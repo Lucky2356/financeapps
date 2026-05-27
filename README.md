@@ -225,3 +225,5 @@ GitHub Actions workflow находится в `.github/workflows/ci.yml` и за
 - `npm run build:static`
 
 Практика работы: важные этапы фиксируются отдельными git-коммитами, чтобы можно было быстро откатиться к стабильному состоянию.
+
+Перед релизом используйте [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md): там собраны preflight, проверки web/PWA, Android shell и Windows desktop shell.
