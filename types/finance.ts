@@ -95,6 +95,7 @@ export type GoalRow = {
 export type WatchlistRow = {
   ticker: string;
   name: string;
+  sector: string;
   price: number;
   changeDay: number;
   change30d: number;
@@ -105,6 +106,7 @@ export type WatchlistRow = {
 export type PortfolioRow = {
   ticker: string;
   name: string;
+  sector: string;
   quantity: number;
   averageBuyPrice: number;
   currentPrice: number;
@@ -122,6 +124,7 @@ export type InvestmentData = {
   watchlist: WatchlistRow[];
   portfolio: PortfolioRow[];
   structure: ChartDatum[];
+  sectorStructure: ChartDatum[];
   risks: RecommendationView[];
   education: RecommendationView[];
 };

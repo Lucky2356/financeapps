@@ -65,6 +65,17 @@ export class InvestmentAnalysisService {
       });
     }
 
+    const sectorShares = this.sectorShares(portfolio);
+    const largestSector = sectorShares[0];
+    if (largestSector && largestSector.share > 55) {
+      risks.push({
+        id: "sector-concentration",
+        title: "Высокая концентрация в одном секторе",
+        description: `${largestSector.sector} занимает ${largestSector.share.toFixed(1)}% портфеля. Такая структура повышает чувствительность к отраслевым событиям и регулированию.`,
+        severity: largestSector.share > 70 ? "CRITICAL" : "WARNING"
+      });
+    }
+
     const volatileTickers = portfolio
       .map((row) => ({ row, volatility: this.volatility(historicalPrices[row.ticker] ?? []) }))
       .filter((item) => item.volatility > 3);
@@ -118,6 +129,12 @@ export class InvestmentAnalysisService {
         severity: "INFO"
       },
       {
+        id: "education-sector",
+        title: "Секторная структура важна не меньше тикеров",
+        description: "Даже несколько бумаг могут вести себя похоже, если они зависят от одних сырьевых цен, ставок или регуляторных факторов.",
+        severity: "INFO"
+      },
+      {
         id: "education-profile",
         title: "Риск-профиль помогает задать рамки",
         description: "Для консервативного профиля инструмент с высокой волатильностью может быть рискованным даже при привлекательных показателях роста.",
@@ -147,5 +164,19 @@ export class InvestmentAnalysisService {
     }
 
     return maxDrop;
+  }
+
+  private sectorShares(portfolio: PortfolioRow[]) {
+    const total = portfolio.reduce((sum, row) => sum + row.currentValue, 0);
+    if (total === 0) return [];
+
+    const shares = new Map<string, number>();
+    for (const row of portfolio) {
+      shares.set(row.sector, (shares.get(row.sector) ?? 0) + row.currentValue);
+    }
+
+    return [...shares.entries()]
+      .map(([sector, value]) => ({ sector, share: (value / total) * 100 }))
+      .sort((left, right) => right.share - left.share);
   }
 }

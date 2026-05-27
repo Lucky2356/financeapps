@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { Edit2, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
@@ -74,6 +74,16 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
     }
   }
 
+  async function refreshMarketPrices() {
+    try {
+      const result = await apiClient.post<{ updated: number; source: string }>("/investments", { action: "refreshMarket" });
+      toast.success(`Рыночные данные обновлены: ${result.updated} бумаг, источник ${result.source}`);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось обновить рыночные данные");
+    }
+  }
+
   const watchlistTickers = new Set(data.watchlist.map((security) => security.ticker));
   const availableForWatchlist = data.securities.filter((security) => !watchlistTickers.has(security.ticker));
 
@@ -87,15 +97,21 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Watchlist российских акций</CardTitle>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Plus className="size-4" />
-                Добавить в watchlist
-              </Button>
-            </DialogTrigger>
-            <WatchlistDialog securities={availableForWatchlist} onSubmit={addWatchlistItem} />
-          </Dialog>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={refreshMarketPrices}>
+              <RefreshCw className="size-4" />
+              Обновить рынок
+            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Plus className="size-4" />
+                  Добавить в watchlist
+                </Button>
+              </DialogTrigger>
+              <WatchlistDialog securities={availableForWatchlist} onSubmit={addWatchlistItem} />
+            </Dialog>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="hidden md:block">
@@ -104,6 +120,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                 <TableRow>
                   <TableHead>Ticker</TableHead>
                   <TableHead>Название</TableHead>
+                  <TableHead>Сектор</TableHead>
                   <TableHead className="text-right">Цена</TableHead>
                   <TableHead className="text-right">День</TableHead>
                   <TableHead className="text-right">30 дней</TableHead>
@@ -117,6 +134,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                   <TableRow key={security.ticker}>
                     <TableCell className="font-semibold">{security.ticker}</TableCell>
                     <TableCell>{security.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{security.sector}</TableCell>
                     <TableCell className="text-right">{formatCurrency(security.price, data.currency)}</TableCell>
                     <TableCell className={security.changeDay >= 0 ? "text-right text-success-foreground" : "text-right text-destructive"}>
                       {security.changeDay.toFixed(2)}%
@@ -153,6 +171,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                   <div>
                     <p className="font-semibold">{security.ticker}</p>
                     <p className="text-sm text-muted-foreground">{security.name}</p>
+                    <p className="text-xs text-muted-foreground">{security.sector}</p>
                   </div>
                   <Badge variant={riskVariant[security.risk]}>{RISK_LABELS[security.risk]}</Badge>
                 </div>
@@ -214,6 +233,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Тикер</TableHead>
+                    <TableHead>Сектор</TableHead>
                     <TableHead className="text-right">Кол-во</TableHead>
                     <TableHead className="text-right">Средняя</TableHead>
                     <TableHead className="text-right">Текущая</TableHead>
@@ -227,6 +247,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                   {data.portfolio.map((position) => (
                     <TableRow key={position.ticker}>
                       <TableCell className="font-semibold">{position.ticker}</TableCell>
+                      <TableCell className="text-muted-foreground">{position.sector}</TableCell>
                       <TableCell className="text-right">{position.quantity.toLocaleString("ru-RU")}</TableCell>
                       <TableCell className="text-right">{formatCurrency(position.averageBuyPrice, data.currency)}</TableCell>
                       <TableCell className="text-right">{formatCurrency(position.currentPrice, data.currency)}</TableCell>
@@ -332,6 +353,16 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
           <CardContent>
             <PortfolioStructureChart data={data.structure} />
             <p className="mt-2 text-sm text-muted-foreground">Риск-профиль: {data.riskProfile}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Секторная структура</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PortfolioStructureChart data={data.sectorStructure} />
+            <p className="mt-2 text-sm text-muted-foreground">Показывает долю отраслей в текущей стоимости портфеля.</p>
           </CardContent>
         </Card>
       </section>

@@ -20,6 +20,7 @@ import type {
   InvestmentData,
   MonthlyCashflowDatum,
   Option,
+  PortfolioRow,
   RecommendationView,
   TransactionRow
 } from "@/types/finance";
@@ -223,6 +224,20 @@ function buildCategoryExpenses(transactions: TransactionRow[]): ChartDatum[] {
   }
 
   return [...byCategory.values()].sort((a, b) => b.value - a.value);
+}
+
+function buildSectorStructure(portfolio: PortfolioRow[]): ChartDatum[] {
+  const totals = new Map<string, number>();
+  const total = portfolio.reduce((sum, row) => sum + row.currentValue, 0);
+  if (total === 0) return [];
+
+  for (const row of portfolio) {
+    totals.set(row.sector, (totals.get(row.sector) ?? 0) + row.currentValue);
+  }
+
+  return [...totals.entries()]
+    .map(([name, value]) => ({ name, value: percent(value, total) }))
+    .sort((left, right) => right.value - left.value);
 }
 
 function buildBudgetRows(transactions: TransactionRow[], categories = demoCategories): BudgetRow[] {
@@ -782,6 +797,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
       return {
         ticker: item.security.ticker,
         name: item.security.name,
+        sector: item.security.sector,
         price: latest ? toNumber(latest.price) : 0,
         changeDay: latest ? toNumber(latest.changeDay) : 0,
         change30d: latest ? toNumber(latest.change30d) : 0,
@@ -794,6 +810,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
       return {
         ticker: security.ticker,
         name: security.name,
+        sector: security.sector,
         price: latest ? toNumber(latest.price) : 0,
         changeDay: latest ? toNumber(latest.changeDay) : 0,
         change30d: latest ? toNumber(latest.change30d) : 0,
@@ -813,6 +830,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
         return {
           ticker: position.security.ticker,
           name: position.security.name,
+          sector: position.security.sector,
           quantity,
           averageBuyPrice,
           currentPrice,
@@ -845,6 +863,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
       watchlist,
       portfolio: portfolioRows,
       structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),
+      sectorStructure: buildSectorStructure(portfolioRows),
       risks: analysis.risks,
       education: analysis.education
     };
@@ -869,6 +888,7 @@ async function buildDemoInvestmentData(): Promise<InvestmentData> {
     return {
       ticker,
       name: security.name,
+      sector: security.sector,
       quantity,
       averageBuyPrice,
       currentPrice: security.price,
@@ -897,6 +917,7 @@ async function buildDemoInvestmentData(): Promise<InvestmentData> {
     watchlist: securities,
     portfolio: portfolioRows,
     structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),
+    sectorStructure: buildSectorStructure(portfolioRows),
     risks: analysis.risks,
     education: analysis.education
   };

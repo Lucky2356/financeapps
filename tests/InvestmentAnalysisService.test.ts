@@ -16,6 +16,7 @@ function portfolio(overrides: Partial<PortfolioRow>[] = []): PortfolioRow[] {
     {
       ticker: "SBER",
       name: "Сбербанк",
+      sector: "Финансы",
       quantity: 100,
       averageBuyPrice: 250,
       currentPrice: 320,
@@ -27,6 +28,7 @@ function portfolio(overrides: Partial<PortfolioRow>[] = []): PortfolioRow[] {
     {
       ticker: "YNDX",
       name: "Яндекс",
+      sector: "Технологии",
       quantity: 5,
       averageBuyPrice: 3500,
       currentPrice: 4100,
@@ -38,6 +40,7 @@ function portfolio(overrides: Partial<PortfolioRow>[] = []): PortfolioRow[] {
     {
       ticker: "MOEX",
       name: "Московская биржа",
+      sector: "Финансовая инфраструктура",
       quantity: 50,
       averageBuyPrice: 210,
       currentPrice: 230,
@@ -69,6 +72,19 @@ describe("InvestmentAnalysisService", () => {
       expect.arrayContaining(["single-position-concentration", "high-risk-share", "diversification"])
     );
     expect(analysis.risks.find((item) => item.id === "single-position-concentration")?.severity).toBe("CRITICAL");
+  });
+
+  it("flags sector concentration when one sector dominates the portfolio", () => {
+    const analysis = service.analyze(
+      portfolio([
+        { share: 35, currentValue: 35000, sector: "Финансы" },
+        { share: 35, currentValue: 35000, sector: "Финансы" },
+        { share: 30, currentValue: 30000, sector: "Финансы" }
+      ]),
+      "MODERATE"
+    );
+
+    expect(analysis.risks.map((item) => item.id)).toContain("sector-concentration");
   });
 
   it("returns an empty-portfolio message when there are no positions", () => {

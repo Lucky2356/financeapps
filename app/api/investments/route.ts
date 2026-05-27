@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { startOfDay } from "date-fns";
 
 import { getInvestmentData } from "@/lib/data";
 import { requirePrisma } from "@/lib/prisma";
 import { portfolioPositionSchema, watchlistItemSchema } from "@/lib/validations";
+import { MockMarketDataProvider } from "@/services/market/MockMarketDataProvider";
 
 export const dynamic = "force-static";
 
@@ -60,6 +62,56 @@ export async function POST(request: NextRequest) {
   const payload = await request.json();
   const action = typeof payload.action === "string" ? payload.action : "";
   const actionTicker = typeof payload.ticker === "string" ? payload.ticker.toUpperCase() : "";
+
+  if (action === "refreshMarket") {
+    const provider = new MockMarketDataProvider();
+    const marketRows = await provider.getSecurities();
+    const priceDate = startOfDay(new Date());
+
+    for (const row of marketRows) {
+      const security = await db.security.upsert({
+        where: { ticker: row.ticker },
+        update: {
+          name: row.name,
+          sector: row.sector,
+          risk: row.risk,
+          comment: row.comment
+        },
+        create: {
+          ticker: row.ticker,
+          name: row.name,
+          sector: row.sector,
+          risk: row.risk,
+          comment: row.comment
+        }
+      });
+
+      await db.marketPrice.upsert({
+        where: {
+          securityId_date: {
+            securityId: security.id,
+            date: priceDate
+          }
+        },
+        update: {
+          price: row.price,
+          changeDay: row.changeDay,
+          change30d: row.change30d,
+          source: "MOCK"
+        },
+        create: {
+          securityId: security.id,
+          date: priceDate,
+          price: row.price,
+          changeDay: row.changeDay,
+          change30d: row.change30d,
+          source: "MOCK"
+        }
+      });
+    }
+
+    return NextResponse.json({ updated: marketRows.length, source: "MOCK" });
+  }
 
   if (action === "addWatchlist") {
     const input = watchlistItemSchema.parse(payload);
