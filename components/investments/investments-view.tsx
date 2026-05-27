@@ -1,10 +1,20 @@
-import { ShieldAlert } from "lucide-react";
+"use client";
+
+import { Edit2, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
+import { toast } from "sonner";
 
 import { PortfolioStructureChart } from "@/components/charts/portfolio-structure-chart";
 import { RecommendationList } from "@/components/recommendation-list";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { apiClient } from "@/lib/api/client";
 import { INVESTMENT_DISCLAIMER, RISK_LABELS } from "@/lib/constants";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import type { InvestmentData } from "@/types/finance";
@@ -16,6 +26,31 @@ const riskVariant = {
 } as const;
 
 export function InvestmentsView({ data }: { data: InvestmentData }) {
+  const router = useRouter();
+
+  async function submitPosition(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+    try {
+      await apiClient.post("/investments", payload);
+      toast.success("Позиция портфеля сохранена");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось сохранить позицию");
+    }
+  }
+
+  async function removePosition(ticker: string) {
+    try {
+      await apiClient.post("/investments", { action: "delete", ticker });
+      toast.success("Позиция удалена из портфеля");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось удалить позицию");
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-lg border border-info/30 bg-info/12 p-4 text-sm">
@@ -96,8 +131,22 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Портфель пользователя</CardTitle>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="size-4" />
+                  Добавить позицию
+                </Button>
+              </DialogTrigger>
+              <PositionDialog
+                title="Добавить позицию"
+                description="Укажите бумагу, количество и среднюю цену покупки. Это учетная запись портфеля, не инвестиционный совет."
+                data={data}
+                onSubmit={submitPosition}
+              />
+            </Dialog>
           </CardHeader>
           <CardContent>
             <div className="hidden md:block">
@@ -111,6 +160,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                     <TableHead className="text-right">Стоимость</TableHead>
                     <TableHead className="text-right">P/L</TableHead>
                     <TableHead className="text-right">Доля</TableHead>
+                    <TableHead className="w-28 text-right">Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -125,6 +175,34 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                         {formatCurrency(position.pnl, data.currency)}
                       </TableCell>
                       <TableCell className="text-right">{formatPercent(position.share)}</TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="icon" title="Редактировать позицию">
+                                <Edit2 className="size-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <PositionDialog
+                              title={`Редактировать ${position.ticker}`}
+                              description="Можно обновить количество и среднюю цену покупки."
+                              data={data}
+                              position={position}
+                              onSubmit={submitPosition}
+                            />
+                          </Dialog>
+                          <form
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void removePosition(position.ticker);
+                            }}
+                          >
+                            <Button type="submit" variant="ghost" size="icon" title="Удалить позицию">
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          </form>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -153,6 +231,34 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                       </p>
                     </div>
                   </div>
+                  <div className="mt-4 flex gap-2">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Edit2 className="size-4" />
+                          Изменить
+                        </Button>
+                      </DialogTrigger>
+                      <PositionDialog
+                        title={`Редактировать ${position.ticker}`}
+                        description="Можно обновить количество и среднюю цену покупки."
+                        data={data}
+                        position={position}
+                        onSubmit={submitPosition}
+                      />
+                    </Dialog>
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void removePosition(position.ticker);
+                      }}
+                    >
+                      <Button type="submit" variant="outline" size="sm">
+                        <Trash2 className="size-4 text-destructive" />
+                        Удалить
+                      </Button>
+                    </form>
+                  </div>
                 </div>
               ))}
             </div>
@@ -175,5 +281,62 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
         <RecommendationList title="Образовательные подсказки" items={data.education} />
       </section>
     </div>
+  );
+}
+
+function PositionDialog({
+  title,
+  description,
+  data,
+  position,
+  onSubmit
+}: {
+  title: string;
+  description: string;
+  data: InvestmentData;
+  position?: InvestmentData["portfolio"][number];
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
+      <form onSubmit={onSubmit} className="grid gap-4">
+        <div className="space-y-2">
+          <Label>Бумага</Label>
+          {position ? <input type="hidden" name="ticker" value={position.ticker} /> : null}
+          <select
+            name="ticker"
+            defaultValue={position?.ticker ?? data.watchlist[0]?.ticker}
+            disabled={Boolean(position)}
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-70"
+          >
+            {data.watchlist.map((security) => (
+              <option key={security.ticker} value={security.ticker}>
+                {security.ticker} · {security.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Количество</Label>
+            <Input name="quantity" type="number" min="0" step="0.000001" defaultValue={position?.quantity ?? ""} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Средняя цена покупки</Label>
+            <Input name="averageBuyPrice" type="number" min="0" step="0.0001" defaultValue={position?.averageBuyPrice ?? ""} required />
+          </div>
+        </div>
+        <div className="rounded-lg border border-info/30 bg-info/12 p-3 text-sm text-muted-foreground">
+          Данные используются только для учета и анализа рисков портфеля. Информация не является индивидуальной инвестиционной рекомендацией.
+        </div>
+        <DialogFooter>
+          <Button type="submit">Сохранить позицию</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
   );
 }
