@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getInvestmentData } from "@/lib/data";
 import { requirePrisma } from "@/lib/prisma";
-import { portfolioPositionSchema } from "@/lib/validations";
+import { portfolioPositionSchema, watchlistItemSchema } from "@/lib/validations";
 
 export const dynamic = "force-static";
 
@@ -60,6 +60,48 @@ export async function POST(request: NextRequest) {
   const payload = await request.json();
   const action = typeof payload.action === "string" ? payload.action : "";
   const actionTicker = typeof payload.ticker === "string" ? payload.ticker.toUpperCase() : "";
+
+  if (action === "addWatchlist") {
+    const input = watchlistItemSchema.parse(payload);
+    const security = await db.security.findUnique({ where: { ticker: input.ticker } });
+    if (!security) {
+      return NextResponse.json({ error: "Security not found in the market directory." }, { status: 404 });
+    }
+
+    const item = await db.watchlistItem.upsert({
+      where: {
+        userId_securityId: {
+          userId: user.id,
+          securityId: security.id
+        }
+      },
+      update: {},
+      create: {
+        userId: user.id,
+        securityId: security.id
+      }
+    });
+
+    return NextResponse.json(item, { status: 201 });
+  }
+
+  if (action === "removeWatchlist") {
+    if (!actionTicker) {
+      return NextResponse.json({ error: "Ticker is required." }, { status: 400 });
+    }
+
+    const security = await db.security.findUnique({ where: { ticker: actionTicker } });
+    if (security) {
+      await db.watchlistItem.deleteMany({
+        where: {
+          userId: user.id,
+          securityId: security.id
+        }
+      });
+    }
+
+    return new NextResponse(null, { status: 204 });
+  }
 
   if (action === "delete") {
     if (!actionTicker) {

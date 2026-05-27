@@ -118,6 +118,7 @@ export type InvestmentData = {
   source: DataSource;
   currency: string;
   riskProfile: string;
+  securities: WatchlistRow[];
   watchlist: WatchlistRow[];
   portfolio: PortfolioRow[];
   structure: ChartDatum[];

@@ -755,6 +755,13 @@ export async function getInvestmentData(): Promise<InvestmentData> {
       orderBy: { createdAt: "asc" }
     });
 
+    const securities = await prisma.security.findMany({
+      include: {
+        prices: { orderBy: { date: "desc" }, take: 1 }
+      },
+      orderBy: { ticker: "asc" }
+    });
+
     const portfolio = await prisma.portfolio.findFirst({
       where: { userId: user.id },
       include: {
@@ -780,6 +787,18 @@ export async function getInvestmentData(): Promise<InvestmentData> {
         change30d: latest ? toNumber(latest.change30d) : 0,
         risk: item.security.risk,
         comment: item.security.comment
+      };
+    });
+    const securityRows = securities.map((security) => {
+      const latest = security.prices[0];
+      return {
+        ticker: security.ticker,
+        name: security.name,
+        price: latest ? toNumber(latest.price) : 0,
+        changeDay: latest ? toNumber(latest.changeDay) : 0,
+        change30d: latest ? toNumber(latest.change30d) : 0,
+        risk: security.risk,
+        comment: security.comment
       };
     });
 
@@ -822,6 +841,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
       source: "database",
       currency: user.currency,
       riskProfile: RISK_PROFILE_LABELS[riskCode],
+      securities: securityRows,
       watchlist,
       portfolio: portfolioRows,
       structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),
@@ -873,6 +893,7 @@ async function buildDemoInvestmentData(): Promise<InvestmentData> {
     source: "demo-fallback",
     currency: "RUB",
     riskProfile: RISK_PROFILE_LABELS.MODERATE,
+    securities,
     watchlist: securities,
     portfolio: portfolioRows,
     structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),

@@ -56,6 +56,10 @@ export const portfolioPositionSchema = z.object({
   averageBuyPrice: z.coerce.number().finite().positive("Средняя цена должна быть больше нуля")
 });
 
+export const watchlistItemSchema = z.object({
+  ticker: z.string().trim().min(1).max(12).transform((value) => value.toUpperCase())
+});
+
 export const csvImportSchema = z.object({
   rows: z.string().min(2),
   dateColumn: z.string().min(1),
@@ -69,3 +73,4 @@ export type TransactionInput = z.infer<typeof transactionSchema>;
 export type AccountInput = z.infer<typeof accountSchema>;
 export type SavingGoalInput = z.infer<typeof savingGoalSchema>;
 export type PortfolioPositionInput = z.infer<typeof portfolioPositionSchema>;
+export type WatchlistItemInput = z.infer<typeof watchlistItemSchema>;

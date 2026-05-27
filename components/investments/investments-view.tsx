@@ -51,6 +51,32 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
     }
   }
 
+  async function addWatchlistItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+    try {
+      await apiClient.post("/investments", { ...payload, action: "addWatchlist" });
+      toast.success("Бумага добавлена в watchlist");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось добавить бумагу");
+    }
+  }
+
+  async function removeWatchlistItem(ticker: string) {
+    try {
+      await apiClient.post("/investments", { action: "removeWatchlist", ticker });
+      toast.success("Бумага удалена из watchlist");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось удалить бумагу");
+    }
+  }
+
+  const watchlistTickers = new Set(data.watchlist.map((security) => security.ticker));
+  const availableForWatchlist = data.securities.filter((security) => !watchlistTickers.has(security.ticker));
+
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-lg border border-info/30 bg-info/12 p-4 text-sm">
@@ -59,8 +85,17 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Watchlist российских акций</CardTitle>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="size-4" />
+                Добавить в watchlist
+              </Button>
+            </DialogTrigger>
+            <WatchlistDialog securities={availableForWatchlist} onSubmit={addWatchlistItem} />
+          </Dialog>
         </CardHeader>
         <CardContent>
           <div className="hidden md:block">
@@ -74,6 +109,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                   <TableHead className="text-right">30 дней</TableHead>
                   <TableHead>Риск</TableHead>
                   <TableHead>Комментарий</TableHead>
+                  <TableHead className="w-16 text-right"> </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -92,6 +128,18 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                       <Badge variant={riskVariant[security.risk]}>{RISK_LABELS[security.risk]}</Badge>
                     </TableCell>
                     <TableCell className="max-w-96 text-muted-foreground">{security.comment}</TableCell>
+                    <TableCell className="text-right">
+                      <form
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void removeWatchlistItem(security.ticker);
+                        }}
+                      >
+                        <Button type="submit" variant="ghost" size="icon" title="Удалить из watchlist">
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </form>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -123,6 +171,18 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                   </div>
                 </div>
                 <p className="mt-3 text-sm text-muted-foreground">{security.comment}</p>
+                <form
+                  className="mt-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void removeWatchlistItem(security.ticker);
+                  }}
+                >
+                  <Button type="submit" variant="outline" size="sm">
+                    <Trash2 className="size-4 text-destructive" />
+                    Удалить
+                  </Button>
+                </form>
               </div>
             ))}
           </div>
@@ -284,6 +344,46 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
   );
 }
 
+function WatchlistDialog({
+  securities,
+  onSubmit
+}: {
+  securities: InvestmentData["securities"];
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Добавить в watchlist</DialogTitle>
+        <DialogDescription>
+          Выберите бумагу из справочника рынка. Это список наблюдения, а не индивидуальная инвестиционная рекомендация.
+        </DialogDescription>
+      </DialogHeader>
+      {securities.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
+          Все бумаги из справочника уже добавлены в watchlist.
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <div className="space-y-2">
+            <Label>Бумага</Label>
+            <select name="ticker" defaultValue={securities[0]?.ticker} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              {securities.map((security) => (
+                <option key={security.ticker} value={security.ticker}>
+                  {security.ticker} · {security.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button type="submit">Добавить</Button>
+          </DialogFooter>
+        </form>
+      )}
+    </DialogContent>
+  );
+}
+
 function PositionDialog({
   title,
   description,
@@ -309,11 +409,11 @@ function PositionDialog({
           {position ? <input type="hidden" name="ticker" value={position.ticker} /> : null}
           <select
             name="ticker"
-            defaultValue={position?.ticker ?? data.watchlist[0]?.ticker}
+            defaultValue={position?.ticker ?? data.securities[0]?.ticker}
             disabled={Boolean(position)}
             className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-70"
           >
-            {data.watchlist.map((security) => (
+            {data.securities.map((security) => (
               <option key={security.ticker} value={security.ticker}>
                 {security.ticker} · {security.name}
               </option>
