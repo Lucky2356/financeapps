@@ -34,8 +34,10 @@ const secondaryItems = [
 ];
 
 export function MobileTopBar() {
+  const pathname = usePathname();
+
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 px-4 py-3 backdrop-blur md:hidden">
+    <header className="sticky top-0 z-40 border-b bg-card/95 px-4 py-3 shadow-soft backdrop-blur md:hidden">
       <div className="flex items-center justify-between gap-3">
         <Link href="/" className="min-w-0">
           <span className="block truncate text-sm font-semibold">{APP_NAME}</span>
@@ -46,11 +48,15 @@ export function MobileTopBar() {
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
         {secondaryItems.map((item) => {
           const Icon = item.icon;
+          const active = item.href === pathname;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-card px-3 py-2 text-xs font-medium"
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium",
+                active ? "bg-secondary text-foreground" : "bg-card text-muted-foreground"
+              )}
             >
               <Icon className="size-3.5" />
               {item.label}

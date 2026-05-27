@@ -6,7 +6,7 @@ import { MobileBottomNav, MobileTopBar } from "@/components/mobile-navigation";
 
 export function LayoutShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen md:flex">
+    <div className="min-h-screen bg-muted/30 md:flex">
       <AppSidebar />
       <MobileTopBar />
       <main className="min-w-0 flex-1">

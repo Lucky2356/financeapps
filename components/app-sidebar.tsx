@@ -34,7 +34,7 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 z-30 hidden h-screen w-72 shrink-0 flex-col border-r bg-background/95 backdrop-blur md:flex">
+    <aside className="sticky top-0 z-30 hidden h-screen w-72 shrink-0 flex-col border-r bg-card/95 backdrop-blur md:flex">
       <div className="block w-full p-5">
         <Link href="/" className="flex items-center gap-3">
           <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -57,7 +57,7 @@ export function AppSidebar() {
               key={item.href}
               asChild
               variant={active ? "secondary" : "ghost"}
-              className={cn("justify-start", active && "font-semibold")}
+              className={cn("relative justify-start", active && "font-semibold before:absolute before:left-0 before:h-5 before:w-1 before:rounded-r before:bg-primary")}
             >
               <Link href={item.href}>
                 <Icon className="size-4" />

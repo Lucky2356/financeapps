@@ -83,4 +83,8 @@
   .surface {
     @apply rounded-lg border bg-card text-card-foreground shadow-soft;
   }
+
+  .focus-ring {
+    @apply outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring;
+  }
 }

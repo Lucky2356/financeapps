@@ -2,6 +2,7 @@ import { Download, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { CashflowChart } from "@/components/charts/cashflow-chart";
+import { DashboardOverview } from "@/components/dashboard-overview";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
 import { FinanceHealthCard } from "@/components/finance-health-card";
 import { MetricCard } from "@/components/metric-card";
@@ -40,6 +41,7 @@ export default async function DashboardPage() {
         }
       />
       <SourceBanner source={data.source} />
+      <DashboardOverview data={data} />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {data.metrics.map((metric) => (
