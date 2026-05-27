@@ -10,6 +10,28 @@ jobs:
   verify:
     name: Verify app
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: financial_assistant
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d financial_assistant"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_assistant?schema=public
+      NEXT_PUBLIC_APP_PLATFORM: web
+      NEXT_PUBLIC_APP_ENV: production
+      NEXT_PUBLIC_API_MODE: cloud
+      NEXT_PUBLIC_API_BASE_URL: /api
+      NEXT_PUBLIC_DESKTOP_DATA_MODE: cloud
 
     steps:
       - name: Checkout
@@ -25,9 +47,13 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_assistant?schema=public
+        run: npm run db:generate
+
+      - name: Apply database migrations
+        run: npm run db:deploy
+
+      - name: Seed demo data
+        run: npm run db:seed
 
       - name: Typecheck
         run: npm run typecheck

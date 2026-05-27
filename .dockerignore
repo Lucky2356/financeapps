@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+.git
+.env
+*.log
+*-qa.png
+src-tauri/target
+android
+ios
