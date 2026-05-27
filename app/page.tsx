@@ -1,3 +1,6 @@
+import { Download, Plus } from "lucide-react";
+import Link from "next/link";
+
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
 import { FinanceHealthCard } from "@/components/finance-health-card";
@@ -5,6 +8,7 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { RecommendationList } from "@/components/recommendation-list";
 import { SourceBanner } from "@/components/source-banner";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
@@ -18,6 +22,22 @@ export default async function DashboardPage() {
       <PageHeader
         title="Главная"
         description="Финансовая картина месяца, динамика расходов, рекомендации и оценка устойчивости."
+        actions={
+          <>
+            <Button asChild>
+              <Link href="/transactions">
+                <Plus className="size-4" />
+                Операция
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/import">
+                <Download className="size-4" />
+                Импорт
+              </Link>
+            </Button>
+          </>
+        }
       />
       <SourceBanner source={data.source} />
 

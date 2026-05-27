@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, Plus, Trash2 } from "lucide-react";
+import { Download, Edit2, Plus, ReceiptText, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,6 +29,15 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const router = useRouter();
+  const totals = data.transactions.reduce(
+    (acc, transaction) => {
+      if (transaction.type === "INCOME") acc.income += transaction.amount;
+      if (transaction.type === "EXPENSE") acc.expense += transaction.amount;
+      return acc;
+    },
+    { income: 0, expense: 0 }
+  );
+  const net = totals.income - totals.expense;
 
   async function submitTransaction(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
@@ -122,17 +132,37 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
               <Button asChild variant="outline">
                 <Link href="/transactions">Сбросить</Link>
               </Button>
+              <Button asChild variant="outline">
+                <Link href="/import">
+                  <Download className="size-4" />
+                  Импорт
+                </Link>
+              </Button>
             </div>
           </form>
         </CardContent>
       </Card>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <SummaryTile label="Доходы в выборке" value={formatCurrency(totals.income)} tone="success" />
+        <SummaryTile label="Расходы в выборке" value={formatCurrency(totals.expense)} tone="danger" />
+        <SummaryTile label="Итоговый поток" value={formatCurrency(net)} tone={net >= 0 ? "success" : "danger"} />
+      </section>
 
       <Card>
         <CardHeader>
           <CardTitle>Операции</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="hidden md:block">
+          {data.transactions.length === 0 ? (
+            <EmptyState
+              icon={ReceiptText}
+              title="Операции не найдены"
+              description="Измените фильтры, добавьте операцию вручную или загрузите CSV на странице импорта."
+            />
+          ) : (
+            <>
+              <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -192,9 +222,9 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 ))}
               </TableBody>
             </Table>
-          </div>
+              </div>
 
-          <div className="space-y-3 md:hidden">
+              <div className="space-y-3 md:hidden">
             {data.transactions.map((transaction) => (
               <div key={transaction.id} className="rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -240,9 +270,28 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 </div>
               </div>
             ))}
-          </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  tone
+}: {
+  label: string;
+  value: string;
+  tone: "success" | "danger";
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-4 shadow-soft">
+      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+      <p className={tone === "success" ? "mt-2 text-xl font-semibold text-success-foreground" : "mt-2 text-xl font-semibold text-destructive"}>{value}</p>
     </div>
   );
 }
