@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getTransactionsPageData } from "@/lib/data";
+import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
 import { transactionSchema } from "@/lib/validations";
 
@@ -44,71 +45,79 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const db = requirePrisma();
-  const user = await defaultUser();
-  const input = transactionSchema.parse(await request.json());
-  const validationError = await validateTransactionRefs(user.id, input.accountId, input.categoryId, input.type);
-  if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+  try {
+    const db = requirePrisma();
+    const user = await defaultUser();
+    const input = transactionSchema.parse(await request.json());
+    const validationError = await validateTransactionRefs(user.id, input.accountId, input.categoryId, input.type);
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-  const [transaction] = await db.$transaction([
-    db.transaction.create({
-      data: {
-        userId: user.id,
-        accountId: input.accountId,
-        categoryId: input.categoryId,
-        amount: input.amount,
-        type: input.type,
-        date: new Date(input.date),
-        description: input.description || null
-      }
-    }),
-    db.account.update({
-      where: { id: input.accountId },
-      data: { balance: { increment: balanceDelta(input.type, input.amount) } }
-    })
-  ]);
+    const [transaction] = await db.$transaction([
+      db.transaction.create({
+        data: {
+          userId: user.id,
+          accountId: input.accountId,
+          categoryId: input.categoryId,
+          amount: input.amount,
+          type: input.type,
+          date: new Date(input.date),
+          description: input.description || null
+        }
+      }),
+      db.account.update({
+        where: { id: input.accountId },
+        data: { balance: { increment: balanceDelta(input.type, input.amount) } }
+      })
+    ]);
 
-  return NextResponse.json(transaction, { status: 201 });
+    return NextResponse.json(transaction, { status: 201 });
+  } catch (error) {
+    return apiErrorResponse(error, "Не удалось создать операцию.");
+  }
 }
 
 export async function PUT(request: NextRequest) {
-  const db = requirePrisma();
-  const body = await request.json();
-  const input = transactionSchema.parse(body);
-  const user = await defaultUser();
+  try {
+    const db = requirePrisma();
+    const body = await request.json();
+    const input = transactionSchema.parse(body);
+    const user = await defaultUser();
 
-  if (!input.id) {
-    return NextResponse.json({ error: "Transaction id is required." }, { status: 400 });
+    if (!input.id) {
+      return NextResponse.json({ error: "Transaction id is required." }, { status: 400 });
+    }
+
+    const validationError = await validateTransactionRefs(user.id, input.accountId, input.categoryId, input.type);
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
+
+    const existing = await db.transaction.findFirstOrThrow({ where: { id: input.id, userId: user.id } });
+    const transaction = await db.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { id: existing.accountId },
+        data: { balance: { decrement: balanceDelta(existing.type, Number(existing.amount)) } }
+      });
+      const updated = await tx.transaction.update({
+        where: { id: input.id },
+        data: {
+          accountId: input.accountId,
+          categoryId: input.categoryId,
+          amount: input.amount,
+          type: input.type,
+          date: new Date(input.date),
+          description: input.description || null
+        }
+      });
+      await tx.account.update({
+        where: { id: input.accountId },
+        data: { balance: { increment: balanceDelta(input.type, input.amount) } }
+      });
+      return updated;
+    });
+
+    return NextResponse.json(transaction);
+  } catch (error) {
+    return apiErrorResponse(error, "Не удалось обновить операцию.");
   }
-
-  const validationError = await validateTransactionRefs(user.id, input.accountId, input.categoryId, input.type);
-  if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
-
-  const existing = await db.transaction.findFirstOrThrow({ where: { id: input.id, userId: user.id } });
-  const transaction = await db.$transaction(async (tx) => {
-    await tx.account.update({
-      where: { id: existing.accountId },
-      data: { balance: { decrement: balanceDelta(existing.type, Number(existing.amount)) } }
-    });
-    const updated = await tx.transaction.update({
-      where: { id: input.id },
-      data: {
-        accountId: input.accountId,
-        categoryId: input.categoryId,
-        amount: input.amount,
-        type: input.type,
-        date: new Date(input.date),
-        description: input.description || null
-      }
-    });
-    await tx.account.update({
-      where: { id: input.accountId },
-      data: { balance: { increment: balanceDelta(input.type, input.amount) } }
-    });
-    return updated;
-  });
-
-  return NextResponse.json(transaction);
 }
 
 export async function DELETE(request: NextRequest) {

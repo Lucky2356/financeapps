@@ -3,8 +3,10 @@ import { SettingsForm } from "@/components/settings/settings-form";
 import { SourceBanner } from "@/components/source-banner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSettingsPageData } from "@/lib/data";
+import { ensureFreshServerData } from "@/lib/rendering";
 
 export default async function SettingsPage() {
+  await ensureFreshServerData();
   const data = await getSettingsPageData();
 
   return (

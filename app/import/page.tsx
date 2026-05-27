@@ -2,8 +2,10 @@ import { ImportExportPanel } from "@/components/import/import-export-panel";
 import { PageHeader } from "@/components/page-header";
 import { SourceBanner } from "@/components/source-banner";
 import { getImportPageData, getTransactionsPageData } from "@/lib/data";
+import { ensureFreshServerData } from "@/lib/rendering";
 
 export default async function ImportPage() {
+  await ensureFreshServerData();
   const [data, transactions] = await Promise.all([getImportPageData(), getTransactionsPageData({})]);
 
   return (

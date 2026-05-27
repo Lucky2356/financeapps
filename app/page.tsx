@@ -7,8 +7,10 @@ import { RecommendationList } from "@/components/recommendation-list";
 import { SourceBanner } from "@/components/source-banner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardData } from "@/lib/data";
+import { ensureFreshServerData } from "@/lib/rendering";
 
 export default async function DashboardPage() {
+  await ensureFreshServerData();
   const data = await getDashboardData();
 
   return (

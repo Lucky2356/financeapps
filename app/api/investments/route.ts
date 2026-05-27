@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { startOfDay } from "date-fns";
 
 import { getInvestmentData } from "@/lib/data";
+import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
 import { portfolioPositionSchema, watchlistItemSchema } from "@/lib/validations";
 import { MockMarketDataProvider } from "@/services/market/MockMarketDataProvider";
@@ -57,141 +58,145 @@ async function deletePositionByTicker(userId: string, ticker: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const db = requirePrisma();
-  const user = await defaultUser();
-  const payload = await request.json();
-  const action = typeof payload.action === "string" ? payload.action : "";
-  const actionTicker = typeof payload.ticker === "string" ? payload.ticker.toUpperCase() : "";
+  try {
+    const db = requirePrisma();
+    const user = await defaultUser();
+    const payload = await request.json();
+    const action = typeof payload.action === "string" ? payload.action : "";
+    const actionTicker = typeof payload.ticker === "string" ? payload.ticker.toUpperCase() : "";
 
-  if (action === "refreshMarket") {
-    const provider = new MockMarketDataProvider();
-    const marketRows = await provider.getSecurities();
-    const priceDate = startOfDay(new Date());
+    if (action === "refreshMarket") {
+      const provider = new MockMarketDataProvider();
+      const marketRows = await provider.getSecurities();
+      const priceDate = startOfDay(new Date());
 
-    for (const row of marketRows) {
-      const security = await db.security.upsert({
-        where: { ticker: row.ticker },
-        update: {
-          name: row.name,
-          sector: row.sector,
-          risk: row.risk,
-          comment: row.comment
-        },
-        create: {
-          ticker: row.ticker,
-          name: row.name,
-          sector: row.sector,
-          risk: row.risk,
-          comment: row.comment
-        }
-      });
-
-      await db.marketPrice.upsert({
-        where: {
-          securityId_date: {
-            securityId: security.id,
-            date: priceDate
+      for (const row of marketRows) {
+        const security = await db.security.upsert({
+          where: { ticker: row.ticker },
+          update: {
+            name: row.name,
+            sector: row.sector,
+            risk: row.risk,
+            comment: row.comment
+          },
+          create: {
+            ticker: row.ticker,
+            name: row.name,
+            sector: row.sector,
+            risk: row.risk,
+            comment: row.comment
           }
-        },
-        update: {
-          price: row.price,
-          changeDay: row.changeDay,
-          change30d: row.change30d,
-          source: "MOCK"
-        },
-        create: {
-          securityId: security.id,
-          date: priceDate,
-          price: row.price,
-          changeDay: row.changeDay,
-          change30d: row.change30d,
-          source: "MOCK"
-        }
-      });
+        });
+
+        await db.marketPrice.upsert({
+          where: {
+            securityId_date: {
+              securityId: security.id,
+              date: priceDate
+            }
+          },
+          update: {
+            price: row.price,
+            changeDay: row.changeDay,
+            change30d: row.change30d,
+            source: "MOCK"
+          },
+          create: {
+            securityId: security.id,
+            date: priceDate,
+            price: row.price,
+            changeDay: row.changeDay,
+            change30d: row.change30d,
+            source: "MOCK"
+          }
+        });
+      }
+
+      return NextResponse.json({ updated: marketRows.length, source: "MOCK" });
     }
 
-    return NextResponse.json({ updated: marketRows.length, source: "MOCK" });
-  }
+    if (action === "addWatchlist") {
+      const input = watchlistItemSchema.parse(payload);
+      const security = await db.security.findUnique({ where: { ticker: input.ticker } });
+      if (!security) {
+        return NextResponse.json({ error: "Security not found in the market directory." }, { status: 404 });
+      }
 
-  if (action === "addWatchlist") {
-    const input = watchlistItemSchema.parse(payload);
+      const item = await db.watchlistItem.upsert({
+        where: {
+          userId_securityId: {
+            userId: user.id,
+            securityId: security.id
+          }
+        },
+        update: {},
+        create: {
+          userId: user.id,
+          securityId: security.id
+        }
+      });
+
+      return NextResponse.json(item, { status: 201 });
+    }
+
+    if (action === "removeWatchlist") {
+      if (!actionTicker) {
+        return NextResponse.json({ error: "Ticker is required." }, { status: 400 });
+      }
+
+      const security = await db.security.findUnique({ where: { ticker: actionTicker } });
+      if (security) {
+        await db.watchlistItem.deleteMany({
+          where: {
+            userId: user.id,
+            securityId: security.id
+          }
+        });
+      }
+
+      return new NextResponse(null, { status: 204 });
+    }
+
+    if (action === "delete") {
+      if (!actionTicker) {
+        return NextResponse.json({ error: "Ticker is required." }, { status: 400 });
+      }
+
+      await deletePositionByTicker(user.id, actionTicker);
+      return new NextResponse(null, { status: 204 });
+    }
+
+    const input = portfolioPositionSchema.parse(payload);
     const security = await db.security.findUnique({ where: { ticker: input.ticker } });
+
     if (!security) {
       return NextResponse.json({ error: "Security not found in the market directory." }, { status: 404 });
     }
 
-    const item = await db.watchlistItem.upsert({
+    const portfolio = await findOrCreatePortfolio(user.id);
+    const position = await db.portfolioPosition.upsert({
       where: {
-        userId_securityId: {
-          userId: user.id,
+        portfolioId_securityId: {
+          portfolioId: portfolio.id,
           securityId: security.id
         }
       },
-      update: {},
+      update: {
+        quantity: input.quantity,
+        averageBuyPrice: input.averageBuyPrice
+      },
       create: {
-        userId: user.id,
-        securityId: security.id
+        portfolioId: portfolio.id,
+        securityId: security.id,
+        quantity: input.quantity,
+        averageBuyPrice: input.averageBuyPrice
       }
     });
 
-    return NextResponse.json(item, { status: 201 });
+    return NextResponse.json(position, { status: 201 });
+  } catch (error) {
+    return apiErrorResponse(error, "Не удалось обновить инвестиционные данные.");
   }
-
-  if (action === "removeWatchlist") {
-    if (!actionTicker) {
-      return NextResponse.json({ error: "Ticker is required." }, { status: 400 });
-    }
-
-    const security = await db.security.findUnique({ where: { ticker: actionTicker } });
-    if (security) {
-      await db.watchlistItem.deleteMany({
-        where: {
-          userId: user.id,
-          securityId: security.id
-        }
-      });
-    }
-
-    return new NextResponse(null, { status: 204 });
-  }
-
-  if (action === "delete") {
-    if (!actionTicker) {
-      return NextResponse.json({ error: "Ticker is required." }, { status: 400 });
-    }
-
-    await deletePositionByTicker(user.id, actionTicker);
-    return new NextResponse(null, { status: 204 });
-  }
-
-  const input = portfolioPositionSchema.parse(payload);
-  const security = await db.security.findUnique({ where: { ticker: input.ticker } });
-
-  if (!security) {
-    return NextResponse.json({ error: "Security not found in the market directory." }, { status: 404 });
-  }
-
-  const portfolio = await findOrCreatePortfolio(user.id);
-  const position = await db.portfolioPosition.upsert({
-    where: {
-      portfolioId_securityId: {
-        portfolioId: portfolio.id,
-        securityId: security.id
-      }
-    },
-    update: {
-      quantity: input.quantity,
-      averageBuyPrice: input.averageBuyPrice
-    },
-    create: {
-      portfolioId: portfolio.id,
-      securityId: security.id,
-      quantity: input.quantity,
-      averageBuyPrice: input.averageBuyPrice
-    }
-  });
-
-  return NextResponse.json(position, { status: 201 });
 }
 
 export async function PUT(request: NextRequest) {

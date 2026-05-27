@@ -3,8 +3,10 @@ import { PageHeader } from "@/components/page-header";
 import { RecommendationList } from "@/components/recommendation-list";
 import { SourceBanner } from "@/components/source-banner";
 import { getBudgetsPageData } from "@/lib/data";
+import { ensureFreshServerData } from "@/lib/rendering";
 
 export default async function BudgetsPage() {
+  await ensureFreshServerData();
   const data = await getBudgetsPageData();
 
   return (
