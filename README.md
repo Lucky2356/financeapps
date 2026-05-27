@@ -201,6 +201,7 @@ npm run dev
 npm run build
 npm run typecheck
 npm run lint
+npm run test
 npm run db:migrate
 npm run db:seed
 npm run db:studio
@@ -217,6 +218,7 @@ GitHub Actions workflow находится в `.github/workflows/ci.yml` и за
 - `npm run db:seed`
 - `npm run typecheck`
 - `npm run lint`
+- `npm run test`
 - `npm run build`
 - `npm run build:static`
 
