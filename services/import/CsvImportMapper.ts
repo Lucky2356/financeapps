@@ -1,5 +1,6 @@
 import Papa from "papaparse";
-import { isValid, parse } from "date-fns";
+
+import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 
 export type ParsedCsv = {
   fields: string[];
@@ -28,29 +29,6 @@ const aliases: Record<keyof CsvColumnMapping, string[]> = {
   categoryColumn: ["category", "категория", "mcc category"],
   accountColumn: ["account", "счет", "счёт", "карта", "кошелек"]
 };
-
-function parseAmount(raw: unknown) {
-  const value = Number(
-    String(raw ?? "")
-      .replace(/\s/g, "")
-      .replace(",", ".")
-      .replace(/[^\d.-]/g, "")
-  );
-  return Number.isFinite(value) ? value : null;
-}
-
-function parseDate(raw: unknown) {
-  const value = String(raw ?? "").trim();
-  const formats = ["dd.MM.yyyy", "yyyy-MM-dd", "dd/MM/yyyy"];
-
-  for (const format of formats) {
-    const parsed = parse(value, format, new Date());
-    if (isValid(parsed)) return parsed;
-  }
-
-  const native = new Date(value);
-  return isValid(native) ? native : null;
-}
 
 export class CsvImportMapper {
   parse(content: string): ParsedCsv {
@@ -83,8 +61,8 @@ export class CsvImportMapper {
 
     rows.forEach((row, index) => {
       const rowNumber = index + 1;
-      const amount = mapping.amountColumn ? parseAmount(row[mapping.amountColumn]) : null;
-      const date = mapping.dateColumn ? parseDate(row[mapping.dateColumn]) : null;
+      const amount = mapping.amountColumn ? parseImportedAmount(row[mapping.amountColumn]) : null;
+      const date = mapping.dateColumn ? parseImportedDate(row[mapping.dateColumn]) : null;
 
       if (!mapping.dateColumn || !mapping.amountColumn) {
         return;

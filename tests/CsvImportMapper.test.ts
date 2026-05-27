@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { CsvImportMapper } from "@/services/import/CsvImportMapper";
+import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 
 describe("CsvImportMapper", () => {
   const mapper = new CsvImportMapper();
@@ -20,5 +21,15 @@ describe("CsvImportMapper", () => {
     expect(validation.validRows).toBe(1);
     expect(validation.invalidRows).toBe(1);
     expect(validation.warnings[0]).toContain("Строка 2");
+  });
+
+  it("uses shared amount and date parsing rules", () => {
+    expect(parseImportedAmount("1 250,50 ₽")).toBe(1250.5);
+    expect(parseImportedAmount("not money")).toBeNull();
+    const parsedDate = parseImportedDate("27.05.2026");
+    expect(parsedDate?.getFullYear()).toBe(2026);
+    expect(parsedDate?.getMonth()).toBe(4);
+    expect(parsedDate?.getDate()).toBe(27);
+    expect(parseImportedDate("bad date")).toBeNull();
   });
 });

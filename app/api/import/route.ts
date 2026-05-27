@@ -1,11 +1,11 @@
 import type { CategoryKind, TransactionType } from "@prisma/client";
-import { isValid, parse } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getImportPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
 import { csvImportSchema } from "@/lib/validations";
+import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 
 export const dynamic = "force-static";
 
@@ -15,26 +15,6 @@ export async function GET() {
 
 function balanceDelta(type: TransactionType, amount: number) {
   return type === "INCOME" ? amount : -amount;
-}
-
-function parseCsvAmount(raw: unknown) {
-  const amount = Number(
-    String(raw ?? "")
-      .replace(/\s/g, "")
-      .replace(",", ".")
-      .replace(/[^\d.-]/g, "")
-  );
-  return Number.isFinite(amount) ? amount : null;
-}
-
-function parseCsvDate(raw: unknown) {
-  const value = String(raw ?? "").trim();
-  const ddmmyyyy = parse(value, "dd.MM.yyyy", new Date());
-  if (isValid(ddmmyyyy)) return ddmmyyyy;
-  const yyyymmdd = parse(value, "yyyy-MM-dd", new Date());
-  if (isValid(yyyymmdd)) return yyyymmdd;
-  const native = new Date(value);
-  return isValid(native) ? native : null;
 }
 
 async function findOrCreateImportCategory(
@@ -82,8 +62,8 @@ export async function POST(request: NextRequest) {
     let skipped = 0;
     await db.$transaction(async (tx) => {
       for (const row of rows) {
-        const rawAmount = parseCsvAmount(row[input.amountColumn]);
-        const date = parseCsvDate(row[input.dateColumn]);
+        const rawAmount = parseImportedAmount(row[input.amountColumn]);
+        const date = parseImportedDate(row[input.dateColumn]);
         if (rawAmount === null || rawAmount === 0 || !date) {
           skipped += 1;
           continue;
