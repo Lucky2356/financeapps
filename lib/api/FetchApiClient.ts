@@ -38,7 +38,14 @@ export class FetchApiClient implements ApiClient {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(text || `API request failed: ${response.status}`);
+      let message = text;
+      try {
+        const payload = JSON.parse(text) as { error?: string };
+        message = payload.error ?? text;
+      } catch {
+        message = text;
+      }
+      throw new Error(message || `API request failed: ${response.status}`);
     }
 
     if (response.status === 204) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileJson, Upload } from "lucide-react";
+import { Download, FileJson, RotateCcw, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
@@ -49,6 +49,34 @@ export function ImportExportPanel({
     await fileSystem.saveTextFile("transactions-export.json", content, "application/json;charset=utf-8");
   }
 
+  async function exportBackup() {
+    try {
+      const backup = await apiClient.get<unknown>("/backup");
+      const stamp = new Date().toISOString().slice(0, 10);
+      await fileSystem.saveTextFile(`financial-assistant-backup-${stamp}.json`, JSON.stringify(backup, null, 2), "application/json;charset=utf-8");
+      toast.success("Резервная копия сохранена");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось создать резервную копию");
+    }
+  }
+
+  async function restoreBackup() {
+    const confirmed = window.confirm("Восстановление заменит текущие пользовательские данные содержимым резервной копии. Продолжить?");
+    if (!confirmed) return;
+
+    const file = await fileSystem.pickTextFile(".json,application/json");
+    if (!file) return;
+
+    try {
+      const backup = JSON.parse(file.content) as unknown;
+      await apiClient.post("/backup", { backup });
+      toast.success("Резервная копия восстановлена");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось восстановить резервную копию");
+    }
+  }
+
   async function submitImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -77,6 +105,27 @@ export function ImportExportPanel({
             <FileJson className="size-4" />
             JSON
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Резервная копия</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={exportBackup}>
+              <Download className="size-4" />
+              Скачать backup
+            </Button>
+            <Button type="button" variant="outline" onClick={restoreBackup}>
+              <RotateCcw className="size-4" />
+              Восстановить backup
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            JSON backup включает настройки, счета, категории, операции, бюджеты, цели, портфель и watchlist.
+          </p>
         </CardContent>
       </Card>
 
