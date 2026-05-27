@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+dist
+coverage
+.env
+.env*.local
+*.log
+*.tsbuildinfo
+*-qa.png
+dev-server.*.log
+prisma/migrations/dev.db
+src-tauri/target
+android
+ios

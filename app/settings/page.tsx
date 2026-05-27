@@ -1,0 +1,28 @@
+import { PageHeader } from "@/components/page-header";
+import { SettingsForm } from "@/components/settings/settings-form";
+import { SourceBanner } from "@/components/source-banner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSettingsPageData } from "@/lib/data";
+
+export default async function SettingsPage() {
+  const data = await getSettingsPageData();
+
+  return (
+    <div className="page-grid">
+      <PageHeader title="Настройки" description="Валюта, демо-режим, риск-профиль и целевой размер финансовой подушки." />
+      <SourceBanner source={data.source} />
+      <SettingsForm data={data} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Безопасность и интеграции</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>Приложение не хранит банковские логины и пароли и не выполняет screen scraping банков.</p>
+          <p>
+            Будущие банковские интеграции должны использовать официальные API, явное согласие пользователя и encrypted/secure storage для токенов.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
