@@ -13,8 +13,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CsvImportMapper } from "@/services/import/CsvImportMapper";
+import { CsvImportMapper, type CsvColumnMapping } from "@/services/import/CsvImportMapper";
 import { ExportService } from "@/services/export/ExportService";
+
+const emptyMapping: CsvColumnMapping = {
+  dateColumn: "",
+  amountColumn: "",
+  descriptionColumn: "",
+  categoryColumn: "",
+  accountColumn: ""
+};
 
 export function ImportExportPanel({
   data,
@@ -26,17 +34,21 @@ export function ImportExportPanel({
   const [fields, setFields] = useState<string[]>([]);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [errors, setErrors] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<CsvColumnMapping>(emptyMapping);
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
+  const mapper = useMemo(() => new CsvImportMapper(), []);
+  const validation = useMemo(() => mapper.validateRows(rows, mapping), [mapper, mapping, rows]);
   const router = useRouter();
 
   async function pickCsv() {
     const file = await fileSystem.pickTextFile(".csv,text/csv");
     if (!file) return;
 
-    const parsed = new CsvImportMapper().parse(file.content);
+    const parsed = mapper.parse(file.content);
     setFields(parsed.fields);
-    setRows(parsed.rows.slice(0, 100));
+    setRows(parsed.rows);
     setErrors(parsed.errors);
+    setMapping(mapper.suggestColumns(parsed.fields));
   }
 
   async function exportCsv() {
@@ -82,8 +94,8 @@ export function ImportExportPanel({
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
     try {
-      await apiClient.post("/import", payload);
-      toast.success("CSV импортирован");
+      const result = await apiClient.post<{ imported: number; skipped: number }>("/import", payload);
+      toast.success(`CSV импортирован: ${result.imported} строк, пропущено: ${result.skipped}`);
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось импортировать CSV");
@@ -152,17 +164,35 @@ export function ImportExportPanel({
             <form onSubmit={submitImport} className="space-y-4">
               <input type="hidden" name="rows" value={JSON.stringify(rows)} />
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <ColumnSelect label="Дата" name="dateColumn" fields={fields} preferred={["date", "Дата"]} required />
-                <ColumnSelect label="Сумма" name="amountColumn" fields={fields} preferred={["amount", "Сумма"]} required />
-                <ColumnSelect label="Описание" name="descriptionColumn" fields={fields} preferred={["description", "Описание"]} />
-                <ColumnSelect label="Категория" name="categoryColumn" fields={fields} preferred={["category", "Категория"]} />
-                <ColumnSelect label="Счет" name="accountColumn" fields={fields} preferred={["account", "Счет"]} />
+                <ColumnSelect label="Дата" name="dateColumn" fields={fields} value={mapping.dateColumn} onChange={(value) => setMapping((current) => ({ ...current, dateColumn: value }))} required />
+                <ColumnSelect label="Сумма" name="amountColumn" fields={fields} value={mapping.amountColumn} onChange={(value) => setMapping((current) => ({ ...current, amountColumn: value }))} required />
+                <ColumnSelect
+                  label="Описание"
+                  name="descriptionColumn"
+                  fields={fields}
+                  value={mapping.descriptionColumn}
+                  onChange={(value) => setMapping((current) => ({ ...current, descriptionColumn: value }))}
+                />
+                <ColumnSelect label="Категория" name="categoryColumn" fields={fields} value={mapping.categoryColumn} onChange={(value) => setMapping((current) => ({ ...current, categoryColumn: value }))} />
+                <ColumnSelect label="Счет" name="accountColumn" fields={fields} value={mapping.accountColumn} onChange={(value) => setMapping((current) => ({ ...current, accountColumn: value }))} />
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                 При импорте положительные суммы станут доходами, отрицательные — расходами. Если счет или категория не найдены,
                 используются первый счет и создаваемая импортная категория.
               </div>
-              <Button type="submit">Импортировать операции</Button>
+              <div className="rounded-lg border p-3 text-sm">
+                <p className="font-medium">Будет импортировано: {validation.validRows} из {rows.length}</p>
+                {validation.warnings.length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-muted-foreground">
+                    {validation.warnings.slice(0, 5).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+              <Button type="submit" disabled={validation.validRows === 0}>
+                Импортировать операции
+              </Button>
             </form>
           ) : null}
         </CardContent>
@@ -233,21 +263,21 @@ function ColumnSelect({
   label,
   name,
   fields,
-  preferred,
+  value,
+  onChange,
   required
 }: {
   label: string;
   name: string;
   fields: string[];
-  preferred: string[];
+  value: string;
+  onChange: (value: string) => void;
   required?: boolean;
 }) {
-  const defaultValue = fields.find((field) => preferred.some((item) => item.toLowerCase() === field.toLowerCase())) ?? "";
-
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <select name={name} defaultValue={defaultValue} required={required} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+      <select name={name} value={value} onChange={(event) => onChange(event.target.value)} required={required} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
         <option value="">Не выбрано</option>
         {fields.map((field) => (
           <option key={field} value={field}>

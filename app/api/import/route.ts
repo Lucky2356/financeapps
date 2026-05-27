@@ -23,7 +23,7 @@ function parseCsvAmount(raw: unknown) {
       .replace(",", ".")
       .replace(/[^\d.-]/g, "")
   );
-  return Number.isFinite(amount) ? amount : 0;
+  return Number.isFinite(amount) ? amount : null;
 }
 
 function parseCsvDate(raw: unknown) {
@@ -33,7 +33,7 @@ function parseCsvDate(raw: unknown) {
   const yyyymmdd = parse(value, "yyyy-MM-dd", new Date());
   if (isValid(yyyymmdd)) return yyyymmdd;
   const native = new Date(value);
-  return isValid(native) ? native : new Date();
+  return isValid(native) ? native : null;
 }
 
 async function findOrCreateImportCategory(userId: string, name: string, kind: CategoryKind) {
@@ -72,10 +72,15 @@ export async function POST(request: NextRequest) {
   if (!fallbackAccount) return NextResponse.json({ error: "Create an account before importing CSV." }, { status: 400 });
 
   let imported = 0;
+  let skipped = 0;
   await db.$transaction(async (tx) => {
     for (const row of rows) {
       const rawAmount = parseCsvAmount(row[input.amountColumn]);
-      if (rawAmount === 0) continue;
+      const date = parseCsvDate(row[input.dateColumn]);
+      if (rawAmount === null || rawAmount === 0 || !date) {
+        skipped += 1;
+        continue;
+      }
 
       const type: TransactionType = rawAmount >= 0 ? "INCOME" : "EXPENSE";
       const amount = Math.abs(rawAmount);
@@ -91,7 +96,7 @@ export async function POST(request: NextRequest) {
           categoryId: category.id,
           amount,
           type,
-          date: parseCsvDate(row[input.dateColumn]),
+          date,
           description: String(row[input.descriptionColumn ?? ""] ?? "").trim() || null
         }
       });
@@ -103,5 +108,5 @@ export async function POST(request: NextRequest) {
     }
   });
 
-  return NextResponse.json({ imported });
+  return NextResponse.json({ imported, skipped });
 }

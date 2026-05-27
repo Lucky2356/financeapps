@@ -4,6 +4,7 @@ import { Edit2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -260,6 +261,16 @@ function TransactionDialog({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const type = transaction?.type ?? "EXPENSE";
+  const [selectedType, setSelectedType] = useState(type);
+  const matchingCategories = useMemo(() => data.categories.filter((category) => category.kind === selectedType), [data.categories, selectedType]);
+  const [categoryId, setCategoryId] = useState(transaction?.category.id ?? matchingCategories[0]?.id ?? "");
+  const effectiveCategoryId = matchingCategories.some((category) => category.id === categoryId) ? categoryId : matchingCategories[0]?.id ?? "";
+
+  function changeType(value: "INCOME" | "EXPENSE") {
+    const nextCategories = data.categories.filter((category) => category.kind === value);
+    setSelectedType(value);
+    setCategoryId(nextCategories[0]?.id ?? "");
+  }
 
   return (
     <DialogContent>
@@ -276,15 +287,15 @@ function TransactionDialog({
           </div>
           <div className="space-y-2">
             <Label>Тип</Label>
-            <select name="type" defaultValue={type} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <select name="type" value={selectedType} onChange={(event) => changeType(event.target.value as "INCOME" | "EXPENSE")} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
               <option value="EXPENSE">Расход</option>
               <option value="INCOME">Доход</option>
             </select>
           </div>
           <div className="space-y-2">
             <Label>Категория</Label>
-            <select name="categoryId" defaultValue={transaction?.category.id ?? data.categories.find((item) => item.kind === type)?.id} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              {data.categories.map((category) => (
+            <select name="categoryId" value={effectiveCategoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              {matchingCategories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.label}
                 </option>
