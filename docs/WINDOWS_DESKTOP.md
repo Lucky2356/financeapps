@@ -33,10 +33,11 @@ This starts the Next.js dev server and opens the Tauri window.
 npm run tauri:build
 ```
 
-Build artifacts are placed in:
+The current desktop bundle target is NSIS because it is simpler and more reliable for this MVP than MSI/WiX. Build artifacts are placed in:
 
 ```text
-src-tauri/target/release/bundle/
+src-tauri/target/release/financial-assistant.exe
+src-tauri/target/release/bundle/nsis/
 ```
 
 ## Data Modes
