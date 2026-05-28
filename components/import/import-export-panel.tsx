@@ -61,6 +61,11 @@ export function ImportExportPanel({
     await fileSystem.saveTextFile("transactions-export.json", content, "application/json;charset=utf-8");
   }
 
+  async function downloadTemplate() {
+    const content = "Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-1200,Кофе,Рестораны,Дебетовая карта\n28.05.2026,150000,Зарплата,Зарплата,Дебетовая карта";
+    await fileSystem.saveTextFile("transactions-import-template.csv", content, "text/csv;charset=utf-8");
+  }
+
   async function exportBackup() {
     try {
       const backup = await apiClient.get<unknown>("/backup");
@@ -104,11 +109,12 @@ export function ImportExportPanel({
 
   return (
     <div className="space-y-5">
+      <section className="grid gap-5 xl:grid-cols-2">
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b bg-muted/20">
           <CardTitle>Экспорт данных</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
+        <CardContent className="flex flex-wrap gap-2 pt-5">
           <Button type="button" variant="outline" onClick={exportCsv}>
             <Download className="size-4" />
             CSV
@@ -121,10 +127,10 @@ export function ImportExportPanel({
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b bg-muted/20">
           <CardTitle>Резервная копия</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 pt-5">
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={exportBackup}>
               <Download className="size-4" />
@@ -140,16 +146,21 @@ export function ImportExportPanel({
           </p>
         </CardContent>
       </Card>
+      </section>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b bg-muted/20">
           <CardTitle>Импорт CSV</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-5">
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={pickCsv}>
               <Upload className="size-4" />
               Загрузить CSV
+            </Button>
+            <Button type="button" variant="outline" onClick={downloadTemplate}>
+              <Download className="size-4" />
+              Шаблон CSV
             </Button>
             <p className="self-center text-sm text-muted-foreground">Поддерживаются колонки даты, суммы, описания, категории и счета.</p>
           </div>
@@ -176,9 +187,19 @@ export function ImportExportPanel({
                 <ColumnSelect label="Категория" name="categoryColumn" fields={fields} value={mapping.categoryColumn} onChange={(value) => setMapping((current) => ({ ...current, categoryColumn: value }))} />
                 <ColumnSelect label="Счет" name="accountColumn" fields={fields} value={mapping.accountColumn} onChange={(value) => setMapping((current) => ({ ...current, accountColumn: value }))} />
               </div>
-              <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                При импорте положительные суммы станут доходами, отрицательные — расходами. Если счет или категория не найдены,
-                используются первый счет и создаваемая импортная категория.
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border bg-muted/25 p-3 text-sm">
+                  <p className="font-medium">1. Проверьте колонки</p>
+                  <p className="mt-1 text-muted-foreground">Дата и сумма обязательны, остальные поля можно оставить пустыми.</p>
+                </div>
+                <div className="rounded-lg border bg-muted/25 p-3 text-sm">
+                  <p className="font-medium">2. Проверьте знак суммы</p>
+                  <p className="mt-1 text-muted-foreground">Положительные суммы станут доходами, отрицательные - расходами.</p>
+                </div>
+                <div className="rounded-lg border bg-muted/25 p-3 text-sm">
+                  <p className="font-medium">3. Проверьте справочники</p>
+                  <p className="mt-1 text-muted-foreground">Если счет или категория не найдены, будет использован fallback.</p>
+                </div>
               </div>
               <div className="rounded-lg border p-3 text-sm">
                 <p className="font-medium">Будет импортировано: {validation.validRows} из {rows.length}</p>
