@@ -2,8 +2,10 @@ import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import type {
   AccountsPageData,
   BudgetsPageData,
+  ForecastPageData,
   GoalsPageData,
   ImportPageData,
+  RecurringTransactionsPageData,
   SettingsPageData,
   TransactionsPageData
 } from "@/lib/data";
@@ -19,6 +21,14 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   transactions() {
     return this.required<TransactionsPageData>("transactions");
+  }
+
+  recurring() {
+    return this.required<RecurringTransactionsPageData>("recurring");
+  }
+
+  forecast() {
+    return this.required<ForecastPageData>("forecast");
   }
 
   accounts() {

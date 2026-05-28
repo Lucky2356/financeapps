@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { DashboardActionPlan } from "@/components/dashboard-action-plan";
+import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
 import { FinanceHealthCard } from "@/components/finance-health-card";
@@ -12,12 +13,12 @@ import { RecommendationList } from "@/components/recommendation-list";
 import { SourceBanner } from "@/components/source-banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDashboardData } from "@/lib/data";
+import { getDashboardData, getForecastData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
 
 export default async function DashboardPage() {
   await ensureFreshServerData();
-  const data = await getDashboardData();
+  const [data, forecast] = await Promise.all([getDashboardData(), getForecastData()]);
 
   return (
     <div className="page-grid">
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
       />
       <SourceBanner source={data.source} />
       <DashboardOverview data={data} />
+      <DashboardForecastStrip forecast={forecast} />
       <DashboardActionPlan data={data} />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

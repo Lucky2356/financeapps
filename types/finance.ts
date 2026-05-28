@@ -48,6 +48,46 @@ export type DashboardData = {
   health: HealthScore;
 };
 
+export type ForecastPoint = {
+  date: string;
+  label: string;
+  balance: number;
+  income: number;
+  expense: number;
+};
+
+export type ForecastEvent = {
+  id: string;
+  date: string;
+  title: string;
+  amount: number;
+  type: TransactionType;
+  category: string;
+  account: string;
+};
+
+export type ForecastWarning = {
+  id: string;
+  title: string;
+  description: string;
+  severity: "INFO" | "WARNING" | "CRITICAL";
+};
+
+export type ForecastData = {
+  source: DataSource;
+  currency: string;
+  startingBalance: number;
+  forecast30dBalance: number;
+  forecast90dBalance: number;
+  plannedIncome30d: number;
+  plannedExpense30d: number;
+  plannedIncome90d: number;
+  plannedExpense90d: number;
+  points: ForecastPoint[];
+  upcomingEvents: ForecastEvent[];
+  warnings: ForecastWarning[];
+};
+
 export type Option = {
   id: string;
   label: string;

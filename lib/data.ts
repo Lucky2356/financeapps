@@ -7,6 +7,7 @@ import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
 import { transactionFilterSchema } from "@/lib/validations";
+import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
@@ -17,6 +18,7 @@ import type {
   ChartDatum,
   DashboardData,
   DataSource,
+  ForecastData,
   GoalRow,
   InvestmentData,
   MonthlyCashflowDatum,
@@ -83,6 +85,8 @@ export type GoalsPageData = {
   goals: GoalRow[];
   currency: string;
 };
+
+export type ForecastPageData = ForecastData;
 
 export type SettingsPageData = {
   source: DataSource;
@@ -805,6 +809,45 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
         currency: user.currency,
         summary: buildRecurringSummary(recurringTransactions)
       };
+    }
+  );
+}
+
+export async function getForecastData(): Promise<ForecastPageData> {
+  return safeData<ForecastPageData>(
+    () => {
+      const recurringTransactions = buildDemoRecurringTransactions();
+      const goals = buildDemoGoals();
+
+      return new CashflowForecastService().build({
+        source: "demo-fallback",
+        currency: "RUB",
+        accounts: demoAccounts,
+        recurringTransactions,
+        goals
+      });
+    },
+    async () => {
+      if (!prisma) throw new Error("Prisma client is not configured.");
+      const user = await getDefaultUser();
+      if (!user) throw new Error("No user found.");
+      const [accounts, recurringRows, goals] = await Promise.all([
+        prisma.account.findMany({ where: { userId: user.id, isArchived: false }, orderBy: { createdAt: "asc" } }),
+        prisma.recurringTransaction.findMany({
+          where: { userId: user.id },
+          orderBy: [{ isActive: "desc" }, { nextDate: "asc" }],
+          include: { account: true, category: true }
+        }),
+        prisma.savingGoal.findMany({ where: { userId: user.id }, orderBy: { deadline: "asc" } })
+      ]);
+
+      return new CashflowForecastService().build({
+        source: "database",
+        currency: user.currency,
+        accounts: accounts.map(toAccountRow),
+        recurringTransactions: recurringRows.map(toRecurringTransactionRow),
+        goals: goals.map(toGoalRow)
+      });
     }
   );
 }

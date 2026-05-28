@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { LocalModePanel } from "@/components/settings/local-mode-panel";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { SourceBanner } from "@/components/source-banner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ export default async function SettingsPage() {
       <PageHeader title="Настройки" description="Валюта, демо-режим, риск-профиль и целевой размер финансовой подушки." />
       <SourceBanner source={data.source} />
       <SettingsForm data={data} />
+      <LocalModePanel />
       <Card>
         <CardHeader>
           <CardTitle>Безопасность и интеграции</CardTitle>

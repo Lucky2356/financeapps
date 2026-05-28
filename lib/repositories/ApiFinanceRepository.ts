@@ -2,8 +2,10 @@ import type { ApiClient } from "@/lib/api/ApiClient";
 import type {
   AccountsPageData,
   BudgetsPageData,
+  ForecastPageData,
   GoalsPageData,
   ImportPageData,
+  RecurringTransactionsPageData,
   SettingsPageData,
   TransactionsPageData
 } from "@/lib/data";
@@ -28,6 +30,14 @@ export class ApiFinanceRepository implements FinanceRepository {
 
   transactions(params?: Record<string, string>) {
     return this.apiClient.get<TransactionsPageData>(`/transactions${query(params)}`);
+  }
+
+  recurring() {
+    return this.apiClient.get<RecurringTransactionsPageData>("/recurring");
+  }
+
+  forecast() {
+    return this.apiClient.get<ForecastPageData>("/forecast");
   }
 
   accounts() {

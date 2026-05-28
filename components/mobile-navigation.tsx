@@ -9,6 +9,7 @@ import {
   Download,
   Flag,
   Gauge,
+  LineChart,
   LayoutDashboard,
   Menu,
   Settings,
@@ -29,6 +30,7 @@ const primaryItems = [
 
 const secondaryItems = [
   { href: "/recurring", label: "Плановые", icon: CalendarClock },
+  { href: "/forecast", label: "Прогноз", icon: LineChart },
   { href: "/accounts", label: "Счета", icon: WalletCards },
   { href: "/goals", label: "Цели", icon: Flag },
   { href: "/import", label: "Импорт", icon: Download },
