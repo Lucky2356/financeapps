@@ -2,7 +2,7 @@
 
 import { Download, Edit2, Plus, ReceiptText, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -29,7 +29,24 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const router = useRouter();
-  const totals = data.transactions.reduce(
+  const searchParams = useSearchParams();
+  const clientFilters = {
+    from: searchParams.get("from") ?? "",
+    to: searchParams.get("to") ?? "",
+    type: searchParams.get("type") ?? "ALL",
+    categoryId: searchParams.get("categoryId") ?? "",
+    accountId: searchParams.get("accountId") ?? ""
+  };
+  const visibleTransactions = data.transactions.filter((transaction) => {
+    const date = transaction.date.slice(0, 10);
+    if (clientFilters.from && date < clientFilters.from) return false;
+    if (clientFilters.to && date > clientFilters.to) return false;
+    if (clientFilters.type !== "ALL" && transaction.type !== clientFilters.type) return false;
+    if (clientFilters.categoryId && transaction.category.id !== clientFilters.categoryId) return false;
+    if (clientFilters.accountId && transaction.account.id !== clientFilters.accountId) return false;
+    return true;
+  });
+  const totals = visibleTransactions.reduce(
     (acc, transaction) => {
       if (transaction.type === "INCOME") acc.income += transaction.amount;
       if (transaction.type === "EXPENSE") acc.expense += transaction.amount;
@@ -91,15 +108,15 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="space-y-2">
               <Label htmlFor="from">С</Label>
-              <Input id="from" name="from" type="date" defaultValue={data.filters.from ?? ""} />
+              <Input id="from" name="from" type="date" defaultValue={clientFilters.from} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="to">По</Label>
-              <Input id="to" name="to" type="date" defaultValue={data.filters.to ?? ""} />
+              <Input id="to" name="to" type="date" defaultValue={clientFilters.to} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Тип</Label>
-              <select id="type" name="type" defaultValue={data.filters.type ?? "ALL"} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <select id="type" name="type" defaultValue={clientFilters.type} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
                 <option value="ALL">Все</option>
                 <option value="INCOME">Доход</option>
                 <option value="EXPENSE">Расход</option>
@@ -107,7 +124,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="categoryId">Категория</Label>
-              <select id="categoryId" name="categoryId" defaultValue={data.filters.categoryId ?? ""} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <select id="categoryId" name="categoryId" defaultValue={clientFilters.categoryId} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
                 <option value="">Все категории</option>
                 {data.categories.map((category) => (
                   <option key={category.id} value={category.id}>
@@ -118,7 +135,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="accountId">Счет</Label>
-              <select id="accountId" name="accountId" defaultValue={data.filters.accountId ?? ""} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <select id="accountId" name="accountId" defaultValue={clientFilters.accountId} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
                 <option value="">Все счета</option>
                 {data.accounts.map((account) => (
                   <option key={account.id} value={account.id}>
@@ -154,7 +171,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           <CardTitle>Операции</CardTitle>
         </CardHeader>
         <CardContent>
-          {data.transactions.length === 0 ? (
+          {visibleTransactions.length === 0 ? (
             <EmptyState
               icon={ReceiptText}
               title="Операции не найдены"
@@ -175,7 +192,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.transactions.map((transaction) => (
+                {visibleTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
                     <TableCell>{formatDate(transaction.date)}</TableCell>
                     <TableCell>
@@ -225,7 +242,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
               </div>
 
               <div className="space-y-3 md:hidden">
-            {data.transactions.map((transaction) => (
+            {visibleTransactions.map((transaction) => (
               <div key={transaction.id} className="rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

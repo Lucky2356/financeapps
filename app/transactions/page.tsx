@@ -1,16 +1,14 @@
+import { Suspense } from "react";
+
 import { PageHeader } from "@/components/page-header";
 import { SourceBanner } from "@/components/source-banner";
 import { TransactionManager } from "@/components/transactions/transaction-manager";
 import { getTransactionsPageData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
 
-export default async function TransactionsPage({
-  searchParams
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+export default async function TransactionsPage() {
   await ensureFreshServerData();
-  const data = await getTransactionsPageData(searchParams);
+  const data = await getTransactionsPageData({});
 
   return (
     <div className="page-grid">
@@ -19,7 +17,9 @@ export default async function TransactionsPage({
         description="Ручной ввод, редактирование, удаление и фильтрация доходов и расходов."
       />
       <SourceBanner source={data.source} />
-      <TransactionManager data={data} />
+      <Suspense fallback={<div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">Загружаем операции...</div>}>
+        <TransactionManager data={data} />
+      </Suspense>
     </div>
   );
 }
