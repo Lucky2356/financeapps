@@ -39,5 +39,12 @@
       <h1>Нет подключения</h1>
       <p>Откройте приложение снова, когда сеть станет доступна. Локальные адаптеры под desktop/mobile заложены для следующих итераций.</p>
     </main>
+    <script>
+      if ("serviceWorker" in navigator && (location.hostname.includes("tauri") || location.protocol !== "http:" && location.protocol !== "https:")) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          return Promise.all(registrations.map((registration) => registration.unregister()));
+        }).then(() => location.replace("/"));
+      }
+    </script>
   </body>
 </html>

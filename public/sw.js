@@ -1,8 +1,14 @@
-const CACHE_NAME = "financial-assistant-v1";
+const CACHE_NAME = "financial-assistant-v2";
 const OFFLINE_URL = "/offline.html";
 const CORE_ASSETS = ["/", OFFLINE_URL, "/manifest.json", "/icons/icon.svg", "/icons/maskable.svg"];
+const IS_TAURI_ORIGIN = self.location.hostname.includes("tauri") || self.location.protocol.startsWith("tauri");
 
 self.addEventListener("install", (event) => {
+  if (IS_TAURI_ORIGIN) {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
+
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -12,6 +18,11 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
+  if (IS_TAURI_ORIGIN) {
+    event.waitUntil(self.registration.unregister().then(() => self.clients.claim()));
+    return;
+  }
+
   event.waitUntil(
     caches
       .keys()
@@ -22,8 +33,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+  const url = new URL(request.url);
 
   if (request.method !== "GET") return;
+  if (IS_TAURI_ORIGIN || url.hostname.includes("tauri")) return;
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
   if (request.mode === "navigate") {
     event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
