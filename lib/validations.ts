@@ -50,6 +50,18 @@ export const settingsSchema = z.object({
   emergencyFundMonthsTarget: z.coerce.number().int().refine((value) => [3, 6, 12].includes(value))
 });
 
+export const recurringTransactionSchema = z.object({
+  id: optionalId,
+  amount: positiveMoney,
+  type: z.enum(["INCOME", "EXPENSE"]),
+  categoryId: z.string().min(1, "Выберите категорию"),
+  accountId: z.string().min(1, "Выберите счет"),
+  frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
+  nextDate: z.string().min(1, "Укажите следующую дату"),
+  description: z.string().trim().max(180).optional(),
+  isActive: z.preprocess((value) => value === "on" || value === true || value === "true", z.boolean().default(true))
+});
+
 export const portfolioPositionSchema = z.object({
   ticker: z.string().trim().min(1).max(12).transform((value) => value.toUpperCase()),
   quantity: z.coerce.number().finite().positive("Количество должно быть больше нуля"),
@@ -72,5 +84,6 @@ export const csvImportSchema = z.object({
 export type TransactionInput = z.infer<typeof transactionSchema>;
 export type AccountInput = z.infer<typeof accountSchema>;
 export type SavingGoalInput = z.infer<typeof savingGoalSchema>;
+export type RecurringTransactionInput = z.infer<typeof recurringTransactionSchema>;
 export type PortfolioPositionInput = z.infer<typeof portfolioPositionSchema>;
 export type WatchlistItemInput = z.infer<typeof watchlistItemSchema>;

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowDownUp,
   BarChart3,
+  CalendarClock,
   CircleDollarSign,
   Download,
   Flag,
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/", label: "Главная", icon: LayoutDashboard },
   { href: "/transactions", label: "Операции", icon: ArrowDownUp },
+  { href: "/recurring", label: "Плановые", icon: CalendarClock },
   { href: "/accounts", label: "Счета", icon: WalletCards },
   { href: "/budgets", label: "Бюджеты", icon: Gauge },
   { href: "/goals", label: "Цели", icon: Flag },

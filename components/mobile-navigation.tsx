@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowDownUp,
   BarChart3,
+  CalendarClock,
   Download,
   Flag,
   Gauge,
@@ -27,6 +28,7 @@ const primaryItems = [
 ];
 
 const secondaryItems = [
+  { href: "/recurring", label: "Плановые", icon: CalendarClock },
   { href: "/accounts", label: "Счета", icon: WalletCards },
   { href: "/goals", label: "Цели", icon: Flag },
   { href: "/import", label: "Импорт", icon: Download },

@@ -28,6 +28,18 @@ const backupTransactionSchema = z.object({
   description: z.string().nullable().optional()
 });
 
+const backupRecurringTransactionSchema = z.object({
+  accountName: z.string().min(1),
+  categoryName: z.string().min(1),
+  categoryKind: z.enum(["INCOME", "EXPENSE"]),
+  amount: z.coerce.number().positive(),
+  type: z.enum(["INCOME", "EXPENSE"]),
+  frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
+  nextDate: z.string().min(1),
+  description: z.string().nullable().optional(),
+  isActive: z.boolean().default(true)
+});
+
 const backupBudgetSchema = z.object({
   categoryName: z.string().min(1),
   categoryKind: z.literal("EXPENSE"),
@@ -68,6 +80,7 @@ export const userBackupSchema = z.object({
   accounts: z.array(backupAccountSchema),
   categories: z.array(backupCategorySchema),
   transactions: z.array(backupTransactionSchema),
+  recurringTransactions: z.array(backupRecurringTransactionSchema).default([]),
   budgets: z.array(backupBudgetSchema),
   savingGoals: z.array(backupGoalSchema),
   portfolios: z.array(backupPortfolioSchema),
@@ -100,6 +113,10 @@ export class UserBackupService {
         categories: { orderBy: { createdAt: "asc" } },
         transactions: {
           orderBy: { date: "desc" },
+          include: { account: true, category: true }
+        },
+        recurringTransactions: {
+          orderBy: { nextDate: "asc" },
           include: { account: true, category: true }
         },
         budgets: {
@@ -163,6 +180,17 @@ export class UserBackupService {
         date: transaction.date.toISOString(),
         description: transaction.description
       })),
+      recurringTransactions: user.recurringTransactions.map((transaction) => ({
+        accountName: transaction.account.name,
+        categoryName: transaction.category.name,
+        categoryKind: transaction.category.kind,
+        amount: toNumber(transaction.amount),
+        type: transaction.type,
+        frequency: transaction.frequency,
+        nextDate: transaction.nextDate.toISOString(),
+        description: transaction.description,
+        isActive: transaction.isActive
+      })),
       budgets: user.budgets.map((budget) => ({
         categoryName: budget.category.name,
         categoryKind: "EXPENSE",
@@ -205,6 +233,7 @@ export class UserBackupService {
         : null;
 
       await tx.transaction.deleteMany({ where: { userId: existingUser.id } });
+      await tx.recurringTransaction.deleteMany({ where: { userId: existingUser.id } });
       await tx.budget.deleteMany({ where: { userId: existingUser.id } });
       await tx.savingGoal.deleteMany({ where: { userId: existingUser.id } });
       await tx.recommendation.deleteMany({ where: { userId: existingUser.id } });
@@ -296,6 +325,26 @@ export class UserBackupService {
             type: transaction.type,
             date: new Date(transaction.date),
             description: transaction.description ?? null
+          }
+        });
+      }
+
+      for (const transaction of backup.recurringTransactions) {
+        const accountId = accountByName.get(accountKey(transaction.accountName));
+        const categoryId = categoryByName.get(categoryKey(transaction.categoryKind, transaction.categoryName));
+        if (!accountId || !categoryId) continue;
+
+        await tx.recurringTransaction.create({
+          data: {
+            userId: existingUser.id,
+            accountId,
+            categoryId,
+            amount: transaction.amount,
+            type: transaction.type,
+            frequency: transaction.frequency,
+            nextDate: new Date(transaction.nextDate),
+            description: transaction.description ?? null,
+            isActive: transaction.isActive
           }
         });
       }

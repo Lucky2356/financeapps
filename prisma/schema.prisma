@@ -43,6 +43,12 @@ enum RiskProfileCode {
   AGGRESSIVE
 }
 
+enum RecurrenceFrequency {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 enum ExternalConnectionStatus {
   DISCONNECTED
   CONNECTED
@@ -78,6 +84,7 @@ model User {
   recommendations           Recommendation[]
   portfolios                Portfolio[]
   watchlistItems            WatchlistItem[]
+  recurringTransactions     RecurringTransaction[]
   externalConnections       ExternalConnection[]
   createdAt                 DateTime             @default(now())
   updatedAt                 DateTime             @updatedAt
@@ -95,6 +102,7 @@ model Account {
   currency     String        @default("RUB")
   isArchived   Boolean       @default(false)
   transactions Transaction[]
+  recurringTransactions RecurringTransaction[]
   portfolios   Portfolio[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -113,6 +121,7 @@ model Category {
   isEssential    Boolean       @default(false)
   isSubscription Boolean       @default(false)
   transactions   Transaction[]
+  recurringTransactions RecurringTransaction[]
   budgets        Budget[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -140,6 +149,29 @@ model Transaction {
   @@index([accountId])
   @@index([categoryId])
   @@index([type])
+}
+
+model RecurringTransaction {
+  id            String              @id @default(cuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId     String
+  account       Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  categoryId    String
+  category      Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  amount        Decimal             @db.Decimal(14, 2)
+  type          TransactionType
+  frequency     RecurrenceFrequency
+  nextDate      DateTime
+  description   String?
+  isActive      Boolean             @default(true)
+  lastCreatedAt DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([userId, isActive, nextDate])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 model Budget {

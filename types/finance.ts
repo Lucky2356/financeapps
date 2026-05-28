@@ -1,4 +1,4 @@
-import type { RecommendationSeverity, SecurityRisk, TransactionType } from "@prisma/client";
+import type { RecommendationSeverity, RecurrenceFrequency, SecurityRisk, TransactionType } from "@prisma/client";
 
 export type DataSource = "database" | "demo-fallback";
 
@@ -59,6 +59,20 @@ export type TransactionRow = {
   type: TransactionType;
   date: string;
   description: string | null;
+  account: Option;
+  category: Option & { color: string };
+};
+
+export type RecurringTransactionRow = {
+  id: string;
+  amount: number;
+  type: TransactionType;
+  frequency: RecurrenceFrequency;
+  nextDate: string;
+  description: string | null;
+  isActive: boolean;
+  daysUntilNext: number;
+  isDue: boolean;
   account: Option;
   category: Option & { color: string };
 };

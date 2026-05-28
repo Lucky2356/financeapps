@@ -22,6 +22,12 @@ export const RISK_PROFILE_LABELS = {
   AGGRESSIVE: "Агрессивный"
 } as const;
 
+export const RECURRENCE_FREQUENCY_LABELS = {
+  WEEKLY: "Еженедельно",
+  MONTHLY: "Ежемесячно",
+  YEARLY: "Ежегодно"
+} as const;
+
 export const SEVERITY_STYLES = {
   INFO: "bg-info/12 text-info-foreground border-info/30",
   SUCCESS: "bg-success/12 text-success-foreground border-success/30",

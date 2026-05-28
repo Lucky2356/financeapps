@@ -280,6 +280,29 @@ async function main() {
     });
   }
 
+  const recurringRows = [
+    [0, 5, 210000, "INCOME", "MONTHLY", "Зарплата", debit.id, "Зарплата"],
+    [0, 8, 19700, "EXPENSE", "MONTHLY", "ЖКХ", debit.id, "Коммунальные платежи"],
+    [0, 10, 8800, "EXPENSE", "MONTHLY", "Подписки", debit.id, "Сервисы и приложения"],
+    [0, 12, 3500, "EXPENSE", "WEEKLY", "Продукты", debit.id, "Плановая закупка продуктов"],
+    [1, 3, 15000, "EXPENSE", "MONTHLY", "Образование", debit.id, "Обучение"]
+  ] as const;
+
+  for (const [monthOffset, day, amount, type, frequency, categoryName, accountId, description] of recurringRows) {
+    await prisma.recurringTransaction.create({
+      data: {
+        userId: user.id,
+        accountId,
+        categoryId: categoryId(type, categoryName),
+        amount,
+        type,
+        frequency,
+        nextDate: monthDate(monthOffset, day),
+        description
+      }
+    });
+  }
+
   const budgetMonth = startOfMonth(new Date());
   const budgetRows = [
     ["Продукты", 43000],

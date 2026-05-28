@@ -1,4 +1,4 @@
-import type { Prisma, RiskProfileCode, TransactionType } from "@prisma/client";
+import type { Prisma, RecurrenceFrequency, RiskProfileCode, TransactionType } from "@prisma/client";
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
 
@@ -9,6 +9,7 @@ import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
 import { transactionFilterSchema } from "@/lib/validations";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
+import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 import { MockMarketDataProvider } from "@/services/market/MockMarketDataProvider";
 import type {
   AccountRow,
@@ -21,6 +22,7 @@ import type {
   MonthlyCashflowDatum,
   Option,
   PortfolioRow,
+  RecurringTransactionRow,
   RecommendationView,
   TransactionRow
 } from "@/types/finance";
@@ -43,6 +45,21 @@ export type TransactionsPageData = {
     type?: "ALL" | "INCOME" | "EXPENSE";
     categoryId?: string;
     accountId?: string;
+  };
+};
+
+export type RecurringTransactionsPageData = {
+  source: DataSource;
+  recurringTransactions: RecurringTransactionRow[];
+  accounts: AccountRow[];
+  categories: CategoryOption[];
+  currency: string;
+  summary: {
+    activeCount: number;
+    dueCount: number;
+    nextSevenDaysAmount: number;
+    monthlyPlannedExpense: number;
+    monthlyPlannedIncome: number;
   };
 };
 
@@ -177,6 +194,66 @@ function buildDemoTransactions(): DemoTransaction[] {
       categoryMeta: category
     };
   });
+}
+
+const frequencyMonthlyFactor: Record<RecurrenceFrequency, number> = {
+  WEEKLY: 4.33,
+  MONTHLY: 1,
+  YEARLY: 1 / 12
+};
+
+function buildRecurringSummary(rows: RecurringTransactionRow[]) {
+  const service = new RecurringTransactionService();
+  const activeRows = rows.filter((row) => row.isActive);
+  const nextSevenDaysAmount = activeRows
+    .filter((row) => service.isUpcomingSoon(new Date(row.nextDate)) || row.isDue)
+    .reduce((sum, row) => sum + row.amount, 0);
+  const monthlyAmount = (type: TransactionType) =>
+    activeRows
+      .filter((row) => row.type === type)
+      .reduce((sum, row) => sum + row.amount * frequencyMonthlyFactor[row.frequency], 0);
+
+  return {
+    activeCount: activeRows.length,
+    dueCount: activeRows.filter((row) => row.isDue).length,
+    nextSevenDaysAmount: roundMoney(nextSevenDaysAmount),
+    monthlyPlannedExpense: roundMoney(monthlyAmount("EXPENSE")),
+    monthlyPlannedIncome: roundMoney(monthlyAmount("INCOME"))
+  };
+}
+
+function buildDemoRecurringTransactions(): RecurringTransactionRow[] {
+  const service = new RecurringTransactionService();
+  const rows = [
+    [0, 5, 210000, "INCOME", "MONTHLY", "cat-salary", "account-card", "Зарплата"],
+    [0, 8, 19700, "EXPENSE", "MONTHLY", "cat-utilities", "account-card", "ЖКХ"],
+    [0, 10, 8800, "EXPENSE", "MONTHLY", "cat-subscriptions", "account-card", "Подписки"],
+    [0, 12, 3500, "EXPENSE", "WEEKLY", "cat-food", "account-card", "Плановая закупка продуктов"],
+    [1, 3, 15000, "EXPENSE", "MONTHLY", "cat-education", "account-card", "Обучение"]
+  ] as const;
+
+  return service.sortUpcoming(
+    rows.map(([monthOffset, day, amount, type, frequency, categoryId, accountId, description], index) => {
+      const category = demoCategories.find((item) => item.id === categoryId)!;
+      const account = demoAccounts.find((item) => item.id === accountId)!;
+      const nextDate = demoDate(monthOffset, day);
+      const status = service.getStatus({ nextDate, frequency, isActive: true });
+
+      return {
+        id: `demo-recurring-${index}`,
+        amount,
+        type,
+        frequency,
+        nextDate: nextDate.toISOString(),
+        description,
+        isActive: true,
+        daysUntilNext: status.daysUntilNext,
+        isDue: status.isDue,
+        account: { id: account.id, label: account.name },
+        category: { id: category.id, label: category.label, color: category.color }
+      };
+    })
+  );
 }
 
 function currentMonthRange() {
@@ -460,6 +537,38 @@ async function getDatabaseTransactions(userId: string, filters: ReturnType<typeo
   }));
 }
 
+function toRecurringTransactionRow(row: {
+  id: string;
+  amount: unknown;
+  type: TransactionType;
+  frequency: RecurrenceFrequency;
+  nextDate: Date;
+  description: string | null;
+  isActive: boolean;
+  account: { id: string; name: string };
+  category: { id: string; name: string; color: string };
+}): RecurringTransactionRow {
+  const status = new RecurringTransactionService().getStatus({
+    nextDate: row.nextDate,
+    frequency: row.frequency,
+    isActive: row.isActive
+  });
+
+  return {
+    id: row.id,
+    amount: toNumber(row.amount),
+    type: row.type,
+    frequency: row.frequency,
+    nextDate: row.nextDate.toISOString(),
+    description: row.description,
+    isActive: row.isActive,
+    daysUntilNext: status.daysUntilNext,
+    isDue: status.isDue,
+    account: { id: row.account.id, label: row.account.name },
+    category: { id: row.category.id, label: row.category.name, color: row.category.color }
+  };
+}
+
 async function getDatabaseFinanceInput(userId: string, emergencyFundTargetMonths: number) {
   if (!prisma) throw new Error("Prisma client is not configured.");
 
@@ -653,6 +762,48 @@ export async function getTransactionsPageData(
         accounts: accounts.map(toAccountRow),
         categories: categories.map(toCategoryOption),
         filters: parsed
+      };
+    }
+  );
+}
+
+export async function getRecurringTransactionsPageData(): Promise<RecurringTransactionsPageData> {
+  return safeData<RecurringTransactionsPageData>(
+    () => {
+      const recurringTransactions = buildDemoRecurringTransactions();
+
+      return {
+        source: "demo-fallback",
+        recurringTransactions,
+        accounts: demoAccounts,
+        categories: demoCategories,
+        currency: "RUB",
+        summary: buildRecurringSummary(recurringTransactions)
+      };
+    },
+    async () => {
+      if (!prisma) throw new Error("Prisma client is not configured.");
+      const user = await getDefaultUser();
+      if (!user) throw new Error("No user found.");
+      const service = new RecurringTransactionService();
+      const [recurringRows, accounts, categories] = await Promise.all([
+        prisma.recurringTransaction.findMany({
+          where: { userId: user.id },
+          orderBy: [{ isActive: "desc" }, { nextDate: "asc" }],
+          include: { account: true, category: true }
+        }),
+        prisma.account.findMany({ where: { userId: user.id, isArchived: false }, orderBy: { createdAt: "asc" } }),
+        prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ kind: "asc" }, { name: "asc" }] })
+      ]);
+      const recurringTransactions = service.sortUpcoming(recurringRows.map(toRecurringTransactionRow));
+
+      return {
+        source: "database",
+        recurringTransactions,
+        accounts: accounts.map(toAccountRow),
+        categories: categories.map(toCategoryOption),
+        currency: user.currency,
+        summary: buildRecurringSummary(recurringTransactions)
       };
     }
   );
