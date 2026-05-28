@@ -166,6 +166,13 @@ src-tauri/target/release/bundle/
 
 Desktop-версия использует тот же frontend. В `cloud` режиме она подключается к API, в `local` режиме предусмотрены `DesktopStorageAdapter` и `TauriFileSystemAdapter`.
 
+Подробная инструкция по Windows EXE находится в [docs/WINDOWS_DESKTOP.md](docs/WINDOWS_DESKTOP.md). Быстрая проверка окружения:
+
+```bash
+npm run build:static
+npm run desktop:preflight
+```
+
 ## Import And Export
 
 Страница `Import` поддерживает:

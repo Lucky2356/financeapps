@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Desktop permissions for CSV/JSON import and export.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default", "fs:default"]
+}

@@ -24,6 +24,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "desktop:icons": "powershell -ExecutionPolicy Bypass -File scripts/generate-tauri-icons.ps1",
+    "desktop:preflight": "node scripts/desktop-preflight.mjs",
     "cap:sync": "cap sync",
     "cap:android": "cap open android"
   },
