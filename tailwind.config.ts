@@ -50,6 +50,13 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))"
         },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          muted: "hsl(var(--sidebar-muted))",
+          border: "hsl(var(--sidebar-border))",
+          accent: "hsl(var(--sidebar-accent))"
+        },
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))"
@@ -69,7 +76,9 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)"
       },
       boxShadow: {
-        soft: "0 14px 40px -28px rgb(15 23 42 / 0.45)"
+        soft: "0 14px 40px -28px rgb(15 23 42 / 0.45)",
+        "soft-sm": "0 4px 16px -8px rgb(15 23 42 / 0.3)",
+        "glow-primary": "0 0 24px -4px hsl(var(--primary) / 0.35)"
       }
     }
   },

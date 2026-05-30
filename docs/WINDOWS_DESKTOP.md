@@ -43,9 +43,9 @@ src-tauri/target/release/bundle/nsis/
 ## Data Modes
 
 - `cloud`: desktop app connects to the deployed API and PostgreSQL.
-- `local`: prepared shell for local storage adapters; full SQLite or IndexedDB sync remains a planned follow-up.
+- `local`: local-first desktop mode backed by IndexedDB through `LocalApiClient` for core workflows.
 
-Recommended production desktop environment:
+Recommended cloud desktop environment:
 
 ```env
 NEXT_PUBLIC_APP_PLATFORM=desktop
@@ -55,3 +55,14 @@ NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com/api
 NEXT_PUBLIC_DESKTOP_DATA_MODE=cloud
 NEXT_OUTPUT=export
 ```
+
+The default `npm run build:static` command now builds the Windows shell in local mode:
+
+```env
+NEXT_PUBLIC_APP_PLATFORM=desktop
+NEXT_PUBLIC_API_MODE=local
+NEXT_PUBLIC_DESKTOP_DATA_MODE=local
+NEXT_OUTPUT=export
+```
+
+See `docs/DESKTOP_LOCAL_MODE.md` for the local-first smoke test.

@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 
 import "@/app/globals.css";
 import { LayoutShell } from "@/components/layout-shell";
 import { Providers } from "@/components/providers";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { APP_NAME } from "@/lib/constants";
+
+const inter = Inter({ subsets: ["latin", "cyrillic"], display: "swap" });
 
 export const metadata: Metadata = {
   title: {
@@ -33,7 +36,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru" suppressHydrationWarning>
-      <body>
+      <body className={inter.className}>
         <Providers>
           <LayoutShell>{children}</LayoutShell>
           <ServiceWorkerRegister />

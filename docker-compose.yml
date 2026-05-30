@@ -17,5 +17,22 @@ services:
       timeout: 5s
       retries: 10
 
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financial-assistant-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}
+      NEXT_PUBLIC_APP_PLATFORM: ${NEXT_PUBLIC_APP_PLATFORM:-web}
+      NEXT_OUTPUT: standalone
+      NODE_ENV: production
+
 volumes:
   postgres-data:

@@ -8,8 +8,9 @@ import { budgetSchema } from "@/lib/validations";
 
 export const dynamic = "force-static";
 
-export async function GET() {
-  return NextResponse.json(await getBudgetsPageData());
+export async function GET(request: NextRequest) {
+  const month = request.nextUrl.searchParams.get("month") ?? undefined;
+  return NextResponse.json(await getBudgetsPageData(month));
 }
 
 export async function POST(request: NextRequest) {

@@ -4,7 +4,7 @@ import type { TransactionRow } from "@/types/finance";
 
 export class ExportService {
   transactionsToCsv(transactions: TransactionRow[]) {
-    return Papa.unparse(
+    const csv = Papa.unparse(
       transactions.map((transaction) => ({
         date: transaction.date,
         amount: transaction.type === "INCOME" ? transaction.amount : -transaction.amount,
@@ -14,6 +14,7 @@ export class ExportService {
         description: transaction.description ?? ""
       }))
     );
+    return "﻿" + csv;
   }
 
   transactionsToJson(transactions: TransactionRow[]) {

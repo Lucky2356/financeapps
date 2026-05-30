@@ -3,6 +3,7 @@
 import { Edit2, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import { PortfolioStructureChart } from "@/components/charts/portfolio-structure-chart";
@@ -14,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { INVESTMENT_DISCLAIMER, RISK_LABELS } from "@/lib/constants";
 import { formatCurrency, formatPercent } from "@/lib/format";
@@ -25,8 +27,20 @@ const riskVariant = {
   HIGH: "destructive"
 } as const;
 
-export function InvestmentsView({ data }: { data: InvestmentData }) {
+export function InvestmentsView({ data: initialData }: { data: InvestmentData }) {
   const router = useRouter();
+  const { data, reload } = useApiPageData(initialData, "/investments");
+
+  // Auto-refresh only when the user has investments to update (avoids confusing
+  // "updated 10 stocks" toast when user has never added any data)
+  const autoRefreshed = useRef(false);
+  useEffect(() => {
+    if (autoRefreshed.current) return;
+    autoRefreshed.current = true;
+    if (data.watchlist.length > 0 || data.portfolio.length > 0) {
+      void refreshMarketPrices();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submitPosition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,6 +49,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
     try {
       await apiClient.post("/investments", payload);
       toast.success("Позиция портфеля сохранена");
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось сохранить позицию");
@@ -45,6 +60,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
     try {
       await apiClient.post("/investments", { action: "delete", ticker });
       toast.success("Позиция удалена из портфеля");
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось удалить позицию");
@@ -58,6 +74,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
     try {
       await apiClient.post("/investments", { ...payload, action: "addWatchlist" });
       toast.success("Бумага добавлена в watchlist");
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось добавить бумагу");
@@ -68,6 +85,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
     try {
       await apiClient.post("/investments", { action: "removeWatchlist", ticker });
       toast.success("Бумага удалена из watchlist");
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось удалить бумагу");
@@ -78,6 +96,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
     try {
       const result = await apiClient.post<{ updated: number; source: string }>("/investments", { action: "refreshMarket" });
       toast.success(`Рыночные данные обновлены: ${result.updated} бумаг, источник ${result.source}`);
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось обновить рыночные данные");
@@ -153,7 +172,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                           void removeWatchlistItem(security.ticker);
                         }}
                       >
-                        <Button type="submit" variant="ghost" size="icon" title="Удалить из watchlist">
+                        <Button type="submit" variant="ghost" size="icon" title="Удалить из watchlist" aria-label="Удалить из watchlist">
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
                       </form>
@@ -260,7 +279,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                         <div className="flex justify-end gap-1">
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" title="Редактировать позицию">
+                              <Button variant="ghost" size="icon" title="Редактировать позицию" aria-label="Редактировать позицию">
                                 <Edit2 className="size-4" />
                               </Button>
                             </DialogTrigger>
@@ -278,7 +297,7 @@ export function InvestmentsView({ data }: { data: InvestmentData }) {
                               void removePosition(position.ticker);
                             }}
                           >
-                            <Button type="submit" variant="ghost" size="icon" title="Удалить позицию">
+                            <Button type="submit" variant="ghost" size="icon" title="Удалить позицию" aria-label="Удалить позицию">
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
                           </form>

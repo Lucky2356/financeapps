@@ -3,16 +3,30 @@ import { Suspense, type ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ToastListener } from "@/components/toast-listener";
 import { MobileBottomNav, MobileTopBar } from "@/components/mobile-navigation";
+import { QuickAddFab } from "@/components/quick-add-fab";
+import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { getImportPageData } from "@/lib/data";
 
-export function LayoutShell({ children }: { children: ReactNode }) {
+export async function LayoutShell({ children }: { children: ReactNode }) {
+  const importData = await getImportPageData();
+
   return (
     <div className="min-h-screen bg-muted/30 md:flex">
+      {/* Skip navigation for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg"
+      >
+        Перейти к содержимому
+      </a>
       <AppSidebar />
       <MobileTopBar />
-      <main className="min-w-0 flex-1">
+      <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 md:pb-6 lg:px-8">{children}</div>
       </main>
       <MobileBottomNav />
+      <QuickAddFab accounts={importData.accounts} categories={importData.categories} />
+      <KeyboardShortcuts />
       <Suspense fallback={null}>
         <ToastListener />
       </Suspense>

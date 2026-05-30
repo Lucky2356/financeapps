@@ -14,12 +14,26 @@ export const transactionSchema = z.object({
   description: z.string().trim().max(180).optional()
 });
 
+export const transferSchema = z.object({
+  amount: positiveMoney,
+  fromAccountId: z.string().min(1, "Выберите счет списания"),
+  toAccountId: z.string().min(1, "Выберите счет зачисления"),
+  date: z.string().min(1, "Укажите дату"),
+  description: z.string().trim().max(180).optional()
+}).refine((input) => input.fromAccountId !== input.toAccountId, {
+  message: "Счета списания и зачисления должны отличаться.",
+  path: ["toAccountId"]
+});
+
 export const transactionFilterSchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   type: z.enum(["ALL", "INCOME", "EXPENSE"]).optional(),
   categoryId: z.string().optional(),
-  accountId: z.string().optional()
+  accountId: z.string().optional(),
+  q: z.string().trim().max(120).optional(),
+  page: z.coerce.number().int().min(1).catch(1).default(1),
+  limit: z.coerce.number().int().min(10).max(100).catch(20).default(20)
 });
 
 export const accountSchema = z.object({
@@ -47,7 +61,10 @@ export const settingsSchema = z.object({
   currency: z.literal("RUB"),
   demoMode: z.preprocess((value) => value === "on" || value === true, z.boolean()),
   riskProfileCode: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE"]),
-  emergencyFundMonthsTarget: z.coerce.number().int().refine((value) => [3, 6, 12].includes(value))
+  emergencyFundMonthsTarget: z.coerce.number().int().refine((value) => [3, 6, 12].includes(value)),
+  theme: z.enum(["light", "dark", "system"]).optional(),
+  density: z.enum(["comfortable", "compact"]).optional(),
+  defaultTransactionType: z.enum(["INCOME", "EXPENSE"]).optional(),
 });
 
 export const recurringTransactionSchema = z.object({
@@ -81,7 +98,18 @@ export const csvImportSchema = z.object({
   accountColumn: z.string().optional()
 });
 
+export const categoryInputSchema = z.object({
+  id: optionalId,
+  name: z.string().trim().min(2, "Название слишком короткое").max(80),
+  kind: z.enum(["INCOME", "EXPENSE"]),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Неверный формат цвета").default("#64748b"),
+  isEssential: z.preprocess((v) => v === "on" || v === true || v === "true", z.boolean().default(false)),
+  isSubscription: z.preprocess((v) => v === "on" || v === true || v === "true", z.boolean().default(false))
+});
+
+export type CategoryInput = z.infer<typeof categoryInputSchema>;
 export type TransactionInput = z.infer<typeof transactionSchema>;
+export type TransferInput = z.infer<typeof transferSchema>;
 export type AccountInput = z.infer<typeof accountSchema>;
 export type SavingGoalInput = z.infer<typeof savingGoalSchema>;
 export type RecurringTransactionInput = z.infer<typeof recurringTransactionSchema>;
