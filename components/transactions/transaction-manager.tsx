@@ -116,14 +116,22 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
 
     try {
       setIsMutating(true);
+      let budgetWarning: { category: string; spent: number; limit: number } | undefined;
       if (method === "POST") {
-        await apiClient.post("/transactions", payload);
+        const result = await apiClient.post<{ budgetWarning?: typeof budgetWarning }>("/transactions", payload);
+        budgetWarning = result?.budgetWarning;
         toast.success("Операция добавлена");
         setAddOpen(false);
       } else {
-        await apiClient.put("/transactions", payload);
+        const result = await apiClient.put<{ budgetWarning?: typeof budgetWarning }>("/transactions", payload);
+        budgetWarning = result?.budgetWarning;
         toast.success("Операция обновлена");
         setEditingTransaction(null);
+      }
+      if (budgetWarning) {
+        toast.warning(
+          `Превышен лимит «${budgetWarning.category}»: потрачено ${formatCurrency(budgetWarning.spent)} из ${formatCurrency(budgetWarning.limit)}`
+        );
       }
       await loadTransactions(true);
       router.refresh();

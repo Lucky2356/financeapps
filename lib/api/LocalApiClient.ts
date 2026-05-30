@@ -67,7 +67,9 @@ const transactionRowSchema = z.object({
   date: z.string().min(1),
   description: z.string().nullable().optional().default(null),
   account: optionSchema,
-  category: optionSchema.extend({ color: z.string().trim().min(1).max(32).default("#64748b") })
+  category: optionSchema.extend({ color: z.string().trim().min(1).max(32).default("#64748b") }),
+  // Optional link to the recurring template that materialized this transaction
+  recurringId: z.string().optional()
 });
 const budgetRowSchema = z.object({
   id: z.string().min(1),
@@ -99,7 +101,9 @@ const recurringRowSchema = z.object({
   daysUntilNext: z.coerce.number().finite().default(0),
   isDue: z.boolean().default(false),
   account: optionSchema,
-  category: optionSchema.extend({ color: z.string().trim().min(1).max(32).default("#64748b") })
+  category: optionSchema.extend({ color: z.string().trim().min(1).max(32).default("#64748b") }),
+  // Id of the transaction this template last created — kept in sync on edit/delete
+  lastTransactionId: z.string().optional()
 });
 const watchlistRowSchema = z.object({
   ticker: z.string().trim().min(1).max(16).transform((value) => value.toUpperCase()),
@@ -179,10 +183,10 @@ type LocalState = {
   defaultTransactionType: "INCOME" | "EXPENSE";
   accounts: Array<AccountRow & { isArchived?: boolean }>;
   categories: CategoryOption[];
-  transactions: TransactionRow[];
+  transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
   goals: GoalsPageData["goals"];
-  recurringTransactions: RecurringTransactionsPageData["recurringTransactions"];
+  recurringTransactions: Array<RecurringTransactionsPageData["recurringTransactions"][number] & { lastTransactionId?: string }>;
   investments: InvestmentData;
   importBatches?: Array<{
     id: string;
@@ -300,6 +304,36 @@ function createInitialState(): LocalState {
   };
 }
 
+// A truly empty state — used when the user explicitly wipes all data.
+// Unlike createInitialState() this seeds nothing: no accounts, categories or watchlist.
+function createBlankState(): LocalState {
+  return {
+    schemaVersion: 1,
+    currency,
+    demoMode: false,
+    emergencyFundMonthsTarget: 6,
+    riskProfileCode: "MODERATE",
+    theme: "system",
+    density: "comfortable",
+    defaultTransactionType: "EXPENSE",
+    accounts: [],
+    categories: [],
+    transactions: [],
+    budgets: [],
+    goals: [],
+    recurringTransactions: [],
+    investments: emptyInvestmentData(),
+    importBatches: []
+  };
+}
+
+const DEFAULT_PROFILE: UserProfile = {
+  id: "profile-default",
+  name: "Основной",
+  color: "#0d9488",
+  createdAt: "1970-01-01T00:00:00.000Z"
+};
+
 export class LocalApiClient implements ApiClient {
   constructor(private readonly storage: StorageAdapter = createStorageAdapter()) {}
 
@@ -358,6 +392,11 @@ export class LocalApiClient implements ApiClient {
     } else if (pathname === "/goals" && itemId) {
       state.goals = state.goals.filter((goal) => goal.id !== itemId);
     } else if (pathname === "/recurring" && itemId) {
+      const existing = state.recurringTransactions.find((item) => item.id === itemId);
+      // Remove the linked materialized transaction so balances/budgets stay correct
+      if (existing?.lastTransactionId) {
+        this.deleteTransaction(state, existing.lastTransactionId);
+      }
       state.recurringTransactions = state.recurringTransactions.filter((item) => item.id !== itemId);
     } else if (pathname === "/categories" && itemId) {
       const txCount = state.transactions.filter((t) => t.category.id === itemId).length;
@@ -369,7 +408,14 @@ export class LocalApiClient implements ApiClient {
       await this.deleteProfile(itemId);
       return undefined as T;
     } else if (pathname === "/storage/clear") {
+      // Wipe everything, then write a single blank profile so the app reloads
+      // into a completely empty state instead of re-seeding demo defaults.
       await this.storage.clear();
+      await this.storage.setItem(PROFILE_LIST_KEY, {
+        profiles: [DEFAULT_PROFILE],
+        activeProfileId: DEFAULT_PROFILE.id
+      } satisfies ProfileList);
+      await this.storage.setItem(profileStateKey(DEFAULT_PROFILE.id), createBlankState());
       return undefined as T;
     } else {
       throw new Error(`Local API delete route is not implemented: ${pathname}`);
@@ -385,7 +431,11 @@ export class LocalApiClient implements ApiClient {
 
     if (pathname === "/accounts") return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer") return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
-    if (pathname === "/transactions") return this.saveAndReturn<TResponse>(state, this.upsertTransaction(state, body, method));
+    if (pathname === "/transactions") {
+      const tx = this.upsertTransaction(state, body, method);
+      const budgetWarning = this.budgetWarningFor(state, tx);
+      return this.saveAndReturn<TResponse>(state, { ...tx, budgetWarning });
+    }
     if (pathname === "/transactions/transfer") return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
     if (pathname === "/budgets") return this.saveAndReturn<TResponse>(state, this.upsertBudget(state, body));
     if (pathname === "/goals") return this.saveAndReturn<TResponse>(state, this.upsertGoal(state, body, method));
@@ -460,29 +510,47 @@ export class LocalApiClient implements ApiClient {
     return account;
   }
 
-  private upsertTransaction(state: LocalState, body: unknown, method: "POST" | "PUT") {
+  private upsertTransaction(state: LocalState, body: unknown, method: "POST" | "PUT", recurringId?: string) {
     const input = toFormObject(body);
     const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
     const category = state.categories.find((item) => item.id === input.categoryId);
     if (!account || !category) throw new Error("Выберите существующий счет и категорию.");
 
+    const previous = method === "PUT" && input.id ? state.transactions.find((item) => item.id === input.id) : undefined;
     if (method === "PUT" && input.id) this.deleteTransaction(state, input.id);
 
     const amount = Number(input.amount);
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
-    const transaction: TransactionRow = {
+    const linkedRecurringId = recurringId ?? previous?.recurringId;
+    const transaction: TransactionRow & { recurringId?: string } = {
       id: method === "PUT" && input.id ? input.id : id("tx"),
       amount,
       type,
       date: new Date(input.date).toISOString(),
       description: input.description?.trim() || null,
       account: { id: account.id, label: account.name },
-      category: { id: category.id, label: category.label, color: category.color }
+      category: { id: category.id, label: category.label, color: category.color },
+      ...(linkedRecurringId ? { recurringId: linkedRecurringId } : {})
     };
 
     state.transactions = [transaction, ...state.transactions.filter((item) => item.id !== transaction.id)];
     this.applyBalance(state, account.id, type === "INCOME" ? amount : -amount);
     return transaction;
+  }
+
+  // Returns budget overflow info when an EXPENSE pushes its category over the limit.
+  private budgetWarningFor(state: LocalState, tx: TransactionRow): { category: string; spent: number; limit: number } | null {
+    if (tx.type !== "EXPENSE") return null;
+    const budget = state.budgets.find((item) => item.categoryId === tx.category.id);
+    if (!budget || budget.limitAmount <= 0) return null;
+    const month = tx.date.slice(0, 7);
+    const spent = state.transactions
+      .filter((item) => item.type === "EXPENSE" && item.category.id === tx.category.id && item.date.startsWith(month))
+      .reduce((sum, item) => sum + item.amount, 0);
+    if (spent > budget.limitAmount) {
+      return { category: tx.category.label, spent: roundMoney(spent), limit: budget.limitAmount };
+    }
+    return null;
   }
 
   private createTransfer(state: LocalState, body: unknown) {
@@ -569,26 +637,92 @@ export class LocalApiClient implements ApiClient {
     if (!account || !category) throw new Error("Выберите существующий счет и категорию.");
 
     const service = new RecurringTransactionService();
-    const status = service.getStatus({
-      nextDate: new Date(input.nextDate),
-      frequency: input.frequency as RecurringTransactionsPageData["recurringTransactions"][number]["frequency"],
-      isActive: input.isActive === "true" || input.isActive === "on"
-    });
-    const row: RecurringTransactionsPageData["recurringTransactions"][number] = {
-      id: method === "PUT" && input.id ? input.id : id("recurring"),
-      amount: Number(input.amount),
-      type: input.type === "INCOME" ? "INCOME" : "EXPENSE",
-      frequency: input.frequency as RecurringTransactionsPageData["recurringTransactions"][number]["frequency"],
-      nextDate: new Date(input.nextDate).toISOString(),
-      description: input.description?.trim() || null,
-      isActive: input.isActive === "true" || input.isActive === "on",
+    const frequency = input.frequency as RecurringTransactionsPageData["recurringTransactions"][number]["frequency"];
+    const isActive = input.isActive === "true" || input.isActive === "on";
+    const amount = Number(input.amount);
+    const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
+    const description = input.description?.trim() || null;
+    const accountRef = { id: account.id, label: account.name };
+    const categoryRef = { id: category.id, label: category.label, color: category.color };
+    const nextDateInput = new Date(input.nextDate);
+
+    if (method === "PUT" && input.id) {
+      const existing = state.recurringTransactions.find((item) => item.id === input.id);
+      // Keep the already-created transaction in sync so budgets/balances reflect edits
+      if (existing?.lastTransactionId && state.transactions.some((item) => item.id === existing.lastTransactionId)) {
+        const linked = state.transactions.find((item) => item.id === existing.lastTransactionId)!;
+        this.upsertTransaction(
+          state,
+          {
+            id: linked.id,
+            amount: String(amount),
+            type,
+            accountId: account.id,
+            categoryId: category.id,
+            date: linked.date,
+            description: description ?? category.label
+          },
+          "PUT",
+          existing.id
+        );
+      }
+      const status = service.getStatus({ nextDate: nextDateInput, frequency, isActive });
+      const row: LocalState["recurringTransactions"][number] = {
+        id: input.id,
+        amount,
+        type,
+        frequency,
+        nextDate: nextDateInput.toISOString(),
+        description,
+        isActive,
+        daysUntilNext: status.daysUntilNext,
+        isDue: status.isDue,
+        account: accountRef,
+        category: categoryRef,
+        lastTransactionId: existing?.lastTransactionId
+      };
+      state.recurringTransactions = state.recurringTransactions.map((item) => (item.id === row.id ? row : item));
+      return row;
+    }
+
+    // POST — create the template AND immediately materialize the first occurrence,
+    // so the planned payment counts right away without an extra confirm click.
+    const newId = id("recurring");
+    let lastTransactionId: string | undefined;
+    if (isActive) {
+      const created = this.upsertTransaction(
+        state,
+        {
+          amount: String(amount),
+          type,
+          accountId: account.id,
+          categoryId: category.id,
+          date: nextDateInput.toISOString(),
+          description: description ?? category.label
+        },
+        "POST",
+        newId
+      );
+      lastTransactionId = created.id;
+    }
+    // Advance the schedule past the occurrence we just created.
+    const advancedNext = isActive ? service.getNextDate(nextDateInput, frequency) : nextDateInput;
+    const status = service.getStatus({ nextDate: advancedNext, frequency, isActive });
+    const row: LocalState["recurringTransactions"][number] = {
+      id: newId,
+      amount,
+      type,
+      frequency,
+      nextDate: advancedNext.toISOString(),
+      description,
+      isActive,
       daysUntilNext: status.daysUntilNext,
       isDue: status.isDue,
-      account: { id: account.id, label: account.name },
-      category: { id: category.id, label: category.label, color: category.color }
+      account: accountRef,
+      category: categoryRef,
+      lastTransactionId
     };
-    state.recurringTransactions =
-      method === "PUT" ? state.recurringTransactions.map((item) => (item.id === row.id ? row : item)) : [...state.recurringTransactions, row];
+    state.recurringTransactions = [...state.recurringTransactions, row];
     return row;
   }
 

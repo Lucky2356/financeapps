@@ -7,7 +7,9 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import type { ImportPageData } from "@/lib/data";
-import { formatInputDate } from "@/lib/format";
+import { formatCurrency, formatInputDate } from "@/lib/format";
+
+type BudgetWarning = { category: string; spent: number; limit: number };
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -42,8 +44,13 @@ export function QuickAddFab({
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
     try {
-      await apiClient.post("/transactions", { ...payload, type });
+      const result = await apiClient.post<{ budgetWarning?: BudgetWarning }>("/transactions", { ...payload, type });
       toast.success("Операция добавлена");
+      if (result?.budgetWarning) {
+        toast.warning(
+          `Превышен лимит «${result.budgetWarning.category}»: потрачено ${formatCurrency(result.budgetWarning.spent)} из ${formatCurrency(result.budgetWarning.limit)}`
+        );
+      }
       setOpen(false);
       router.refresh();
     } catch (error) {

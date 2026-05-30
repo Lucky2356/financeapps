@@ -32,19 +32,21 @@ export function KeyboardShortcuts() {
         return;
       }
 
-      if (event.altKey && event.key === "n") {
+      // Use event.code (physical key) so shortcuts work on any keyboard layout,
+      // including Russian — event.key would be "т"/"е" etc. on a Cyrillic layout.
+      if (event.altKey && event.code === "KeyN") {
         event.preventDefault();
         window.dispatchEvent(new CustomEvent("quick-add-open"));
-      } else if (event.altKey && event.key === "t") {
+      } else if (event.altKey && event.code === "KeyT") {
         event.preventDefault();
         router.push("/transactions");
-      } else if (event.altKey && event.key === "d") {
+      } else if (event.altKey && event.code === "KeyD") {
         event.preventDefault();
         router.push("/");
-      } else if (event.altKey && event.key === "a") {
+      } else if (event.altKey && event.code === "KeyA") {
         event.preventDefault();
         router.push("/analytics");
-      } else if (event.key === "?" && !event.ctrlKey && !event.metaKey) {
+      } else if ((event.key === "?" || (event.code === "Slash" && event.shiftKey)) && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         setShowHelp(true);
       }

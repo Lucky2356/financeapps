@@ -36,6 +36,9 @@ const PRESET_COLORS = [
 export function CategoryManager({ data }: { data: CategoriesPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/categories");
+  // Which "add" dialog is open (by kind), and which category is being edited
+  const [addKind, setAddKind] = useState<"INCOME" | "EXPENSE" | null>(null);
+  const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(null);
 
   const incomeCategories = pageData.categories.filter((c) => c.kind === "INCOME");
   const expenseCategories = pageData.categories.filter((c) => c.kind === "EXPENSE");
@@ -48,9 +51,11 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
       if (method === "POST") {
         await apiClient.post("/categories", payload);
         toast.success("Категория добавлена");
+        setAddKind(null);
       } else {
         await apiClient.put("/categories", payload);
         toast.success("Категория обновлена");
+        setEditingCategory(null);
       }
       await reload();
       router.refresh();
@@ -77,6 +82,9 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
         kind="INCOME"
         headerClass="text-green-700 dark:text-green-400"
         categories={incomeCategories}
+        addOpen={addKind === "INCOME"}
+        onAddOpenChange={(open) => setAddKind(open ? "INCOME" : null)}
+        onEdit={setEditingCategory}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
       />
@@ -85,9 +93,24 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
         kind="EXPENSE"
         headerClass="text-orange-700 dark:text-orange-400"
         categories={expenseCategories}
+        addOpen={addKind === "EXPENSE"}
+        onAddOpenChange={(open) => setAddKind(open ? "EXPENSE" : null)}
+        onEdit={setEditingCategory}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
       />
+
+      {/* Single controlled dialog for editing any category */}
+      <Dialog open={editingCategory !== null} onOpenChange={(open) => { if (!open) setEditingCategory(null); }}>
+        {editingCategory && (
+          <CategoryDialog
+            title="Редактировать категорию"
+            category={editingCategory}
+            defaultKind={editingCategory.kind}
+            onSubmit={(event) => handleSubmit(event, "PUT")}
+          />
+        )}
+      </Dialog>
     </div>
   );
 }
@@ -97,6 +120,9 @@ function CategoryColumn({
   kind,
   headerClass,
   categories,
+  addOpen,
+  onAddOpenChange,
+  onEdit,
   onSubmit,
   onDelete
 }: {
@@ -104,6 +130,9 @@ function CategoryColumn({
   kind: "INCOME" | "EXPENSE";
   headerClass: string;
   categories: CategoryRow[];
+  addOpen: boolean;
+  onAddOpenChange: (open: boolean) => void;
+  onEdit: (category: CategoryRow) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") => void;
   onDelete: (id: string) => void;
 }) {
@@ -111,7 +140,7 @@ function CategoryColumn({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className={headerClass}>{title}</CardTitle>
-        <Dialog>
+        <Dialog open={addOpen} onOpenChange={onAddOpenChange}>
           <DialogTrigger asChild>
             <Button size="sm">
               <Plus className="size-4" />
@@ -146,7 +175,7 @@ function CategoryColumn({
                     <CategoryTableRow
                       key={category.id}
                       category={category}
-                      onSubmit={onSubmit}
+                      onEdit={onEdit}
                       onDelete={onDelete}
                     />
                   ))}
@@ -160,7 +189,7 @@ function CategoryColumn({
                 <CategoryCard
                   key={category.id}
                   category={category}
-                  onSubmit={onSubmit}
+                  onEdit={onEdit}
                   onDelete={onDelete}
                 />
               ))}
@@ -174,11 +203,11 @@ function CategoryColumn({
 
 function CategoryTableRow({
   category,
-  onSubmit,
+  onEdit,
   onDelete
 }: {
   category: CategoryRow;
-  onSubmit: (event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") => void;
+  onEdit: (category: CategoryRow) => void;
   onDelete: (id: string) => void;
 }) {
   const canDelete = category.transactionCount === 0;
@@ -213,19 +242,9 @@ function CategoryTableRow({
       </TableCell>
       <TableCell>
         <div className="flex justify-end gap-1">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать категорию">
-                <Edit2 className="size-4" />
-              </Button>
-            </DialogTrigger>
-            <CategoryDialog
-              title="Редактировать категорию"
-              category={category}
-              defaultKind={category.kind}
-              onSubmit={(event) => onSubmit(event, "PUT")}
-            />
-          </Dialog>
+          <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать категорию" onClick={() => onEdit(category)}>
+            <Edit2 className="size-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -244,11 +263,11 @@ function CategoryTableRow({
 
 function CategoryCard({
   category,
-  onSubmit,
+  onEdit,
   onDelete
 }: {
   category: CategoryRow;
-  onSubmit: (event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") => void;
+  onEdit: (category: CategoryRow) => void;
   onDelete: (id: string) => void;
 }) {
   const canDelete = category.transactionCount === 0;
@@ -272,20 +291,10 @@ function CategoryCard({
         </div>
       )}
       <div className="mt-3 flex gap-2">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Edit2 className="size-4" />
-              Изменить
-            </Button>
-          </DialogTrigger>
-          <CategoryDialog
-            title="Редактировать категорию"
-            category={category}
-            defaultKind={category.kind}
-            onSubmit={(event) => onSubmit(event, "PUT")}
-          />
-        </Dialog>
+        <Button variant="outline" size="sm" onClick={() => onEdit(category)}>
+          <Edit2 className="size-4" />
+          Изменить
+        </Button>
         <Button
           variant="outline"
           size="sm"

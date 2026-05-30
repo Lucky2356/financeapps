@@ -3,7 +3,7 @@
 import { Edit2, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PortfolioStructureChart } from "@/components/charts/portfolio-structure-chart";
@@ -30,6 +30,9 @@ const riskVariant = {
 export function InvestmentsView({ data: initialData }: { data: InvestmentData }) {
   const router = useRouter();
   const { data, reload } = useApiPageData(initialData, "/investments");
+  const [watchlistOpen, setWatchlistOpen] = useState(false);
+  const [addPositionOpen, setAddPositionOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<InvestmentData["portfolio"][number] | null>(null);
 
   // Auto-refresh only when the user has investments to update (avoids confusing
   // "updated 10 stocks" toast when user has never added any data)
@@ -38,7 +41,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     if (autoRefreshed.current) return;
     autoRefreshed.current = true;
     if (data.watchlist.length > 0 || data.portfolio.length > 0) {
-      void refreshMarketPrices();
+      // Silent: refresh prices in the background without a toast on every visit
+      void refreshMarketPrices(true);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -49,6 +53,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     try {
       await apiClient.post("/investments", payload);
       toast.success("Позиция портфеля сохранена");
+      setAddPositionOpen(false);
+      setEditingPosition(null);
       await reload();
       router.refresh();
     } catch (error) {
@@ -74,6 +80,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     try {
       await apiClient.post("/investments", { ...payload, action: "addWatchlist" });
       toast.success("Бумага добавлена в watchlist");
+      setWatchlistOpen(false);
       await reload();
       router.refresh();
     } catch (error) {
@@ -92,14 +99,18 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     }
   }
 
-  async function refreshMarketPrices() {
+  async function refreshMarketPrices(silent = false) {
     try {
       const result = await apiClient.post<{ updated: number; source: string }>("/investments", { action: "refreshMarket" });
-      toast.success(`Рыночные данные обновлены: ${result.updated} бумаг, источник ${result.source}`);
+      if (!silent) {
+        toast.success(`Рыночные данные обновлены: ${result.updated} бумаг, источник ${result.source}`);
+      }
       await reload();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось обновить рыночные данные");
+      if (!silent) {
+        toast.error(error instanceof Error ? error.message : "Не удалось обновить рыночные данные");
+      }
     }
   }
 
@@ -117,11 +128,11 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Watchlist российских акций</CardTitle>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={refreshMarketPrices}>
+            <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
               <RefreshCw className="size-4" />
               Обновить рынок
             </Button>
-            <Dialog>
+            <Dialog open={watchlistOpen} onOpenChange={setWatchlistOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <Plus className="size-4" />
@@ -231,7 +242,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Портфель пользователя</CardTitle>
-            <Dialog>
+            <Dialog open={addPositionOpen} onOpenChange={setAddPositionOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="size-4" />
@@ -277,20 +288,9 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                       <TableCell className="text-right">{formatPercent(position.share)}</TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" title="Редактировать позицию" aria-label="Редактировать позицию">
-                                <Edit2 className="size-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <PositionDialog
-                              title={`Редактировать ${position.ticker}`}
-                              description="Можно обновить количество и среднюю цену покупки."
-                              data={data}
-                              position={position}
-                              onSubmit={submitPosition}
-                            />
-                          </Dialog>
+                          <Button variant="ghost" size="icon" title="Редактировать позицию" aria-label="Редактировать позицию" onClick={() => setEditingPosition(position)}>
+                            <Edit2 className="size-4" />
+                          </Button>
                           <form
                             onSubmit={(event) => {
                               event.preventDefault();
@@ -332,21 +332,10 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                     </div>
                   </div>
                   <div className="mt-4 flex gap-2">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Edit2 className="size-4" />
-                          Изменить
-                        </Button>
-                      </DialogTrigger>
-                      <PositionDialog
-                        title={`Редактировать ${position.ticker}`}
-                        description="Можно обновить количество и среднюю цену покупки."
-                        data={data}
-                        position={position}
-                        onSubmit={submitPosition}
-                      />
-                    </Dialog>
+                    <Button variant="outline" size="sm" onClick={() => setEditingPosition(position)}>
+                      <Edit2 className="size-4" />
+                      Изменить
+                    </Button>
                     <form
                       onSubmit={(event) => {
                         event.preventDefault();
@@ -390,6 +379,19 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         <RecommendationList title="Риски портфеля" items={data.risks} />
         <RecommendationList title="Образовательные подсказки" items={data.education} />
       </section>
+
+      {/* Single controlled dialog for editing any portfolio position */}
+      <Dialog open={editingPosition !== null} onOpenChange={(open) => { if (!open) setEditingPosition(null); }}>
+        {editingPosition && (
+          <PositionDialog
+            title={`Редактировать ${editingPosition.ticker}`}
+            description="Можно обновить количество и среднюю цену покупки."
+            data={data}
+            position={editingPosition}
+            onSubmit={submitPosition}
+          />
+        )}
+      </Dialog>
     </div>
   );
 }
