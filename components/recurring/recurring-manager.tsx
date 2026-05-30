@@ -32,6 +32,8 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 export function RecurringManager({ data }: { data: RecurringTransactionsPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/recurring");
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingRecurring, setEditingRecurring] = useState<RecurringTransactionsPageData["recurringTransactions"][number] | null>(null);
 
   async function submitTemplate(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
@@ -40,10 +42,12 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
     try {
       if (method === "POST") {
         await apiClient.post("/recurring", payload);
-        toast.success("Плановый платеж добавлен");
+        toast.success("Плановый платеж создан");
+        setAddOpen(false);
       } else {
         await apiClient.put("/recurring", payload);
         toast.success("Плановый платеж обновлен");
+        setEditingRecurring(null);
       }
       await reload();
       router.refresh();
@@ -90,7 +94,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Плановые операции</CardTitle>
-          <Dialog>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="size-4" />
@@ -99,7 +103,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
             </DialogTrigger>
             <RecurringDialog
               title="Новый шаблон"
-              description="Для зарплаты, аренды, подписок, ЖКХ и других повторяющихся операций."
+              description="Для зарплаты, аренды, подписок, ЖКХ и других повторяющихся операций. Операция создастся сразу."
               data={pageData}
               onSubmit={(event) => submitTemplate(event, "POST")}
             />
@@ -162,20 +166,9 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                             >
                               <CheckCircle2 className="size-4" />
                             </Button>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать шаблон">
-                                  <Edit2 className="size-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <RecurringDialog
-                                title="Редактировать шаблон"
-                                description="Изменения применятся к будущим операциям."
-                                data={pageData}
-                                recurring={item}
-                                onSubmit={(event) => submitTemplate(event, "PUT")}
-                              />
-                            </Dialog>
+                            <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать шаблон" onClick={() => setEditingRecurring(item)}>
+                              <Edit2 className="size-4" />
+                            </Button>
                             <Button type="button" variant="ghost" size="icon" title="Удалить" aria-label="Удалить шаблон" onClick={() => removeTemplate(item.id)}>
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
@@ -209,20 +202,9 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                         <Button type="button" variant="outline" size="sm" disabled={!item.isDue} onClick={() => materializeTemplate(item.id)}>
                           <CheckCircle2 className="size-4" />
                         </Button>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <Edit2 className="size-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <RecurringDialog
-                            title="Редактировать шаблон"
-                            description="Изменения применятся к будущим операциям."
-                            data={pageData}
-                            recurring={item}
-                            onSubmit={(event) => submitTemplate(event, "PUT")}
-                          />
-                        </Dialog>
+                        <Button variant="outline" size="sm" onClick={() => setEditingRecurring(item)}>
+                          <Edit2 className="size-4" />
+                        </Button>
                         <Button type="button" variant="outline" size="sm" onClick={() => removeTemplate(item.id)}>
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
@@ -235,6 +217,19 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
           )}
         </CardContent>
       </Card>
+
+      {/* Single controlled dialog for editing any template */}
+      <Dialog open={editingRecurring !== null} onOpenChange={(open) => { if (!open) setEditingRecurring(null); }}>
+        {editingRecurring && (
+          <RecurringDialog
+            title="Редактировать шаблон"
+            description="Изменения суммы сразу применятся к созданной операции."
+            data={pageData}
+            recurring={editingRecurring}
+            onSubmit={(event) => submitTemplate(event, "PUT")}
+          />
+        )}
+      </Dialog>
 
       <Card>
         <CardHeader>

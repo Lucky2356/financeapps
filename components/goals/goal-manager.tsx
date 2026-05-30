@@ -20,6 +20,8 @@ import { Progress } from "@/components/ui/progress";
 export function GoalManager({ data }: { data: GoalsPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/goals");
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<GoalsPageData["goals"][number] | null>(null);
 
   async function submitGoal(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
@@ -29,9 +31,11 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
       if (method === "POST") {
         await apiClient.post("/goals", payload);
         toast.success("Цель добавлена");
+        setAddOpen(false);
       } else {
         await apiClient.put("/goals", payload);
         toast.success("Цель обновлена");
+        setEditingGoal(null);
       }
       await reload();
       router.refresh();
@@ -55,7 +59,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
   return (
     <div className="space-y-5">
       <div className="flex justify-end">
-        <Dialog>
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="size-4" />
@@ -77,14 +81,9 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                 </div>
                 <div className="flex gap-1">
                   <DepositDialog goal={goal} currency={pageData.currency} onSuccess={async () => { await reload(); router.refresh(); }} />
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать цель">
-                        <Edit2 className="size-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <GoalDialog title="Редактировать цель" goal={goal} onSubmit={(event) => submitGoal(event, "PUT")} />
-                  </Dialog>
+                  <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать цель" onClick={() => setEditingGoal(goal)}>
+                    <Edit2 className="size-4" />
+                  </Button>
                   <form
                     onSubmit={(event) => {
                       event.preventDefault();
@@ -118,6 +117,13 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
           </Card>
         ))}
       </div>
+
+      {/* Single controlled dialog for editing any goal */}
+      <Dialog open={editingGoal !== null} onOpenChange={(open) => { if (!open) setEditingGoal(null); }}>
+        {editingGoal && (
+          <GoalDialog title="Редактировать цель" goal={editingGoal} onSubmit={(event) => submitGoal(event, "PUT")} />
+        )}
+      </Dialog>
     </div>
   );
 }

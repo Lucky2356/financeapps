@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { applyDensity } from "@/components/app-settings-sync";
 import type { SettingsPageData } from "@/lib/data";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -63,6 +64,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     try {
       await apiClient.put("/settings", payload);
       setTheme(payload.theme);
+      applyDensity(payload.density === "compact" ? "compact" : "comfortable");
       toast.success("Настройки сохранены");
       await reload();
       router.refresh();
@@ -197,7 +199,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                     name="density"
                     value={value}
                     checked={selectedDensity === value}
-                    onChange={() => setUserDensity(value)}
+                    onChange={() => { setUserDensity(value); applyDensity(value); }}
                     className="sr-only"
                   />
                   {label}

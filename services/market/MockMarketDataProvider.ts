@@ -105,10 +105,16 @@ function priceForSecurity(basePrice: number, volatility: number, dayIndex: numbe
 
 export class MockMarketDataProvider implements MarketDataService {
   async getSecurities(): Promise<MarketSecurity[]> {
+    // Drift the "latest" day forward through the current day so each manual
+    // refresh shows slightly different prices instead of frozen values.
+    const minutesIntoDay = (Date.now() % 86_400_000) / 60_000; // 0..1440
+    const drift = minutesIntoDay / 1440; // 0..1 across the day
+    const latestDay = 44 + drift;
+
     return securities.map((security, securityIndex) => {
-      const latest = priceForSecurity(security.basePrice, security.volatility, 44, securityIndex);
-      const previous = priceForSecurity(security.basePrice, security.volatility, 43, securityIndex);
-      const thirtyAgo = priceForSecurity(security.basePrice, security.volatility, 14, securityIndex);
+      const latest = priceForSecurity(security.basePrice, security.volatility, latestDay, securityIndex);
+      const previous = priceForSecurity(security.basePrice, security.volatility, latestDay - 1, securityIndex);
+      const thirtyAgo = priceForSecurity(security.basePrice, security.volatility, latestDay - 30, securityIndex);
 
       return {
         ticker: security.ticker,

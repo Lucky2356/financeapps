@@ -3,6 +3,7 @@
 import { Edit2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -20,6 +21,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export function AccountManager({ data }: { data: AccountsPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/accounts");
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<AccountsPageData["accounts"][number] | null>(null);
 
   async function submitAccount(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
@@ -29,9 +32,11 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
       if (method === "POST") {
         await apiClient.post("/accounts", payload);
         toast.success("Счет добавлен");
+        setAddOpen(false);
       } else {
         await apiClient.put("/accounts", payload);
         toast.success("Счет обновлен");
+        setEditingAccount(null);
       }
       await reload();
       router.refresh();
@@ -59,7 +64,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
             <CardTitle>Общий баланс</CardTitle>
             <p className="mt-2 text-3xl font-semibold">{formatCurrency(pageData.totalBalance, pageData.currency)}</p>
           </div>
-          <Dialog>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="size-4" />
@@ -96,14 +101,9 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                     <TableCell className="text-right font-semibold">{formatCurrency(account.balance, account.currency)}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать счет">
-                              <Edit2 className="size-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <AccountDialog title="Редактировать счет" account={account} onSubmit={(event) => submitAccount(event, "PUT")} />
-                        </Dialog>
+                        <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать счет" onClick={() => setEditingAccount(account)}>
+                          <Edit2 className="size-4" />
+                        </Button>
                         <form
                           onSubmit={(event) => {
                             event.preventDefault();
@@ -133,15 +133,10 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                   <p className="font-semibold">{formatCurrency(account.balance, account.currency)}</p>
                 </div>
                 <div className="mt-4 flex gap-2">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Edit2 className="size-4" />
-                        Изменить
-                      </Button>
-                    </DialogTrigger>
-                    <AccountDialog title="Редактировать счет" account={account} onSubmit={(event) => submitAccount(event, "PUT")} />
-                  </Dialog>
+                  <Button variant="outline" size="sm" onClick={() => setEditingAccount(account)}>
+                    <Edit2 className="size-4" />
+                    Изменить
+                  </Button>
                   <form
                     onSubmit={(event) => {
                       event.preventDefault();
@@ -159,6 +154,13 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Single controlled dialog for editing any account */}
+      <Dialog open={editingAccount !== null} onOpenChange={(open) => { if (!open) setEditingAccount(null); }}>
+        {editingAccount && (
+          <AccountDialog title="Редактировать счет" account={editingAccount} onSubmit={(event) => submitAccount(event, "PUT")} />
+        )}
+      </Dialog>
     </div>
   );
 }
