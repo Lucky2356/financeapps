@@ -3,5 +3,17 @@
   "identifier": "default",
   "description": "Desktop permissions for CSV/JSON import and export.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default", "fs:default"]
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "window-state:allow-restore-state",
+    "window-state:allow-save-window-state",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**"]
+    }
+  ]
 }

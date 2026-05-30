@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { runtimeConfig } from "@/lib/platform/env";
 import { prisma } from "@/lib/prisma";
 
+// force-static is required for NEXT_OUTPUT=export (Tauri/Capacitor shell).
+// Trade-off: in web deployments the GET response is a build-time snapshot.
+// For a real-time health check in web-only deployments, change this to
+// "force-dynamic" (then build:static must be run separately or excluded).
 export const dynamic = "force-static";
 
 export async function GET() {
@@ -10,7 +14,7 @@ export async function GET() {
   let database: "ok" | "unavailable" = "unavailable";
   let seeded = false;
 
-  if (prisma) {
+  if (prisma && process.env.NEXT_OUTPUT !== "export") {
     try {
       await prisma.$queryRaw`SELECT 1`;
       database = "ok";

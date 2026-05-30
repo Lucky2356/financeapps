@@ -2,6 +2,7 @@ import type { Prisma, RecurrenceFrequency, RiskProfileCode, TransactionType } fr
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
 
+
 import { ACCOUNT_TYPE_LABELS, RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -11,10 +12,11 @@ import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
-import { MockMarketDataProvider } from "@/services/market/MockMarketDataProvider";
+import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 import type {
   AccountRow,
   BudgetRow,
+  CategoryRow,
   ChartDatum,
   DashboardData,
   DataSource,
@@ -32,6 +34,7 @@ import type {
 type CategoryOption = Option & {
   kind: "INCOME" | "EXPENSE";
   color: string;
+  icon?: string;
   isEssential?: boolean;
   isSubscription?: boolean;
 };
@@ -47,6 +50,16 @@ export type TransactionsPageData = {
     type?: "ALL" | "INCOME" | "EXPENSE";
     categoryId?: string;
     accountId?: string;
+    q?: string;
+    page?: number;
+    limit?: number;
+  };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasPreviousPage: boolean;
+    hasNextPage: boolean;
   };
 };
 
@@ -78,6 +91,7 @@ export type BudgetsPageData = {
   categories: CategoryOption[];
   recommendations: RecommendationView[];
   currency: string;
+  selectedMonth: string;
 };
 
 export type GoalsPageData = {
@@ -94,6 +108,9 @@ export type SettingsPageData = {
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
   riskProfileCode: RiskProfileCode;
+  theme: "light" | "dark" | "system";
+  density: "comfortable" | "compact";
+  defaultTransactionType: "INCOME" | "EXPENSE";
   riskProfiles: Array<{
     id: string;
     code: RiskProfileCode;
@@ -108,9 +125,27 @@ export type ImportPageData = {
   categories: CategoryOption[];
 };
 
+export type CategoriesPageData = {
+  source: DataSource;
+  categories: CategoryRow[];
+};
+
+export type AnalyticsData = {
+  source: DataSource;
+  currency: string;
+  monthlyCashflow: Array<{ month: string; income: number; expense: number; savings: number; savingsRate: number }>;
+  topExpenseCategories: Array<{ category: string; color: string; total: number; share: number }>;
+  avgMonthlyIncome: number;
+  avgMonthlyExpense: number;
+  avgSavingsRate: number;
+  bestMonth: string;
+  worstMonth: string;
+};
+
 type DemoTransaction = TransactionRow & {
   categoryMeta: CategoryOption;
 };
+type TransactionFilters = ReturnType<typeof transactionFilterSchema.parse>;
 
 const demoAccounts: AccountRow[] = [
   { id: "account-cash", name: "Наличные", type: "CASH", balance: 32000, currency: "RUB" },
@@ -321,8 +356,10 @@ function buildSectorStructure(portfolio: PortfolioRow[]): ChartDatum[] {
     .sort((left, right) => right.value - left.value);
 }
 
-function buildBudgetRows(transactions: TransactionRow[], categories = demoCategories): BudgetRow[] {
-  const { start, end } = currentMonthRange();
+function buildBudgetRows(transactions: TransactionRow[], categories = demoCategories, targetMonthDate?: Date): BudgetRow[] {
+  const monthDate = targetMonthDate ?? new Date();
+  const start = startOfMonth(monthDate);
+  const end = endOfMonth(monthDate);
   return categories
     .filter((category) => category.kind === "EXPENSE")
     .map((category) => {
@@ -415,21 +452,47 @@ function buildFinanceInput(transactions: TransactionRow[], accounts: AccountRow[
   };
 }
 
+function buildTrend(current: number, previous: number): { value: number; label: string } | undefined {
+  if (previous === 0) return undefined;
+  const diff = percent(current - previous, previous);
+  return { value: diff, label: "vs прошлый мес." };
+}
+
 function buildDemoDashboard(): DashboardData {
   const transactions = buildDemoTransactions();
   const goals = buildDemoGoals();
   const input = buildFinanceInput(transactions, demoAccounts, goals);
   const service = new FinanceRecommendationService();
   const totalBalance = demoAccounts.reduce((sum, account) => sum + account.balance, 0);
+  const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
+  const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
 
   return {
     source: "demo-fallback",
     currency: "RUB",
     metrics: [
       { title: "Общий баланс", value: formatCurrency(totalBalance), detail: "Все счета и брокерский счет" },
-      { title: "Доходы за месяц", value: formatCurrency(input.currentMonthIncome), detail: "Текущий календарный месяц", tone: "success" },
-      { title: "Расходы за месяц", value: formatCurrency(input.currentMonthExpense), detail: "Текущий календарный месяц", tone: "warning" },
-      { title: "Свободный остаток", value: formatCurrency(input.freeCashflow), detail: "Доходы минус расходы", tone: input.freeCashflow >= 0 ? "success" : "danger" },
+      {
+        title: "Доходы за месяц",
+        value: formatCurrency(input.currentMonthIncome),
+        detail: "Текущий календарный месяц",
+        tone: "success",
+        trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
+      },
+      {
+        title: "Расходы за месяц",
+        value: formatCurrency(input.currentMonthExpense),
+        detail: "Текущий календарный месяц",
+        tone: "warning",
+        trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
+      },
+      {
+        title: "Свободный остаток",
+        value: formatCurrency(input.freeCashflow),
+        detail: "Доходы минус расходы",
+        tone: input.freeCashflow >= 0 ? "success" : "danger",
+        trend: buildTrend(input.freeCashflow, (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0))
+      },
       { title: "Процент накоплений", value: `${input.savingsRate.toFixed(1)}%`, detail: "Доля свободного остатка" },
       { title: "Финансовая подушка", value: `${input.emergencyFundMonths.toFixed(1)} мес.`, detail: "Резерв к средним расходам" }
     ],
@@ -446,6 +509,10 @@ function normalizeSearchParams(searchParams: Record<string, string | string[] | 
   );
 }
 
+function isStaticDataBuild() {
+  return process.env.NEXT_OUTPUT === "export";
+}
+
 async function getDefaultUser() {
   if (!prisma) return null;
 
@@ -456,7 +523,7 @@ async function getDefaultUser() {
 }
 
 async function safeData<T>(fallback: () => T | Promise<T>, query: () => Promise<T>): Promise<T> {
-  if (!prisma) return fallback();
+  if (!prisma || isStaticDataBuild()) return fallback();
 
   try {
     return await query();
@@ -481,6 +548,7 @@ function toCategoryOption(category: {
   name: string;
   kind: "INCOME" | "EXPENSE";
   color: string;
+  icon?: string | null;
   isEssential: boolean;
   isSubscription: boolean;
 }): CategoryOption {
@@ -489,6 +557,7 @@ function toCategoryOption(category: {
     label: category.name,
     kind: category.kind,
     color: category.color,
+    icon: category.icon ?? undefined,
     isEssential: category.isEssential,
     isSubscription: category.isSubscription
   };
@@ -496,13 +565,22 @@ function toCategoryOption(category: {
 
 function transactionWhere(
   userId: string,
-  filters: ReturnType<typeof transactionFilterSchema.parse>
+  filters: TransactionFilters
 ): Prisma.TransactionWhereInput {
   return {
     userId,
     ...(filters.type && filters.type !== "ALL" ? { type: filters.type } : {}),
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.accountId ? { accountId: filters.accountId } : {}),
+    ...(filters.q
+      ? {
+          OR: [
+            { description: { contains: filters.q, mode: "insensitive" } },
+            { account: { name: { contains: filters.q, mode: "insensitive" } } },
+            { category: { name: { contains: filters.q, mode: "insensitive" } } }
+          ]
+        }
+      : {}),
     ...(filters.from || filters.to
       ? {
           date: {
@@ -514,12 +592,14 @@ function transactionWhere(
   };
 }
 
-async function getDatabaseTransactions(userId: string, filters: ReturnType<typeof transactionFilterSchema.parse> = {}) {
+async function getDatabaseTransactions(userId: string, filters: TransactionFilters = transactionFilterSchema.parse({})) {
   if (!prisma) return [];
 
   const transactions = await prisma.transaction.findMany({
     where: transactionWhere(userId, filters),
     orderBy: { date: "desc" },
+    skip: ((filters.page ?? 1) - 1) * (filters.limit ?? 20),
+    take: filters.limit ?? 20,
     include: {
       account: true,
       category: true
@@ -536,7 +616,8 @@ async function getDatabaseTransactions(userId: string, filters: ReturnType<typeo
     category: {
       id: transaction.category.id,
       label: transaction.category.name,
-      color: transaction.category.color
+      color: transaction.category.color,
+      icon: transaction.category.icon ?? undefined
     }
   }));
 }
@@ -660,17 +741,20 @@ function toGoalRow(goal: { id: string; title: string; targetAmount: unknown; cur
 async function buildDatabaseBudgetRows(
   userId: string,
   transactions: TransactionRow[],
-  categories: CategoryOption[]
+  categories: CategoryOption[],
+  targetMonthDate?: Date
 ): Promise<BudgetRow[]> {
   if (!prisma) return [];
 
-  const month = startOfMonth(new Date());
+  const monthDate = targetMonthDate ?? new Date();
+  const month = startOfMonth(monthDate);
+  const start = startOfMonth(monthDate);
+  const end = endOfMonth(monthDate);
   const budgets = await prisma.budget.findMany({
     where: { userId, month },
     include: { category: true }
   });
   const budgetByCategory = new Map(budgets.map((budget) => [budget.categoryId, budget]));
-  const { start, end } = currentMonthRange();
 
   return categories
     .filter((category) => category.kind === "EXPENSE")
@@ -707,14 +791,35 @@ export async function getDashboardData(): Promise<DashboardData> {
     const totalBalance = finance.accounts.reduce((sum, account) => sum + account.balance, 0);
     const input = finance.input;
 
+    const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
+    const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
+
     return {
       source: "database",
       currency: user.currency,
       metrics: [
         { title: "Общий баланс", value: formatCurrency(totalBalance, user.currency), detail: "Все активные счета" },
-        { title: "Доходы за месяц", value: formatCurrency(input.currentMonthIncome, user.currency), detail: "Текущий календарный месяц", tone: "success" },
-        { title: "Расходы за месяц", value: formatCurrency(input.currentMonthExpense, user.currency), detail: "Текущий календарный месяц", tone: "warning" },
-        { title: "Свободный остаток", value: formatCurrency(input.freeCashflow, user.currency), detail: "Доходы минус расходы", tone: input.freeCashflow >= 0 ? "success" : "danger" },
+        {
+          title: "Доходы за месяц",
+          value: formatCurrency(input.currentMonthIncome, user.currency),
+          detail: "Текущий календарный месяц",
+          tone: "success",
+          trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
+        },
+        {
+          title: "Расходы за месяц",
+          value: formatCurrency(input.currentMonthExpense, user.currency),
+          detail: "Текущий календарный месяц",
+          tone: "warning",
+          trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
+        },
+        {
+          title: "Свободный остаток",
+          value: formatCurrency(input.freeCashflow, user.currency),
+          detail: "Доходы минус расходы",
+          tone: input.freeCashflow >= 0 ? "success" : "danger",
+          trend: buildTrend(input.freeCashflow, (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0))
+        },
         { title: "Процент накоплений", value: `${input.savingsRate.toFixed(1)}%`, detail: "Доля свободного остатка" },
         { title: "Финансовая подушка", value: `${input.emergencyFundMonths.toFixed(1)} мес.`, detail: "Резерв к средним расходам" }
       ],
@@ -733,39 +838,62 @@ export async function getTransactionsPageData(
 
   return safeData<TransactionsPageData>(
     () => {
-      const transactions = buildDemoTransactions().filter((transaction) => {
+      const filteredTransactions = buildDemoTransactions().filter((transaction) => {
         if (parsed.type && parsed.type !== "ALL" && transaction.type !== parsed.type) return false;
         if (parsed.categoryId && transaction.category.id !== parsed.categoryId) return false;
         if (parsed.accountId && transaction.account.id !== parsed.accountId) return false;
+        if (parsed.q) {
+          const query = parsed.q.toLowerCase();
+          const haystack = `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
         if (parsed.from && new Date(transaction.date) < new Date(parsed.from)) return false;
         if (parsed.to && new Date(transaction.date) > new Date(`${parsed.to}T23:59:59`)) return false;
         return true;
       });
+      const start = (parsed.page - 1) * parsed.limit;
+      const transactions = filteredTransactions.slice(start, start + parsed.limit);
 
       return {
         source: "demo-fallback",
         transactions,
         accounts: demoAccounts,
         categories: demoCategories,
-        filters: parsed
+        filters: parsed,
+        pagination: {
+          page: parsed.page,
+          limit: parsed.limit,
+          total: filteredTransactions.length,
+          hasPreviousPage: parsed.page > 1,
+          hasNextPage: start + parsed.limit < filteredTransactions.length
+        }
       };
     },
     async () => {
       if (!prisma) throw new Error("Prisma client is not configured.");
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
-      const [transactions, accounts, categories] = await Promise.all([
+      const [transactions, total, accounts, categories] = await Promise.all([
         getDatabaseTransactions(user.id, parsed),
+        prisma.transaction.count({ where: transactionWhere(user.id, parsed) }),
         prisma.account.findMany({ where: { userId: user.id, isArchived: false }, orderBy: { createdAt: "asc" } }),
         prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ kind: "asc" }, { name: "asc" }] })
       ]);
+      const start = (parsed.page - 1) * parsed.limit;
 
       return {
         source: "database",
         transactions,
         accounts: accounts.map(toAccountRow),
         categories: categories.map(toCategoryOption),
-        filters: parsed
+        filters: parsed,
+        pagination: {
+          page: parsed.page,
+          limit: parsed.limit,
+          total,
+          hasPreviousPage: parsed.page > 1,
+          hasNextPage: start + parsed.limit < total
+        }
       };
     }
   );
@@ -879,7 +1007,10 @@ export async function getAccountsPageData(): Promise<AccountsPageData> {
   );
 }
 
-export async function getBudgetsPageData(): Promise<BudgetsPageData> {
+export async function getBudgetsPageData(month?: string): Promise<BudgetsPageData> {
+  const targetMonthDate = month ? new Date(`${month}-01`) : new Date();
+  const selectedMonth = format(startOfMonth(targetMonthDate), "yyyy-MM");
+
   return safeData<BudgetsPageData>(
     () => {
       const transactions = buildDemoTransactions();
@@ -889,10 +1020,11 @@ export async function getBudgetsPageData(): Promise<BudgetsPageData> {
 
       return {
         source: "demo-fallback",
-        budgets: buildBudgetRows(transactions),
+        budgets: buildBudgetRows(transactions, demoCategories, targetMonthDate),
         categories: demoCategories,
         recommendations: service.build(input).filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
-        currency: "RUB"
+        currency: "RUB",
+        selectedMonth
       };
     },
     async () => {
@@ -904,7 +1036,7 @@ export async function getBudgetsPageData(): Promise<BudgetsPageData> {
         getDatabaseTransactions(user.id)
       ]);
       const categoryOptions = categories.map(toCategoryOption);
-      const budgets = await buildDatabaseBudgetRows(user.id, transactions, categoryOptions);
+      const budgets = await buildDatabaseBudgetRows(user.id, transactions, categoryOptions, targetMonthDate);
       const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
       const recommendations = new FinanceRecommendationService()
         .build(finance.input)
@@ -915,7 +1047,8 @@ export async function getBudgetsPageData(): Promise<BudgetsPageData> {
         budgets,
         categories: categoryOptions,
         recommendations,
-        currency: user.currency
+        currency: user.currency,
+        selectedMonth
       };
     }
   );
@@ -1065,7 +1198,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
 }
 
 async function buildDemoInvestmentData(): Promise<InvestmentData> {
-  const provider = new MockMarketDataProvider();
+  const provider = createMarketDataProvider();
   const securities = await provider.getSecurities();
   const positionConfig = [
     ["SBER", 350, 287],
@@ -1125,6 +1258,9 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
       demoMode: true,
       emergencyFundMonthsTarget: 6,
       riskProfileCode: "MODERATE",
+      theme: "system",
+      density: "comfortable",
+      defaultTransactionType: "EXPENSE" as const,
       riskProfiles: [
         {
           id: "risk-conservative",
@@ -1158,6 +1294,9 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         demoMode: user.demoMode,
         emergencyFundMonthsTarget: user.emergencyFundMonthsTarget,
         riskProfileCode: user.riskProfile?.code ?? "MODERATE",
+        theme: "system" as const,
+        density: "comfortable" as const,
+        defaultTransactionType: "EXPENSE" as const,
         riskProfiles: riskProfiles.map((profile) => ({
           id: profile.id,
           code: profile.code,
@@ -1192,6 +1331,201 @@ export async function getImportPageData(): Promise<ImportPageData> {
       };
     }
   );
+}
+
+function buildAnalyticsFromTransactions(
+  transactions: TransactionRow[],
+  currency: string,
+  source: DataSource
+): AnalyticsData {
+  const months = [
+    subMonths(new Date(), 5),
+    subMonths(new Date(), 4),
+    subMonths(new Date(), 3),
+    subMonths(new Date(), 2),
+    subMonths(new Date(), 1),
+    new Date()
+  ];
+
+  const monthlyCashflow = months.map((month) => {
+    const start = startOfMonth(month);
+    const end = endOfMonth(month);
+    const rows = transactions.filter((transaction) => {
+      const date = new Date(transaction.date);
+      return date >= start && date <= end;
+    });
+    const income = rows.filter((row) => row.type === "INCOME").reduce((sum, row) => sum + row.amount, 0);
+    const expense = rows.filter((row) => row.type === "EXPENSE").reduce((sum, row) => sum + row.amount, 0);
+    const savings = income - expense;
+    const savingsRate = income > 0 ? percent(savings, income) : 0;
+    return {
+      month: format(month, "LLL", { locale: ru }),
+      income,
+      expense,
+      savings,
+      savingsRate
+    };
+  });
+
+  const totalIncome = monthlyCashflow.reduce((sum, m) => sum + m.income, 0);
+  const totalExpense = monthlyCashflow.reduce((sum, m) => sum + m.expense, 0);
+  const nonZeroMonths = monthlyCashflow.filter((m) => m.income > 0 || m.expense > 0).length || 1;
+  const avgMonthlyIncome = roundMoney(totalIncome / nonZeroMonths);
+  const avgMonthlyExpense = roundMoney(totalExpense / nonZeroMonths);
+  const avgSavingsRate = roundMoney(monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length);
+
+  const bestMonthData = [...monthlyCashflow].sort((a, b) => b.savings - a.savings)[0];
+  const worstMonthData = [...monthlyCashflow].sort((a, b) => a.savings - b.savings)[0];
+
+  // Top expense categories (last 6 months)
+  const categoryTotals = new Map<string, { category: string; color: string; total: number }>();
+  const sixMonthsAgo = startOfMonth(months[0]);
+  const expenseTransactions = transactions.filter((t) => t.type === "EXPENSE" && new Date(t.date) >= sixMonthsAgo);
+  const totalExpenseAll = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+  for (const t of expenseTransactions) {
+    const existing = categoryTotals.get(t.category.id) ?? { category: t.category.label, color: t.category.color, total: 0 };
+    existing.total += t.amount;
+    categoryTotals.set(t.category.id, existing);
+  }
+  const topExpenseCategories = [...categoryTotals.values()]
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6)
+    .map((item) => ({
+      ...item,
+      share: totalExpenseAll > 0 ? percent(item.total, totalExpenseAll) : 0
+    }));
+
+  return {
+    source,
+    currency,
+    monthlyCashflow,
+    topExpenseCategories,
+    avgMonthlyIncome,
+    avgMonthlyExpense,
+    avgSavingsRate,
+    bestMonth: bestMonthData?.month ?? "-",
+    worstMonth: worstMonthData?.month ?? "-"
+  };
+}
+
+function buildDemoAnalytics(): AnalyticsData {
+  const transactions = buildDemoTransactions();
+  const result = buildAnalyticsFromTransactions(transactions, "RUB", "demo-fallback");
+
+  // Supplement with more realistic 6-month demo data if we don't have 6 months of real demo data
+  // (demo only has 3 months). Patch months with no data to have realistic values.
+  const patchedCashflow = result.monthlyCashflow.map((m, index) => {
+    if (m.income === 0 && m.expense === 0) {
+      const baseIncome = 145000 + index * 5000;
+      const baseExpense = 108000 + index * 2000;
+      const savings = baseIncome - baseExpense;
+      return {
+        month: m.month,
+        income: baseIncome,
+        expense: baseExpense,
+        savings,
+        savingsRate: percent(savings, baseIncome)
+      };
+    }
+    return m;
+  });
+
+  const patchedTotals = patchedCashflow.reduce((acc, m) => ({ income: acc.income + m.income, expense: acc.expense + m.expense }), { income: 0, expense: 0 });
+  const avgMonthlyIncome = roundMoney(patchedTotals.income / 6);
+  const avgMonthlyExpense = roundMoney(patchedTotals.expense / 6);
+  const avgSavingsRate = roundMoney(patchedCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / 6);
+  const bestMonth = [...patchedCashflow].sort((a, b) => b.savings - a.savings)[0]?.month ?? "-";
+  const worstMonth = [...patchedCashflow].sort((a, b) => a.savings - b.savings)[0]?.month ?? "-";
+
+  const topExpenseCategories = result.topExpenseCategories.length > 0
+    ? result.topExpenseCategories
+    : [
+        { category: "Продукты", color: "#f97316", total: 260000, share: 28 },
+        { category: "ЖКХ", color: "#7c3aed", total: 115000, share: 12 },
+        { category: "Развлечения", color: "#eab308", total: 130000, share: 14 },
+        { category: "Транспорт", color: "#2563eb", total: 68000, share: 7 },
+        { category: "Рестораны", color: "#ea580c", total: 95000, share: 10 },
+        { category: "Здоровье", color: "#dc2626", total: 55000, share: 6 }
+      ];
+
+  return {
+    source: "demo-fallback",
+    currency: "RUB",
+    monthlyCashflow: patchedCashflow,
+    topExpenseCategories,
+    avgMonthlyIncome,
+    avgMonthlyExpense,
+    avgSavingsRate,
+    bestMonth,
+    worstMonth
+  };
+}
+
+export async function getCategoriesPageData(): Promise<CategoriesPageData> {
+  return safeData<CategoriesPageData>(
+    () => ({
+      source: "demo-fallback",
+      categories: demoCategories.map((cat) => ({
+        id: cat.id,
+        name: cat.label,
+        kind: cat.kind,
+        color: cat.color,
+        isEssential: cat.isEssential ?? false,
+        isSubscription: cat.isSubscription ?? false,
+        transactionCount: buildDemoTransactions().filter((t) => t.category.id === cat.id).length
+      }))
+    }),
+    async () => {
+      if (!prisma) throw new Error("Prisma client is not configured.");
+      const user = await getDefaultUser();
+      if (!user) throw new Error("No user found.");
+      const categories = await prisma.category.findMany({
+        where: { userId: user.id },
+        orderBy: [{ kind: "asc" }, { name: "asc" }],
+        include: { _count: { select: { transactions: true } } }
+      });
+
+      return {
+        source: "database",
+        categories: categories.map((cat) => ({
+          id: cat.id,
+          name: cat.name,
+          kind: cat.kind,
+          color: cat.color,
+          isEssential: cat.isEssential,
+          isSubscription: cat.isSubscription,
+          transactionCount: cat._count.transactions
+        }))
+      };
+    }
+  );
+}
+
+export async function getAnalyticsData(): Promise<AnalyticsData> {
+  return safeData<AnalyticsData>(buildDemoAnalytics, async () => {
+    if (!prisma) throw new Error("Prisma client is not configured.");
+    const user = await getDefaultUser();
+    if (!user) throw new Error("No user found.");
+
+    const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
+    const transactions = await prisma.transaction.findMany({
+      where: { userId: user.id, date: { gte: sixMonthsAgo } },
+      include: { category: true },
+      orderBy: { date: "desc" }
+    });
+
+    const transactionRows: TransactionRow[] = transactions.map((t) => ({
+      id: t.id,
+      amount: toNumber(t.amount),
+      type: t.type,
+      date: t.date.toISOString(),
+      description: t.description,
+      account: { id: t.accountId, label: "" },
+      category: { id: t.category.id, label: t.category.name, color: t.category.color }
+    }));
+
+    return buildAnalyticsFromTransactions(transactionRows, user.currency, "database");
+  });
 }
 
 export function dateInputValue(value: string | Date) {

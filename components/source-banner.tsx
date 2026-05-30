@@ -1,8 +1,16 @@
+"use client";
+
 import { AlertTriangle } from "lucide-react";
 
 import type { DataSource } from "@/types/finance";
+import { runtimeConfig } from "@/lib/platform/env";
 
 export function SourceBanner({ source }: { source: DataSource }) {
+  // Desktop-local mode uses IndexedDB, never PostgreSQL — banner is irrelevant
+  if (runtimeConfig.platform === "desktop" && runtimeConfig.desktopDataMode === "local") {
+    return null;
+  }
+
   if (source !== "demo-fallback") return null;
 
   return (
@@ -11,7 +19,7 @@ export function SourceBanner({ source }: { source: DataSource }) {
       <div>
         <p className="font-medium">Показаны встроенные демо-данные</p>
         <p className="mt-1 text-muted-foreground">
-          Подключите PostgreSQL через `DATABASE_URL`, выполните миграции и seed, чтобы включить полноценное сохранение данных.
+          Подключите PostgreSQL через <code className="rounded bg-warning/20 px-1 py-0.5 font-mono text-xs">DATABASE_URL</code>, выполните миграции и seed, чтобы включить полноценное сохранение данных.
         </p>
       </div>
     </div>

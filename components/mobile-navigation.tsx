@@ -13,6 +13,8 @@ import {
   LayoutDashboard,
   Menu,
   Settings,
+  Tag,
+  TrendingUp,
   WalletCards
 } from "lucide-react";
 
@@ -32,6 +34,8 @@ const secondaryItems = [
   { href: "/recurring", label: "Плановые", icon: CalendarClock },
   { href: "/forecast", label: "Прогноз", icon: LineChart },
   { href: "/accounts", label: "Счета", icon: WalletCards },
+  { href: "/categories", label: "Категории", icon: Tag },
+  { href: "/analytics", label: "Аналитика", icon: TrendingUp },
   { href: "/goals", label: "Цели", icon: Flag },
   { href: "/import", label: "Импорт", icon: Download },
   { href: "/settings", label: "Настройки", icon: Settings }
@@ -45,7 +49,7 @@ export function MobileTopBar() {
       <div className="flex items-center justify-between gap-3">
         <Link href="/" className="min-w-0">
           <span className="block truncate text-sm font-semibold">{APP_NAME}</span>
-          <span className="block text-xs text-muted-foreground">PWA-ready MVP</span>
+          <span className="block text-xs text-muted-foreground">Личные финансы</span>
         </Link>
         <ThemeToggle />
       </div>
@@ -87,7 +91,7 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-md text-[11px] font-medium text-muted-foreground",
+                "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md text-[10px] font-medium text-muted-foreground",
                 active && "bg-secondary text-foreground"
               )}
             >

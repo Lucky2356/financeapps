@@ -27,9 +27,11 @@ import { RECURRENCE_FREQUENCY_LABELS } from "@/lib/constants";
 import { apiClient } from "@/lib/api/client";
 import type { RecurringTransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { useApiPageData } from "@/hooks/use-api-page-data";
 
 export function RecurringManager({ data }: { data: RecurringTransactionsPageData }) {
   const router = useRouter();
+  const { data: pageData, reload } = useApiPageData(data, "/recurring");
 
   async function submitTemplate(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
@@ -43,6 +45,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
         await apiClient.put("/recurring", payload);
         toast.success("Плановый платеж обновлен");
       }
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось сохранить шаблон");
@@ -53,6 +56,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
     try {
       await apiClient.delete(`/recurring?id=${encodeURIComponent(id)}`);
       toast.success("Шаблон удален");
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось удалить шаблон");
@@ -63,6 +67,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
     try {
       const result = await apiClient.post<{ created: number; nextDate: string }, { id: string }>("/recurring/materialize", { id });
       toast.success(result.created > 0 ? `Создано операций: ${result.created}` : "Нет наступивших платежей");
+      await reload();
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось создать операции");
@@ -72,13 +77,13 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
   return (
     <div className="space-y-5">
       <section className="grid gap-3 md:grid-cols-4">
-        <SummaryTile label="Активные шаблоны" value={String(data.summary.activeCount)} />
-        <SummaryTile label="К созданию сегодня" value={String(data.summary.dueCount)} tone={data.summary.dueCount > 0 ? "warning" : "default"} />
-        <SummaryTile label="Ближайшие 7 дней" value={formatCurrency(data.summary.nextSevenDaysAmount, data.currency)} />
+        <SummaryTile label="Активные шаблоны" value={String(pageData.summary.activeCount)} />
+        <SummaryTile label="К созданию сегодня" value={String(pageData.summary.dueCount)} tone={pageData.summary.dueCount > 0 ? "warning" : "default"} />
+        <SummaryTile label="Ближайшие 7 дней" value={formatCurrency(pageData.summary.nextSevenDaysAmount, pageData.currency)} />
         <SummaryTile
           label="Плановый поток / мес."
-          value={formatCurrency(data.summary.monthlyPlannedIncome - data.summary.monthlyPlannedExpense, data.currency)}
-          tone={data.summary.monthlyPlannedIncome >= data.summary.monthlyPlannedExpense ? "success" : "danger"}
+          value={formatCurrency(pageData.summary.monthlyPlannedIncome - pageData.summary.monthlyPlannedExpense, pageData.currency)}
+          tone={pageData.summary.monthlyPlannedIncome >= pageData.summary.monthlyPlannedExpense ? "success" : "danger"}
         />
       </section>
 
@@ -95,13 +100,13 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
             <RecurringDialog
               title="Новый шаблон"
               description="Для зарплаты, аренды, подписок, ЖКХ и других повторяющихся операций."
-              data={data}
+              data={pageData}
               onSubmit={(event) => submitTemplate(event, "POST")}
             />
           </Dialog>
         </CardHeader>
         <CardContent>
-          {data.recurringTransactions.length === 0 ? (
+          {pageData.recurringTransactions.length === 0 ? (
             <EmptyState
               icon={CalendarClock}
               title="Плановых операций пока нет"
@@ -109,8 +114,8 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
             />
           ) : (
             <>
-              <div className="hidden md:block">
-                <Table>
+              <div className="hidden overflow-x-auto md:block">
+                <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Следующая дата</TableHead>
@@ -123,7 +128,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.recurringTransactions.map((item) => (
+                    {pageData.recurringTransactions.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell>{formatDate(item.nextDate)}</TableCell>
                         <TableCell>
@@ -142,7 +147,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                         </TableCell>
                         <TableCell className={item.type === "INCOME" ? "text-right font-semibold text-success-foreground" : "text-right font-semibold"}>
                           {item.type === "INCOME" ? "+" : "-"}
-                          {formatCurrency(item.amount, data.currency)}
+                          {formatCurrency(item.amount, pageData.currency)}
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
@@ -151,6 +156,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                               variant="ghost"
                               size="icon"
                               title="Создать наступившие операции"
+                              aria-label="Создать наступившие операции"
                               disabled={!item.isDue}
                               onClick={() => materializeTemplate(item.id)}
                             >
@@ -158,19 +164,19 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                             </Button>
                             <Dialog>
                               <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon" title="Редактировать">
+                                <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать шаблон">
                                   <Edit2 className="size-4" />
                                 </Button>
                               </DialogTrigger>
                               <RecurringDialog
                                 title="Редактировать шаблон"
                                 description="Изменения применятся к будущим операциям."
-                                data={data}
+                                data={pageData}
                                 recurring={item}
                                 onSubmit={(event) => submitTemplate(event, "PUT")}
                               />
                             </Dialog>
-                            <Button type="button" variant="ghost" size="icon" title="Удалить" onClick={() => removeTemplate(item.id)}>
+                            <Button type="button" variant="ghost" size="icon" title="Удалить" aria-label="Удалить шаблон" onClick={() => removeTemplate(item.id)}>
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
                           </div>
@@ -182,7 +188,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
               </div>
 
               <div className="space-y-3 md:hidden">
-                {data.recurringTransactions.map((item) => (
+                {pageData.recurringTransactions.map((item) => (
                   <div key={item.id} className="rounded-lg border bg-card p-4 shadow-soft">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -194,7 +200,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                       </div>
                       <p className={item.type === "INCOME" ? "shrink-0 font-semibold text-success-foreground" : "shrink-0 font-semibold"}>
                         {item.type === "INCOME" ? "+" : "-"}
-                        {formatCurrency(item.amount, data.currency)}
+                        {formatCurrency(item.amount, pageData.currency)}
                       </p>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-2">
@@ -212,7 +218,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                           <RecurringDialog
                             title="Редактировать шаблон"
                             description="Изменения применятся к будущим операциям."
-                            data={data}
+                            data={pageData}
                             recurring={item}
                             onSubmit={(event) => submitTemplate(event, "PUT")}
                           />
@@ -237,11 +243,11 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="rounded-lg border bg-muted/20 p-4">
             <p className="font-medium">Плановые доходы в месяц</p>
-            <p className="mt-2 text-2xl font-semibold text-success-foreground">{formatCurrency(data.summary.monthlyPlannedIncome, data.currency)}</p>
+            <p className="mt-2 text-2xl font-semibold text-success-foreground">{formatCurrency(pageData.summary.monthlyPlannedIncome, pageData.currency)}</p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-4">
             <p className="font-medium">Плановые расходы в месяц</p>
-            <p className="mt-2 text-2xl font-semibold text-destructive">{formatCurrency(data.summary.monthlyPlannedExpense, data.currency)}</p>
+            <p className="mt-2 text-2xl font-semibold text-destructive">{formatCurrency(pageData.summary.monthlyPlannedExpense, pageData.currency)}</p>
           </div>
         </CardContent>
       </Card>

@@ -5,7 +5,7 @@ import { getInvestmentData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
 import { portfolioPositionSchema, watchlistItemSchema } from "@/lib/validations";
-import { MockMarketDataProvider } from "@/services/market/MockMarketDataProvider";
+import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 
 export const dynamic = "force-static";
 
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const actionTicker = typeof payload.ticker === "string" ? payload.ticker.toUpperCase() : "";
 
     if (action === "refreshMarket") {
-      const provider = new MockMarketDataProvider();
+      const provider = createMarketDataProvider();
       const marketRows = await provider.getSecurities();
       const priceDate = startOfDay(new Date());
 

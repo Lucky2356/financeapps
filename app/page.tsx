@@ -2,14 +2,12 @@ import { Download, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { CashflowChart } from "@/components/charts/cashflow-chart";
-import { DashboardActionPlan } from "@/components/dashboard-action-plan";
 import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
-import { FinanceHealthCard } from "@/components/finance-health-card";
 import { MetricCard } from "@/components/metric-card";
+import { OnboardingBanner } from "@/components/onboarding-banner";
 import { PageHeader } from "@/components/page-header";
-import { RecommendationList } from "@/components/recommendation-list";
 import { SourceBanner } from "@/components/source-banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +22,7 @@ export default async function DashboardPage() {
     <div className="page-grid">
       <PageHeader
         title="Главная"
-        description="Финансовая картина месяца, динамика расходов, рекомендации и оценка устойчивости."
+        description="Финансовая картина месяца и динамика расходов."
         actions={
           <>
             <Button asChild>
@@ -43,11 +41,11 @@ export default async function DashboardPage() {
         }
       />
       <SourceBanner source={data.source} />
+      <OnboardingBanner hasTransactions={data.categoryExpenses.length > 0} />
       <DashboardOverview data={data} />
       <DashboardForecastStrip forecast={forecast} />
-      <DashboardActionPlan data={data} />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {data.metrics.map((metric) => (
           <MetricCard key={metric.title} metric={metric} />
         ))}
@@ -82,11 +80,6 @@ export default async function DashboardPage() {
             <CashflowChart data={data.monthlyCashflow} />
           </CardContent>
         </Card>
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <RecommendationList title="Рекомендации" items={data.recommendations} />
-        <FinanceHealthCard health={data.health} />
       </section>
     </div>
   );

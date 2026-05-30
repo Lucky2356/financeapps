@@ -1,9 +1,18 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
+
+const cargoBin = process.env.USERPROFILE ? join(process.env.USERPROFILE, ".cargo", "bin") : "";
+const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+if (cargoBin && existsSync(cargoBin) && !process.env[pathKey]?.includes(cargoBin)) {
+  process.env[pathKey] = `${cargoBin}${delimiter}${process.env[pathKey] ?? ""}`;
+}
+process.env.PATH = process.env[pathKey];
 
 function check(command, args = ["--version"]) {
-  const result = spawnSync(command, args, { encoding: "utf8", shell: true });
+  const executable = command === "npm" && process.env.npm_execpath ? process.execPath : command;
+  const executableArgs = command === "npm" && process.env.npm_execpath ? [process.env.npm_execpath, ...args] : args;
+  const result = spawnSync(executable, executableArgs, { encoding: "utf8" });
   return {
     ok: result.status === 0,
     output: `${result.stdout || result.stderr || ""}`.trim()

@@ -7,6 +7,17 @@ export type MetricCard = {
   value: string;
   detail: string;
   tone?: "default" | "success" | "warning" | "danger";
+  trend?: { value: number; label: string };
+};
+
+export type CategoryRow = {
+  id: string;
+  name: string;
+  kind: "INCOME" | "EXPENSE";
+  color: string;
+  isEssential: boolean;
+  isSubscription: boolean;
+  transactionCount: number;
 };
 
 export type ChartDatum = {
@@ -100,7 +111,7 @@ export type TransactionRow = {
   date: string;
   description: string | null;
   account: Option;
-  category: Option & { color: string };
+  category: Option & { color: string; icon?: string };
 };
 
 export type RecurringTransactionRow = {
@@ -130,6 +141,7 @@ export type BudgetRow = {
   categoryId: string;
   category: string;
   color: string;
+  icon?: string;
   limitAmount: number;
   spent: number;
   progress: number;

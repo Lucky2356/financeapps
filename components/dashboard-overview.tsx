@@ -12,14 +12,14 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
   const healthTone = data.health.score >= 75 ? "good" : data.health.score >= 50 ? "warning" : "critical";
 
   return (
-    <section className="overflow-hidden rounded-lg border bg-card shadow-soft">
+    <section className="overflow-hidden rounded-lg border shadow-soft">
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <div className="border-b p-5 sm:p-6 lg:border-b-0 lg:border-r">
+        <div className="border-b bg-gradient-to-br from-primary/6 via-card to-card p-5 sm:p-6 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <WalletCards className="size-4 text-primary" />
             Текущее состояние
           </div>
-          <p className="mt-4 text-3xl font-semibold sm:text-4xl">{balance?.value ?? "0 ₽"}</p>
+          <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">{balance?.value ?? "0 ₽"}</p>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">{balance?.detail ?? "Баланс по активным счетам."}</p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">

@@ -75,6 +75,23 @@ export async function POST(request: NextRequest) {
         const account = accounts.find((item) => item.name.toLowerCase() === accountName) ?? fallbackAccount;
         const categoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
         const category = await findOrCreateImportCategory(tx, user.id, categoryName, type);
+        const description = String(row[input.descriptionColumn ?? ""] ?? "").trim() || null;
+        const duplicate = await tx.transaction.findFirst({
+          where: {
+            userId: user.id,
+            accountId: account.id,
+            categoryId: category.id,
+            amount,
+            type,
+            date,
+            description
+          }
+        });
+
+        if (duplicate) {
+          skipped += 1;
+          continue;
+        }
 
         await tx.transaction.create({
           data: {
@@ -84,7 +101,7 @@ export async function POST(request: NextRequest) {
             amount,
             type,
             date,
-            description: String(row[input.descriptionColumn ?? ""] ?? "").trim() || null
+            description
           }
         });
         await tx.account.update({
