@@ -28,7 +28,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
             Чистый капитал
           </div>
           <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">{formatCurrency(data.netWorth, data.currency)}</p>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">Счета и инвестиционный портфель.</p>
+          <p className="mt-2 max-w-xl text-sm text-muted-foreground">Счета, инвестиции и накопления по целям.</p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {signals.slice(0, 3).map((signal) => (

@@ -435,6 +435,9 @@ export class LocalApiClient implements ApiClient {
     }
     if (pathname === "/transactions/transfer") return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
     if (pathname === "/budgets") return this.saveAndReturn<TResponse>(state, this.upsertBudget(state, body));
+    if (pathname === "/goals" && (body as { action?: unknown })?.action === "deposit") {
+      return this.saveAndReturn<TResponse>(state, this.depositToGoal(state, body));
+    }
     if (pathname === "/goals") return this.saveAndReturn<TResponse>(state, this.upsertGoal(state, body, method));
     if (pathname === "/recurring") return this.saveAndReturn<TResponse>(state, this.upsertRecurring(state, body, method));
     if (pathname === "/recurring/materialize") return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
@@ -625,6 +628,46 @@ export class LocalApiClient implements ApiClient {
     });
     state.goals = method === "PUT" ? state.goals.map((item) => (item.id === row.id ? row : item)) : [...state.goals, row];
     return row;
+  }
+
+  // Top up a goal. When an account is given, the money is really moved: an
+  // expense (category "Накопления") is recorded against that account, so the
+  // account balance drops while the goal grows. Net worth counts goal savings,
+  // so it stays conserved across a deposit.
+  private depositToGoal(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const goal = state.goals.find((item) => item.id === input.goalId);
+    if (!goal) throw new Error("Цель не найдена.");
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
+
+    if (input.accountId) {
+      const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
+      if (!account) throw new Error("Выберите существующий активный счёт.");
+      const category = this.findOrCreateCategory(state, "Накопления", "EXPENSE");
+      this.upsertTransaction(
+        state,
+        {
+          amount: String(amount),
+          type: "EXPENSE",
+          accountId: account.id,
+          categoryId: category.id,
+          date: input.date || new Date().toISOString(),
+          description: `Пополнение цели: ${goal.title}`
+        },
+        "POST"
+      );
+    }
+
+    const updated = recomputeGoal({
+      id: goal.id,
+      title: goal.title,
+      targetAmount: goal.targetAmount,
+      currentAmount: goal.currentAmount + amount,
+      deadline: goal.deadline
+    });
+    state.goals = state.goals.map((item) => (item.id === goal.id ? updated : item));
+    return updated;
   }
 
   private upsertRecurring(state: LocalState, body: unknown, method: "POST" | "PUT") {
@@ -1124,7 +1167,10 @@ export class LocalApiClient implements ApiClient {
     const finance = this.financeInput(state);
     const totalBalance = this.accounts(state).totalBalance;
     const portfolioValue = await this.portfolioValue(state);
-    const netWorth = roundMoney(totalBalance + portfolioValue);
+    // Goal savings are money the user set aside from accounts, so they stay
+    // part of net worth (a deposit just moves it from a balance into a goal).
+    const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
+    const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
     const netWorthTrend = this.recordNetWorthSnapshot(state, netWorth);
     const recommendationService = new FinanceRecommendationService();
     return {
