@@ -112,6 +112,9 @@ export type ForecastData = {
   plannedExpense90d: number;
   points: ForecastPoint[];
   upcomingEvents: ForecastEvent[];
+  // Full set of planned events across the horizon (used by the calendar so it
+  // matches the totals; upcomingEvents is the short "ближайшие" list).
+  events: ForecastEvent[];
   warnings: ForecastWarning[];
 };
 

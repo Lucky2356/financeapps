@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, ...props }, ref) => {
+const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, onFocus, ...props }, ref) => {
   return (
     <input
       type={type}
@@ -13,6 +13,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type,
         className
       )}
       ref={ref}
+      onFocus={(event) => {
+        // For number fields, select the contents on focus so typing replaces a
+        // default like "0" instead of prepending to it.
+        if (type === "number") event.target.select();
+        onFocus?.(event);
+      }}
       {...props}
     />
   );

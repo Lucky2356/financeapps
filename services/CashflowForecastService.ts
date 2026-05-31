@@ -53,6 +53,7 @@ export class CashflowForecastService {
       plannedExpense90d,
       points,
       upcomingEvents: events.slice(0, 12),
+      events,
       warnings: this.buildWarnings({
         startingBalance,
         forecast30dBalance,
