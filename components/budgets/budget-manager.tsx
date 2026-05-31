@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import type { BudgetsPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,37 +38,37 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   const apiPath = `/budgets?month=${selectedMonth}`;
   const { data: pageData, reload } = useApiPageData(data, apiPath);
 
+  const { run } = useApiMutation();
   const monthOptions = buildMonthOptions();
   const currentIndex = monthOptions.findIndex((option) => option.value === selectedMonth);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < monthOptions.length - 1;
+
+  async function refresh() {
+    await reload();
+    router.refresh();
+  }
 
   function navigateToMonth(monthValue: string) {
     setSelectedMonth(monthValue);
     // apiPath will update → useApiPageData effect re-fetches for new month
   }
 
-  // Auto-save a single category limit (no explicit save button).
+  // Auto-save a single category limit (no explicit save button; silent success).
   async function saveLimit(categoryId: string, limitAmount: number) {
-    try {
-      await apiClient.post("/budgets", { categoryId, limitAmount: String(limitAmount) });
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить лимит");
-    }
+    await run(() => apiClient.post("/budgets", { categoryId, limitAmount: String(limitAmount) }), {
+      error: "Не удалось сохранить лимит",
+      onSuccess: refresh
+    });
   }
 
   async function resetBudget(budget: BudgetsPageData["budgets"][number]) {
     if (!window.confirm(`Сбросить лимит для «${budget.category}»?`)) return;
-    try {
-      await apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: 0 });
-      toast.success("Лимит сброшен");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сбросить лимит");
-    }
+    await run(() => apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: 0 }), {
+      success: "Лимит сброшен",
+      error: "Не удалось сбросить лимит",
+      onSuccess: refresh
+    });
   }
 
   // Fill limits for categories that have none yet, using the average spend
@@ -78,16 +79,18 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
       toast.info("Нет пустых категорий с историей трат для подсказки.");
       return;
     }
-    try {
-      for (const budget of targets) {
-        await apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: String(budget.suggestedLimit) });
+    await run(
+      async () => {
+        for (const budget of targets) {
+          await apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: String(budget.suggestedLimit) });
+        }
+      },
+      {
+        success: `Лимиты заполнены по средним тратам: ${targets.length}`,
+        error: "Не удалось применить предложения",
+        onSuccess: refresh
       }
-      toast.success(`Лимиты заполнены по средним тратам: ${targets.length}`);
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось применить предложения");
-    }
+    );
   }
 
   return (

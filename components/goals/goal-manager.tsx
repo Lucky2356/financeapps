@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, GoalsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -21,40 +22,37 @@ import { Progress } from "@/components/ui/progress";
 export function GoalManager({ data }: { data: GoalsPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/goals");
+  const { run } = useApiMutation();
   const [addOpen, setAddOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalsPageData["goals"][number] | null>(null);
+
+  async function refresh() {
+    await reload();
+    router.refresh();
+  }
 
   async function submitGoal(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    try {
-      if (method === "POST") {
-        await apiClient.post("/goals", payload);
-        toast.success("Цель добавлена");
-        setAddOpen(false);
-      } else {
-        await apiClient.put("/goals", payload);
-        toast.success("Цель обновлена");
-        setEditingGoal(null);
+    await run(() => (method === "POST" ? apiClient.post("/goals", payload) : apiClient.put("/goals", payload)), {
+      success: method === "POST" ? "Цель добавлена" : "Цель обновлена",
+      error: "Не удалось сохранить цель",
+      onSuccess: async () => {
+        if (method === "POST") setAddOpen(false);
+        else setEditingGoal(null);
+        await refresh();
       }
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить цель");
-    }
+    });
   }
 
   async function removeGoal(id: string, title: string) {
     if (!window.confirm(`Удалить цель «${title}»?`)) return;
-    try {
-      await apiClient.delete(`/goals?id=${encodeURIComponent(id)}`);
-      toast.success("Цель удалена");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить цель");
-    }
+    await run(() => apiClient.delete(`/goals?id=${encodeURIComponent(id)}`), {
+      success: "Цель удалена",
+      error: "Не удалось удалить цель",
+      onSuccess: refresh
+    });
   }
 
   return (
