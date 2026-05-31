@@ -1,5 +1,6 @@
 "use client";
 
+import { CashflowCalendar } from "@/components/forecast/cashflow-calendar";
 import { ForecastView } from "@/components/forecast/forecast-view";
 import { SourceBanner } from "@/components/source-banner";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -13,6 +14,7 @@ export function ForecastClient({ initialData }: { initialData: ForecastData }) {
     <>
       <SourceBanner source={data.source} />
       <ForecastView data={data} />
+      <CashflowCalendar events={data.upcomingEvents} currency={data.currency} />
     </>
   );
 }
