@@ -620,35 +620,23 @@ export class LocalApiClient implements ApiClient {
     return row;
   }
 
-  // Top up a goal. When an account is given, the money is really moved: an
-  // expense (category "Накопления") is recorded against that account, so the
-  // account balance drops while the goal grows. Net worth counts goal savings,
-  // so it stays conserved across a deposit.
+  // Top up a goal by moving money from a chosen account into the goal — a
+  // transfer to savings, NOT a consumption expense. No income/expense
+  // transaction is recorded, so savings rate / monthly expense / budgets are
+  // not distorted; the account balance drops and the goal grows, leaving net
+  // worth (which counts goal savings) conserved.
   private depositToGoal(state: LocalState, body: unknown) {
     const input = toFormObject(body);
     const goal = state.goals.find((item) => item.id === input.goalId);
     if (!goal) throw new Error("Цель не найдена.");
     const amount = Number(input.amount);
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
+    if (!input.accountId) throw new Error("Выберите счёт для пополнения.");
+    const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
+    if (!account) throw new Error("Выберите существующий активный счёт.");
+    if (amount > account.balance) throw new Error("Недостаточно средств на счёте.");
 
-    if (input.accountId) {
-      const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
-      if (!account) throw new Error("Выберите существующий активный счёт.");
-      const category = this.findOrCreateCategory(state, "Накопления", "EXPENSE");
-      this.upsertTransaction(
-        state,
-        {
-          amount: String(amount),
-          type: "EXPENSE",
-          accountId: account.id,
-          categoryId: category.id,
-          date: input.date || new Date().toISOString(),
-          description: `Пополнение цели: ${goal.title}`
-        },
-        "POST"
-      );
-    }
-
+    this.applyBalance(state, account.id, -amount);
     const updated = recomputeGoal({
       id: goal.id,
       title: goal.title,
@@ -1367,7 +1355,12 @@ export class LocalApiClient implements ApiClient {
     const expenseRows = state.transactions.filter((row) => row.type === "EXPENSE" && row.date.startsWith(monthKey(0)));
     const averageExpense = monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(monthlyCashflow.length, 1);
     const emergencyFund = state.accounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
-    const softExpense = expenseRows.filter((row) => state.categories.find((category) => category.id === row.category.id)?.isSubscription).reduce((sum, row) => sum + row.amount, 0);
+    const softExpense = expenseRows.filter((row) => {
+      const category = state.categories.find((item) => item.id === row.category.id);
+      // Discretionary = subscriptions + entertainment + restaurants (same
+      // definition as the web/Prisma path, for parity).
+      return category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.label ?? "");
+    }).reduce((sum, row) => sum + row.amount, 0);
     const essentialExpense = expenseRows.filter((row) => state.categories.find((category) => category.id === row.category.id)?.isEssential).reduce((sum, row) => sum + row.amount, 0);
     const freeCashflow = currentMonth.income - currentMonth.expense;
     return {
