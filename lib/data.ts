@@ -134,7 +134,7 @@ export type AnalyticsData = {
   source: DataSource;
   currency: string;
   monthlyCashflow: Array<{ month: string; income: number; expense: number; savings: number; savingsRate: number }>;
-  topExpenseCategories: Array<{ category: string; color: string; total: number; share: number }>;
+  topExpenseCategories: Array<{ categoryId: string; category: string; color: string; total: number; share: number }>;
   avgMonthlyIncome: number;
   avgMonthlyExpense: number;
   avgSavingsRate: number;
@@ -1483,12 +1483,12 @@ function buildAnalyticsFromTransactions(
   const worstMonthData = [...monthlyCashflow].sort((a, b) => a.savings - b.savings)[0];
 
   // Top expense categories (last 6 months)
-  const categoryTotals = new Map<string, { category: string; color: string; total: number }>();
+  const categoryTotals = new Map<string, { categoryId: string; category: string; color: string; total: number }>();
   const sixMonthsAgo = startOfMonth(months[0]);
   const expenseTransactions = transactions.filter((t) => t.type === "EXPENSE" && new Date(t.date) >= sixMonthsAgo);
   const totalExpenseAll = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
   for (const t of expenseTransactions) {
-    const existing = categoryTotals.get(t.category.id) ?? { category: t.category.label, color: t.category.color, total: 0 };
+    const existing = categoryTotals.get(t.category.id) ?? { categoryId: t.category.id, category: t.category.label, color: t.category.color, total: 0 };
     existing.total += t.amount;
     categoryTotals.set(t.category.id, existing);
   }
@@ -1545,12 +1545,12 @@ function buildDemoAnalytics(): AnalyticsData {
   const topExpenseCategories = result.topExpenseCategories.length > 0
     ? result.topExpenseCategories
     : [
-        { category: "Продукты", color: "#f97316", total: 260000, share: 28 },
-        { category: "ЖКХ", color: "#7c3aed", total: 115000, share: 12 },
-        { category: "Развлечения", color: "#eab308", total: 130000, share: 14 },
-        { category: "Транспорт", color: "#2563eb", total: 68000, share: 7 },
-        { category: "Рестораны", color: "#ea580c", total: 95000, share: 10 },
-        { category: "Здоровье", color: "#dc2626", total: 55000, share: 6 }
+        { categoryId: "cat-food", category: "Продукты", color: "#f97316", total: 260000, share: 28 },
+        { categoryId: "cat-utilities", category: "ЖКХ", color: "#7c3aed", total: 115000, share: 12 },
+        { categoryId: "cat-entertainment", category: "Развлечения", color: "#eab308", total: 130000, share: 14 },
+        { categoryId: "cat-transport", category: "Транспорт", color: "#2563eb", total: 68000, share: 7 },
+        { categoryId: "cat-restaurants", category: "Рестораны", color: "#ea580c", total: 95000, share: 10 },
+        { categoryId: "cat-health", category: "Здоровье", color: "#dc2626", total: 55000, share: 6 }
       ];
 
   return {

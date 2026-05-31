@@ -1,6 +1,7 @@
 "use client";
 
 import { Printer } from "lucide-react";
+import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import type { AnalyticsData } from "@/lib/data";
@@ -96,7 +97,12 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
           <CardContent>
             <div className="space-y-3">
               {data.topExpenseCategories.map((cat) => (
-                <div key={cat.category}>
+                <Link
+                  key={cat.category}
+                  href={`/transactions?categoryId=${encodeURIComponent(cat.categoryId)}&type=EXPENSE`}
+                  className="block rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
+                  title={`Показать операции: ${cat.category}`}
+                >
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <span
@@ -119,7 +125,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                       }}
                     />
                   </div>
-                </div>
+                </Link>
               ))}
               {data.topExpenseCategories.length === 0 && (
                 <p className="py-8 text-center text-sm text-muted-foreground">Нет данных за последние 6 месяцев</p>

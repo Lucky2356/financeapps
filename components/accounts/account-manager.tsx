@@ -1,6 +1,7 @@
 "use client";
 
-import { Edit2, Plus, Trash2 } from "lucide-react";
+import { Edit2, Plus, ReceiptText, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -95,12 +96,25 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
               <TableBody>
                 {pageData.accounts.map((account) => (
                   <TableRow key={account.id}>
-                    <TableCell className="font-medium">{account.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/transactions?accountId=${encodeURIComponent(account.id)}`}
+                        className="hover:text-primary hover:underline"
+                        title={`Показать операции: ${account.name}`}
+                      >
+                        {account.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>{accountTypeLabel(account.type)}</TableCell>
                     <TableCell>{account.currency}</TableCell>
                     <TableCell className="text-right font-semibold">{formatCurrency(account.balance, account.currency)}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
+                        <Button asChild variant="ghost" size="icon" title="Операции по счёту" aria-label="Операции по счёту">
+                          <Link href={`/transactions?accountId=${encodeURIComponent(account.id)}`}>
+                            <ReceiptText className="size-4" />
+                          </Link>
+                        </Button>
                         <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать счет" onClick={() => setEditingAccount(account)}>
                           <Edit2 className="size-4" />
                         </Button>
@@ -133,6 +147,12 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                   <p className="font-semibold">{formatCurrency(account.balance, account.currency)}</p>
                 </div>
                 <div className="mt-4 flex gap-2">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/transactions?accountId=${encodeURIComponent(account.id)}`}>
+                      <ReceiptText className="size-4" />
+                      Операции
+                    </Link>
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => setEditingAccount(account)}>
                     <Edit2 className="size-4" />
                     Изменить
