@@ -5,6 +5,8 @@ import { ru } from "date-fns/locale";
 
 import { ACCOUNT_TYPE_LABELS, RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
+import { suggestedLimitFor } from "@/lib/budget-suggest";
+import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthTrend } from "@/lib/net-worth";
 import { prisma } from "@/lib/prisma";
 import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
@@ -380,7 +382,8 @@ function buildBudgetRows(transactions: TransactionRow[], categories = demoCatego
         limitAmount,
         spent,
         progress: limitAmount > 0 ? clamp(percent(spent, limitAmount), 0, 140) : 0,
-        isExceeded: limitAmount > 0 && spent > limitAmount
+        isExceeded: limitAmount > 0 && spent > limitAmount,
+        suggestedLimit: suggestedLimitFor(category.id, transactions, { now: monthDate })
       };
     });
 }
@@ -502,7 +505,12 @@ function buildDemoDashboard(): DashboardData {
     recommendations: service.build(input),
     health: service.healthScore(input),
     netWorth: totalBalance,
-    netWorthTrend: buildNetWorthTrend({ currentNetWorth: totalBalance, transactions })
+    netWorthTrend: buildNetWorthTrend({ currentNetWorth: totalBalance, transactions }),
+    emergencyFund: buildEmergencyFund({
+      savingsBalance: demoAccounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0),
+      averageMonthlyExpense: input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(input.monthlyCashflow.length, 1),
+      targetMonths: 6
+    })
   };
 }
 
@@ -566,7 +574,8 @@ function emptyDashboard(): DashboardData {
     recommendations: [],
     health: service.healthScore(input),
     netWorth: 0,
-    netWorthTrend: []
+    netWorthTrend: [],
+    emergencyFund: buildEmergencyFund({ savingsBalance: 0, averageMonthlyExpense: 0, targetMonths: 6 })
   };
 }
 
@@ -842,7 +851,8 @@ async function buildDatabaseBudgetRows(
         limitAmount,
         spent,
         progress: limitAmount > 0 ? clamp(percent(spent, limitAmount), 0, 140) : 0,
-        isExceeded: limitAmount > 0 && spent > limitAmount
+        isExceeded: limitAmount > 0 && spent > limitAmount,
+        suggestedLimit: suggestedLimitFor(category.id, transactions, { now: monthDate })
       };
     });
 }
@@ -862,6 +872,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     const portfolioValue = investments.portfolio.reduce((sum, position) => sum + position.currentValue, 0);
     const goalSavings = finance.goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
     const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
+
+    const savingsBalance = finance.accounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
+    const averageMonthlyExpense = input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(input.monthlyCashflow.length, 1);
+    const emergencyFund = buildEmergencyFund({ savingsBalance, averageMonthlyExpense, targetMonths: user.emergencyFundMonthsTarget });
 
     const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
     const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
@@ -900,7 +914,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       recommendations: service.build(input),
       health: service.healthScore(input),
       netWorth,
-      netWorthTrend: buildNetWorthTrend({ currentNetWorth: netWorth, transactions: finance.transactions })
+      netWorthTrend: buildNetWorthTrend({ currentNetWorth: netWorth, transactions: finance.transactions }),
+      emergencyFund
     };
   }, emptyDashboard);
 }

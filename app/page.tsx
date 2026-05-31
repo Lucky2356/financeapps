@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { PageHeader } from "@/components/page-header";
+import { PrintButton } from "@/components/print-button";
 import { Button } from "@/components/ui/button";
 import { getDashboardData, getForecastData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
@@ -30,6 +31,7 @@ export default async function DashboardPage() {
                 Импорт
               </Link>
             </Button>
+            <PrintButton />
           </>
         }
       />
