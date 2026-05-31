@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { INVESTMENT_DISCLAIMER, RISK_LABELS } from "@/lib/constants";
@@ -39,6 +40,7 @@ const riskVariant = {
 export function InvestmentsView({ data: initialData }: { data: InvestmentData }) {
   const router = useRouter();
   const { data, reload } = useApiPageData(initialData, "/investments");
+  const { run } = useApiMutation();
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [addPositionOpen, setAddPositionOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<InvestmentData["portfolio"][number] | null>(null);
@@ -88,73 +90,73 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     }
   }
 
+  async function refresh() {
+    await reload();
+    router.refresh();
+  }
+
   async function addSuggestion(suggestion: InvestmentSuggestion) {
-    try {
-      await apiClient.post("/investments", {
-        ticker: suggestion.ticker,
-        quantity: String(suggestion.suggestedQuantity),
-        averageBuyPrice: String(suggestion.price)
-      });
-      toast.success(`${suggestion.ticker}: добавлено ${suggestion.suggestedQuantity} шт. в портфель`);
-      setSuggestions((prev) => prev.filter((item) => item.ticker !== suggestion.ticker));
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось добавить позицию");
-    }
+    await run(
+      () =>
+        apiClient.post("/investments", {
+          ticker: suggestion.ticker,
+          quantity: String(suggestion.suggestedQuantity),
+          averageBuyPrice: String(suggestion.price)
+        }),
+      {
+        success: `${suggestion.ticker}: добавлено ${suggestion.suggestedQuantity} шт. в портфель`,
+        error: "Не удалось добавить позицию",
+        onSuccess: async () => {
+          setSuggestions((prev) => prev.filter((item) => item.ticker !== suggestion.ticker));
+          await refresh();
+        }
+      }
+    );
   }
 
   async function submitPosition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    try {
-      await apiClient.post("/investments", payload);
-      toast.success("Позиция портфеля сохранена");
-      setAddPositionOpen(false);
-      setEditingPosition(null);
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить позицию");
-    }
+    await run(() => apiClient.post("/investments", payload), {
+      success: "Позиция портфеля сохранена",
+      error: "Не удалось сохранить позицию",
+      onSuccess: async () => {
+        setAddPositionOpen(false);
+        setEditingPosition(null);
+        await refresh();
+      }
+    });
   }
 
   async function removePosition(ticker: string) {
-    try {
-      await apiClient.post("/investments", { action: "delete", ticker });
-      toast.success("Позиция удалена из портфеля");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить позицию");
-    }
+    await run(() => apiClient.post("/investments", { action: "delete", ticker }), {
+      success: "Позиция удалена из портфеля",
+      error: "Не удалось удалить позицию",
+      onSuccess: refresh
+    });
   }
 
   async function addWatchlistItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    try {
-      await apiClient.post("/investments", { ...payload, action: "addWatchlist" });
-      toast.success("Бумага добавлена в watchlist");
-      setWatchlistOpen(false);
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось добавить бумагу");
-    }
+    await run(() => apiClient.post("/investments", { ...payload, action: "addWatchlist" }), {
+      success: "Бумага добавлена в watchlist",
+      error: "Не удалось добавить бумагу",
+      onSuccess: async () => {
+        setWatchlistOpen(false);
+        await refresh();
+      }
+    });
   }
 
   async function removeWatchlistItem(ticker: string) {
-    try {
-      await apiClient.post("/investments", { action: "removeWatchlist", ticker });
-      toast.success("Бумага удалена из watchlist");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить бумагу");
-    }
+    await run(() => apiClient.post("/investments", { action: "removeWatchlist", ticker }), {
+      success: "Бумага удалена из watchlist",
+      error: "Не удалось удалить бумагу",
+      onSuccess: refresh
+    });
   }
 
   async function refreshMarketPrices(silent = false) {

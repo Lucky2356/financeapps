@@ -10,7 +10,10 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 import type { TransactionsPageData } from "@/lib/data";
+
+type BudgetWarning = { category: string; spent: number; limit: number };
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -43,7 +46,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     q: searchParams.get("q") ?? "",
     limit: searchParams.get("limit") ?? String(pageData.pagination.limit)
   };
-  const [isMutating, setIsMutating] = useState(false);
+  const { run, pending: isMutating } = useApiMutation();
   const [addOpen, setAddOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<TransactionsPageData["transactions"][number] | null>(null);
@@ -105,50 +108,43 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   );
   const net = totals.income - totals.expense;
 
+  async function refresh() {
+    await loadTransactions(true);
+    router.refresh();
+  }
+
   async function submitTransaction(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    try {
-      setIsMutating(true);
-      let budgetWarning: { category: string; spent: number; limit: number } | undefined;
-      if (method === "POST") {
-        const result = await apiClient.post<{ budgetWarning?: typeof budgetWarning }>("/transactions", payload);
-        budgetWarning = result?.budgetWarning;
-        toast.success("Операция добавлена");
-        setAddOpen(false);
-      } else {
-        const result = await apiClient.put<{ budgetWarning?: typeof budgetWarning }>("/transactions", payload);
-        budgetWarning = result?.budgetWarning;
-        toast.success("Операция обновлена");
-        setEditingTransaction(null);
+    await run(
+      () =>
+        method === "POST"
+          ? apiClient.post<{ budgetWarning?: BudgetWarning }>("/transactions", payload)
+          : apiClient.put<{ budgetWarning?: BudgetWarning }>("/transactions", payload),
+      {
+        success: method === "POST" ? "Операция добавлена" : "Операция обновлена",
+        error: "Не удалось сохранить операцию",
+        onSuccess: async (result) => {
+          if (method === "POST") setAddOpen(false);
+          else setEditingTransaction(null);
+          if (result?.budgetWarning) {
+            toast.warning(
+              `Превышен лимит «${result.budgetWarning.category}»: потрачено ${formatCurrency(result.budgetWarning.spent)} из ${formatCurrency(result.budgetWarning.limit)}`
+            );
+          }
+          await refresh();
+        }
       }
-      if (budgetWarning) {
-        toast.warning(
-          `Превышен лимит «${budgetWarning.category}»: потрачено ${formatCurrency(budgetWarning.spent)} из ${formatCurrency(budgetWarning.limit)}`
-        );
-      }
-      await loadTransactions(true);
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить операцию");
-    } finally {
-      setIsMutating(false);
-    }
+    );
   }
 
   async function removeTransaction(id: string) {
-    try {
-      setIsMutating(true);
-      await apiClient.delete(`/transactions?id=${encodeURIComponent(id)}`);
-      toast.success("Операция удалена");
-      await loadTransactions(true);
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить операцию");
-    } finally {
-      setIsMutating(false);
-    }
+    await run(() => apiClient.delete(`/transactions?id=${encodeURIComponent(id)}`), {
+      success: "Операция удалена",
+      error: "Не удалось удалить операцию",
+      onSuccess: refresh
+    });
   }
 
   async function submitTransfer(event: FormEvent<HTMLFormElement>) {
@@ -158,18 +154,14 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
       ...Object.fromEntries(new FormData(event.currentTarget).entries())
     };
 
-    try {
-      setIsMutating(true);
-      await apiClient.post("/transactions", payload);
-      toast.success("Перевод между счетами создан");
-      setTransferOpen(false);
-      await loadTransactions(true);
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось создать перевод");
-    } finally {
-      setIsMutating(false);
-    }
+    await run(() => apiClient.post("/transactions", payload), {
+      success: "Перевод между счетами создан",
+      error: "Не удалось создать перевод",
+      onSuccess: async () => {
+        setTransferOpen(false);
+        await refresh();
+      }
+    });
   }
 
   return (
