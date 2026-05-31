@@ -15,9 +15,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { DashboardData, RecommendationView } from "@/types/finance";
+import { buildNotifications, countUrgent, type NotificationItem, type NotificationSeverity } from "@/lib/notifications";
+import type { BudgetsPageData } from "@/lib/data";
+import type { DashboardData, ForecastData } from "@/types/finance";
 
-const severityLabel: Record<RecommendationView["severity"], string> = {
+const severityLabel: Record<NotificationSeverity, string> = {
   INFO: "Инфо",
   SUCCESS: "Ок",
   WARNING: "Важно",
@@ -32,24 +34,35 @@ const badgeVariant = {
 } as const;
 
 export function NotificationBell() {
-  const [recommendations, setRecommendations] = useState<RecommendationView[]>([]);
+  const [items, setItems] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    apiClient
-      .get<Pick<DashboardData, "recommendations">>("/dashboard")
-      .then((data) => {
-        if (!cancelled) setRecommendations(data.recommendations ?? []);
-      })
-      .catch(() => {});
+    void (async () => {
+      // Pull from all three sources; each is best-effort so one failure does
+      // not blank out the others.
+      const [dashboard, forecast, budgets] = await Promise.all([
+        apiClient.get<Pick<DashboardData, "recommendations">>("/dashboard").catch(() => null),
+        apiClient.get<Pick<ForecastData, "upcomingEvents" | "warnings" | "currency">>("/forecast").catch(() => null),
+        apiClient.get<BudgetsPageData>("/budgets").catch(() => null)
+      ]);
+      if (cancelled) return;
+      setItems(
+        buildNotifications({
+          recommendations: dashboard?.recommendations,
+          upcomingEvents: forecast?.upcomingEvents,
+          forecastWarnings: forecast?.warnings,
+          budgets: budgets?.budgets,
+          currency: forecast?.currency ?? budgets?.currency
+        })
+      );
+    })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const urgentCount = recommendations.filter(
-    (r) => r.severity === "WARNING" || r.severity === "CRITICAL"
-  ).length;
+  const urgentCount = countUrgent(items);
 
   return (
     <Dialog>
@@ -70,15 +83,15 @@ export function NotificationBell() {
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Рекомендации и предупреждения</DialogTitle>
+          <DialogTitle>Уведомления</DialogTitle>
         </DialogHeader>
         <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
-          {recommendations.length === 0 ? (
+          {items.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Нет активных рекомендаций
+              Нет активных уведомлений
             </p>
           ) : (
-            recommendations.map((item) => (
+            items.map((item) => (
               <div
                 key={item.id}
                 className={cn("rounded-lg border p-3", SEVERITY_STYLES[item.severity])}
