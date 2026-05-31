@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { applyDensity } from "@/components/app-settings-sync";
+import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -195,7 +196,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Риск-профиль</Label>
+            <Label className="inline-flex items-center gap-1">Риск-профиль <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} /></Label>
             <select
               name="riskProfileCode"
               value={settings.riskProfileCode}
@@ -213,7 +214,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             </p>
           </div>
           <div className="space-y-2">
-            <Label>Цель финансовой подушки</Label>
+            <Label className="inline-flex items-center gap-1">Цель финансовой подушки <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} /></Label>
             <select
               name="emergencyFundMonthsTarget"
               value={String(settings.emergencyFundMonthsTarget)}

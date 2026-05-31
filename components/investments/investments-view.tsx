@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, Plus, RefreshCw, ShieldAlert, Trash2 } from "lucide-react";
+import { Edit2, LineChart, Plus, RefreshCw, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -10,6 +10,7 @@ import { PortfolioStructureChart } from "@/components/charts/portfolio-structure
 import { RecommendationList } from "@/components/recommendation-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -262,6 +263,20 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           </div>
         </CardHeader>
         <CardContent>
+          {data.watchlist.length === 0 ? (
+            <EmptyState
+              icon={Star}
+              title="Watchlist пуст"
+              description="Добавьте интересные бумаги в список наблюдения, чтобы следить за ценой и динамикой. Это не инвестиционная рекомендация."
+              action={
+                <Button variant="outline" onClick={() => setWatchlistOpen(true)}>
+                  <Plus className="size-4" />
+                  Добавить в watchlist
+                </Button>
+              }
+            />
+          ) : (
+          <>
           <div className="hidden md:block">
             <Table>
               <TableHeader>
@@ -353,6 +368,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               </div>
             ))}
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 
@@ -376,6 +393,20 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             </Dialog>
           </CardHeader>
           <CardContent>
+            {data.portfolio.length === 0 ? (
+              <EmptyState
+                icon={LineChart}
+                title="Портфель пуст"
+                description="Подберите бумаги по бюджету и риску в блоке выше или добавьте позицию вручную — стоимость и P/L будут обновляться автоматически."
+                action={
+                  <Button onClick={() => setAddPositionOpen(true)}>
+                    <Plus className="size-4" />
+                    Добавить позицию
+                  </Button>
+                }
+              />
+            ) : (
+            <>
             <div className="hidden md:block">
               <Table>
                 <TableHeader>
@@ -469,6 +500,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                 </div>
               ))}
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
 

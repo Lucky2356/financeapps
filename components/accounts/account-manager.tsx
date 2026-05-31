@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, Plus, ReceiptText, Trash2 } from "lucide-react";
+import { Edit2, Plus, ReceiptText, Trash2, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/format";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,6 +83,20 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
           <CardTitle>Счета</CardTitle>
         </CardHeader>
         <CardContent>
+          {pageData.accounts.length === 0 ? (
+            <EmptyState
+              icon={WalletCards}
+              title="Пока нет счетов"
+              description="Создайте первый счёт (наличные, карта, накопительный или брокерский) — с него будут учитываться операции и баланс."
+              action={
+                <Button onClick={() => setAddOpen(true)}>
+                  <Plus className="size-4" />
+                  Создать счёт
+                </Button>
+              }
+            />
+          ) : (
+          <>
           <div className="hidden md:block">
             <Table>
               <TableHeader>
@@ -172,6 +187,8 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
               </div>
             ))}
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 
