@@ -32,12 +32,14 @@ export class CashflowForecastService {
     );
     const events = this.buildEvents(input.recurringTransactions, today, horizon);
     const points = this.buildPoints(startingBalance, events, today, horizonDays);
-    const forecast30dBalance = this.balanceAt(points, 30);
-    const forecast90dBalance = points[points.length - 1]?.balance ?? startingBalance;
     const plannedIncome30d = this.sumEvents(events, "INCOME", 30, today);
     const plannedExpense30d = this.sumEvents(events, "EXPENSE", 30, today);
     const plannedIncome90d = this.sumEvents(events, "INCOME", 90, today);
     const plannedExpense90d = this.sumEvents(events, "EXPENSE", 90, today);
+    // Compute the horizon balances from the exact 30/90-day event sums rather
+    // than the 7-day chart points (which would otherwise land on day 35/91).
+    const forecast30dBalance = roundMoney(startingBalance + plannedIncome30d - plannedExpense30d);
+    const forecast90dBalance = roundMoney(startingBalance + plannedIncome90d - plannedExpense90d);
 
     return {
       source: input.source,
@@ -127,11 +129,6 @@ export class CashflowForecastService {
     }
 
     return points;
-  }
-
-  private balanceAt(points: ForecastData["points"], day: number) {
-    const point = points.find((item, index) => index > 0 && differenceInCalendarDays(new Date(item.date), new Date(points[0].date)) >= day);
-    return point?.balance ?? points[points.length - 1]?.balance ?? 0;
   }
 
   private sumEvents(events: ForecastEvent[], type: TransactionType, days: number, today: Date) {

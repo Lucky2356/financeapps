@@ -171,15 +171,19 @@ function DepositDialog({
       toast.error("Введите сумму больше нуля");
       return;
     }
+    if (!accountId) {
+      toast.error("Выберите счёт для пополнения");
+      return;
+    }
     setLoading(true);
     try {
       await apiClient.post("/goals", {
         action: "deposit",
         goalId: goal.id,
         amount: String(depositAmount),
-        accountId: accountId || undefined
+        accountId
       });
-      toast.success(accountId ? "Пополнение списано со счёта" : "Пополнение сохранено");
+      toast.success("Пополнение списано со счёта");
       setOpen(false);
       setAmount("");
       await onSuccess();
@@ -234,12 +238,15 @@ function DepositDialog({
               </select>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Нет счетов — пополнение будет учтено только в прогрессе цели. Добавьте счёт, чтобы списывать деньги реально.
+                Нет счетов. Сначала добавьте счёт, чтобы откладывать деньги на цель.
               </p>
             )}
+            <p className="text-xs text-muted-foreground">
+              Деньги перемещаются со счёта в цель. Это не трата — норма накоплений не снижается.
+            </p>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={loading}>Пополнить</Button>
+            <Button type="submit" disabled={loading || accounts.length === 0}>Пополнить</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -272,10 +279,17 @@ function GoalDialog({
             <Label>Целевая сумма</Label>
             <Input name="targetAmount" type="number" min="0" step="100" defaultValue={goal?.targetAmount ?? ""} required />
           </div>
-          <div className="space-y-2">
-            <Label>Текущая сумма</Label>
-            <Input name="currentAmount" type="number" min="0" step="100" defaultValue={goal?.currentAmount ?? 0} required />
-          </div>
+          {goal ? (
+            <div className="space-y-2">
+              <Label>Накоплено</Label>
+              <Input name="currentAmount" type="number" min="0" step="100" defaultValue={goal.currentAmount} required />
+            </div>
+          ) : (
+            // New goals start at 0 and grow only through deposits, so the saved
+            // amount is always backed by money moved out of an account (net
+            // worth is never inflated by a manually-typed balance).
+            <input type="hidden" name="currentAmount" value="0" />
+          )}
         </div>
         <div className="space-y-2">
           <Label>Дедлайн</Label>
