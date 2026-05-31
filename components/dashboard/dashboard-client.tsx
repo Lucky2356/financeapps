@@ -4,6 +4,8 @@ import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { NetWorthChart } from "@/components/charts/net-worth-chart";
 import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
+import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
+import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
 import { MetricCard } from "@/components/metric-card";
 import { OnboardingBanner } from "@/components/onboarding-banner";
@@ -25,12 +27,17 @@ export function DashboardClient({
   const { data } = useApiPageData(initialData, "/dashboard");
   const { data: forecast } = useApiPageData(initialForecast, "/forecast");
 
+  const freeCash = data.metrics.find((metric) => metric.title === "Свободный остаток");
+  const showDistribute = freeCash?.tone === "success";
+
   return (
     <>
       <SourceBanner source={data.source} />
       <OnboardingBanner hasTransactions={data.categoryExpenses.length > 0} />
       <DashboardOverview data={data} />
+      {showDistribute && freeCash ? <DistributeCashflow freeCashflowLabel={freeCash.value} /> : null}
       <DashboardForecastStrip forecast={forecast} />
+      <EmergencyFundCard fund={data.emergencyFund} currency={data.currency} />
 
       {data.netWorthTrend.length >= 2 ? (
         <Card>

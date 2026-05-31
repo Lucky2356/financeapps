@@ -64,6 +64,15 @@ export type DashboardData = {
   health: HealthScore;
   netWorth: number;
   netWorthTrend: NetWorthPoint[];
+  emergencyFund: EmergencyFundStatus;
+};
+
+export type EmergencyFundStatus = {
+  amount: number; // current reserve (liquid savings)
+  months: number; // how many months of average expense it covers
+  targetMonths: number;
+  targetAmount: number; // targetMonths × average monthly expense
+  progress: number; // 0..100
 };
 
 export type ForecastPoint = {
@@ -153,6 +162,8 @@ export type BudgetRow = {
   spent: number;
   progress: number;
   isExceeded: boolean;
+  // Suggested monthly limit derived from average spend in this category.
+  suggestedLimit: number;
 };
 
 export type GoalRow = {

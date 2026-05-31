@@ -28,6 +28,8 @@ import { RecurringTransactionService } from "@/services/RecurringTransactionServ
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { suggestedLimitFor } from "@/lib/budget-suggest";
+import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthTrend } from "@/lib/net-worth";
 import type { AccountRow, CategoryRow, DashboardData, InvestmentData, TransactionRow } from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
@@ -1047,7 +1049,8 @@ export class LocalApiClient implements ApiClient {
       limitAmount,
       spent: roundMoney(spent),
       progress: limitAmount > 0 ? clamp(percent(spent, limitAmount), 0, 140) : 0,
-      isExceeded: limitAmount > 0 && spent > limitAmount
+      isExceeded: limitAmount > 0 && spent > limitAmount,
+      suggestedLimit: suggestedLimitFor(category.id, state.transactions, { now: monthKey ? new Date(`${monthKey}-01`) : now })
     };
   }
 
@@ -1161,6 +1164,9 @@ export class LocalApiClient implements ApiClient {
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
     const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
     const netWorthTrend = buildNetWorthTrend({ currentNetWorth: netWorth, transactions: state.transactions });
+    const savingsBalance = state.accounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
+    const averageMonthlyExpense = finance.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(finance.monthlyCashflow.length, 1);
+    const emergencyFund = buildEmergencyFund({ savingsBalance, averageMonthlyExpense, targetMonths: state.emergencyFundMonthsTarget });
     const recommendationService = new FinanceRecommendationService();
     return {
       source: "database",
@@ -1176,7 +1182,8 @@ export class LocalApiClient implements ApiClient {
       recommendations: recommendationService.build(finance),
       health: recommendationService.healthScore(finance),
       netWorth,
-      netWorthTrend
+      netWorthTrend,
+      emergencyFund
     };
   }
 

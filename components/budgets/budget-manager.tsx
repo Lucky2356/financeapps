@@ -2,11 +2,11 @@
 
 import { format, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Save, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -74,11 +74,35 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
     }
   }
 
+  // Fill limits for categories that have none yet, using the average spend
+  // suggestion (history → budgets). Existing limits are left untouched.
+  async function fillSuggestedLimits() {
+    const targets = pageData.budgets.filter((budget) => budget.limitAmount === 0 && budget.suggestedLimit > 0);
+    if (targets.length === 0) {
+      toast.info("Нет пустых категорий с историей трат для подсказки.");
+      return;
+    }
+    try {
+      for (const budget of targets) {
+        await apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: String(budget.suggestedLimit) });
+      }
+      toast.success(`Лимиты заполнены по средним тратам: ${targets.length}`);
+      await reload();
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось применить предложения");
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Лимиты по категориям</CardTitle>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={fillSuggestedLimits} title="Заполнить пустые лимиты по средним тратам за 3 месяца">
+            <Sparkles className="size-4" />
+            Предложить лимиты
+          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -191,16 +215,30 @@ function BudgetForm({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onReset: () => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const showSuggestion = budget.suggestedLimit > 0 && budget.suggestedLimit !== budget.limitAmount;
   return (
-    <form onSubmit={onSubmit} className="flex gap-2">
-      <input type="hidden" name="categoryId" value={budget.categoryId} />
-      <Input name="limitAmount" type="number" min="0" step="100" defaultValue={budget.limitAmount} className="min-w-0" />
-      <Button type="submit" size="icon" variant="outline" title="Сохранить лимит">
-        <Save className="size-4" />
-      </Button>
-      <Button type="button" size="icon" variant="outline" title="Сбросить лимит" onClick={onReset}>
-        <X className="size-4" />
-      </Button>
-    </form>
+    <div className="space-y-1">
+      <form onSubmit={onSubmit} className="flex gap-2">
+        <input type="hidden" name="categoryId" value={budget.categoryId} />
+        <Input ref={inputRef} name="limitAmount" type="number" min="0" step="100" defaultValue={budget.limitAmount} className="min-w-0" />
+        <Button type="submit" size="icon" variant="outline" title="Сохранить лимит">
+          <Save className="size-4" />
+        </Button>
+        <Button type="button" size="icon" variant="outline" title="Сбросить лимит" onClick={onReset}>
+          <X className="size-4" />
+        </Button>
+      </form>
+      {showSuggestion ? (
+        <button
+          type="button"
+          onClick={() => { if (inputRef.current) inputRef.current.value = String(budget.suggestedLimit); }}
+          className="text-[11px] text-primary hover:underline"
+          title="Подставить лимит по средним тратам за 3 месяца"
+        >
+          по средним: {budget.suggestedLimit.toLocaleString("ru-RU")} ₽
+        </button>
+      ) : null}
+    </div>
   );
 }
