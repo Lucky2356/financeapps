@@ -12,6 +12,7 @@ import {
   Gauge,
   LineChart,
   LayoutDashboard,
+  Search,
   Settings,
   Tag,
   TrendingUp,
@@ -79,6 +80,19 @@ export function AppSidebar() {
       </div>
 
       <ProfileSwitcher />
+
+      {/* Command palette trigger */}
+      <div className="px-3 pt-3">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("command-palette-open"))}
+          className="flex w-full items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60"
+        >
+          <Search className="size-4" />
+          <span className="flex-1 text-left">Поиск…</span>
+          <kbd className="rounded bg-background px-1.5 py-0.5 font-mono text-[10px]">Ctrl K</kbd>
+        </button>
+      </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-3">
