@@ -13,11 +13,24 @@ function createClient() {
   return new LocalApiClient(new MemoryStorageAdapter());
 }
 
+// A fresh install now starts with no accounts (the user adds their own), so
+// tests that need an account must create one first.
+async function seedAccount(
+  client: LocalApiClient,
+  overrides: { name?: string; type?: string; balance?: string } = {}
+) {
+  return client.post<AccountsPageData["accounts"][number]>("/accounts", {
+    name: overrides.name ?? "Карта",
+    type: overrides.type ?? "DEBIT_CARD",
+    balance: overrides.balance ?? "0"
+  });
+}
+
 describe("LocalApiClient", () => {
   it("creates account-to-account transfers and updates local balances", async () => {
     const client = createClient();
-    const before = await client.get<AccountsPageData>("/accounts");
-    const [fromAccount, toAccount] = before.accounts;
+    const fromAccount = await seedAccount(client, { name: "Счёт А", balance: "10000" });
+    const toAccount = await seedAccount(client, { name: "Счёт Б", balance: "2000" });
 
     await client.post("/transactions", {
       action: "transfer",
@@ -42,8 +55,8 @@ describe("LocalApiClient", () => {
     const initial = await client.get<InvestmentData>("/investments");
 
     expect(initial.securities.length).toBeGreaterThan(0);
-    // Watchlist is pre-populated with 5 default stocks for new users (Bug 4 fix)
-    expect(initial.watchlist.length).toBeGreaterThan(0);
+    // A fresh install starts with an empty watchlist — the user adds their own.
+    expect(initial.watchlist).toHaveLength(0);
     expect(initial.portfolio).toHaveLength(0);
 
     await client.post("/investments", { action: "addWatchlist", ticker: "SBER" });
@@ -71,6 +84,27 @@ describe("LocalApiClient", () => {
     );
   });
 
+  it("creates a transaction against a freshly created account", async () => {
+    const client = createClient();
+    const account = await client.post<AccountsPageData["accounts"][number]>("/accounts", {
+      name: "Новая карта",
+      type: "DEBIT_CARD",
+      balance: "0"
+    });
+
+    // Should NOT throw "account does not exist"
+    await client.post("/transactions", {
+      amount: "1200",
+      type: "EXPENSE",
+      accountId: account.id,
+      categoryId: "cat-food",
+      date: todayInput()
+    });
+
+    const transactions = await client.get<TransactionsPageData>("/transactions");
+    expect(transactions.transactions.some((t) => t.account.id === account.id && t.amount === 1200)).toBe(true);
+  });
+
   it("wipes everything to a blank state on storage clear", async () => {
     const client = createClient();
     // Seed some data first
@@ -89,8 +123,7 @@ describe("LocalApiClient", () => {
 
   it("immediately materializes a transaction when a recurring payment is created", async () => {
     const client = createClient();
-    const accounts = await client.get<AccountsPageData>("/accounts");
-    const account = accounts.accounts[0];
+    const account = await seedAccount(client);
 
     await client.post("/recurring", {
       amount: "5000",
@@ -113,8 +146,7 @@ describe("LocalApiClient", () => {
 
   it("keeps the linked transaction in sync when a recurring amount is edited", async () => {
     const client = createClient();
-    const accounts = await client.get<AccountsPageData>("/accounts");
-    const account = accounts.accounts[0];
+    const account = await seedAccount(client);
 
     const created = await client.post<RecurringTransactionsPageData["recurringTransactions"][number]>("/recurring", {
       amount: "5000",
@@ -144,8 +176,7 @@ describe("LocalApiClient", () => {
 
   it("returns a budget warning when an expense exceeds its limit", async () => {
     const client = createClient();
-    const accounts = await client.get<AccountsPageData>("/accounts");
-    const account = accounts.accounts[0];
+    const account = await seedAccount(client);
 
     await client.post("/budgets", { categoryId: "cat-food", limitAmount: "1000" });
 

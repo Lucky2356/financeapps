@@ -71,12 +71,17 @@ describe("Category management in LocalApiClient", () => {
     const expenseCategory = data.categories.find((c) => c.kind === "EXPENSE");
     if (!expenseCategory) return;
 
-    // Add a transaction using this category
-    const accounts = (await client.get<{ accounts: Array<{ id: string }> }>("/accounts")).accounts;
+    // Add a transaction using this category (a fresh install has no accounts,
+    // so create one first).
+    const account = await client.post<{ id: string }>("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "0",
+    });
     await client.post("/transactions", {
       amount: "500",
       type: "EXPENSE",
-      accountId: accounts[0].id,
+      accountId: account.id,
       categoryId: expenseCategory.id,
       date: new Date().toISOString(),
     });

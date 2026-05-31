@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 
-import { AnalyticsView } from "@/components/analytics/analytics-view";
+import { AnalyticsClient } from "@/components/analytics/analytics-client";
 import { PageHeader } from "@/components/page-header";
-import { SourceBanner } from "@/components/source-banner";
 import { getAnalyticsData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
 
@@ -20,8 +19,7 @@ export default async function AnalyticsPage() {
         title="Аналитика"
         description="Денежные потоки, динамика сбережений и структура расходов за 6 месяцев."
       />
-      <SourceBanner source={data.source} />
-      <AnalyticsView data={data} />
+      <AnalyticsClient initialData={data} />
     </div>
   );
 }

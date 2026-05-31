@@ -522,8 +522,16 @@ async function getDefaultUser() {
   });
 }
 
-async function safeData<T>(fallback: () => T | Promise<T>, query: () => Promise<T>): Promise<T> {
-  if (!prisma || isStaticDataBuild()) return fallback();
+async function safeData<T>(
+  fallback: () => T | Promise<T>,
+  query: () => Promise<T>,
+  staticFallback?: () => T | Promise<T>
+): Promise<T> {
+  // Desktop/mobile static export: the client LocalApiClient is the source of
+  // truth, so the baked-in server data must be EMPTY (not demo) to avoid
+  // "phantom" data and account-id mismatches in forms.
+  if (isStaticDataBuild()) return (staticFallback ?? fallback)();
+  if (!prisma) return fallback();
 
   try {
     return await query();
@@ -531,6 +539,59 @@ async function safeData<T>(fallback: () => T | Promise<T>, query: () => Promise<
     console.error("Data layer fallback:", error);
     return fallback();
   }
+}
+
+// ---- Empty fallbacks for static (desktop) builds ----
+// source "database" so the SourceBanner does not flag a demo state.
+
+function emptyDashboard(): DashboardData {
+  const input = buildFinanceInput([], [], []);
+  const service = new FinanceRecommendationService();
+  return {
+    source: "database",
+    currency: "RUB",
+    metrics: [
+      { title: "Общий баланс", value: formatCurrency(0), detail: "Все активные счета" },
+      { title: "Доходы за месяц", value: formatCurrency(0), detail: "Текущий календарный месяц", tone: "success" },
+      { title: "Расходы за месяц", value: formatCurrency(0), detail: "Текущий календарный месяц", tone: "warning" },
+      { title: "Свободный остаток", value: formatCurrency(0), detail: "Доходы минус расходы", tone: "success" },
+      { title: "Процент накоплений", value: "0.0%", detail: "Доля свободного остатка" },
+      { title: "Финансовая подушка", value: "0.0 мес.", detail: "Резерв к средним расходам" }
+    ],
+    categoryExpenses: [],
+    monthlyCashflow: input.monthlyCashflow,
+    recommendations: [],
+    health: service.healthScore(input)
+  };
+}
+
+function emptyForecast(): ForecastPageData {
+  return new CashflowForecastService().build({
+    source: "database",
+    currency: "RUB",
+    accounts: [],
+    recurringTransactions: [],
+    goals: []
+  });
+}
+
+function emptyAnalytics(): AnalyticsData {
+  return buildAnalyticsFromTransactions([], "RUB", "database");
+}
+
+function emptyInvestments(): InvestmentData {
+  return {
+    source: "database",
+    currency: "RUB",
+    riskProfile: RISK_PROFILE_LABELS.MODERATE,
+    securities: [],
+    watchlist: [],
+    portfolio: [],
+    structure: [],
+    sectorStructure: [],
+    risks: [],
+    education: []
+  };
 }
 
 function toAccountRow(account: { id: string; name: string; type: string; balance: unknown; currency: string }): AccountRow {
@@ -828,7 +889,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       recommendations: service.build(input),
       health: service.healthScore(input)
     };
-  });
+  }, emptyDashboard);
 }
 
 export async function getTransactionsPageData(
@@ -895,7 +956,15 @@ export async function getTransactionsPageData(
           hasNextPage: start + parsed.limit < total
         }
       };
-    }
+    },
+    () => ({
+      source: "database",
+      transactions: [],
+      accounts: [],
+      categories: [],
+      filters: parsed,
+      pagination: { page: parsed.page, limit: parsed.limit, total: 0, hasPreviousPage: false, hasNextPage: false }
+    })
   );
 }
 
@@ -937,7 +1006,15 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
         currency: user.currency,
         summary: buildRecurringSummary(recurringTransactions)
       };
-    }
+    },
+    () => ({
+      source: "database",
+      recurringTransactions: [],
+      accounts: [],
+      categories: [],
+      currency: "RUB",
+      summary: { activeCount: 0, dueCount: 0, nextSevenDaysAmount: 0, monthlyPlannedExpense: 0, monthlyPlannedIncome: 0 }
+    })
   );
 }
 
@@ -976,7 +1053,8 @@ export async function getForecastData(): Promise<ForecastPageData> {
         recurringTransactions: recurringRows.map(toRecurringTransactionRow),
         goals: goals.map(toGoalRow)
       });
-    }
+    },
+    emptyForecast
   );
 }
 
@@ -1003,7 +1081,8 @@ export async function getAccountsPageData(): Promise<AccountsPageData> {
         totalBalance: accounts.reduce((sum, account) => sum + account.balance, 0),
         currency: user.currency
       };
-    }
+    },
+    () => ({ source: "database", accounts: [], totalBalance: 0, currency: "RUB" })
   );
 }
 
@@ -1050,7 +1129,8 @@ export async function getBudgetsPageData(month?: string): Promise<BudgetsPageDat
         currency: user.currency,
         selectedMonth
       };
-    }
+    },
+    () => ({ source: "database", budgets: [], categories: [], recommendations: [], currency: "RUB", selectedMonth })
   );
 }
 
@@ -1075,12 +1155,13 @@ export async function getGoalsPageData(): Promise<GoalsPageData> {
         goals: goals.map(toGoalRow),
         currency: user.currency
       };
-    }
+    },
+    () => ({ source: "database", goals: [], currency: "RUB" })
   );
 }
 
 export async function getInvestmentData(): Promise<InvestmentData> {
-  return safeData<InvestmentData>(buildDemoInvestmentData, async () => {
+  return safeData<InvestmentData>(buildDemoInvestmentData, async (): Promise<InvestmentData> => {
     if (!prisma) throw new Error("Prisma client is not configured.");
     const user = await getDefaultUser();
     if (!user) throw new Error("No user found.");
@@ -1194,7 +1275,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
       risks: analysis.risks,
       education: analysis.education
     };
-  });
+  }, emptyInvestments);
 }
 
 async function buildDemoInvestmentData(): Promise<InvestmentData> {
@@ -1304,7 +1385,22 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
           description: profile.description
         }))
       };
-    }
+    },
+    () => ({
+      source: "database",
+      currency: "RUB",
+      demoMode: false,
+      emergencyFundMonthsTarget: 6,
+      riskProfileCode: "MODERATE",
+      theme: "system",
+      density: "comfortable",
+      defaultTransactionType: "EXPENSE" as const,
+      riskProfiles: [
+        { id: "risk-conservative", code: "CONSERVATIVE", title: RISK_PROFILE_LABELS.CONSERVATIVE, description: "Стабильность и контроль просадки." },
+        { id: "risk-moderate", code: "MODERATE", title: RISK_PROFILE_LABELS.MODERATE, description: "Баланс роста и риска." },
+        { id: "risk-aggressive", code: "AGGRESSIVE", title: RISK_PROFILE_LABELS.AGGRESSIVE, description: "Готовность к заметной волатильности." }
+      ]
+    })
   );
 }
 
@@ -1329,7 +1425,8 @@ export async function getImportPageData(): Promise<ImportPageData> {
         accounts: accounts.map(toAccountRow),
         categories: categories.map(toCategoryOption)
       };
-    }
+    },
+    () => ({ source: "database", accounts: [], categories: [] })
   );
 }
 
@@ -1497,7 +1594,8 @@ export async function getCategoriesPageData(): Promise<CategoriesPageData> {
           transactionCount: cat._count.transactions
         }))
       };
-    }
+    },
+    () => ({ source: "database", categories: [] })
   );
 }
 
@@ -1525,7 +1623,7 @@ export async function getAnalyticsData(): Promise<AnalyticsData> {
     }));
 
     return buildAnalyticsFromTransactions(transactionRows, user.currency, "database");
-  });
+  }, emptyAnalytics);
 }
 
 export function dateInputValue(value: string | Date) {

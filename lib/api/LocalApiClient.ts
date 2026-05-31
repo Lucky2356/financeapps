@@ -206,13 +206,6 @@ const defaultCategories: CategoryOption[] = [
   { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#dc2626", isEssential: true }
 ];
 
-const defaultAccounts: LocalState["accounts"] = [
-  { id: "account-cash", name: "Наличные", type: "CASH", balance: 0, currency },
-  { id: "account-card", name: "Дебетовая карта", type: "DEBIT_CARD", balance: 0, currency },
-  { id: "account-savings", name: "Накопительный счет", type: "SAVINGS", balance: 0, currency },
-  { id: "account-brokerage", name: "Брокерский счет", type: "BROKERAGE", balance: 0, currency }
-];
-
 function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
@@ -273,6 +266,9 @@ function sectorStructure(portfolio: InvestmentData["portfolio"]) {
 }
 
 function createInitialState(): LocalState {
+  // A fresh install starts empty: no accounts, no transactions, no watchlist —
+  // the user adds their own. Default categories are kept only so that operations
+  // can be categorized out of the box; they carry no monetary data.
   return {
     schemaVersion: 1,
     currency,
@@ -282,24 +278,13 @@ function createInitialState(): LocalState {
     theme: "system",
     density: "comfortable",
     defaultTransactionType: "EXPENSE",
-    accounts: defaultAccounts,
+    accounts: [],
     categories: defaultCategories,
     transactions: [],
     budgets: [],
     goals: [],
     recurringTransactions: [],
-    investments: {
-      ...emptyInvestmentData(),
-      // Pre-populate watchlist with 5 well-known Russian stocks
-      // Prices and data will be refreshed on first investments page open
-      watchlist: [
-        { ticker: "SBER", name: "Сбербанк", sector: "Финансы", price: 315, changeDay: 0, change30d: 0, risk: "MEDIUM", comment: "Крупная ликвидная бумага, чувствительна к ставкам." },
-        { ticker: "LKOH", name: "Лукойл", sector: "Энергетика", price: 7420, changeDay: 0, change30d: 0, risk: "MEDIUM", comment: "Нефтегазовый сектор, чувствителен к ценам на сырье." },
-        { ticker: "YNDX", name: "Яндекс", sector: "Технологии", price: 4060, changeDay: 0, change30d: 0, risk: "HIGH", comment: "Технологическая компания с повышенной волатильностью." },
-        { ticker: "MOEX", name: "Московская биржа", sector: "Финансовая инфраструктура", price: 228, changeDay: 0, change30d: 0, risk: "LOW", comment: "Инфраструктурная компания, динамика зависит от оборотов торгов." },
-        { ticker: "MGNT", name: "Магнит", sector: "Ритейл", price: 5980, changeDay: 0, change30d: 0, risk: "MEDIUM", comment: "Защитный сектор, маржинальность зависит от потребительского спроса." },
-      ],
-    },
+    investments: emptyInvestmentData(),
     importBatches: []
   };
 }

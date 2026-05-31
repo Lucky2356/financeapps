@@ -64,16 +64,16 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col bg-sidebar md:flex">
+    <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
       {/* Logo */}
-      <div className="border-b border-sidebar-border p-5">
+      <div className="border-b p-5">
         <Link href="/" className="flex items-center gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-emerald-400/80 text-white shadow-sm">
             <CircleDollarSign className="size-[18px]" />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-sidebar-foreground">{APP_NAME}</span>
-            <span className="block text-[11px] text-sidebar-muted">Личные финансы</span>
+            <span className="block truncate text-sm font-semibold text-foreground">{APP_NAME}</span>
+            <span className="block text-[11px] text-muted-foreground">Личные финансы</span>
           </span>
         </Link>
       </div>
@@ -85,7 +85,7 @@ export function AppSidebar() {
         {navSections.map((section, si) => (
           <div key={si} className={si > 0 ? "mt-4" : undefined}>
             {section.label ? (
-              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-sidebar-muted/70">
+              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
                 {section.label}
               </p>
             ) : null}
@@ -100,8 +100,8 @@ export function AppSidebar() {
                     className={cn(
                       "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150",
                       active
-                        ? "bg-sidebar-accent/15 font-semibold text-sidebar-foreground before:absolute before:left-0 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-sidebar-accent before:content-['']"
-                        : "text-sidebar-muted hover:bg-sidebar-border/50 hover:text-sidebar-foreground"
+                        ? "bg-primary/10 font-semibold text-primary before:absolute before:left-0 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-primary before:content-['']"
+                        : "text-muted-foreground hover:bg-primary/5 hover:text-foreground"
                     )}
                   >
                     <Icon className="size-4 shrink-0" />
@@ -115,9 +115,9 @@ export function AppSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-sidebar-border px-4 py-3">
+      <div className="border-t px-4 py-3">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] text-sidebar-muted">Тема и уведомления</p>
+          <p className="text-[11px] text-muted-foreground">Тема и уведомления</p>
           <div className="flex items-center gap-0.5">
             <NotificationBell />
             <ThemeToggle />

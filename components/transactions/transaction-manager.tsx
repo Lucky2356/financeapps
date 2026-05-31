@@ -63,18 +63,12 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!paramsString) {
-      queueMicrotask(() => {
-        if (!cancelled) setPageData(data);
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-
+    // Always load from the active API client (LocalApiClient on desktop) so the
+    // page shows real data and the forms get real account/category options —
+    // the server-rendered `data` is an empty placeholder on the static build.
     void (async () => {
       try {
-        const nextData = await apiClient.get<TransactionsPageData>(`/transactions?${paramsString}`);
+        const nextData = await apiClient.get<TransactionsPageData>(paramsString ? `/transactions?${paramsString}` : "/transactions");
         if (!cancelled) setPageData(nextData);
       } catch {
         if (!cancelled) setPageData(data);
