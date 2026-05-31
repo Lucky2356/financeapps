@@ -215,6 +215,11 @@ function id(prefix: string) {
   return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
 
+// "YYYY-MM" key used to bucket transactions by calendar month (local time).
+function monthKeyOf(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function firstOf<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -1031,7 +1036,7 @@ export class LocalApiClient implements ApiClient {
 
   private budgets(state: LocalState, month?: string): BudgetsPageData {
     const targetDate = month ? new Date(`${month}-01`) : new Date();
-    const selectedMonth = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}`;
+    const selectedMonth = monthKeyOf(targetDate);
     const budgets = this.budgetRows(state, selectedMonth);
     const finance = this.financeInput(state);
     return {
@@ -1046,7 +1051,7 @@ export class LocalApiClient implements ApiClient {
 
   private buildBudgetRow(state: LocalState, category: CategoryOption, limitAmount: number, monthKey?: string): BudgetsPageData["budgets"][number] {
     const now = new Date();
-    const month = monthKey ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const month = monthKey ?? monthKeyOf(now);
     const spent = state.transactions
       .filter((transaction) => transaction.type === "EXPENSE" && transaction.category.id === category.id && transaction.date.startsWith(month))
       .reduce((sum, transaction) => sum + transaction.amount, 0);
@@ -1296,7 +1301,7 @@ export class LocalApiClient implements ApiClient {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const year = d.getFullYear();
       const month = d.getMonth();
-      const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const key = monthKeyOf(d);
       const endDate = new Date(year, month + 1, 0);
       const shortLabel = d.toLocaleDateString("ru", { month: "short" });
       months.push({ key, label: shortLabel, start: `${key}-01`, end: `${year}-${String(month + 1).padStart(2, "0")}-${endDate.getDate()}` });
@@ -1398,10 +1403,7 @@ export class LocalApiClient implements ApiClient {
 
   private financeInput(state: LocalState) {
     const now = new Date();
-    const monthKey = (offset: number) => {
-      const date = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    };
+    const monthKey = (offset: number) => monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset, 1));
     const monthlyCashflow = [-2, -1, 0].map((offset) => {
       const key = monthKey(offset);
       const rows = state.transactions.filter((transaction) => transaction.date.startsWith(key));
