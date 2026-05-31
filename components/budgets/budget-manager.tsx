@@ -2,10 +2,9 @@
 
 import { format, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Save, Sparkles, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -48,13 +47,10 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
     // apiPath will update → useApiPageData effect re-fetches for new month
   }
 
-  async function submitBudget(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
-
+  // Auto-save a single category limit (no explicit save button).
+  async function saveLimit(categoryId: string, limitAmount: number) {
     try {
-      await apiClient.post("/budgets", payload);
-      toast.success("Лимит бюджета сохранен");
+      await apiClient.post("/budgets", { categoryId, limitAmount: String(limitAmount) });
       await reload();
       router.refresh();
     } catch (error) {
@@ -168,7 +164,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                   </TableCell>
                   <TableCell className="text-right">{formatCurrency(budget.spent, pageData.currency)}</TableCell>
                   <TableCell>
-                    <BudgetForm budget={budget} onSubmit={submitBudget} onReset={() => resetBudget(budget)} />
+                    <BudgetForm budget={budget} onSave={saveLimit} onReset={() => resetBudget(budget)} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -196,7 +192,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                 <span>{formatCurrency(budget.limitAmount, pageData.currency)}</span>
               </div>
               <div className="mt-3">
-                <BudgetForm budget={budget} onSubmit={submitBudget} onReset={() => resetBudget(budget)} />
+                <BudgetForm budget={budget} onSave={saveLimit} onReset={() => resetBudget(budget)} />
               </div>
             </div>
           ))}
@@ -208,33 +204,65 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
 
 function BudgetForm({
   budget,
-  onSubmit,
+  onSave,
   onReset
 }: {
   budget: BudgetsPageData["budgets"][number];
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSave: (categoryId: string, limit: number) => void;
   onReset: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState(budget.limitAmount ? String(budget.limitAmount) : "");
+  // Re-sync when the saved value changes (month switch / reload).
+  const [synced, setSynced] = useState(budget.limitAmount);
+  if (synced !== budget.limitAmount) {
+    setSynced(budget.limitAmount);
+    setValue(budget.limitAmount ? String(budget.limitAmount) : "");
+  }
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showSuggestion = budget.suggestedLimit > 0 && budget.suggestedLimit !== budget.limitAmount;
+
+  function commit(next: string) {
+    const num = Number(next || 0);
+    if (num === budget.limitAmount) return; // no change
+    onSave(budget.categoryId, num);
+  }
+
+  function handleChange(next: string) {
+    setValue(next);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => commit(next), 700); // debounce auto-save
+  }
+
+  function applySuggestion() {
+    if (timer.current) clearTimeout(timer.current);
+    setValue(String(budget.suggestedLimit));
+    onSave(budget.categoryId, budget.suggestedLimit);
+  }
+
   return (
     <div className="space-y-1">
-      <form onSubmit={onSubmit} className="flex gap-2">
-        <input type="hidden" name="categoryId" value={budget.categoryId} />
-        <Input ref={inputRef} name="limitAmount" type="number" min="0" step="100" defaultValue={budget.limitAmount} className="min-w-0" />
-        <Button type="submit" size="icon" variant="outline" title="Сохранить лимит">
-          <Save className="size-4" />
-        </Button>
+      <div className="flex gap-2">
+        <Input
+          name="limitAmount"
+          type="number"
+          min="0"
+          step="100"
+          value={value}
+          placeholder="нет лимита"
+          onChange={(e) => handleChange(e.target.value)}
+          onBlur={() => { if (timer.current) clearTimeout(timer.current); commit(value); }}
+          className="min-w-0"
+        />
         <Button type="button" size="icon" variant="outline" title="Сбросить лимит" onClick={onReset}>
           <X className="size-4" />
         </Button>
-      </form>
+      </div>
       {showSuggestion ? (
         <button
           type="button"
-          onClick={() => { if (inputRef.current) inputRef.current.value = String(budget.suggestedLimit); }}
+          onClick={applySuggestion}
           className="text-[11px] text-primary hover:underline"
-          title="Подставить лимит по средним тратам за 3 месяца"
+          title="Применить лимит по средним тратам за 3 месяца"
         >
           по средним: {budget.suggestedLimit.toLocaleString("ru-RU")} ₽
         </button>

@@ -14,7 +14,7 @@ export function ForecastClient({ initialData }: { initialData: ForecastData }) {
     <>
       <SourceBanner source={data.source} />
       <ForecastView data={data} />
-      <CashflowCalendar events={data.upcomingEvents} currency={data.currency} />
+      <CashflowCalendar events={data.events} currency={data.currency} />
     </>
   );
 }

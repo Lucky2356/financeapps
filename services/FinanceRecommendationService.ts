@@ -108,6 +108,22 @@ export class FinanceRecommendationService {
   }
 
   healthScore(input: FinanceRecommendationInput): HealthScore {
+    // Empty state: no income/expense anywhere and no reserve — nothing to
+    // assess yet, so don't penalize the user with phantom "problems".
+    const hasActivity =
+      input.monthlyCashflow.some((month) => month.income > 0 || month.expense > 0) || input.emergencyFundMonths > 0;
+    if (!hasActivity) {
+      return {
+        score: 100,
+        summary: "Пока нет данных для оценки. Добавьте счета и операции, чтобы увидеть финансовое здоровье.",
+        checks: [
+          { label: "Свободный остаток", value: "—", status: "good" },
+          { label: "Норма накоплений", value: "—", status: "good" },
+          { label: "Финансовая подушка", value: "—", status: "good" }
+        ]
+      };
+    }
+
     let score = 100;
 
     if (input.freeCashflow < 0) score -= 25;

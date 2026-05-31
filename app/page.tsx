@@ -1,9 +1,10 @@
-import { Download, Plus } from "lucide-react";
+import { Download } from "lucide-react";
 import Link from "next/link";
 
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
+import { QuickAddButton } from "@/components/quick-add-button";
 import { Button } from "@/components/ui/button";
 import { getDashboardData, getForecastData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
@@ -19,12 +20,7 @@ export default async function DashboardPage() {
         description="Финансовая картина месяца и динамика расходов."
         actions={
           <>
-            <Button asChild>
-              <Link href="/transactions">
-                <Plus className="size-4" />
-                Операция
-              </Link>
-            </Button>
+            <QuickAddButton />
             <Button asChild variant="outline">
               <Link href="/import">
                 <Download className="size-4" />

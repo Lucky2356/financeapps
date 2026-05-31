@@ -368,15 +368,17 @@ function CategoryDialog({
           </div>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="size-4 rounded border accent-primary"
-            checked={isEssential}
-            onChange={(e) => setIsEssential(e.target.checked)}
-          />
-          <span>Обязательная (критически необходимые расходы)</span>
-        </label>
+        {defaultKind === "EXPENSE" && (
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 rounded border accent-primary"
+              checked={isEssential}
+              onChange={(e) => setIsEssential(e.target.checked)}
+            />
+            <span>Обязательная (критически необходимые расходы)</span>
+          </label>
+        )}
 
         {defaultKind === "EXPENSE" && (
           <label className="flex cursor-pointer items-center gap-2 text-sm">
