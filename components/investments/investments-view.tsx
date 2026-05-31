@@ -19,7 +19,15 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { INVESTMENT_DISCLAIMER, RISK_LABELS } from "@/lib/constants";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { InvestmentSuggestionService, type InvestmentSuggestion } from "@/services/InvestmentSuggestionService";
 import type { InvestmentData } from "@/types/finance";
+
+const REFRESH_INTERVAL_MS = 45_000;
+const RISK_CODES = [
+  { value: "CONSERVATIVE", label: "Консервативный" },
+  { value: "MODERATE", label: "Умеренный" },
+  { value: "AGGRESSIVE", label: "Агрессивный" }
+] as const;
 
 const riskVariant = {
   LOW: "success",
@@ -33,6 +41,13 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [addPositionOpen, setAddPositionOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<InvestmentData["portfolio"][number] | null>(null);
+  // Suggestion engine inputs
+  const [budget, setBudget] = useState("");
+  const [riskCode, setRiskCode] = useState<(typeof RISK_CODES)[number]["value"]>("MODERATE");
+  const [suggestions, setSuggestions] = useState<InvestmentSuggestion[]>([]);
+  const [suggested, setSuggested] = useState(false);
+
+  const hasMarketData = data.watchlist.length > 0 || data.portfolio.length > 0;
 
   // Auto-refresh only when the user has investments to update (avoids confusing
   // "updated 10 stocks" toast when user has never added any data)
@@ -40,11 +55,53 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   useEffect(() => {
     if (autoRefreshed.current) return;
     autoRefreshed.current = true;
-    if (data.watchlist.length > 0 || data.portfolio.length > 0) {
+    if (hasMarketData) {
       // Silent: refresh prices in the background without a toast on every visit
       void refreshMarketPrices(true);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Real-time updates: keep prices fresh while the page is open.
+  useEffect(() => {
+    if (!hasMarketData) return;
+    const id = setInterval(() => void refreshMarketPrices(true), REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [hasMarketData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function computeSuggestions() {
+    const value = Number(budget);
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error("Введите сумму бюджета на инвестиции");
+      return;
+    }
+    const result = new InvestmentSuggestionService().suggest({
+      budget: value,
+      riskProfile: riskCode,
+      portfolio: data.portfolio,
+      securities: data.securities
+    });
+    setSuggestions(result);
+    setSuggested(true);
+    if (result.length === 0) {
+      toast.info("Не удалось подобрать бумаги — увеличьте бюджет или смягчите ограничение риска.");
+    }
+  }
+
+  async function addSuggestion(suggestion: InvestmentSuggestion) {
+    try {
+      await apiClient.post("/investments", {
+        ticker: suggestion.ticker,
+        quantity: String(suggestion.suggestedQuantity),
+        averageBuyPrice: String(suggestion.price)
+      });
+      toast.success(`${suggestion.ticker}: добавлено ${suggestion.suggestedQuantity} шт. в портфель`);
+      setSuggestions((prev) => prev.filter((item) => item.ticker !== suggestion.ticker));
+      await reload();
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось добавить позицию");
+    }
+  }
 
   async function submitPosition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,9 +181,70 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         <p className="text-muted-foreground">{INVESTMENT_DISCLAIMER}</p>
       </div>
 
+      {/* Suggestion engine: budget + risk → securities to strengthen the portfolio */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Подбор бумаг для портфеля</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Укажите сумму на инвестиции в этом месяце и допустимый риск — подберём бумаги, которые сделают портфель более
+            диверсифицированным и устойчивым с учётом уже имеющихся позиций.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <div className="space-y-2">
+              <Label htmlFor="invest-budget">Бюджет на инвестиции, ₽</Label>
+              <Input id="invest-budget" type="number" min="0" step="1000" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Например, 50000" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invest-risk">Допустимый риск</Label>
+              <select id="invest-risk" value={riskCode} onChange={(e) => setRiskCode(e.target.value as typeof riskCode)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                {RISK_CODES.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <Button type="button" onClick={computeSuggestions}>Подобрать</Button>
+          </div>
+
+          {suggested && suggestions.length > 0 ? (
+            <div className="space-y-2">
+              {suggestions.map((suggestion) => (
+                <div key={suggestion.ticker} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      {suggestion.ticker} · {suggestion.name}
+                      <Badge variant={riskVariant[suggestion.risk]} className="ml-2 align-middle text-[11px]">{RISK_LABELS[suggestion.risk]}</Badge>
+                    </p>
+                    <p className="text-xs text-muted-foreground">{suggestion.rationale}</p>
+                  </div>
+                  <div className="flex items-center gap-3 sm:shrink-0">
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{suggestion.suggestedQuantity} шт. · {formatCurrency(suggestion.suggestedAmount, data.currency)}</p>
+                      <p className="text-xs text-muted-foreground">по {formatCurrency(suggestion.price, data.currency)}</p>
+                    </div>
+                    <Button type="button" size="sm" onClick={() => void addSuggestion(suggestion)}>
+                      <Plus className="size-4" />
+                      В портфель
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : suggested ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              Подходящих бумаг не нашлось. Попробуйте увеличить бюджет или выбрать более высокий допустимый риск.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Watchlist российских акций</CardTitle>
+          <CardTitle>
+            Watchlist российских акций
+            {hasMarketData ? <span className="ml-2 text-xs font-normal text-muted-foreground">· цены обновляются автоматически</span> : null}
+          </CardTitle>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
               <RefreshCw className="size-4" />
