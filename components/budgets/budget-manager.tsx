@@ -3,6 +3,7 @@
 import { format, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Save, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -124,10 +125,14 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
               {pageData.budgets.map((budget) => (
                 <TableRow key={budget.categoryId}>
                   <TableCell className="font-medium">
-                    <span className="inline-flex items-center gap-2">
+                    <Link
+                      href={`/transactions?categoryId=${encodeURIComponent(budget.categoryId)}&type=EXPENSE`}
+                      className="inline-flex items-center gap-2 hover:text-primary hover:underline"
+                      title={`Показать операции: ${budget.category}`}
+                    >
                       <span className="size-2.5 rounded-full" style={{ backgroundColor: budget.color }} />
                       {budget.category}
-                    </span>
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -151,7 +156,12 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
           {pageData.budgets.map((budget) => (
             <div key={budget.categoryId} className="rounded-lg border p-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="font-semibold">{budget.category}</p>
+                <Link
+                  href={`/transactions?categoryId=${encodeURIComponent(budget.categoryId)}&type=EXPENSE`}
+                  className="font-semibold hover:text-primary hover:underline"
+                >
+                  {budget.category}
+                </Link>
                 <p className={budget.isExceeded ? "font-semibold text-destructive" : "font-semibold"}>
                   {Math.round(budget.progress)}%
                 </p>

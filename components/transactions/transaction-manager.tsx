@@ -204,7 +204,10 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           </div>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          {/* key remounts the uncontrolled filter inputs when the URL params
+              change (e.g. arriving from a drill-down link) so the controls
+              reflect the active category/account filter. */}
+          <form key={paramsString} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <div className="space-y-2 sm:col-span-2 xl:col-span-6">
               <Label htmlFor="q">Поиск</Label>
               <div className="relative">

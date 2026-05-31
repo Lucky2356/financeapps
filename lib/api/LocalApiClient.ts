@@ -1293,9 +1293,9 @@ export class LocalApiClient implements ApiClient {
     const sixMonthsAgoKey = months[0].key;
     const expenseTxs = state.transactions.filter((t) => t.type === "EXPENSE" && t.date >= sixMonthsAgoKey);
     const totalExpense = expenseTxs.reduce((sum, t) => sum + t.amount, 0);
-    const catTotals = new Map<string, { category: string; color: string; total: number }>();
+    const catTotals = new Map<string, { categoryId: string; category: string; color: string; total: number }>();
     for (const t of expenseTxs) {
-      const existing = catTotals.get(t.category.id) ?? { category: t.category.label, color: t.category.color, total: 0 };
+      const existing = catTotals.get(t.category.id) ?? { categoryId: t.category.id, category: t.category.label, color: t.category.color, total: 0 };
       existing.total += t.amount;
       catTotals.set(t.category.id, existing);
     }
