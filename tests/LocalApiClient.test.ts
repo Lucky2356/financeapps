@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { AccountsPageData, BudgetsPageData, CategoriesPageData, RecurringTransactionsPageData, SettingsPageData, TransactionsPageData } from "@/lib/data";
+import type { AccountsPageData, BudgetsPageData, CategoriesPageData, GoalsPageData, RecurringTransactionsPageData, SettingsPageData, TransactionsPageData } from "@/lib/data";
 import type { DashboardData, InvestmentData } from "@/types/finance";
 
 function todayInput() {
@@ -140,6 +140,32 @@ describe("LocalApiClient", () => {
     expect(dashboard.netWorth).toBeGreaterThan(10000);
     expect(dashboard.netWorthTrend.length).toBeGreaterThanOrEqual(1);
     expect(dashboard.netWorthTrend.at(-1)?.value).toBe(dashboard.netWorth);
+  });
+
+  it("goal deposit debits the account, grows the goal, and keeps net worth conserved", async () => {
+    const client = createClient();
+    const account = await seedAccount(client, { balance: "20000" });
+    const goal = await client.post<GoalsPageData["goals"][number]>("/goals", {
+      title: "Отпуск",
+      targetAmount: "100000",
+      currentAmount: "0",
+      deadline: "2027-01-01"
+    });
+
+    const before = await client.get<DashboardData>("/dashboard");
+
+    await client.post("/goals", { action: "deposit", goalId: goal.id, amount: "5000", accountId: account.id });
+
+    const accounts = await client.get<AccountsPageData>("/accounts");
+    const goals = await client.get<GoalsPageData>("/goals");
+    const transactions = await client.get<TransactionsPageData>("/transactions");
+    const after = await client.get<DashboardData>("/dashboard");
+
+    expect(accounts.accounts.find((a) => a.id === account.id)?.balance).toBe(15000);
+    expect(goals.goals.find((g) => g.id === goal.id)?.currentAmount).toBe(5000);
+    expect(transactions.transactions.some((t) => t.amount === 5000)).toBe(true);
+    // Money moved from a balance into the goal, so net worth is unchanged.
+    expect(after.netWorth).toBe(before.netWorth);
   });
 
   it("wipes everything to a blank state on storage clear", async () => {

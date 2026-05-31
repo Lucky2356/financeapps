@@ -3,11 +3,11 @@
 import { Edit2, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import type { GoalsPageData } from "@/lib/data";
+import type { AccountsPageData, GoalsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
@@ -140,8 +140,29 @@ function DepositDialog({
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
+  const [accountId, setAccountId] = useState("");
 
   const remaining = goal.targetAmount - goal.currentAmount;
+
+  // Load real accounts when the dialog opens so the deposit can be debited
+  // from one of them (keeping balances and goal progress in sync).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void apiClient
+      .get<AccountsPageData>("/accounts")
+      .then((data) => {
+        if (cancelled) return;
+        // The /accounts endpoint already excludes archived accounts.
+        setAccounts(data.accounts);
+        setAccountId((current) => current || data.accounts[0]?.id || "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -152,14 +173,13 @@ function DepositDialog({
     }
     setLoading(true);
     try {
-      await apiClient.put("/goals", {
-        id: goal.id,
-        title: goal.title,
-        targetAmount: goal.targetAmount,
-        currentAmount: goal.currentAmount + depositAmount,
-        deadline: formatInputDate(goal.deadline)
+      await apiClient.post("/goals", {
+        action: "deposit",
+        goalId: goal.id,
+        amount: String(depositAmount),
+        accountId: accountId || undefined
       });
-      toast.success("Пополнение сохранено");
+      toast.success(accountId ? "Пополнение списано со счёта" : "Пополнение сохранено");
       setOpen(false);
       setAmount("");
       await onSuccess();
@@ -197,6 +217,26 @@ function DepositDialog({
               placeholder="Например, 5000"
               required
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Списать со счёта</Label>
+            {accounts.length > 0 ? (
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} — {formatCurrency(account.balance, currency)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Нет счетов — пополнение будет учтено только в прогрессе цели. Добавьте счёт, чтобы списывать деньги реально.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading}>Пополнить</Button>
