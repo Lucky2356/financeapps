@@ -5,6 +5,7 @@ import { ru } from "date-fns/locale";
 
 import { ACCOUNT_TYPE_LABELS, RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
+import { buildNetWorthTrend } from "@/lib/net-worth";
 import { prisma } from "@/lib/prisma";
 import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
 import { transactionFilterSchema } from "@/lib/validations";
@@ -501,7 +502,7 @@ function buildDemoDashboard(): DashboardData {
     recommendations: service.build(input),
     health: service.healthScore(input),
     netWorth: totalBalance,
-    netWorthTrend: []
+    netWorthTrend: buildNetWorthTrend({ currentNetWorth: totalBalance, transactions })
   };
 }
 
@@ -856,6 +857,12 @@ export async function getDashboardData(): Promise<DashboardData> {
     const totalBalance = finance.accounts.reduce((sum, account) => sum + account.balance, 0);
     const input = finance.input;
 
+    // Net worth = accounts + current portfolio value + goal savings (parity with desktop).
+    const investments = await getInvestmentData();
+    const portfolioValue = investments.portfolio.reduce((sum, position) => sum + position.currentValue, 0);
+    const goalSavings = finance.goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
+    const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
+
     const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
     const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
 
@@ -892,10 +899,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       monthlyCashflow: input.monthlyCashflow,
       recommendations: service.build(input),
       health: service.healthScore(input),
-      // Net-worth history is only persisted in desktop local mode; in web mode
-      // we surface the current value without a trend.
-      netWorth: totalBalance,
-      netWorthTrend: []
+      netWorth,
+      netWorthTrend: buildNetWorthTrend({ currentNetWorth: netWorth, transactions: finance.transactions })
     };
   }, emptyDashboard);
 }

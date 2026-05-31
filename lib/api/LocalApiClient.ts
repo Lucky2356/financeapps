@@ -28,6 +28,7 @@ import { RecurringTransactionService } from "@/services/RecurringTransactionServ
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { buildNetWorthTrend } from "@/lib/net-worth";
 import type { AccountRow, CategoryRow, DashboardData, InvestmentData, TransactionRow } from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
 
@@ -171,10 +172,6 @@ const localStateSchema = z.object({
     id: z.string().min(1),
     importedAt: z.string().min(1),
     transactionIds: z.array(z.string().min(1))
-  })).optional().default([]),
-  netWorthSnapshots: z.array(z.object({
-    month: z.string().min(1),
-    value: z.number().finite()
   })).optional().default([])
 });
 type LocalState = {
@@ -198,8 +195,6 @@ type LocalState = {
     importedAt: string;
     transactionIds: string[];
   }>;
-  // Monthly net-worth snapshots (accounts + portfolio), keyed by YYYY-MM.
-  netWorthSnapshots?: Array<{ month: string; value: number }>;
 };
 
 const defaultCategories: CategoryOption[] = [
@@ -292,8 +287,7 @@ function createInitialState(): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: [],
-    netWorthSnapshots: []
+    importBatches: []
   };
 }
 
@@ -316,8 +310,7 @@ function createBlankState(): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: [],
-    netWorthSnapshots: []
+    importBatches: []
   };
 }
 
@@ -341,11 +334,7 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/goals") return this.goals(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(state) as T;
-    if (pathname === "/dashboard") {
-      const data = await this.dashboard(state);
-      await this.save(state); // persist the monthly net-worth snapshot
-      return data as T;
-    }
+    if (pathname === "/dashboard") return (await this.dashboard(state)) as T;
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") return (await this.backup(state)) as T;
@@ -1183,7 +1172,7 @@ export class LocalApiClient implements ApiClient {
     // part of net worth (a deposit just moves it from a balance into a goal).
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
     const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
-    const netWorthTrend = this.recordNetWorthSnapshot(state, netWorth);
+    const netWorthTrend = buildNetWorthTrend({ currentNetWorth: netWorth, transactions: state.transactions });
     const recommendationService = new FinanceRecommendationService();
     return {
       source: "database",
@@ -1215,25 +1204,6 @@ export class LocalApiClient implements ApiClient {
         return sum + price * position.quantity;
       }, 0)
     );
-  }
-
-  // Upserts the current month's net-worth snapshot and returns the trailing
-  // trend (last 12 months) with short month labels for the chart.
-  private recordNetWorthSnapshot(state: LocalState, netWorth: number) {
-    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
-    const snapshots = state.netWorthSnapshots ?? [];
-    const existing = snapshots.find((snapshot) => snapshot.month === month);
-    if (existing) {
-      existing.value = netWorth;
-    } else {
-      snapshots.push({ month, value: netWorth });
-    }
-    snapshots.sort((left, right) => left.month.localeCompare(right.month));
-    state.netWorthSnapshots = snapshots.slice(-12);
-    return state.netWorthSnapshots.map((snapshot) => ({
-      month: new Date(`${snapshot.month}-01`).toLocaleDateString("ru", { month: "short" }),
-      value: snapshot.value
-    }));
   }
 
   private settings(state: LocalState): SettingsPageData {

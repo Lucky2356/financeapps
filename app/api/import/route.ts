@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getImportPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
+import { suggestCategoryId } from "@/lib/category-suggest";
 import { requirePrisma } from "@/lib/prisma";
 import { csvImportSchema } from "@/lib/validations";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
@@ -58,6 +59,14 @@ export async function POST(request: NextRequest) {
     const fallbackAccount = accounts[0];
     if (!fallbackAccount) return NextResponse.json({ error: "Create an account before importing CSV." }, { status: 400 });
 
+    // History for auto-categorizing rows that arrive without a category column.
+    const categories = await db.category.findMany({ where: { userId: user.id } });
+    const historyRows = await db.transaction.findMany({
+      where: { userId: user.id },
+      select: { description: true, type: true, categoryId: true }
+    });
+    const history = historyRows.map((row) => ({ description: row.description, type: row.type, category: { id: row.categoryId } }));
+
     let imported = 0;
     let skipped = 0;
     await db.$transaction(async (tx) => {
@@ -74,8 +83,18 @@ export async function POST(request: NextRequest) {
         const accountName = String(row[input.accountColumn ?? ""] ?? "").trim().toLowerCase();
         const account = accounts.find((item) => item.name.toLowerCase() === accountName) ?? fallbackAccount;
         const categoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
-        const category = await findOrCreateImportCategory(tx, user.id, categoryName, type);
         const description = String(row[input.descriptionColumn ?? ""] ?? "").trim() || null;
+        // Use the explicit category if present; otherwise try to auto-categorize
+        // from the description before falling back to a generic import bucket.
+        let category;
+        if (categoryName) {
+          category = await findOrCreateImportCategory(tx, user.id, categoryName, type);
+        } else {
+          const suggestedId = suggestCategoryId(description ?? "", history, { type });
+          category =
+            (suggestedId ? categories.find((item) => item.id === suggestedId && item.kind === type) : undefined) ??
+            (await findOrCreateImportCategory(tx, user.id, "", type));
+        }
         const duplicate = await tx.transaction.findFirst({
           where: {
             userId: user.id,
