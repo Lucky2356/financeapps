@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type { AccountsPageData, BudgetsPageData, CategoriesPageData, RecurringTransactionsPageData, SettingsPageData, TransactionsPageData } from "@/lib/data";
-import type { InvestmentData } from "@/types/finance";
+import type { DashboardData, InvestmentData } from "@/types/finance";
 
 function todayInput() {
   return new Date().toISOString().slice(0, 10);
@@ -127,6 +127,19 @@ describe("LocalApiClient", () => {
     expect(settings.demoMode).toBe(true);
     expect(settings.defaultTransactionType).toBe("INCOME");
     expect(settings.density).toBe("compact");
+  });
+
+  it("net worth combines account balances with portfolio value and records a snapshot", async () => {
+    const client = createClient();
+    await seedAccount(client, { balance: "10000" });
+    await client.post("/investments", { action: "addWatchlist", ticker: "SBER" });
+    await client.post("/investments", { ticker: "SBER", quantity: "10", averageBuyPrice: "250" });
+
+    const dashboard = await client.get<DashboardData>("/dashboard");
+    // 10 000 in cash + 10 SBER shares at a positive market price.
+    expect(dashboard.netWorth).toBeGreaterThan(10000);
+    expect(dashboard.netWorthTrend.length).toBeGreaterThanOrEqual(1);
+    expect(dashboard.netWorthTrend.at(-1)?.value).toBe(dashboard.netWorth);
   });
 
   it("wipes everything to a blank state on storage clear", async () => {

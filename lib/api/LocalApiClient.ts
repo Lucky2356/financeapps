@@ -170,6 +170,10 @@ const localStateSchema = z.object({
     id: z.string().min(1),
     importedAt: z.string().min(1),
     transactionIds: z.array(z.string().min(1))
+  })).optional().default([]),
+  netWorthSnapshots: z.array(z.object({
+    month: z.string().min(1),
+    value: z.number().finite()
   })).optional().default([])
 });
 type LocalState = {
@@ -193,6 +197,8 @@ type LocalState = {
     importedAt: string;
     transactionIds: string[];
   }>;
+  // Monthly net-worth snapshots (accounts + portfolio), keyed by YYYY-MM.
+  netWorthSnapshots?: Array<{ month: string; value: number }>;
 };
 
 const defaultCategories: CategoryOption[] = [
@@ -285,7 +291,8 @@ function createInitialState(): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: []
+    importBatches: [],
+    netWorthSnapshots: []
   };
 }
 
@@ -308,7 +315,8 @@ function createBlankState(): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: []
+    importBatches: [],
+    netWorthSnapshots: []
   };
 }
 
@@ -332,7 +340,11 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/goals") return this.goals(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(state) as T;
-    if (pathname === "/dashboard") return this.dashboard(state) as T;
+    if (pathname === "/dashboard") {
+      const data = await this.dashboard(state);
+      await this.save(state); // persist the monthly net-worth snapshot
+      return data as T;
+    }
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") return (await this.backup(state)) as T;
@@ -1108,9 +1120,12 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
-  private dashboard(state: LocalState): DashboardData {
+  private async dashboard(state: LocalState): Promise<DashboardData> {
     const finance = this.financeInput(state);
     const totalBalance = this.accounts(state).totalBalance;
+    const portfolioValue = await this.portfolioValue(state);
+    const netWorth = roundMoney(totalBalance + portfolioValue);
+    const netWorthTrend = this.recordNetWorthSnapshot(state, netWorth);
     const recommendationService = new FinanceRecommendationService();
     return {
       source: "database",
@@ -1124,8 +1139,43 @@ export class LocalApiClient implements ApiClient {
       categoryExpenses: this.budgetRows(state).filter((budget) => budget.spent > 0).map((budget) => ({ name: budget.category, value: budget.spent, fill: budget.color })),
       monthlyCashflow: finance.monthlyCashflow,
       recommendations: recommendationService.build(finance),
-      health: recommendationService.healthScore(finance)
+      health: recommendationService.healthScore(finance),
+      netWorth,
+      netWorthTrend
     };
+  }
+
+  // Current market value of the investment portfolio (0 when empty).
+  private async portfolioValue(state: LocalState): Promise<number> {
+    if (!state.investments.portfolio.length) return 0;
+    const provider = createMarketDataProvider();
+    const securities = await provider.getSecurities();
+    const priceByTicker = new Map(securities.map((security) => [security.ticker, security.price]));
+    return roundMoney(
+      state.investments.portfolio.reduce((sum, position) => {
+        const price = priceByTicker.get(position.ticker) ?? position.currentPrice;
+        return sum + price * position.quantity;
+      }, 0)
+    );
+  }
+
+  // Upserts the current month's net-worth snapshot and returns the trailing
+  // trend (last 12 months) with short month labels for the chart.
+  private recordNetWorthSnapshot(state: LocalState, netWorth: number) {
+    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const snapshots = state.netWorthSnapshots ?? [];
+    const existing = snapshots.find((snapshot) => snapshot.month === month);
+    if (existing) {
+      existing.value = netWorth;
+    } else {
+      snapshots.push({ month, value: netWorth });
+    }
+    snapshots.sort((left, right) => left.month.localeCompare(right.month));
+    state.netWorthSnapshots = snapshots.slice(-12);
+    return state.netWorthSnapshots.map((snapshot) => ({
+      month: new Date(`${snapshot.month}-01`).toLocaleDateString("ru", { month: "short" }),
+      value: snapshot.value
+    }));
   }
 
   private settings(state: LocalState): SettingsPageData {

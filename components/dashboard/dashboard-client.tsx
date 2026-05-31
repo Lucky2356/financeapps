@@ -1,6 +1,7 @@
 "use client";
 
 import { CashflowChart } from "@/components/charts/cashflow-chart";
+import { NetWorthChart } from "@/components/charts/net-worth-chart";
 import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
@@ -30,6 +31,17 @@ export function DashboardClient({
       <OnboardingBanner hasTransactions={data.categoryExpenses.length > 0} />
       <DashboardOverview data={data} />
       <DashboardForecastStrip forecast={forecast} />
+
+      {data.netWorthTrend.length >= 2 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Динамика чистого капитала</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <NetWorthChart data={data.netWorthTrend} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {data.metrics.map((metric) => (

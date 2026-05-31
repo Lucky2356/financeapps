@@ -49,6 +49,11 @@ export type HealthScore = {
   }>;
 };
 
+export type NetWorthPoint = {
+  month: string;
+  value: number;
+};
+
 export type DashboardData = {
   source: DataSource;
   currency: string;
@@ -57,6 +62,8 @@ export type DashboardData = {
   monthlyCashflow: MonthlyCashflowDatum[];
   recommendations: RecommendationView[];
   health: HealthScore;
+  netWorth: number;
+  netWorthTrend: NetWorthPoint[];
 };
 
 export type ForecastPoint = {
