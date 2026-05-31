@@ -116,7 +116,7 @@ function ProfileSwitcherInner() {
   }
 
   return (
-    <div className="mx-3 mb-2">
+    <div className="mx-3 mb-2 mt-3">
       {/* Trigger — compact button, no overflow issues */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>

@@ -114,9 +114,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="grid gap-4 md:grid-cols-2">
       {/* Auto-save status — changes apply immediately, no Save button */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground xl:col-span-2">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground md:col-span-2">
         {status === "saving" ? (
           <>
             <Loader2 className="size-3.5 animate-spin" />
@@ -158,6 +158,19 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               className="size-5 accent-primary"
             />
           </label>
+          <div className="space-y-2">
+            <Label>Тип операции по умолчанию</Label>
+            <select
+              name="defaultTransactionType"
+              value={settings.defaultTransactionType}
+              onChange={(e) => void persist({ defaultTransactionType: e.target.value as EditableSettings["defaultTransactionType"] })}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="EXPENSE">Расход</option>
+              <option value="INCOME">Доход</option>
+            </select>
+            <p className="text-xs text-muted-foreground">Выбран при открытии формы быстрого добавления.</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -265,30 +278,6 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </label>
               ))}
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Card 4: Operations */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Операции</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Тип операции по умолчанию</Label>
-            <select
-              name="defaultTransactionType"
-              value={settings.defaultTransactionType}
-              onChange={(e) => void persist({ defaultTransactionType: e.target.value as EditableSettings["defaultTransactionType"] })}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="EXPENSE">Расход</option>
-              <option value="INCOME">Доход</option>
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Будет выбран при открытии формы быстрого добавления.
-            </p>
           </div>
         </CardContent>
       </Card>
