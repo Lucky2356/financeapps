@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, PiggyBank, Plus, Trash2 } from "lucide-react";
+import { Edit2, Flag, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
@@ -10,6 +10,7 @@ import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, GoalsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -70,6 +71,19 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
         </Dialog>
       </div>
 
+      {pageData.goals.length === 0 ? (
+        <EmptyState
+          icon={Flag}
+          title="Пока нет целей"
+          description="Создайте накопительную цель (например, «Подушка» или «Отпуск») и пополняйте её со счёта — прогресс будет считаться автоматически."
+          action={
+            <Button onClick={() => setAddOpen(true)}>
+              <Plus className="size-4" />
+              Создать цель
+            </Button>
+          }
+        />
+      ) : (
       <div className="grid gap-4 lg:grid-cols-2">
         {pageData.goals.map((goal) => (
           <Card key={goal.id}>
@@ -117,6 +131,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Single controlled dialog for editing any goal */}
       <Dialog open={editingGoal !== null} onOpenChange={(open) => { if (!open) setEditingGoal(null); }}>

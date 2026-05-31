@@ -3,6 +3,7 @@
 import { ShieldCheck } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import { Progress } from "@/components/ui/progress";
 import type { EmergencyFundStatus } from "@/types/finance";
 import { formatCurrency } from "@/lib/format";
@@ -15,6 +16,7 @@ export function EmergencyFundCard({ fund, currency }: { fund: EmergencyFundStatu
         <CardTitle className="flex items-center gap-2">
           <ShieldCheck className="size-4 text-primary" />
           Финансовая подушка
+          <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -6,7 +6,10 @@ import type { AccountsPageData, BudgetsPageData, CategoriesPageData, GoalsPageDa
 import type { DashboardData, InvestmentData } from "@/types/finance";
 
 function todayInput() {
-  return new Date().toISOString().slice(0, 10);
+  // Local date (matches the app's formatInputDate), so month bucketing stays
+  // consistent across the UTC/local month boundary.
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function createClient() {

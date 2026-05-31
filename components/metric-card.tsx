@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Minus, TrendingDown, TrendingUp } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { MetricCard as MetricCardType } from "@/types/finance";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,10 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
       tone === "default" && "card-accent-top",
     )}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{metric.title}</CardTitle>
+        <CardTitle className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
+          {metric.title}
+          {FINANCE_TERM_HINTS[metric.title] ? <InfoHint text={FINANCE_TERM_HINTS[metric.title]} /> : null}
+        </CardTitle>
         <span
           className={cn(
             "flex size-9 items-center justify-center rounded-lg",

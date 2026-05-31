@@ -13,7 +13,9 @@ import type {
 import type { DashboardData, ForecastData } from "@/types/finance";
 
 function todayInput() {
-  return new Date().toISOString().slice(0, 10);
+  // Local date (matches the app's formatInputDate) to avoid UTC/local month-boundary drift.
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // Simulates a brand-new user going through the whole app the way the desktop

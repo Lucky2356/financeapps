@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 type AccountOption = ImportPageData["accounts"][number];
 type CategoryOption = ImportPageData["categories"][number];
 
+const LAST_ACCOUNT_KEY = "quick-add-last-account";
+
 const ACCOUNT_TYPES = [
   { value: "DEBIT_CARD", label: "Дебетовая карта" },
   { value: "CASH", label: "Наличные" },
@@ -52,6 +54,13 @@ export function QuickAddFab({
 
   async function openDialog() {
     void reloadRefs();
+    // Pre-select the last account the user added an operation to.
+    try {
+      const last = localStorage.getItem(LAST_ACCOUNT_KEY);
+      if (last) setAccountId(last);
+    } catch {
+      /* ignore */
+    }
     // Honour the default transaction type from settings.
     try {
       const settings = await apiClient.get<SettingsPageData>("/settings");
@@ -126,6 +135,11 @@ export function QuickAddFab({
         accountId,
         categoryId
       });
+      try {
+        localStorage.setItem(LAST_ACCOUNT_KEY, accountId);
+      } catch {
+        /* ignore */
+      }
       toast.success("Операция добавлена");
       if (result?.budgetWarning) {
         toast.warning(
@@ -176,7 +190,7 @@ export function QuickAddFab({
 
             <div className="space-y-2">
               <Label htmlFor="fab-amount">Сумма</Label>
-              <Input id="fab-amount" name="amount" type="number" step="0.01" min="0.01" placeholder="0.00" required />
+              <Input id="fab-amount" name="amount" type="number" step="0.01" min="0.01" placeholder="0.00" autoFocus required />
             </div>
 
             {/* Category with inline creation */}

@@ -1,6 +1,7 @@
 import { Activity, PiggyBank, ShieldCheck, WalletCards } from "lucide-react";
 
 import { Progress } from "@/components/ui/progress";
+import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { DashboardData } from "@/types/finance";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <WalletCards className="size-4 text-primary" />
             Чистый капитал
+            <InfoHint text={FINANCE_TERM_HINTS["Чистый капитал"]} />
           </div>
           <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">{formatCurrency(data.netWorth, data.currency)}</p>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">Счета, инвестиции и накопления по целям.</p>
