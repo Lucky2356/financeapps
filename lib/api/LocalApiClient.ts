@@ -905,12 +905,15 @@ export class LocalApiClient implements ApiClient {
     const input = toFormObject(body);
     const action = input.action ?? "";
     const provider = createMarketDataProvider();
+    // An explicit refresh should bypass the cache for genuinely fresh quotes.
+    if (action === "refreshMarket") await provider.updateMarketPrices();
     const securities = await provider.getSecurities();
     const ticker = input.ticker?.toUpperCase();
+    const marketSource = process.env.NEXT_PUBLIC_MARKET_DATA === "moex" ? "MOEX ISS" : "MOCK";
 
     if (action === "refreshMarket") {
       state.investments = await this.investments(state);
-      return { updated: securities.length, source: "MOCK" };
+      return { updated: securities.length, source: marketSource };
     }
 
     if (action === "addWatchlist") {

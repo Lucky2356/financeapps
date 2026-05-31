@@ -10,7 +10,7 @@ describe("MockMarketDataProvider", () => {
 
     expect(securities).toHaveLength(10);
     expect(securities.map((security) => security.ticker)).toEqual(
-      expect.arrayContaining(["SBER", "GAZP", "LKOH", "YNDX", "T", "VTBR", "MGNT", "NVTK", "ROSN", "MOEX"])
+      expect.arrayContaining(["SBER", "GAZP", "LKOH", "YDEX", "T", "VTBR", "MGNT", "NVTK", "ROSN", "MOEX"])
     );
   });
 
