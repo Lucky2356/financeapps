@@ -8,7 +8,7 @@ import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
 import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
 import { MetricCard } from "@/components/metric-card";
-import { OnboardingBanner } from "@/components/onboarding-banner";
+import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { SourceBanner } from "@/components/source-banner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -33,7 +33,7 @@ export function DashboardClient({
   return (
     <>
       <SourceBanner source={data.source} />
-      <OnboardingBanner hasTransactions={data.categoryExpenses.length > 0} />
+      <SetupChecklist />
       <DashboardOverview data={data} />
       {showDistribute && freeCash ? <DistributeCashflow freeCashflowLabel={freeCash.value} /> : null}
       <DashboardForecastStrip forecast={forecast} />

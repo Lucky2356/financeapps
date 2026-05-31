@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Keyboard, Loader2, Monitor, Moon, Sun, Trash2 } from "lucide-react";
+import { Check, Keyboard, Loader2, Monitor, Moon, Sparkles, Sun, Trash2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -56,6 +56,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   const { setTheme } = useTheme();
   const { data: pageData, reload } = useApiPageData(data, "/settings");
   const [clearing, setClearing] = useState(false);
+  const [loadingSample, setLoadingSample] = useState(false);
   const [settings, setSettings] = useState<EditableSettings>(() => toEditable(pageData));
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
@@ -98,6 +99,19 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
   const selectedTheme = settings.theme;
   const selectedDensity = settings.density;
+
+  async function loadSampleData() {
+    try {
+      setLoadingSample(true);
+      await apiClient.post("/sample", {});
+      toast.success("Демо-данные загружены.");
+      await new Promise((r) => setTimeout(r, 400));
+      window.location.reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось загрузить демо-данные");
+      setLoadingSample(false);
+    }
+  }
 
   async function clearAllData() {
     try {
@@ -312,6 +326,13 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
+            Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы посмотреть, как всё работает. Текущие данные при этом будут заменены.
+          </p>
+          <Button variant="outline" type="button" className="w-full" onClick={loadSampleData} disabled={loadingSample}>
+            <Sparkles className="size-4" />
+            {loadingSample ? "Загрузка…" : "Загрузить демо-данные"}
+          </Button>
+          <p className="pt-1 text-sm text-muted-foreground">
             Очистка удалит все счета, операции, цели, бюджеты и настройки. Это действие необратимо.
           </p>
           <Dialog>
