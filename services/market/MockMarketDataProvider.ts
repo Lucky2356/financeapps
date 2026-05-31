@@ -31,7 +31,7 @@ const securities: Array<Omit<MarketSecurity, "price" | "changeDay" | "change30d"
     comment: "Нефтегазовый сектор, чувствителен к ценам на сырье и валютному курсу."
   },
   {
-    ticker: "YNDX",
+    ticker: "YDEX",
     name: "Яндекс",
     sector: "Технологии",
     risk: "HIGH",
