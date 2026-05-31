@@ -1,47 +1,83 @@
-# Финансовый помощник
+# 💰 Финансовый помощник
 
-Production-ready MVP для ручного учета личных финансов, бюджета, целей накоплений и аналитики российского фондового рынка.
+Личный финансовый помощник для Windows-десктопа и веба: учёт доходов и расходов, бюджеты, цели накоплений, плановые платежи, прогноз денежного потока и аналитика российского фондового рынка.
 
-Инвестиционный раздел показывает аналитику, риски, структуру портфеля и образовательные подсказки. Он не дает индивидуальных инвестиционных рекомендаций.
+Работает полностью офлайн на десктопе — все данные хранятся локально на устройстве пользователя, без облака и без банковских интеграций.
 
-## Features
+> **Дисклеймер.** Инвестиционный раздел показывает аналитику, риски, структуру портфеля и образовательные подсказки. Он **не** даёт индивидуальных инвестиционных рекомендаций.
 
-### Implemented
+---
 
-- Учет доходов и расходов с поддержкой счетов, категорий и переводов между счетами.
-- Управление категориями: создание, редактирование, удаление, защита от удаления категорий с операциями.
-- Бюджеты по категориям: лимиты, прогресс, сброс лимита до нуля.
-- Цели накоплений: создание, редактирование, удаление с подтверждением, пополнение цели с прогрессом.
-- Плановые платежи и доходы: шаблоны с частотой еженедельно/ежемесячно/ежегодно, материализация наступивших платежей.
-- Прогноз cashflow на 30 и 90 дней с предупреждениями о кассовых разрывах.
-- Аналитика за 6 месяцев: помесячный cashflow, топ категорий расходов, коэффициент сбережений.
-- Инвестиции: портфель, watchlist, аналитика рисков, образовательные подсказки.
-- Импорт CSV с маппингом колонок, экспорт операций в CSV и JSON, полный backup и восстановление.
-- Быстрое добавление операции (Quick Add FAB) с форм-панелью на мобильном экране.
-- PWA: manifest, service worker, offline.html, mobile-first layout, нижняя мобильная навигация.
+## Содержание
 
-### Roadmap
+- [Возможности](#возможности)
+- [Технологии](#технологии)
+- [Два режима работы](#два-режима-работы)
+- [Быстрый старт](#быстрый-старт)
+- [Сборка десктоп-приложения (Windows)](#сборка-десктоп-приложения-windows)
+- [Структура проекта](#структура-проекта)
+- [Команды](#команды)
+- [Импорт, экспорт и резервные копии](#импорт-экспорт-и-резервные-копии)
+- [Безопасность и приватность](#безопасность-и-приватность)
+- [Планы развития](#планы-развития)
 
-- Подключение MOEX ISS API вместо mock-данных по ценным бумагам.
-- Банковские интеграции через официальные API с согласия пользователя.
-- SQLite/IndexedDB синхронизация между desktop-устройствами.
-- Уведомления о приближающихся плановых платежах и превышении бюджетных лимитов.
+---
 
-## Stack
+## Возможности
 
-- Next.js 16, React 18, TypeScript 5
-- Tailwind CSS, shadcn/ui-style components
-- Prisma ORM, PostgreSQL
-- Recharts, Zod, date-fns
-- PWA-ready настройки
-- Архитектурная подготовка под Capacitor Android и Tauri Windows
+| Раздел | Что умеет |
+|---|---|
+| **Операции** | Доходы, расходы и переводы между счетами; поиск, фильтры, пагинация |
+| **Счета** | Несколько счетов (наличные, карта, накопительный, брокерский) с отслеживанием баланса |
+| **Категории** | Создание, редактирование, цвет, флаги «обязательная» и «подписка», защита от удаления категории с операциями |
+| **Бюджеты** | Лимиты по категориям, прогресс, предупреждение при превышении |
+| **Цели накоплений** | Создание, пополнение, расчёт нужного ежемесячного взноса |
+| **Плановые платежи** | Шаблоны регулярных доходов/расходов (неделя/месяц/год) с автоматической материализацией наступивших операций |
+| **Прогноз** | Денежный поток на 30 и 90 дней с предупреждениями о кассовых разрывах |
+| **Аналитика** | Динамика за 6 месяцев, топ категорий, коэффициент сбережений |
+| **Инвестиции** | Портфель, watchlist, анализ рисков, структура по секторам, образовательные подсказки |
+| **Дашборд** | Финансовый health-score, ключевые метрики, графики, помесячная динамика |
+| **Импорт/экспорт** | Импорт CSV с маппингом колонок, экспорт в CSV/JSON, полный backup и восстановление |
 
-## Quick Start
+Дополнительно: быстрое добавление операции (FAB), тёмная/светлая тема, настройка плотности интерфейса, горячие клавиши (с поддержкой русской раскладки), PWA с офлайн-страницей.
+
+---
+
+## Технологии
+
+- **Next.js 16** (App Router) + **React 18.3** + **TypeScript 5.6**
+- **Tailwind CSS** + компоненты в стиле shadcn/ui (Radix UI)
+- **Recharts** — графики, **Zod** — валидация, **date-fns** — даты
+- **Prisma ORM** + **PostgreSQL** (веб-режим)
+- **Tauri 2** — десктоп-приложение для Windows
+- **Vitest** — модульные тесты
+
+---
+
+## Два режима работы
+
+Приложение использует один и тот же фронтенд, но получает данные из разных источников в зависимости от платформы. Это абстрагировано через `lib/api/` (`ApiClient`).
+
+### 🌐 Веб (`NEXT_PUBLIC_APP_PLATFORM=web`)
+Запросы идут на серверные `app/api/*` эндпоинты → Prisma → PostgreSQL. Если базы нет, UI показывает встроенный demo-fallback (без сохранения).
+
+### 🖥️ Десктоп (`NEXT_PUBLIC_APP_PLATFORM=desktop` + `DESKTOP_DATA_MODE=local`)
+Это **основной пользовательский опыт**. Приложение — статический экспорт внутри Tauri-оболочки. Все CRUD-операции обрабатывает `LocalApiClient`, данные хранятся в **IndexedDB** на устройстве. Сервер не участвует.
+
+> Важная деталь архитектуры: при статическом экспорте серверные страницы рендерятся с **пустыми** данными-заглушками (`source: "database"`), а реальные данные клиент подгружает из `LocalApiClient` через хук `useApiPageData`. Это исключает «фантомные» демо-данные и рассинхрон id счетов в формах.
+>
+> Свежая установка стартует **пустой**: пользователь сам добавляет счета, операции и бумаги в watchlist. Предзаполнены только базовые категории расходов/доходов.
+
+---
+
+## Быстрый старт
+
+### Веб-разработка
 
 ```bash
 npm install
 copy .env.example .env
-npm run docker:db:up
+npm run docker:db:up          # поднять локальный PostgreSQL в Docker
 npm run db:migrate -- --name init
 npm run db:seed
 npm run dev
@@ -49,233 +85,104 @@ npm run dev
 
 Откройте [http://localhost:3000](http://localhost:3000).
 
-Если `DATABASE_URL` не задан или база недоступна, UI покажет встроенный demo fallback, но сохранение форм требует PostgreSQL и seed.
+> `npm run dev` всегда запускается в **веб-режиме** (Prisma). Поведение локального хранилища (IndexedDB) проверяется на десктоп-сборке или через модульные тесты, а не на дев-сервере.
 
-## Local PostgreSQL With Docker
-
-Для воспроизводимого локального окружения добавлен `docker-compose.yml`:
-
-```bash
-npm run docker:db:up
-npm run db:migrate
-npm run db:seed
-```
-
-Полезные команды:
-
-```bash
-npm run docker:db:logs
-npm run docker:db:down
-npm run db:studio
-```
-
-Локальный `.env` не коммитится. Для разработки можно оставить дефолтные значения из `.env.example` или заменить пароль PostgreSQL на свой.
-
-## Environment Modes
+### Переменные окружения
 
 ```env
-NEXT_PUBLIC_APP_PLATFORM=web       # web | android | desktop
-NEXT_PUBLIC_APP_ENV=development    # development | production
-NEXT_PUBLIC_API_MODE=cloud         # cloud | local | mock
+NEXT_PUBLIC_APP_PLATFORM=web        # web | desktop | android
+NEXT_PUBLIC_APP_ENV=development     # development | production
+NEXT_PUBLIC_API_MODE=cloud          # cloud | local | mock
 NEXT_PUBLIC_API_BASE_URL=/api
 NEXT_PUBLIC_DESKTOP_DATA_MODE=cloud # cloud | local
-NEXT_OUTPUT=
+NEXT_OUTPUT=                        # пусто | export
 ```
 
-Web-версия может работать с backend API и PostgreSQL на сервере. Desktop-версия подготовлена к двум режимам:
+---
 
-- `cloud`: Tauri-приложение работает как клиент к удаленному API.
-- `local`: данные хранятся локально через storage adapter; SQLite/IndexedDB синхронизация с сервером оставлена как TODO.
+## Сборка десктоп-приложения (Windows)
 
-## Architecture
-
-- UI находится в `app/` и `components/`.
-- Бизнес-логика вынесена в `services/`.
-- Prisma и серверное чтение данных находятся в `lib/data.ts` и `lib/actions.ts`.
-- REST-style endpoints находятся в `app/api/`.
-- Все сетевые запросы для переносимого frontend идут через `lib/api/ApiClient.ts`.
-- Доступ к localStorage, IndexedDB и desktop file system вынесен в `lib/storage/` и `lib/files/`.
-- `lib/repositories/` позволяет переключать источник данных между API и local mode.
-
-Frontend не использует Node.js API напрямую. Browser-only API изолированы в client adapters.
-
-## PWA
-
-Добавлены:
-
-- `public/manifest.json`
-- `public/sw.js`
-- `public/offline.html`
-- app icons в `public/icons/`
-- `theme-color`
-- mobile-first layout и нижняя мобильная навигация
-- мобильные карточки вместо таблиц на малых экранах
-
-Production service worker регистрируется автоматически после `npm run build && npm run start`.
-
-## Mobile Build With Capacitor
-
-Установленные зависимости: `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`.
+Требуется установленный Rust toolchain (см. подробную инструкцию в [docs/WINDOWS_DESKTOP.md](docs/WINDOWS_DESKTOP.md)).
 
 ```bash
-npm run build:static
-npx cap add android
-npm run cap:sync
-npm run cap:android
+npm run build:static       # статический экспорт фронтенда (desktop + local mode)
+npm run desktop:preflight  # быстрая проверка окружения
+npm run tauri:build        # сборка установщика
 ```
 
-Для APK используйте Android Studio или Gradle в папке `android/`, например `gradlew assembleDebug`.
+Результаты сборки:
 
-Для mobile shell обычно используйте:
+- **Установщик NSIS:** `src-tauri/target/release/bundle/nsis/Финансовый помощник_1.0.0_x64-setup.exe`
+- **Исполняемый файл:** `src-tauri/target/release/financial-assistant.exe`
 
-```env
-NEXT_PUBLIC_APP_PLATFORM=android
-NEXT_PUBLIC_API_MODE=cloud
-NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com/api
-NEXT_OUTPUT=export
-```
+Запуск десктоп-версии в режиме разработки: `npm run tauri:dev`.
 
-## Desktop Build With Tauri
+---
 
-Структура Tauri уже добавлена:
-
-- `src-tauri/`
-- `src-tauri/tauri.conf.json`
-- `src-tauri/Cargo.toml`
-
-Команды:
-
-```bash
-npm install --save-dev @tauri-apps/cli
-npm create tauri-app
-```
-
-Или настройка Tauri в существующем проекте:
-
-```bash
-npm install --save-dev @tauri-apps/cli
-npm install @tauri-apps/api
-```
-
-Запуск desktop-версии:
-
-```bash
-npm run tauri dev
-```
-
-Также доступна короткая команда:
-
-```bash
-npm run tauri:dev
-```
-
-Сборка Windows EXE:
-
-```bash
-npm run tauri build
-```
-
-Также доступна:
-
-```bash
-npm run tauri:build
-```
-
-Результат сборки:
+## Структура проекта
 
 ```text
-src-tauri/target/release/bundle/
+app/                  # страницы (App Router) и серверные API-эндпоинты (app/api/*)
+components/           # UI-компоненты; *-client.tsx и *-manager.tsx — клиентские обёртки,
+                      #   подгружающие данные из активного ApiClient
+hooks/                # useApiPageData — перезапрос данных из ApiClient на клиенте
+lib/
+  api/                # ApiClient: FetchApiClient (web) и LocalApiClient (desktop)
+  data.ts             # серверное чтение данных + пустые заглушки для статической сборки
+  actions.ts          # серверные мутации
+  storage/            # адаптеры хранилища (IndexedDB, память, desktop FS)
+  files/              # файловые адаптеры (browser / Tauri)
+services/             # бизнес-логика (прогноз, рекомендации, анализ инвестиций, рыночные данные)
+prisma/               # схема БД и сиды
+src-tauri/            # десктоп-оболочка Tauri
+tests/                # модульные тесты (Vitest)
+docs/                 # инструкции по релизу и десктоп-сборке
 ```
 
-Desktop-версия использует тот же frontend. В `cloud` режиме она подключается к API, в `local` режиме предусмотрены `DesktopStorageAdapter` и `TauriFileSystemAdapter`.
+Фронтенд не использует Node.js API напрямую — браузер-специфичные API изолированы в клиентских адаптерах, что и позволяет переносить его в Tauri и Capacitor.
 
-Подробная инструкция по Windows EXE находится в [docs/WINDOWS_DESKTOP.md](docs/WINDOWS_DESKTOP.md). Быстрая проверка окружения:
+---
 
-```bash
-npm run build:static
-npm run desktop:preflight
-```
+## Команды
 
-## Import And Export
+| Команда | Назначение |
+|---|---|
+| `npm run dev` | Дев-сервер (веб-режим) |
+| `npm run build` | Production-сборка веб-версии |
+| `npm run build:static` | Статический экспорт для десктопа (local mode) |
+| `npm run typecheck` | Проверка типов (`tsc --noEmit`) |
+| `npm run lint` | ESLint (0 предупреждений) |
+| `npm run test` | Модульные тесты (Vitest) |
+| `npm run tauri:dev` / `tauri:build` | Десктоп: запуск / сборка |
+| `npm run db:migrate` / `db:seed` / `db:studio` | Prisma: миграции / сиды / GUI |
+| `npm run docker:db:up` / `docker:db:down` | Локальный PostgreSQL в Docker |
 
-Страница `Import` поддерживает:
+---
 
-- выбор CSV;
-- предпросмотр строк;
-- маппинг колонок даты, суммы, описания, категории и счета;
-- импорт операций;
-- экспорт операций в CSV и JSON;
-- полный JSON backup пользовательских данных;
-- восстановление из JSON backup.
+## Импорт, экспорт и резервные копии
 
-Backup v1 включает настройки, счета, категории, операции, плановые операции, бюджеты, цели, портфель и watchlist. Web использует browser file adapter. Desktop-режим подготовлен для Tauri file plugins.
+Страница **Импорт** поддерживает выбор CSV, предпросмотр строк и маппинг колонок (дата, сумма, описание, категория, счёт), экспорт операций в CSV/JSON, а также полный JSON-backup и восстановление.
 
-## Planned Payments
+Backup v1 включает настройки, счета, категории, операции, плановые операции, бюджеты, цели, портфель и watchlist. В вебе используется браузерный файловый адаптер, на десктопе — файловые плагины Tauri.
 
-Страница `Плановые платежи` поддерживает:
+---
 
-- шаблоны повторяющихся доходов и расходов;
-- периоды `еженедельно`, `ежемесячно`, `ежегодно`;
-- ближайшие обязательства и сумму на 7 дней;
-- расчет планового месячного денежного потока;
-- создание наступивших операций из шаблона с автоматическим переносом следующей даты.
+## Безопасность и приватность
 
-## Cashflow Forecast
+- Банковские логины и пароли **не** хранятся; скрейпинг банков не используется.
+- На десктопе данные не покидают устройство (IndexedDB).
+- Рыночные данные по бумагам в MVP — это `MockMarketDataProvider` (демо-данные по `SBER`, `GAZP`, `LKOH`, `YNDX`, `T`, `VTBR`, `MGNT`, `NVTK`, `ROSN`, `MOEX`). Подключение реального MOEX ISS API оставлено как TODO в `MoexMarketDataProvider.ts`.
+- Для будущих банковских интеграций предполагается официальный API с явным согласием пользователя и secure-storage модель для токенов.
 
-Страница `Прогноз` строит плановый cashflow на 30 и 90 дней:
+---
 
-- доступный остаток с учетом наличных, дебетовых карт и накопительных счетов;
-- регулярные доходы и расходы из плановых операций;
-- ближайшие события календаря;
-- предупреждения о возможном кассовом разрыве;
-- контроль нагрузки целей накоплений на свободный поток.
+## Планы развития
 
-В настройках есть блок локального снимка данных для desktop/mobile local mode. Он сохраняет текущие API-данные в IndexedDB через `StorageAdapter`, без прямого использования Node.js API во frontend.
+- Подключение MOEX ISS API вместо mock-данных.
+- Синхронизация локальных данных между десктоп-устройствами.
+- Уведомления о приближающихся плановых платежах и превышении лимитов.
+- Банковские интеграции через официальные API с согласия пользователя.
 
-## Market Data
+---
 
-MVP использует `MockMarketDataProvider` с демо-данными по:
-
-`SBER`, `GAZP`, `LKOH`, `YNDX`, `T`, `VTBR`, `MGNT`, `NVTK`, `ROSN`, `MOEX`.
-
-`MoexMarketDataProvider.ts` содержит TODO для будущего подключения MOEX ISS API.
-
-## Security Notes
-
-- Банковские логины и пароли не хранятся.
-- Screen scraping банков не используется.
-- Банковские API требуют официального доступа и явного согласия пользователя.
-- Для будущих токенов нужна secure storage / keychain модель и шифрование at rest.
-- В MVP банковские токены не реализованы.
-
-## Useful Commands
-
-```bash
-npm run dev
-npm run build
-npm run typecheck
-npm run lint
-npm run test
-npm run db:migrate
-npm run db:seed
-npm run db:studio
-```
-
-## DevOps Workflow
-
-GitHub Actions workflow находится в `.github/workflows/ci.yml` и запускает:
-
-- `npm ci`
-- `npx prisma generate`
-- PostgreSQL service container
-- `npm run db:deploy`
-- `npm run db:seed`
-- `npm run typecheck`
-- `npm run lint`
-- `npm run test`
-- `npm run build`
-- `npm run build:static`
-
-Практика работы: важные этапы фиксируются отдельными git-коммитами, чтобы можно было быстро откатиться к стабильному состоянию.
-
-Перед релизом используйте [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md): там собраны preflight, проверки web/PWA, Android shell и Windows desktop shell.
+Перед релизом используйте [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md): preflight, проверки web/PWA и Windows desktop shell.

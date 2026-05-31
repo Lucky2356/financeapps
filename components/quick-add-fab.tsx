@@ -6,6 +6,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 
@@ -28,15 +29,24 @@ export function QuickAddFab({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
+  // The server props are empty on the desktop static build — the real accounts
+  // and categories live in the client API (LocalApiClient/IndexedDB). useApiPageData
+  // fetches them so the dropdowns match what actually exists (otherwise the
+  // backend rejects with "счёт не существует").
+  const initialRefs = { source: "database", accounts, categories } as ImportPageData;
+  const { data: refs, reload: reloadRefs } = useApiPageData<ImportPageData>(initialRefs, "/import");
 
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => {
+      void reloadRefs();
+      setOpen(true);
+    };
     window.addEventListener("quick-add-open", handler);
     return () => window.removeEventListener("quick-add-open", handler);
-  }, []);
+  }, [reloadRefs]);
 
-  const activeAccounts = accounts.filter((a) => !(a as AccountOption & { isArchived?: boolean }).isArchived);
-  const filteredCategories = categories.filter((c) => c.kind === type);
+  const activeAccounts = refs.accounts.filter((a) => !(a as AccountOption & { isArchived?: boolean }).isArchived);
+  const filteredCategories = refs.categories.filter((c) => c.kind === type);
   const today = formatInputDate(new Date());
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -63,7 +73,7 @@ export function QuickAddFab({
       <Button
         size="icon"
         className="fixed bottom-20 right-4 z-40 size-14 rounded-full shadow-lg md:bottom-6 md:right-6"
-        onClick={() => setOpen(true)}
+        onClick={() => { void reloadRefs(); setOpen(true); }}
         aria-label="Быстрое добавление операции"
       >
         <Plus className="size-6" />
