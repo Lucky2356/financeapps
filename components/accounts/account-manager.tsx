@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData } from "@/lib/data";
 import { accountTypeLabel } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,39 +23,36 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export function AccountManager({ data }: { data: AccountsPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/accounts");
+  const { run } = useApiMutation();
   const [addOpen, setAddOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountsPageData["accounts"][number] | null>(null);
+
+  async function refresh() {
+    await reload();
+    router.refresh();
+  }
 
   async function submitAccount(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    try {
-      if (method === "POST") {
-        await apiClient.post("/accounts", payload);
-        toast.success("Счет добавлен");
-        setAddOpen(false);
-      } else {
-        await apiClient.put("/accounts", payload);
-        toast.success("Счет обновлен");
-        setEditingAccount(null);
+    await run(() => (method === "POST" ? apiClient.post("/accounts", payload) : apiClient.put("/accounts", payload)), {
+      success: method === "POST" ? "Счет добавлен" : "Счет обновлен",
+      error: "Не удалось сохранить счет",
+      onSuccess: async () => {
+        if (method === "POST") setAddOpen(false);
+        else setEditingAccount(null);
+        await refresh();
       }
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить счет");
-    }
+    });
   }
 
   async function removeAccount(id: string) {
-    try {
-      await apiClient.delete(`/accounts?id=${encodeURIComponent(id)}`);
-      toast.success("Счет архивирован");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось архивировать счет");
-    }
+    await run(() => apiClient.delete(`/accounts?id=${encodeURIComponent(id)}`), {
+      success: "Счет архивирован",
+      error: "Не удалось архивировать счет",
+      onSuccess: refresh
+    });
   }
 
   return (

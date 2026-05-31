@@ -27,55 +27,52 @@ import { RECURRENCE_FREQUENCY_LABELS } from "@/lib/constants";
 import { apiClient } from "@/lib/api/client";
 import type { RecurringTransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 
 export function RecurringManager({ data }: { data: RecurringTransactionsPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/recurring");
+  const { run } = useApiMutation();
   const [addOpen, setAddOpen] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState<RecurringTransactionsPageData["recurringTransactions"][number] | null>(null);
+
+  async function refresh() {
+    await reload();
+    router.refresh();
+  }
 
   async function submitTemplate(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    try {
-      if (method === "POST") {
-        await apiClient.post("/recurring", payload);
-        toast.success("Плановый платеж создан");
-        setAddOpen(false);
-      } else {
-        await apiClient.put("/recurring", payload);
-        toast.success("Плановый платеж обновлен");
-        setEditingRecurring(null);
+    await run(() => (method === "POST" ? apiClient.post("/recurring", payload) : apiClient.put("/recurring", payload)), {
+      success: method === "POST" ? "Плановый платеж создан" : "Плановый платеж обновлен",
+      error: "Не удалось сохранить шаблон",
+      onSuccess: async () => {
+        if (method === "POST") setAddOpen(false);
+        else setEditingRecurring(null);
+        await refresh();
       }
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить шаблон");
-    }
+    });
   }
 
   async function removeTemplate(id: string) {
-    try {
-      await apiClient.delete(`/recurring?id=${encodeURIComponent(id)}`);
-      toast.success("Шаблон удален");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить шаблон");
-    }
+    await run(() => apiClient.delete(`/recurring?id=${encodeURIComponent(id)}`), {
+      success: "Шаблон удален",
+      error: "Не удалось удалить шаблон",
+      onSuccess: refresh
+    });
   }
 
   async function materializeTemplate(id: string) {
-    try {
-      const result = await apiClient.post<{ created: number; nextDate: string }, { id: string }>("/recurring/materialize", { id });
-      toast.success(result.created > 0 ? `Создано операций: ${result.created}` : "Нет наступивших платежей");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось создать операции");
-    }
+    await run(() => apiClient.post<{ created: number; nextDate: string }, { id: string }>("/recurring/materialize", { id }), {
+      error: "Не удалось создать операции",
+      onSuccess: async (result) => {
+        toast.success(result.created > 0 ? `Создано операций: ${result.created}` : "Нет наступивших платежей");
+        await refresh();
+      }
+    });
   }
 
   return (

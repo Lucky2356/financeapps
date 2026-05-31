@@ -3,10 +3,10 @@
 import { Edit2, Plus, Tag, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import type { CategoriesPageData } from "@/lib/data";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ const PRESET_COLORS = [
 export function CategoryManager({ data }: { data: CategoriesPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/categories");
+  const { run } = useApiMutation();
   // Which "add" dialog is open (by kind), and which category is being edited
   const [addKind, setAddKind] = useState<"INCOME" | "EXPENSE" | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(null);
@@ -43,36 +44,32 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
   const incomeCategories = pageData.categories.filter((c) => c.kind === "INCOME");
   const expenseCategories = pageData.categories.filter((c) => c.kind === "EXPENSE");
 
+  async function refresh() {
+    await reload();
+    router.refresh();
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    try {
-      if (method === "POST") {
-        await apiClient.post("/categories", payload);
-        toast.success("Категория добавлена");
-        setAddKind(null);
-      } else {
-        await apiClient.put("/categories", payload);
-        toast.success("Категория обновлена");
-        setEditingCategory(null);
+    await run(() => (method === "POST" ? apiClient.post("/categories", payload) : apiClient.put("/categories", payload)), {
+      success: method === "POST" ? "Категория добавлена" : "Категория обновлена",
+      error: "Не удалось сохранить категорию",
+      onSuccess: async () => {
+        if (method === "POST") setAddKind(null);
+        else setEditingCategory(null);
+        await refresh();
       }
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить категорию");
-    }
+    });
   }
 
   async function handleDelete(id: string) {
-    try {
-      await apiClient.delete(`/categories?id=${encodeURIComponent(id)}`);
-      toast.success("Категория удалена");
-      await reload();
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить категорию");
-    }
+    await run(() => apiClient.delete(`/categories?id=${encodeURIComponent(id)}`), {
+      success: "Категория удалена",
+      error: "Не удалось удалить категорию",
+      onSuccess: refresh
+    });
   }
 
   return (
