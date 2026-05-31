@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { suggestCategoryId } from "@/lib/category-suggest";
 import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
@@ -519,11 +520,34 @@ function TransactionDialog({
   const matchingCategories = useMemo(() => data.categories.filter((category) => category.kind === selectedType), [data.categories, selectedType]);
   const [categoryId, setCategoryId] = useState(transaction?.category.id ?? matchingCategories[0]?.id ?? "");
   const effectiveCategoryId = matchingCategories.some((category) => category.id === categoryId) ? categoryId : matchingCategories[0]?.id ?? "";
+  // Auto-categorization: while the user has not manually chosen a category,
+  // suggest one from past transactions as they type the description.
+  const [manualCategory, setManualCategory] = useState(false);
+  const [autoSuggested, setAutoSuggested] = useState(false);
 
   function changeType(value: "INCOME" | "EXPENSE") {
     const nextCategories = data.categories.filter((category) => category.kind === value);
     setSelectedType(value);
     setCategoryId(nextCategories[0]?.id ?? "");
+    setManualCategory(false);
+    setAutoSuggested(false);
+  }
+
+  function pickCategory(value: string) {
+    setCategoryId(value);
+    setManualCategory(true);
+    setAutoSuggested(false);
+  }
+
+  function onDescriptionChange(value: string) {
+    if (manualCategory) return;
+    const suggestion = suggestCategoryId(value, data.transactions, { type: selectedType });
+    if (suggestion && matchingCategories.some((category) => category.id === suggestion)) {
+      setCategoryId(suggestion);
+      setAutoSuggested(true);
+    } else {
+      setAutoSuggested(false);
+    }
   }
 
   return (
@@ -548,13 +572,14 @@ function TransactionDialog({
           </div>
           <div className="space-y-2">
             <Label>Категория</Label>
-            <select name="categoryId" value={effectiveCategoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <select name="categoryId" value={effectiveCategoryId} onChange={(event) => pickCategory(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
               {matchingCategories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.label}
                 </option>
               ))}
             </select>
+            {autoSuggested ? <p className="text-xs text-primary">Категория подобрана по описанию</p> : null}
           </div>
           <div className="space-y-2">
             <Label>Счет</Label>
@@ -572,7 +597,12 @@ function TransactionDialog({
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>Описание</Label>
-            <Textarea name="description" defaultValue={transaction?.description ?? ""} />
+            <Textarea
+              name="description"
+              defaultValue={transaction?.description ?? ""}
+              onChange={(event) => onDescriptionChange(event.target.value)}
+              placeholder="Например, «Пятёрочка продукты» — категория подберётся сама"
+            />
           </div>
         </div>
         <DialogFooter>

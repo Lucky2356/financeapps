@@ -27,6 +27,7 @@ import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService"
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
+import { suggestCategoryId } from "@/lib/category-suggest";
 import type { AccountRow, CategoryRow, DashboardData, InvestmentData, TransactionRow } from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
 
@@ -816,9 +817,20 @@ export class LocalApiClient implements ApiClient {
       const type = rawAmount >= 0 ? "INCOME" : "EXPENSE";
       const accountName = String(row[input.accountColumn ?? ""] ?? "").trim().toLowerCase();
       const account = state.accounts.find((item) => item.name.toLowerCase() === accountName && !item.isArchived) ?? fallbackAccount;
-      const categoryName = String(row[input.categoryColumn ?? ""] ?? "").trim() || (type === "INCOME" ? "Импорт доходов" : "Импорт расходов");
-      const category = this.findOrCreateCategory(state, categoryName, type);
+      const rawCategoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
       const description = String(row[input.descriptionColumn ?? ""] ?? "").trim();
+      // When the CSV row carries no category, try to auto-categorize it from
+      // the description against existing transactions before falling back to a
+      // generic import bucket.
+      let category;
+      if (rawCategoryName) {
+        category = this.findOrCreateCategory(state, rawCategoryName, type);
+      } else {
+        const suggestedId = suggestCategoryId(description, state.transactions, { type });
+        category =
+          (suggestedId ? state.categories.find((item) => item.id === suggestedId && item.kind === type) : undefined) ??
+          this.findOrCreateCategory(state, type === "INCOME" ? "Импорт доходов" : "Импорт расходов", type);
+      }
       const duplicate = state.transactions.some((transaction) => {
         return (
           transaction.account.id === account.id &&
