@@ -16,3 +16,8 @@ export function getRuntimeConfig(): RuntimeConfig {
 }
 
 export const runtimeConfig = getRuntimeConfig();
+
+// True when running as the desktop app with local (IndexedDB) data — used to
+// gate desktop-only features like profiles and local settings persistence.
+export const isLocalDesktopMode =
+  runtimeConfig.platform === "desktop" && runtimeConfig.desktopDataMode === "local";
