@@ -1,9 +1,7 @@
 "use client";
 
-import { Keyboard, Monitor, Moon, Sun, Trash2 } from "lucide-react";
+import { Check, Keyboard, Loader2, Monitor, Moon, Sun, Trash2 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -34,44 +32,72 @@ const shortcuts = [
   { keys: "?", label: "Показать эту справку" },
 ];
 
+type EditableSettings = {
+  demoMode: boolean;
+  riskProfileCode: SettingsPageData["riskProfileCode"];
+  emergencyFundMonthsTarget: number;
+  theme: "light" | "dark" | "system";
+  density: "comfortable" | "compact";
+  defaultTransactionType: "INCOME" | "EXPENSE";
+};
+
+function toEditable(data: SettingsPageData): EditableSettings {
+  return {
+    demoMode: data.demoMode,
+    riskProfileCode: data.riskProfileCode,
+    emergencyFundMonthsTarget: data.emergencyFundMonthsTarget,
+    theme: data.theme ?? "system",
+    density: data.density ?? "comfortable",
+    defaultTransactionType: data.defaultTransactionType,
+  };
+}
+
 export function SettingsForm({ data }: { data: SettingsPageData }) {
-  const router = useRouter();
   const { setTheme } = useTheme();
   const { data: pageData, reload } = useApiPageData(data, "/settings");
   const [clearing, setClearing] = useState(false);
-  // null = user hasn't manually picked yet → fall back to loaded pageData value
-  const [userTheme, setUserTheme] = useState<"light" | "dark" | "system" | null>(null);
-  const [userDensity, setUserDensity] = useState<"comfortable" | "compact" | null>(null);
-  const selectedTheme = userTheme ?? pageData.theme ?? "system";
-  const selectedDensity = userDensity ?? pageData.density ?? "comfortable";
+  const [settings, setSettings] = useState<EditableSettings>(() => toEditable(pageData));
+  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-  // key forces remount of uncontrolled inputs when data loads from IndexedDB
-  const formKey = `${pageData.riskProfileCode}-${pageData.emergencyFundMonthsTarget}-${String(pageData.demoMode)}-${selectedTheme}-${selectedDensity}-${pageData.defaultTransactionType}`;
+  // Re-sync controlled fields whenever fresh data arrives (e.g. the real values
+  // load from IndexedDB after mount, or a save round-trips through reload()).
+  // Derived-state-on-prop-change pattern — adjusts state during render instead
+  // of in an effect, so there is no extra paint with stale values.
+  const [syncedFrom, setSyncedFrom] = useState(pageData);
+  if (syncedFrom !== pageData) {
+    setSyncedFrom(pageData);
+    setSettings(toEditable(pageData));
+  }
 
-  async function submitSettings(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const payload = {
-      currency: "RUB",
-      demoMode: formData.get("demoMode") === "on",
-      riskProfileCode: String(formData.get("riskProfileCode") ?? "MODERATE"),
-      emergencyFundMonthsTarget: String(formData.get("emergencyFundMonthsTarget") ?? "6"),
-      theme: String(formData.get("theme") ?? "system"),
-      density: String(formData.get("density") ?? "comfortable"),
-      defaultTransactionType: String(formData.get("defaultTransactionType") ?? "EXPENSE"),
-    };
+  // Auto-save: applies the change immediately (no Save button) and persists it.
+  async function persist(patch: Partial<EditableSettings>) {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    if (patch.theme) setTheme(patch.theme);
+    if (patch.density) applyDensity(patch.density);
 
     try {
-      await apiClient.put("/settings", payload);
-      setTheme(payload.theme);
-      applyDensity(payload.density === "compact" ? "compact" : "comfortable");
-      toast.success("Настройки сохранены");
+      setStatus("saving");
+      await apiClient.put("/settings", {
+        currency: "RUB",
+        demoMode: next.demoMode,
+        riskProfileCode: next.riskProfileCode,
+        emergencyFundMonthsTarget: String(next.emergencyFundMonthsTarget),
+        theme: next.theme,
+        density: next.density,
+        defaultTransactionType: next.defaultTransactionType,
+      });
       await reload();
-      router.refresh();
+      setStatus("saved");
+      setTimeout(() => setStatus("idle"), 1500);
     } catch (error) {
+      setStatus("idle");
       toast.error(error instanceof Error ? error.message : "Не удалось сохранить настройки");
     }
   }
+
+  const selectedTheme = settings.theme;
+  const selectedDensity = settings.density;
 
   async function clearAllData() {
     try {
@@ -88,7 +114,24 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   }
 
   return (
-    <form key={formKey} onSubmit={submitSettings} className="grid gap-5 xl:grid-cols-2">
+    <div className="grid gap-5 xl:grid-cols-2">
+      {/* Auto-save status — changes apply immediately, no Save button */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground xl:col-span-2">
+        {status === "saving" ? (
+          <>
+            <Loader2 className="size-3.5 animate-spin" />
+            Сохранение…
+          </>
+        ) : status === "saved" ? (
+          <>
+            <Check className="size-3.5 text-primary" />
+            <span className="text-primary">Сохранено</span>
+          </>
+        ) : (
+          "Изменения применяются и сохраняются автоматически."
+        )}
+      </div>
+
       {/* Card 1: Basic */}
       <Card>
         <CardHeader>
@@ -107,7 +150,13 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               <span className="block text-sm font-medium">Режим демо-данных</span>
               <span className="block text-xs text-muted-foreground">Показывает встроенный набор при пустой базе.</span>
             </span>
-            <input name="demoMode" type="checkbox" defaultChecked={pageData.demoMode} className="size-5 accent-primary" />
+            <input
+              name="demoMode"
+              type="checkbox"
+              checked={settings.demoMode}
+              onChange={(e) => void persist({ demoMode: e.target.checked })}
+              className="size-5 accent-primary"
+            />
           </label>
         </CardContent>
       </Card>
@@ -120,7 +169,12 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Риск-профиль</Label>
-            <select name="riskProfileCode" defaultValue={pageData.riskProfileCode} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <select
+              name="riskProfileCode"
+              value={settings.riskProfileCode}
+              onChange={(e) => void persist({ riskProfileCode: e.target.value as EditableSettings["riskProfileCode"] })}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
               {pageData.riskProfiles.map((profile) => (
                 <option key={profile.id} value={profile.code}>
                   {RISK_PROFILE_LABELS[profile.code]} — {profile.description}
@@ -133,7 +187,12 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           </div>
           <div className="space-y-2">
             <Label>Цель финансовой подушки</Label>
-            <select name="emergencyFundMonthsTarget" defaultValue={pageData.emergencyFundMonthsTarget} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <select
+              name="emergencyFundMonthsTarget"
+              value={String(settings.emergencyFundMonthsTarget)}
+              onChange={(e) => void persist({ emergencyFundMonthsTarget: Number(e.target.value) })}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
               <option value="3">3 месяца расходов</option>
               <option value="6">6 месяцев расходов</option>
               <option value="12">12 месяцев расходов</option>
@@ -171,7 +230,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                     name="theme"
                     value={value}
                     checked={selectedTheme === value}
-                    onChange={() => { setUserTheme(value); setTheme(value); }}
+                    onChange={() => void persist({ theme: value })}
                     className="sr-only"
                   />
                   <Icon className="size-5" />
@@ -199,7 +258,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                     name="density"
                     value={value}
                     checked={selectedDensity === value}
-                    onChange={() => { setUserDensity(value); applyDensity(value); }}
+                    onChange={() => void persist({ density: value })}
                     className="sr-only"
                   />
                   {label}
@@ -218,7 +277,12 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Тип операции по умолчанию</Label>
-            <select name="defaultTransactionType" defaultValue={pageData.defaultTransactionType} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <select
+              name="defaultTransactionType"
+              value={settings.defaultTransactionType}
+              onChange={(e) => void persist({ defaultTransactionType: e.target.value as EditableSettings["defaultTransactionType"] })}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
               <option value="EXPENSE">Расход</option>
               <option value="INCOME">Доход</option>
             </select>
@@ -228,11 +292,6 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           </div>
         </CardContent>
       </Card>
-
-      {/* Save button — full width */}
-      <div className="xl:col-span-2">
-        <Button type="submit" size="lg">Сохранить настройки</Button>
-      </div>
 
       {/* Card 5: About */}
       <Card>
@@ -293,6 +352,6 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           </Dialog>
         </CardContent>
       </Card>
-    </form>
+    </div>
   );
 }
