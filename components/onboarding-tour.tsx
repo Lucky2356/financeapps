@@ -1,8 +1,10 @@
 "use client";
 
-import { BarChart3, CalendarClock, CircleDollarSign, Command, PiggyBank, Wallet } from "lucide-react";
+import { BarChart3, CalendarClock, CircleDollarSign, Command, PiggyBank, Sparkles, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
+import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -13,7 +15,7 @@ const STEPS = [
     icon: CircleDollarSign,
     title: "Добро пожаловать в Финансовый помощник",
     description:
-      "Это краткое введение покажет, с чего начать. Все данные хранятся локально на вашем устройстве — без облака и без передачи третьим лицам."
+      "Все данные хранятся локально на вашем устройстве — без облака. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках."
   },
   {
     icon: Wallet,
@@ -56,6 +58,19 @@ const STEPS = [
 export function OnboardingTour() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
+  const [loadingSample, setLoadingSample] = useState(false);
+
+  async function loadSample() {
+    setLoadingSample(true);
+    try {
+      await apiClient.post("/sample", {});
+      markDone();
+      window.location.reload();
+    } catch (error) {
+      setLoadingSample(false);
+      toast.error(error instanceof Error ? error.message : "Не удалось загрузить пример");
+    }
+  }
 
   useEffect(() => {
     // localStorage is only available on the client, so this first-run check must
@@ -68,12 +83,16 @@ export function OnboardingTour() {
     }
   }, []);
 
-  function finish() {
+  function markDone() {
     try {
       localStorage.setItem(STORAGE_KEY, "1");
     } catch {
       /* ignore */
     }
+  }
+
+  function finish() {
+    markDone();
     setOpen(false);
   }
 
@@ -104,13 +123,23 @@ export function OnboardingTour() {
         <DialogFooter className="flex-row justify-between gap-2 sm:justify-between">
           <Button variant="ghost" onClick={finish}>Пропустить обучение</Button>
           <div className="flex gap-2">
-            {step > 0 ? (
-              <Button variant="outline" onClick={() => setStep((s) => s - 1)}>Назад</Button>
-            ) : null}
-            {isLast ? (
-              <Button onClick={finish}>Начать</Button>
+            {step === 0 ? (
+              <>
+                <Button variant="outline" onClick={() => setStep(1)} disabled={loadingSample}>Начать с нуля</Button>
+                <Button onClick={() => void loadSample()} disabled={loadingSample}>
+                  <Sparkles className="size-4" />
+                  {loadingSample ? "Загрузка…" : "Загрузить пример"}
+                </Button>
+              </>
             ) : (
-              <Button onClick={() => setStep((s) => s + 1)}>Далее</Button>
+              <>
+                <Button variant="outline" onClick={() => setStep((s) => s - 1)}>Назад</Button>
+                {isLast ? (
+                  <Button onClick={finish}>Начать</Button>
+                ) : (
+                  <Button onClick={() => setStep((s) => s + 1)}>Далее</Button>
+                )}
+              </>
             )}
           </div>
         </DialogFooter>

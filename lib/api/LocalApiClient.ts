@@ -31,6 +31,7 @@ import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthTrend } from "@/lib/net-worth";
+import { SAMPLE_ACCOUNTS, SAMPLE_BUDGETS, SAMPLE_CATEGORIES, SAMPLE_GOALS, SAMPLE_TRANSACTIONS, sampleDate, sampleDeadline } from "@/lib/sample-data";
 import type { AccountRow, CategoryRow, DashboardData, InvestmentData, TransactionRow } from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
 
@@ -418,6 +419,11 @@ export class LocalApiClient implements ApiClient {
     const state = await this.state();
     const { pathname } = normalizePath(path);
 
+    if (pathname === "/sample") {
+      const sample = this.buildSampleState();
+      await this.save(sample);
+      return { loaded: true } as TResponse;
+    }
     if (pathname === "/accounts") return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer") return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
     if (pathname === "/transactions") {
@@ -1156,6 +1162,50 @@ export class LocalApiClient implements ApiClient {
       risks: analysis.risks,
       education: analysis.education
     };
+  }
+
+  // Builds a fully-populated example state (accounts, categories, transactions,
+  // budgets, goals) from the shared sample dataset, so a new user can explore a
+  // realistic app in one click.
+  private buildSampleState(): LocalState {
+    const accounts = SAMPLE_ACCOUNTS.map((account) => ({ id: account.id, name: account.name, type: account.type, balance: account.balance, currency }));
+    const categories: CategoryOption[] = SAMPLE_CATEGORIES.map((category) => ({
+      id: category.id,
+      label: category.label,
+      kind: category.kind,
+      color: category.color,
+      ...(category.isEssential ? { isEssential: true } : {}),
+      ...(category.isSubscription ? { isSubscription: true } : {})
+    }));
+    const transactions = SAMPLE_TRANSACTIONS.map((tx, index) => {
+      const account = accounts.find((item) => item.id === tx.accountId)!;
+      const category = categories.find((item) => item.id === tx.categoryId)!;
+      return {
+        id: `sample-tx-${index}`,
+        amount: tx.amount,
+        type: tx.type,
+        date: sampleDate(tx.monthOffset, tx.day).toISOString(),
+        description: tx.description,
+        account: { id: account.id, label: account.name },
+        category: { id: category.id, label: category.label, color: category.color }
+      };
+    });
+    const goals = SAMPLE_GOALS.map((goal) =>
+      recomputeGoal({
+        id: goal.id,
+        title: goal.title,
+        targetAmount: goal.targetAmount,
+        currentAmount: goal.currentAmount,
+        deadline: sampleDeadline(goal.monthsToDeadline).toISOString()
+      })
+    );
+
+    const state: LocalState = { ...createInitialState(), accounts, categories, transactions, goals };
+    state.budgets = SAMPLE_BUDGETS.map((budget) => {
+      const category = categories.find((item) => item.id === budget.categoryId);
+      return category ? this.buildBudgetRow(state, category, budget.limitAmount) : null;
+    }).filter((row): row is NonNullable<typeof row> => row !== null);
+    return state;
   }
 
   private async dashboard(state: LocalState): Promise<DashboardData> {
