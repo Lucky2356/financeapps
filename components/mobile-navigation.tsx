@@ -2,44 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ArrowDownUp,
-  BarChart3,
-  CalendarClock,
-  Download,
-  Flag,
-  Gauge,
-  LineChart,
-  LayoutDashboard,
-  Menu,
-  Settings,
-  Tag,
-  TrendingUp,
-  WalletCards
-} from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
+import { MOBILE_PRIMARY, MOBILE_SECONDARY } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-const primaryItems = [
-  { href: "/", label: "Главная", icon: LayoutDashboard },
-  { href: "/transactions", label: "Операции", icon: ArrowDownUp },
-  { href: "/budgets", label: "Бюджеты", icon: Gauge },
-  { href: "/investments", label: "Рынок", icon: BarChart3 },
-  { href: "/settings", label: "Еще", icon: Menu }
-];
-
-const secondaryItems = [
-  { href: "/recurring", label: "Плановые", icon: CalendarClock },
-  { href: "/forecast", label: "Прогноз", icon: LineChart },
-  { href: "/accounts", label: "Счета", icon: WalletCards },
-  { href: "/categories", label: "Категории", icon: Tag },
-  { href: "/analytics", label: "Аналитика", icon: TrendingUp },
-  { href: "/goals", label: "Цели", icon: Flag },
-  { href: "/import", label: "Импорт", icon: Download },
-  { href: "/settings", label: "Настройки", icon: Settings }
-];
+const primaryItems = MOBILE_PRIMARY;
+const secondaryItems = MOBILE_SECONDARY;
 
 export function MobileTopBar() {
   const pathname = usePathname();

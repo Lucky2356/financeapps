@@ -2,64 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ArrowDownUp,
-  BarChart3,
-  CalendarClock,
-  CircleDollarSign,
-  Download,
-  Flag,
-  Gauge,
-  LineChart,
-  LayoutDashboard,
-  Search,
-  Settings,
-  Tag,
-  TrendingUp,
-  WalletCards
-} from "lucide-react";
+import { CircleDollarSign, Search } from "lucide-react";
 
 import { NotificationBell } from "@/components/notification-bell";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
+import { NAV_SECTIONS } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
-
-const navSections = [
-  {
-    label: null,
-    items: [{ href: "/", label: "Главная", icon: LayoutDashboard }]
-  },
-  {
-    label: "Учёт",
-    items: [
-      { href: "/transactions", label: "Операции", icon: ArrowDownUp },
-      { href: "/accounts", label: "Счета", icon: WalletCards },
-      { href: "/categories", label: "Категории", icon: Tag }
-    ]
-  },
-  {
-    label: "Планирование",
-    items: [
-      { href: "/budgets", label: "Бюджеты", icon: Gauge },
-      { href: "/goals", label: "Цели", icon: Flag },
-      { href: "/recurring", label: "Плановые", icon: CalendarClock },
-      { href: "/forecast", label: "Прогноз", icon: LineChart },
-      { href: "/analytics", label: "Аналитика", icon: TrendingUp }
-    ]
-  },
-  {
-    label: "Рынок",
-    items: [{ href: "/investments", label: "Инвестиции", icon: BarChart3 }]
-  },
-  {
-    label: "Прочее",
-    items: [
-      { href: "/import", label: "Импорт", icon: Download },
-      { href: "/settings", label: "Настройки", icon: Settings }
-    ]
-  }
-];
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -96,7 +46,7 @@ export function AppSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-3">
-        {navSections.map((section, si) => (
+        {NAV_SECTIONS.map((section, si) => (
           <div key={si} className={si > 0 ? "mt-4" : undefined}>
             {section.label ? (
               <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
