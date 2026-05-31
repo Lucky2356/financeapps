@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { AccountsPageData, BudgetsPageData, CategoriesPageData, RecurringTransactionsPageData, TransactionsPageData } from "@/lib/data";
+import type { AccountsPageData, BudgetsPageData, CategoriesPageData, RecurringTransactionsPageData, SettingsPageData, TransactionsPageData } from "@/lib/data";
 import type { InvestmentData } from "@/types/finance";
 
 function todayInput() {
@@ -103,6 +103,30 @@ describe("LocalApiClient", () => {
 
     const transactions = await client.get<TransactionsPageData>("/transactions");
     expect(transactions.transactions.some((t) => t.account.id === account.id && t.amount === 1200)).toBe(true);
+  });
+
+  it("applies a partial settings update without resetting other fields", async () => {
+    const client = createClient();
+    // Set several non-default settings first.
+    await client.put("/settings", {
+      riskProfileCode: "AGGRESSIVE",
+      emergencyFundMonthsTarget: "12",
+      demoMode: true,
+      defaultTransactionType: "INCOME",
+      density: "compact"
+    });
+
+    // Then save ONLY the theme (what the sidebar toggle does).
+    await client.put("/settings", { theme: "dark" });
+
+    const settings = await client.get<SettingsPageData>("/settings");
+    expect(settings.theme).toBe("dark");
+    // The single-field save must not clobber the rest.
+    expect(settings.riskProfileCode).toBe("AGGRESSIVE");
+    expect(settings.emergencyFundMonthsTarget).toBe(12);
+    expect(settings.demoMode).toBe(true);
+    expect(settings.defaultTransactionType).toBe("INCOME");
+    expect(settings.density).toBe("compact");
   });
 
   it("wipes everything to a blank state on storage clear", async () => {

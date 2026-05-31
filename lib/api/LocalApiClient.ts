@@ -829,10 +829,20 @@ export class LocalApiClient implements ApiClient {
   }
 
   private updateSettings(state: LocalState, body: unknown) {
+    // Partial update: only fields actually present in the payload are changed,
+    // so a single-field save (e.g. the sidebar theme toggle sending just
+    // { theme }) does not reset every other setting to its default.
+    const raw = (body ?? {}) as Record<string, unknown>;
     const input = toFormObject(body);
-    state.demoMode = input.demoMode === "true" || input.demoMode === "on";
-    state.riskProfileCode = (input.riskProfileCode as LocalState["riskProfileCode"]) || "MODERATE";
-    state.emergencyFundMonthsTarget = Number(input.emergencyFundMonthsTarget || 6);
+    if (raw.demoMode !== undefined) {
+      state.demoMode = raw.demoMode === true || raw.demoMode === "true" || raw.demoMode === "on";
+    }
+    if (input.riskProfileCode) {
+      state.riskProfileCode = input.riskProfileCode as LocalState["riskProfileCode"];
+    }
+    if (input.emergencyFundMonthsTarget !== undefined && input.emergencyFundMonthsTarget !== "") {
+      state.emergencyFundMonthsTarget = Number(input.emergencyFundMonthsTarget);
+    }
     if (input.theme && ["light", "dark", "system"].includes(input.theme)) {
       state.theme = input.theme as LocalState["theme"];
     }
