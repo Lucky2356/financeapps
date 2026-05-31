@@ -499,7 +499,9 @@ function buildDemoDashboard(): DashboardData {
     categoryExpenses: buildCategoryExpenses(transactions),
     monthlyCashflow: input.monthlyCashflow,
     recommendations: service.build(input),
-    health: service.healthScore(input)
+    health: service.healthScore(input),
+    netWorth: totalBalance,
+    netWorthTrend: []
   };
 }
 
@@ -561,7 +563,9 @@ function emptyDashboard(): DashboardData {
     categoryExpenses: [],
     monthlyCashflow: input.monthlyCashflow,
     recommendations: [],
-    health: service.healthScore(input)
+    health: service.healthScore(input),
+    netWorth: 0,
+    netWorthTrend: []
   };
 }
 
@@ -887,7 +891,11 @@ export async function getDashboardData(): Promise<DashboardData> {
       categoryExpenses: buildCategoryExpenses(finance.transactions),
       monthlyCashflow: input.monthlyCashflow,
       recommendations: service.build(input),
-      health: service.healthScore(input)
+      health: service.healthScore(input),
+      // Net-worth history is only persisted in desktop local mode; in web mode
+      // we surface the current value without a trend.
+      netWorth: totalBalance,
+      netWorthTrend: []
     };
   }, emptyDashboard);
 }

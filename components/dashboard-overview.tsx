@@ -2,6 +2,7 @@ import { Activity, PiggyBank, ShieldCheck, WalletCards } from "lucide-react";
 
 import { Progress } from "@/components/ui/progress";
 import type { DashboardData } from "@/types/finance";
+import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export function DashboardOverview({ data }: { data: DashboardData }) {
@@ -10,6 +11,13 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
   const savingsRate = data.metrics.find((metric) => metric.title === "Процент накоплений");
   const cushion = data.metrics.find((metric) => metric.title === "Финансовая подушка");
   const healthTone = data.health.score >= 75 ? "good" : data.health.score >= 50 ? "warning" : "critical";
+  // Net worth (accounts + investments) is the headline; the plain account
+  // balance and the other signals sit beneath it.
+  const signals = [
+    balance ? { ...balance, icon: WalletCards } : null,
+    freeCash ? { ...freeCash, icon: PiggyBank } : null,
+    savingsRate ? { ...savingsRate, icon: Activity } : cushion ? { ...cushion, icon: ShieldCheck } : null
+  ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
     <section className="overflow-hidden rounded-lg border shadow-soft">
@@ -17,15 +25,15 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         <div className="border-b bg-gradient-to-br from-primary/6 via-card to-card p-5 sm:p-6 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <WalletCards className="size-4 text-primary" />
-            Текущее состояние
+            Чистый капитал
           </div>
-          <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">{balance?.value ?? "0 ₽"}</p>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">{balance?.detail ?? "Баланс по активным счетам."}</p>
+          <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">{formatCurrency(data.netWorth, data.currency)}</p>
+          <p className="mt-2 max-w-xl text-sm text-muted-foreground">Счета и инвестиционный портфель.</p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {freeCash ? <Signal label={freeCash.title} value={freeCash.value} icon={PiggyBank} tone={freeCash.tone} /> : null}
-            {savingsRate ? <Signal label={savingsRate.title} value={savingsRate.value} icon={Activity} tone={savingsRate.tone} /> : null}
-            {cushion ? <Signal label={cushion.title} value={cushion.value} icon={ShieldCheck} tone={cushion.tone} /> : null}
+            {signals.slice(0, 3).map((signal) => (
+              <Signal key={signal.title} label={signal.title} value={signal.value} icon={signal.icon} tone={signal.tone} />
+            ))}
           </div>
         </div>
 
