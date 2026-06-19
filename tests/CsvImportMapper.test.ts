@@ -7,7 +7,9 @@ describe("CsvImportMapper", () => {
   const mapper = new CsvImportMapper();
 
   it("suggests Russian CSV columns and validates rows before import", () => {
-    const parsed = mapper.parse("Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-1200,Кофе,Рестораны,Дебетовая карта\nbad,0,Пусто,,");
+    const parsed = mapper.parse(
+      "Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-1200,Кофе,Рестораны,Дебетовая карта\nbad,0,Пусто,,"
+    );
     const mapping = mapper.suggestColumns(parsed.fields);
     const validation = mapper.validateRows(parsed.rows, mapping);
 
@@ -31,5 +33,21 @@ describe("CsvImportMapper", () => {
     expect(parsedDate?.getMonth()).toBe(4);
     expect(parsedDate?.getDate()).toBe(27);
     expect(parseImportedDate("bad date")).toBeNull();
+  });
+
+  it("applies bank presets before falling back to generic aliases", () => {
+    const fields = ["Дата платежа", "Сумма платежа", "Описание операции", "Категория", "Счёт"];
+    const mapping = mapper.applyPreset(fields, "tbank");
+
+    expect(mapping).toEqual({
+      dateColumn: "Дата платежа",
+      amountColumn: "Сумма платежа",
+      descriptionColumn: "Описание операции",
+      categoryColumn: "Категория",
+      accountColumn: "Счёт"
+    });
+    expect(mapper.presets().map((preset) => preset.id)).toEqual(
+      expect.arrayContaining(["sber", "tbank", "alfa", "vtb"])
+    );
   });
 });

@@ -1,14 +1,29 @@
 "use client";
 
-import { BarChart3, CalendarClock, CircleDollarSign, Command, PiggyBank, Sparkles, Wallet } from "lucide-react";
+import {
+  BarChart3,
+  CalendarClock,
+  CircleDollarSign,
+  Command,
+  Download,
+  PiggyBank,
+  Sparkles,
+  Wallet
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
-const STORAGE_KEY = "onboarding-v1-done";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 
 const STEPS = [
   {
@@ -42,8 +57,14 @@ const STEPS = [
       "Создавайте накопительные цели и пополняйте их со счёта. На главной видно прогресс финансовой подушки и свободный остаток, который можно сразу отложить на цель."
   },
   {
+    icon: Download,
+    title: "5. Импорт и backup",
+    description:
+      "На вкладке «Импорт» можно загрузить CSV из банка, выбрать пресет колонок и скачать резервную копию. Перед восстановлением мы покажем preview, чтобы случайно не заменить данные не тем файлом."
+  },
+  {
     icon: CalendarClock,
-    title: "5. Прогноз и инвестиции",
+    title: "6. Прогноз и инвестиции",
     description:
       "Добавляйте плановые платежи — «Прогноз» построит денежный поток и календарь на 90 дней. На «Инвестициях» можно подобрать бумаги под бюджет и риск-профиль."
   },
@@ -77,15 +98,25 @@ export function OnboardingTour() {
     // run in an effect rather than during render.
     try {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (!localStorage.getItem(STORAGE_KEY)) setOpen(true);
+      if (!localStorage.getItem(ONBOARDING_STORAGE_KEY)) setOpen(true);
     } catch {
       /* localStorage unavailable — skip onboarding */
     }
   }, []);
 
+  useEffect(() => {
+    function replayOnboarding() {
+      setStep(0);
+      setOpen(true);
+    }
+
+    window.addEventListener(ONBOARDING_REPLAY_EVENT, replayOnboarding);
+    return () => window.removeEventListener(ONBOARDING_REPLAY_EVENT, replayOnboarding);
+  }, []);
+
   function markDone() {
     try {
-      localStorage.setItem(STORAGE_KEY, "1");
+      localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
     } catch {
       /* ignore */
     }
@@ -101,8 +132,13 @@ export function OnboardingTour() {
   const isLast = step === STEPS.length - 1;
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!value) finish(); }}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) finish();
+      }}
+    >
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
             <Icon className="size-6" />
@@ -115,29 +151,66 @@ export function OnboardingTour() {
           {STEPS.map((_, index) => (
             <span
               key={index}
-              className={index === step ? "h-1.5 w-5 rounded-full bg-primary" : "h-1.5 w-1.5 rounded-full bg-muted-foreground/30"}
+              className={
+                index === step
+                  ? "h-1.5 w-5 rounded-full bg-primary"
+                  : "h-1.5 w-1.5 rounded-full bg-muted-foreground/30"
+              }
             />
           ))}
         </div>
 
-        <DialogFooter className="flex-row justify-between gap-2 sm:justify-between">
-          <Button variant="ghost" onClick={finish}>Пропустить обучение</Button>
-          <div className="flex gap-2">
+        <DialogFooter className="items-stretch gap-3 sm:items-center sm:justify-between">
+          <Button
+            className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
+            variant="ghost"
+            onClick={finish}
+          >
+            Пропустить обучение
+          </Button>
+          <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:w-auto">
             {step === 0 ? (
               <>
-                <Button variant="outline" onClick={() => setStep(1)} disabled={loadingSample}>Начать с нуля</Button>
-                <Button onClick={() => void loadSample()} disabled={loadingSample}>
+                <Button
+                  className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
+                  variant="outline"
+                  onClick={() => setStep(1)}
+                  disabled={loadingSample}
+                >
+                  Начать с нуля
+                </Button>
+                <Button
+                  className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
+                  onClick={() => void loadSample()}
+                  disabled={loadingSample}
+                >
                   <Sparkles className="size-4" />
                   {loadingSample ? "Загрузка…" : "Загрузить пример"}
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="outline" onClick={() => setStep((s) => s - 1)}>Назад</Button>
+                <Button
+                  className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
+                  variant="outline"
+                  onClick={() => setStep((s) => s - 1)}
+                >
+                  Назад
+                </Button>
                 {isLast ? (
-                  <Button onClick={finish}>Начать</Button>
+                  <Button
+                    className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
+                    onClick={finish}
+                  >
+                    Начать
+                  </Button>
                 ) : (
-                  <Button onClick={() => setStep((s) => s + 1)}>Далее</Button>
+                  <Button
+                    className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
+                    onClick={() => setStep((s) => s + 1)}
+                  >
+                    Далее
+                  </Button>
                 )}
               </>
             )}

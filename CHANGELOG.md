@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+- Backup safety improvements: local schema v2, last-backup reminder, restore preview before replacing data.
+- CSV import presets for Sber, T-Bank, Alfa-Bank, and VTB column layouts.
+- Analytics insights: savings-rate trend, month-over-month expense change, and short actionable notes.
+- Expanded MOEX watchlist universe with additional liquid Russian equities.
+- Coverage/smoke commands and build-mode tests for safer release checks.
+- Settings action to replay onboarding after the first launch.
+
+### Changed
+- Onboarding footer now adapts on narrow screens without buttons overflowing the dialog.
+- Finance hints now render in a body-level portal, stay inside the viewport, and are not clipped by cards.
+- Chart tooltips can escape chart bounds near edges instead of disappearing inside the plot area.
+- Web production builds now avoid request-only `connection()` hangs and skip live DB reads during build-time fallback generation.
+- Docker build target uses Node 24 and explicit standalone Next.js output settings.
+
 ## [1.0.0] — 2026-05-30
 
 ### Added

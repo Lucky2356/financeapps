@@ -18,4 +18,20 @@ describe("InfoHint", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByText("Пояснение термина")).not.toBeInTheDocument();
   });
+
+  it("renders the hint in a document body portal so cards cannot clip it", async () => {
+    const user = userEvent.setup();
+    render(
+      <div style={{ height: 24, overflow: "hidden", width: 24 }}>
+        <InfoHint text="Портальная подсказка" />
+      </div>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Пояснение" }));
+
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Портальная подсказка");
+    expect(tooltip.parentElement).toBe(document.body);
+    expect(tooltip).toHaveClass("fixed");
+  });
 });

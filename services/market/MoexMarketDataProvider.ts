@@ -6,22 +6,119 @@ import { MockMarketDataProvider } from "./MockMarketDataProvider";
 // Curated universe of liquid Russian blue chips. MOEX ISS provides live prices
 // and day change; sector/risk/comment are app-curated. (Yandex now trades as
 // YDEX on MOEX after the 2024 restructuring.)
-const TICKERS = ["SBER", "GAZP", "LKOH", "YDEX", "T", "VTBR", "MGNT", "NVTK", "ROSN", "MOEX"] as const;
+const TICKERS = [
+  "SBER",
+  "GAZP",
+  "LKOH",
+  "YDEX",
+  "T",
+  "VTBR",
+  "MGNT",
+  "NVTK",
+  "ROSN",
+  "MOEX",
+  "PLZL",
+  "PHOR",
+  "CHMF",
+  "SNGS",
+  "AFLT"
+] as const;
 
 type Ticker = (typeof TICKERS)[number];
 type StaticMeta = Pick<MarketSecurity, "sector" | "risk" | "comment"> & { name: string };
 
 const STATIC_META: Record<Ticker, StaticMeta> = {
-  SBER: { name: "Сбербанк", sector: "Финансы", risk: "MEDIUM", comment: "Крупная ликвидная бумага, чувствительна к ставкам и качеству кредитного портфеля." },
-  GAZP: { name: "Газпром", sector: "Энергетика", risk: "HIGH", comment: "Высокая зависимость от экспортной конъюнктуры, налоговой нагрузки и капзатрат." },
-  LKOH: { name: "Лукойл", sector: "Энергетика", risk: "MEDIUM", comment: "Нефтегазовый сектор, чувствителен к ценам на сырьё и валютному курсу." },
-  YDEX: { name: "Яндекс", sector: "Технологии", risk: "HIGH", comment: "Технологическая компания с повышенной волатильностью и регуляторными факторами." },
-  T: { name: "Т-Технологии", sector: "Финтех", risk: "HIGH", comment: "Финтех-эмитент с быстрым ростом и заметной чувствительностью к ожиданиям рынка." },
-  VTBR: { name: "ВТБ", sector: "Финансы", risk: "HIGH", comment: "Банковская бумага с высокой волатильностью и зависимостью от макрофакторов." },
-  MGNT: { name: "Магнит", sector: "Ритейл", risk: "MEDIUM", comment: "Защитный сектор, но маржинальность зависит от потребительского спроса и логистики." },
-  NVTK: { name: "Новатэк", sector: "Энергетика", risk: "MEDIUM", comment: "Газовый сектор, важны санкционные ограничения и инвестиционные проекты." },
-  ROSN: { name: "Роснефть", sector: "Энергетика", risk: "MEDIUM", comment: "Зависимость от нефтяных цен, налоговой политики и курса рубля." },
-  MOEX: { name: "Московская биржа", sector: "Финансовая инфраструктура", risk: "LOW", comment: "Инфраструктурная компания, динамика зависит от оборотов торгов и ставок." }
+  SBER: {
+    name: "Сбербанк",
+    sector: "Финансы",
+    risk: "MEDIUM",
+    comment: "Крупная ликвидная бумага, чувствительна к ставкам и качеству кредитного портфеля."
+  },
+  GAZP: {
+    name: "Газпром",
+    sector: "Энергетика",
+    risk: "HIGH",
+    comment: "Высокая зависимость от экспортной конъюнктуры, налоговой нагрузки и капзатрат."
+  },
+  LKOH: {
+    name: "Лукойл",
+    sector: "Энергетика",
+    risk: "MEDIUM",
+    comment: "Нефтегазовый сектор, чувствителен к ценам на сырьё и валютному курсу."
+  },
+  YDEX: {
+    name: "Яндекс",
+    sector: "Технологии",
+    risk: "HIGH",
+    comment: "Технологическая компания с повышенной волатильностью и регуляторными факторами."
+  },
+  T: {
+    name: "Т-Технологии",
+    sector: "Финтех",
+    risk: "HIGH",
+    comment: "Финтех-эмитент с быстрым ростом и заметной чувствительностью к ожиданиям рынка."
+  },
+  VTBR: {
+    name: "ВТБ",
+    sector: "Финансы",
+    risk: "HIGH",
+    comment: "Банковская бумага с высокой волатильностью и зависимостью от макрофакторов."
+  },
+  MGNT: {
+    name: "Магнит",
+    sector: "Ритейл",
+    risk: "MEDIUM",
+    comment: "Защитный сектор, но маржинальность зависит от потребительского спроса и логистики."
+  },
+  NVTK: {
+    name: "Новатэк",
+    sector: "Энергетика",
+    risk: "MEDIUM",
+    comment: "Газовый сектор, важны санкционные ограничения и инвестиционные проекты."
+  },
+  ROSN: {
+    name: "Роснефть",
+    sector: "Энергетика",
+    risk: "MEDIUM",
+    comment: "Зависимость от нефтяных цен, налоговой политики и курса рубля."
+  },
+  MOEX: {
+    name: "Московская биржа",
+    sector: "Финансовая инфраструктура",
+    risk: "LOW",
+    comment: "Инфраструктурная компания, динамика зависит от оборотов торгов и ставок."
+  },
+  PLZL: {
+    name: "Полюс",
+    sector: "Металлы и добыча",
+    risk: "MEDIUM",
+    comment: "Золотодобытчик, чувствителен к ценам на золото и валютному курсу."
+  },
+  PHOR: {
+    name: "ФосАгро",
+    sector: "Химия",
+    risk: "MEDIUM",
+    comment: "Производитель удобрений; важны экспортные рынки, цены на сырье и логистика."
+  },
+  CHMF: {
+    name: "Северсталь",
+    sector: "Металлы и добыча",
+    risk: "MEDIUM",
+    comment: "Металлургический сектор, зависит от спроса на сталь и сырьевых циклов."
+  },
+  SNGS: {
+    name: "Сургутнефтегаз",
+    sector: "Энергетика",
+    risk: "MEDIUM",
+    comment: "Нефтегазовая компания с заметной зависимостью от курса рубля и дивидендных ожиданий."
+  },
+  AFLT: {
+    name: "Аэрофлот",
+    sector: "Транспорт",
+    risk: "HIGH",
+    comment:
+      "Авиаперевозчик с высокой чувствительностью к топливу, пассажиропотоку и регуляторным факторам."
+  }
 };
 
 const SECURITIES_URL =
@@ -51,7 +148,9 @@ function parseMoexRows(table: { columns: string[]; data: (string | number | null
   const map = new Map<string, Record<string, string | number | null>>();
   for (const row of table.data) {
     const obj: Record<string, string | number | null> = {};
-    table.columns.forEach((col, i) => { obj[col] = row[i] ?? null; });
+    table.columns.forEach((col, i) => {
+      obj[col] = row[i] ?? null;
+    });
     const secid = String(obj["SECID"] ?? "");
     if (secid) map.set(secid, obj);
   }
@@ -110,7 +209,11 @@ export class MoexMarketDataProvider implements MarketDataService {
 
   async getHistoricalPrices(ticker: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
     try {
-      const prices = await this.fetchHistory(ticker.toUpperCase(), format(from, "yyyy-MM-dd"), format(to, "yyyy-MM-dd"));
+      const prices = await this.fetchHistory(
+        ticker.toUpperCase(),
+        format(from, "yyyy-MM-dd"),
+        format(to, "yyyy-MM-dd")
+      );
       if (prices.length > 0) return prices;
       return this.fallback.getHistoricalPrices(ticker, from, to);
     } catch {
@@ -148,7 +251,8 @@ export class MoexMarketDataProvider implements MarketDataService {
       if (!md) continue;
       const last = md["LAST"];
       const market = md["MARKETPRICE"];
-      const price = typeof last === "number" && last > 0 ? last : typeof market === "number" ? market : 0;
+      const price =
+        typeof last === "number" && last > 0 ? last : typeof market === "number" ? market : 0;
       const pct = md["LASTTOPREVPRICE"]; // day change in %
       rows.set(ticker, {
         price,
@@ -163,7 +267,8 @@ export class MoexMarketDataProvider implements MarketDataService {
   // 30-day % change per ticker, derived from history (parallel), cached for an
   // hour because it barely moves intraday.
   private async getChange30dMap(): Promise<Map<string, number>> {
-    if (change30dCache && Date.now() - change30dCache.ts < CHANGE30D_TTL_MS) return change30dCache.map;
+    if (change30dCache && Date.now() - change30dCache.ts < CHANGE30D_TTL_MS)
+      return change30dCache.map;
 
     const from = format(subDays(new Date(), 35), "yyyy-MM-dd");
     const till = format(new Date(), "yyyy-MM-dd");
@@ -176,7 +281,8 @@ export class MoexMarketDataProvider implements MarketDataService {
           if (history.length >= 2) {
             const oldest = history[0].price;
             const latest = history[history.length - 1].price;
-            if (oldest > 0) map.set(ticker, Number((((latest - oldest) / oldest) * 100).toFixed(2)));
+            if (oldest > 0)
+              map.set(ticker, Number((((latest - oldest) / oldest) * 100).toFixed(2)));
           }
         } catch {
           /* leave this ticker without a 30d value */
@@ -188,10 +294,16 @@ export class MoexMarketDataProvider implements MarketDataService {
     return map;
   }
 
-  private async fetchHistory(ticker: string, from: string, till: string): Promise<HistoricalPrice[]> {
+  private async fetchHistory(
+    ticker: string,
+    from: string,
+    till: string
+  ): Promise<HistoricalPrice[]> {
     const response = await fetchWithTimeout(historyUrl(ticker, from, till));
     if (!response.ok) throw new Error(`MOEX history returned HTTP ${response.status}`);
-    const json = (await response.json()) as { history: { columns: string[]; data: (string | number | null)[][] } };
+    const json = (await response.json()) as {
+      history: { columns: string[]; data: (string | number | null)[][] };
+    };
 
     const colDate = json.history.columns.indexOf("TRADEDATE");
     const colClose = json.history.columns.indexOf("CLOSE");

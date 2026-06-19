@@ -14,6 +14,8 @@
 npm run typecheck
 npm run lint
 npm run test
+npm run test:smoke
+npm run test:coverage
 npm run build
 npm run build:static
 npm audit

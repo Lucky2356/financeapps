@@ -2,7 +2,12 @@ import { addDays, startOfDay, subDays } from "date-fns";
 
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 
-const securities: Array<Omit<MarketSecurity, "price" | "changeDay" | "change30d"> & { basePrice: number; volatility: number }> = [
+const securities: Array<
+  Omit<MarketSecurity, "price" | "changeDay" | "change30d"> & {
+    basePrice: number;
+    volatility: number;
+  }
+> = [
   {
     ticker: "SBER",
     name: "Сбербанк",
@@ -19,7 +24,8 @@ const securities: Array<Omit<MarketSecurity, "price" | "changeDay" | "change30d"
     risk: "HIGH",
     basePrice: 138,
     volatility: 3.6,
-    comment: "Высокая зависимость от экспортной конъюнктуры, налоговой нагрузки и капитальных затрат."
+    comment:
+      "Высокая зависимость от экспортной конъюнктуры, налоговой нагрузки и капитальных затрат."
   },
   {
     ticker: "LKOH",
@@ -92,10 +98,61 @@ const securities: Array<Omit<MarketSecurity, "price" | "changeDay" | "change30d"
     basePrice: 228,
     volatility: 1.8,
     comment: "Инфраструктурная компания, динамика зависит от оборотов торгов и ставок."
+  },
+  {
+    ticker: "PLZL",
+    name: "Полюс",
+    sector: "Металлы и добыча",
+    risk: "MEDIUM",
+    basePrice: 15200,
+    volatility: 2.7,
+    comment: "Золотодобытчик, чувствителен к ценам на золото и валютному курсу."
+  },
+  {
+    ticker: "PHOR",
+    name: "ФосАгро",
+    sector: "Химия",
+    risk: "MEDIUM",
+    basePrice: 6350,
+    volatility: 2.6,
+    comment: "Производитель удобрений; важны экспортные рынки, цены на сырье и логистика."
+  },
+  {
+    ticker: "CHMF",
+    name: "Северсталь",
+    sector: "Металлы и добыча",
+    risk: "MEDIUM",
+    basePrice: 1780,
+    volatility: 2.9,
+    comment: "Металлургический сектор, зависит от спроса на сталь и сырьевых циклов."
+  },
+  {
+    ticker: "SNGS",
+    name: "Сургутнефтегаз",
+    sector: "Энергетика",
+    risk: "MEDIUM",
+    basePrice: 32,
+    volatility: 3.1,
+    comment: "Нефтегазовая компания с заметной зависимостью от курса рубля и дивидендных ожиданий."
+  },
+  {
+    ticker: "AFLT",
+    name: "Аэрофлот",
+    sector: "Транспорт",
+    risk: "HIGH",
+    basePrice: 58,
+    volatility: 4.8,
+    comment:
+      "Авиаперевозчик с высокой чувствительностью к топливу, пассажиропотоку и регуляторным факторам."
   }
 ];
 
-function priceForSecurity(basePrice: number, volatility: number, dayIndex: number, securityIndex: number) {
+function priceForSecurity(
+  basePrice: number,
+  volatility: number,
+  dayIndex: number,
+  securityIndex: number
+) {
   const wave =
     Math.sin((dayIndex + securityIndex) * 0.42) * volatility +
     Math.cos(dayIndex * 0.19 + securityIndex) * (volatility / 2);
@@ -112,9 +169,24 @@ export class MockMarketDataProvider implements MarketDataService {
     const latestDay = 44 + drift;
 
     return securities.map((security, securityIndex) => {
-      const latest = priceForSecurity(security.basePrice, security.volatility, latestDay, securityIndex);
-      const previous = priceForSecurity(security.basePrice, security.volatility, latestDay - 1, securityIndex);
-      const thirtyAgo = priceForSecurity(security.basePrice, security.volatility, latestDay - 30, securityIndex);
+      const latest = priceForSecurity(
+        security.basePrice,
+        security.volatility,
+        latestDay,
+        securityIndex
+      );
+      const previous = priceForSecurity(
+        security.basePrice,
+        security.volatility,
+        latestDay - 1,
+        securityIndex
+      );
+      const thirtyAgo = priceForSecurity(
+        security.basePrice,
+        security.volatility,
+        latestDay - 30,
+        securityIndex
+      );
 
       return {
         ticker: security.ticker,
@@ -136,7 +208,9 @@ export class MockMarketDataProvider implements MarketDataService {
   }
 
   async getHistoricalPrices(ticker: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
-    const securityIndex = securities.findIndex((security) => security.ticker === ticker.toUpperCase());
+    const securityIndex = securities.findIndex(
+      (security) => security.ticker === ticker.toUpperCase()
+    );
     if (securityIndex === -1) return [];
 
     const security = securities[securityIndex];

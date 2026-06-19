@@ -1,6 +1,16 @@
 "use client";
 
-import { Check, Keyboard, Loader2, Monitor, Moon, Sparkles, Sun, Trash2 } from "lucide-react";
+import {
+  Check,
+  GraduationCap,
+  Keyboard,
+  Loader2,
+  Monitor,
+  Moon,
+  Sparkles,
+  Sun,
+  Trash2
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +19,7 @@ import { apiClient } from "@/lib/api/client";
 import { applyDensity } from "@/components/app-settings-sync";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
+import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
@@ -20,7 +31,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -30,7 +41,7 @@ const shortcuts = [
   { keys: "Alt+T", label: "Перейти к операциям" },
   { keys: "Alt+D", label: "Перейти на главную" },
   { keys: "Alt+A", label: "Перейти к аналитике" },
-  { keys: "?", label: "Показать эту справку" },
+  { keys: "?", label: "Показать эту справку" }
 ];
 
 type EditableSettings = {
@@ -49,7 +60,7 @@ function toEditable(data: SettingsPageData): EditableSettings {
     emergencyFundMonthsTarget: data.emergencyFundMonthsTarget,
     theme: data.theme ?? "system",
     density: data.density ?? "comfortable",
-    defaultTransactionType: data.defaultTransactionType,
+    defaultTransactionType: data.defaultTransactionType
   };
 }
 
@@ -87,7 +98,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         emergencyFundMonthsTarget: String(next.emergencyFundMonthsTarget),
         theme: next.theme,
         density: next.density,
-        defaultTransactionType: next.defaultTransactionType,
+        defaultTransactionType: next.defaultTransactionType
       });
       await reload();
       setStatus("saved");
@@ -128,6 +139,16 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     }
   }
 
+  function replayOnboarding() {
+    try {
+      localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+      window.dispatchEvent(new Event(ONBOARDING_REPLAY_EVENT));
+      toast.success("Обучение открыто.");
+    } catch {
+      toast.error("Не удалось открыть обучение");
+    }
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {/* Auto-save status — changes apply immediately, no Save button */}
@@ -155,15 +176,24 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Валюта</Label>
-            <select name="currency" defaultValue="RUB" disabled className="h-10 w-full rounded-md border bg-background px-3 text-sm opacity-60">
+            <select
+              name="currency"
+              defaultValue="RUB"
+              disabled
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm opacity-60"
+            >
               <option value="RUB">RUB — Российский рубль</option>
             </select>
-            <p className="text-xs text-muted-foreground">Поддержка других валют запланирована в следующих версиях.</p>
+            <p className="text-xs text-muted-foreground">
+              Поддержка других валют запланирована в следующих версиях.
+            </p>
           </div>
           <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
             <span>
               <span className="block text-sm font-medium">Режим демо-данных</span>
-              <span className="block text-xs text-muted-foreground">Показывает встроенный набор при пустой базе.</span>
+              <span className="block text-xs text-muted-foreground">
+                Показывает встроенный набор при пустой базе.
+              </span>
             </span>
             <input
               name="demoMode"
@@ -178,13 +208,20 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             <select
               name="defaultTransactionType"
               value={settings.defaultTransactionType}
-              onChange={(e) => void persist({ defaultTransactionType: e.target.value as EditableSettings["defaultTransactionType"] })}
+              onChange={(e) =>
+                void persist({
+                  defaultTransactionType: e.target
+                    .value as EditableSettings["defaultTransactionType"]
+                })
+              }
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
               <option value="EXPENSE">Расход</option>
               <option value="INCOME">Доход</option>
             </select>
-            <p className="text-xs text-muted-foreground">Выбран при открытии формы быстрого добавления.</p>
+            <p className="text-xs text-muted-foreground">
+              Выбран при открытии формы быстрого добавления.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -196,11 +233,17 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label className="inline-flex items-center gap-1">Риск-профиль <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} /></Label>
+            <Label className="inline-flex items-center gap-1">
+              Риск-профиль <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
+            </Label>
             <select
               name="riskProfileCode"
               value={settings.riskProfileCode}
-              onChange={(e) => void persist({ riskProfileCode: e.target.value as EditableSettings["riskProfileCode"] })}
+              onChange={(e) =>
+                void persist({
+                  riskProfileCode: e.target.value as EditableSettings["riskProfileCode"]
+                })
+              }
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
               {pageData.riskProfiles.map((profile) => (
@@ -214,7 +257,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             </p>
           </div>
           <div className="space-y-2">
-            <Label className="inline-flex items-center gap-1">Цель финансовой подушки <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} /></Label>
+            <Label className="inline-flex items-center gap-1">
+              Цель финансовой подушки <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
+            </Label>
             <select
               name="emergencyFundMonthsTarget"
               value={String(settings.emergencyFundMonthsTarget)}
@@ -241,16 +286,19 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           <div className="space-y-2">
             <Label>Тема оформления</Label>
             <div className="grid grid-cols-3 gap-2">
-              {([
-                { value: "light", label: "Светлая", icon: Sun },
-                { value: "system", label: "Системная", icon: Monitor },
-                { value: "dark", label: "Тёмная", icon: Moon },
-              ] as const).map(({ value, label, icon: Icon }) => (
+              {(
+                [
+                  { value: "light", label: "Светлая", icon: Sun },
+                  { value: "system", label: "Системная", icon: Monitor },
+                  { value: "dark", label: "Тёмная", icon: Moon }
+                ] as const
+              ).map(({ value, label, icon: Icon }) => (
                 <label
                   key={value}
                   className={cn(
                     "flex cursor-pointer flex-col items-center gap-2 rounded-lg border p-3 text-center text-sm transition-colors hover:bg-muted/40",
-                    selectedTheme === value && "border-primary bg-primary/8 font-medium text-primary"
+                    selectedTheme === value &&
+                      "border-primary bg-primary/8 font-medium text-primary"
                   )}
                 >
                   <input
@@ -270,15 +318,18 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           <div className="space-y-2">
             <Label>Плотность интерфейса</Label>
             <div className="grid grid-cols-2 gap-2">
-              {([
-                { value: "comfortable", label: "Комфортная" },
-                { value: "compact", label: "Компактная" },
-              ] as const).map(({ value, label }) => (
+              {(
+                [
+                  { value: "comfortable", label: "Комфортная" },
+                  { value: "compact", label: "Компактная" }
+                ] as const
+              ).map(({ value, label }) => (
                 <label
                   key={value}
                   className={cn(
                     "flex cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
-                    selectedDensity === value && "border-primary bg-primary/8 font-medium text-primary"
+                    selectedDensity === value &&
+                      "border-primary bg-primary/8 font-medium text-primary"
                   )}
                 >
                   <input
@@ -308,12 +359,24 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         <CardContent>
           <div className="grid gap-2">
             {shortcuts.map((s) => (
-              <div key={s.keys} className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2">
+              <div
+                key={s.keys}
+                className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2"
+              >
                 <span className="text-sm text-muted-foreground">{s.label}</span>
                 <kbd className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{s.keys}</kbd>
               </div>
             ))}
           </div>
+          <Button
+            variant="outline"
+            type="button"
+            className="mt-4 w-full"
+            onClick={replayOnboarding}
+          >
+            <GraduationCap className="size-4" />
+            Показать обучение снова
+          </Button>
           <p className="mt-3 text-center text-xs text-muted-foreground">
             Финансовый помощник&nbsp;·&nbsp;версия 1.0.0
           </p>
@@ -327,9 +390,16 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы посмотреть, как всё работает. Текущие данные при этом будут заменены.
+            Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы
+            посмотреть, как всё работает. Текущие данные при этом будут заменены.
           </p>
-          <Button variant="outline" type="button" className="w-full" onClick={loadSampleData} disabled={loadingSample}>
+          <Button
+            variant="outline"
+            type="button"
+            className="w-full"
+            onClick={loadSampleData}
+            disabled={loadingSample}
+          >
             <Sparkles className="size-4" />
             {loadingSample ? "Загрузка…" : "Загрузить демо-данные"}
           </Button>
@@ -347,8 +417,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               <DialogHeader>
                 <DialogTitle>Очистить все данные?</DialogTitle>
                 <DialogDescription>
-                  Все ваши операции, счета, цели, бюджеты, плановые платежи, портфель и настройки будут безвозвратно удалены.
-                  Резервную копию можно сохранить на странице Импорт.
+                  Все ваши операции, счета, цели, бюджеты, плановые платежи, портфель и настройки
+                  будут безвозвратно удалены. Резервную копию можно сохранить на странице Импорт.
                 </DialogDescription>
               </DialogHeader>
               <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">

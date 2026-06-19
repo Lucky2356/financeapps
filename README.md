@@ -155,6 +155,8 @@ docs/                 # инструкции по релизу и десктоп
 | `npm run typecheck` | Проверка типов (`tsc --noEmit`) |
 | `npm run lint` | ESLint (0 предупреждений) |
 | `npm run test` | Модульные тесты (Vitest) |
+| `npm run test:coverage` | Модульные тесты с отчетом покрытия |
+| `npm run test:smoke` | Desktop local smoke-сценарий нового пользователя |
 | `npm run tauri:dev` / `tauri:build` | Десктоп: запуск / сборка |
 | `npm run db:migrate` / `db:seed` / `db:studio` | Prisma: миграции / сиды / GUI |
 | `npm run docker:db:up` / `docker:db:down` | Локальный PostgreSQL в Docker |

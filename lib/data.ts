@@ -2,8 +2,8 @@ import type { Prisma, RecurrenceFrequency, RiskProfileCode, TransactionType } fr
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
 
-
 import { ACCOUNT_TYPE_LABELS, RISK_PROFILE_LABELS } from "@/lib/constants";
+import { shouldUseBuildFallbackData } from "@/lib/build-mode";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
@@ -15,6 +15,7 @@ import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
+import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 import type {
   AccountRow,
@@ -126,6 +127,8 @@ export type ImportPageData = {
   source: DataSource;
   accounts: AccountRow[];
   categories: CategoryOption[];
+  lastBackupAt?: string | null;
+  backupReminderDue?: boolean;
 };
 
 export type CategoriesPageData = {
@@ -136,13 +139,28 @@ export type CategoriesPageData = {
 export type AnalyticsData = {
   source: DataSource;
   currency: string;
-  monthlyCashflow: Array<{ month: string; income: number; expense: number; savings: number; savingsRate: number }>;
-  topExpenseCategories: Array<{ categoryId: string; category: string; color: string; total: number; share: number }>;
+  monthlyCashflow: Array<{
+    month: string;
+    income: number;
+    expense: number;
+    savings: number;
+    savingsRate: number;
+  }>;
+  topExpenseCategories: Array<{
+    categoryId: string;
+    category: string;
+    color: string;
+    total: number;
+    share: number;
+  }>;
   avgMonthlyIncome: number;
   avgMonthlyExpense: number;
   avgSavingsRate: number;
   bestMonth: string;
   worstMonth: string;
+  expenseChangePct: number;
+  savingsRateTrend: "up" | "down" | "flat";
+  insights: RecommendationView[];
 };
 
 type DemoTransaction = TransactionRow & {
@@ -152,9 +170,27 @@ type TransactionFilters = ReturnType<typeof transactionFilterSchema.parse>;
 
 const demoAccounts: AccountRow[] = [
   { id: "account-cash", name: "Наличные", type: "CASH", balance: 32000, currency: "RUB" },
-  { id: "account-card", name: "Дебетовая карта", type: "DEBIT_CARD", balance: 184500, currency: "RUB" },
-  { id: "account-savings", name: "Накопительный счет", type: "SAVINGS", balance: 280000, currency: "RUB" },
-  { id: "account-brokerage", name: "Брокерский счет", type: "BROKERAGE", balance: 420000, currency: "RUB" }
+  {
+    id: "account-card",
+    name: "Дебетовая карта",
+    type: "DEBIT_CARD",
+    balance: 184500,
+    currency: "RUB"
+  },
+  {
+    id: "account-savings",
+    name: "Накопительный счет",
+    type: "SAVINGS",
+    balance: 280000,
+    currency: "RUB"
+  },
+  {
+    id: "account-brokerage",
+    name: "Брокерский счет",
+    type: "BROKERAGE",
+    balance: 420000,
+    currency: "RUB"
+  }
 ];
 
 const demoCategories: CategoryOption[] = [
@@ -163,7 +199,13 @@ const demoCategories: CategoryOption[] = [
   { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#f97316", isEssential: true },
   { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#2563eb", isEssential: true },
   { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#7c3aed", isEssential: true },
-  { id: "cat-subscriptions", label: "Подписки", kind: "EXPENSE", color: "#db2777", isSubscription: true },
+  {
+    id: "cat-subscriptions",
+    label: "Подписки",
+    kind: "EXPENSE",
+    color: "#db2777",
+    isSubscription: true
+  },
   { id: "cat-entertainment", label: "Развлечения", kind: "EXPENSE", color: "#eab308" },
   { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#dc2626", isEssential: true },
   { id: "cat-education", label: "Образование", kind: "EXPENSE", color: "#0891b2" },
@@ -275,26 +317,28 @@ function buildDemoRecurringTransactions(): RecurringTransactionRow[] {
   ] as const;
 
   return service.sortUpcoming(
-    rows.map(([monthOffset, day, amount, type, frequency, categoryId, accountId, description], index) => {
-      const category = demoCategories.find((item) => item.id === categoryId)!;
-      const account = demoAccounts.find((item) => item.id === accountId)!;
-      const nextDate = demoDate(monthOffset, day);
-      const status = service.getStatus({ nextDate, frequency, isActive: true });
+    rows.map(
+      ([monthOffset, day, amount, type, frequency, categoryId, accountId, description], index) => {
+        const category = demoCategories.find((item) => item.id === categoryId)!;
+        const account = demoAccounts.find((item) => item.id === accountId)!;
+        const nextDate = demoDate(monthOffset, day);
+        const status = service.getStatus({ nextDate, frequency, isActive: true });
 
-      return {
-        id: `demo-recurring-${index}`,
-        amount,
-        type,
-        frequency,
-        nextDate: nextDate.toISOString(),
-        description,
-        isActive: true,
-        daysUntilNext: status.daysUntilNext,
-        isDue: status.isDue,
-        account: { id: account.id, label: account.name },
-        category: { id: category.id, label: category.label, color: category.color }
-      };
-    })
+        return {
+          id: `demo-recurring-${index}`,
+          amount,
+          type,
+          frequency,
+          nextDate: nextDate.toISOString(),
+          description,
+          isActive: true,
+          daysUntilNext: status.daysUntilNext,
+          isDue: status.isDue,
+          account: { id: account.id, label: account.name },
+          category: { id: category.id, label: category.label, color: category.color }
+        };
+      }
+    )
   );
 }
 
@@ -320,7 +364,9 @@ function buildMonthlyCashflow(transactions: TransactionRow[]): MonthlyCashflowDa
     return {
       month: format(month, "LLL", { locale: ru }),
       income: rows.filter((row) => row.type === "INCOME").reduce((sum, row) => sum + row.amount, 0),
-      expense: rows.filter((row) => row.type === "EXPENSE").reduce((sum, row) => sum + row.amount, 0)
+      expense: rows
+        .filter((row) => row.type === "EXPENSE")
+        .reduce((sum, row) => sum + row.amount, 0)
     };
   });
 }
@@ -359,7 +405,11 @@ function buildSectorStructure(portfolio: PortfolioRow[]): ChartDatum[] {
     .sort((left, right) => right.value - left.value);
 }
 
-function buildBudgetRows(transactions: TransactionRow[], categories = demoCategories, targetMonthDate?: Date): BudgetRow[] {
+function buildBudgetRows(
+  transactions: TransactionRow[],
+  categories = demoCategories,
+  targetMonthDate?: Date
+): BudgetRow[] {
   const monthDate = targetMonthDate ?? new Date();
   const start = startOfMonth(monthDate);
   const end = endOfMonth(monthDate);
@@ -369,7 +419,12 @@ function buildBudgetRows(transactions: TransactionRow[], categories = demoCatego
       const spent = transactions
         .filter((transaction) => {
           const date = new Date(transaction.date);
-          return transaction.category.id === category.id && transaction.type === "EXPENSE" && date >= start && date <= end;
+          return (
+            transaction.category.id === category.id &&
+            transaction.type === "EXPENSE" &&
+            date >= start &&
+            date <= end
+          );
         })
         .reduce((sum, row) => sum + row.amount, 0);
       const limitAmount = budgetLimits.get(category.id) ?? 0;
@@ -411,12 +466,19 @@ function buildDemoGoals(): GoalRow[] {
   });
 }
 
-function buildFinanceInput(transactions: TransactionRow[], accounts: AccountRow[], goals: GoalRow[]) {
+function buildFinanceInput(
+  transactions: TransactionRow[],
+  accounts: AccountRow[],
+  goals: GoalRow[]
+) {
   const monthlyCashflow = buildMonthlyCashflow(transactions);
   const currentMonth = monthlyCashflow[monthlyCashflow.length - 1];
   const freeCashflow = currentMonth.income - currentMonth.expense;
-  const averageExpense = monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / monthlyCashflow.length;
-  const emergencyFund = accounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
+  const averageExpense =
+    monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / monthlyCashflow.length;
+  const emergencyFund = accounts
+    .filter((account) => account.type === "SAVINGS")
+    .reduce((sum, account) => sum + account.balance, 0);
   const emergencyFundMonths = averageExpense > 0 ? emergencyFund / averageExpense : 0;
   const currentExpenseRows = transactions.filter((transaction) => {
     const { start, end } = currentMonthRange();
@@ -424,10 +486,17 @@ function buildFinanceInput(transactions: TransactionRow[], accounts: AccountRow[
     return transaction.type === "EXPENSE" && date >= start && date <= end;
   });
   const essentialExpense = currentExpenseRows
-    .filter((transaction) => demoCategories.find((category) => category.id === transaction.category.id)?.isEssential)
+    .filter(
+      (transaction) =>
+        demoCategories.find((category) => category.id === transaction.category.id)?.isEssential
+    )
     .reduce((sum, row) => sum + row.amount, 0);
   const softExpense = currentExpenseRows
-    .filter((transaction) => ["cat-subscriptions", "cat-entertainment", "cat-restaurants"].includes(transaction.category.id))
+    .filter((transaction) =>
+      ["cat-subscriptions", "cat-entertainment", "cat-restaurants"].includes(
+        transaction.category.id
+      )
+    )
     .reduce((sum, row) => sum + row.amount, 0);
   const budgets = buildBudgetRows(transactions);
 
@@ -437,7 +506,8 @@ function buildFinanceInput(transactions: TransactionRow[], accounts: AccountRow[
       limitAmount: budget.limitAmount,
       spent: budget.spent,
       isExceeded: budget.isExceeded,
-      isSubscription: demoCategories.find((category) => category.id === budget.categoryId)?.isSubscription
+      isSubscription: demoCategories.find((category) => category.id === budget.categoryId)
+        ?.isSubscription
     })),
     monthlyCashflow,
     currentMonthIncome: currentMonth.income,
@@ -446,8 +516,10 @@ function buildFinanceInput(transactions: TransactionRow[], accounts: AccountRow[
     savingsRate: currentMonth.income > 0 ? percent(freeCashflow, currentMonth.income) : 0,
     emergencyFundMonths,
     emergencyFundTargetMonths: 6,
-    essentialExpenseShare: currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
-    subscriptionAndEntertainmentShare: currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
+    essentialExpenseShare:
+      currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
+    subscriptionAndEntertainmentShare:
+      currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
     goals: goals.map((goal) => ({
       title: goal.title,
       progress: goal.progress,
@@ -456,7 +528,10 @@ function buildFinanceInput(transactions: TransactionRow[], accounts: AccountRow[
   };
 }
 
-function buildTrend(current: number, previous: number): { value: number; label: string } | undefined {
+function buildTrend(
+  current: number,
+  previous: number
+): { value: number; label: string } | undefined {
   if (previous === 0) return undefined;
   const diff = percent(current - previous, previous);
   return { value: diff, label: "vs прошлый мес." };
@@ -475,7 +550,11 @@ function buildDemoDashboard(): DashboardData {
     source: "demo-fallback",
     currency: "RUB",
     metrics: [
-      { title: "Общий баланс", value: formatCurrency(totalBalance), detail: "Все счета и брокерский счет" },
+      {
+        title: "Общий баланс",
+        value: formatCurrency(totalBalance),
+        detail: "Все счета и брокерский счет"
+      },
       {
         title: "Доходы за месяц",
         value: formatCurrency(input.currentMonthIncome),
@@ -497,8 +576,16 @@ function buildDemoDashboard(): DashboardData {
         tone: input.freeCashflow >= 0 ? "success" : "danger",
         trend: buildTrend(input.freeCashflow, (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0))
       },
-      { title: "Процент накоплений", value: `${input.savingsRate.toFixed(1)}%`, detail: "Доля свободного остатка" },
-      { title: "Финансовая подушка", value: `${input.emergencyFundMonths.toFixed(1)} мес.`, detail: "Резерв к средним расходам" }
+      {
+        title: "Процент накоплений",
+        value: `${input.savingsRate.toFixed(1)}%`,
+        detail: "Доля свободного остатка"
+      },
+      {
+        title: "Финансовая подушка",
+        value: `${input.emergencyFundMonths.toFixed(1)} мес.`,
+        detail: "Резерв к средним расходам"
+      }
     ],
     categoryExpenses: buildCategoryExpenses(transactions),
     monthlyCashflow: input.monthlyCashflow,
@@ -507,8 +594,12 @@ function buildDemoDashboard(): DashboardData {
     netWorth: totalBalance,
     netWorthTrend: buildNetWorthTrend({ currentNetWorth: totalBalance, transactions }),
     emergencyFund: buildEmergencyFund({
-      savingsBalance: demoAccounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0),
-      averageMonthlyExpense: input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(input.monthlyCashflow.length, 1),
+      savingsBalance: demoAccounts
+        .filter((account) => account.type === "SAVINGS")
+        .reduce((sum, account) => sum + account.balance, 0),
+      averageMonthlyExpense:
+        input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
+        Math.max(input.monthlyCashflow.length, 1),
       targetMonths: 6
     })
   };
@@ -516,12 +607,11 @@ function buildDemoDashboard(): DashboardData {
 
 function normalizeSearchParams(searchParams: Record<string, string | string[] | undefined>) {
   return Object.fromEntries(
-    Object.entries(searchParams).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+    Object.entries(searchParams).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? value[0] : value
+    ])
   );
-}
-
-function isStaticDataBuild() {
-  return process.env.NEXT_OUTPUT === "export";
 }
 
 async function getDefaultUser() {
@@ -541,7 +631,7 @@ async function safeData<T>(
   // Desktop/mobile static export: the client LocalApiClient is the source of
   // truth, so the baked-in server data must be EMPTY (not demo) to avoid
   // "phantom" data and account-id mismatches in forms.
-  if (isStaticDataBuild()) return (staticFallback ?? fallback)();
+  if (shouldUseBuildFallbackData()) return (staticFallback ?? fallback)();
   if (!prisma) return fallback();
 
   try {
@@ -563,9 +653,24 @@ function emptyDashboard(): DashboardData {
     currency: "RUB",
     metrics: [
       { title: "Общий баланс", value: formatCurrency(0), detail: "Все активные счета" },
-      { title: "Доходы за месяц", value: formatCurrency(0), detail: "Текущий календарный месяц", tone: "success" },
-      { title: "Расходы за месяц", value: formatCurrency(0), detail: "Текущий календарный месяц", tone: "warning" },
-      { title: "Свободный остаток", value: formatCurrency(0), detail: "Доходы минус расходы", tone: "success" },
+      {
+        title: "Доходы за месяц",
+        value: formatCurrency(0),
+        detail: "Текущий календарный месяц",
+        tone: "success"
+      },
+      {
+        title: "Расходы за месяц",
+        value: formatCurrency(0),
+        detail: "Текущий календарный месяц",
+        tone: "warning"
+      },
+      {
+        title: "Свободный остаток",
+        value: formatCurrency(0),
+        detail: "Доходы минус расходы",
+        tone: "success"
+      },
       { title: "Процент накоплений", value: "0.0%", detail: "Доля свободного остатка" },
       { title: "Финансовая подушка", value: "0.0 мес.", detail: "Резерв к средним расходам" }
     ],
@@ -575,7 +680,11 @@ function emptyDashboard(): DashboardData {
     health: service.healthScore(input),
     netWorth: 0,
     netWorthTrend: [],
-    emergencyFund: buildEmergencyFund({ savingsBalance: 0, averageMonthlyExpense: 0, targetMonths: 6 })
+    emergencyFund: buildEmergencyFund({
+      savingsBalance: 0,
+      averageMonthlyExpense: 0,
+      targetMonths: 6
+    })
   };
 }
 
@@ -608,7 +717,13 @@ function emptyInvestments(): InvestmentData {
   };
 }
 
-function toAccountRow(account: { id: string; name: string; type: string; balance: unknown; currency: string }): AccountRow {
+function toAccountRow(account: {
+  id: string;
+  name: string;
+  type: string;
+  balance: unknown;
+  currency: string;
+}): AccountRow {
   return {
     id: account.id,
     name: account.name,
@@ -667,7 +782,10 @@ function transactionWhere(
   };
 }
 
-async function getDatabaseTransactions(userId: string, filters: TransactionFilters = transactionFilterSchema.parse({})) {
+async function getDatabaseTransactions(
+  userId: string,
+  filters: TransactionFilters = transactionFilterSchema.parse({})
+) {
   if (!prisma) return [];
 
   const transactions = await prisma.transaction.findMany({
@@ -681,20 +799,22 @@ async function getDatabaseTransactions(userId: string, filters: TransactionFilte
     }
   });
 
-  return transactions.map((transaction): TransactionRow => ({
-    id: transaction.id,
-    amount: toNumber(transaction.amount),
-    type: transaction.type,
-    date: transaction.date.toISOString(),
-    description: transaction.description,
-    account: { id: transaction.account.id, label: transaction.account.name },
-    category: {
-      id: transaction.category.id,
-      label: transaction.category.name,
-      color: transaction.category.color,
-      icon: transaction.category.icon ?? undefined
-    }
-  }));
+  return transactions.map(
+    (transaction): TransactionRow => ({
+      id: transaction.id,
+      amount: toNumber(transaction.amount),
+      type: transaction.type,
+      date: transaction.date.toISOString(),
+      description: transaction.description,
+      account: { id: transaction.account.id, label: transaction.account.name },
+      category: {
+        id: transaction.category.id,
+        label: transaction.category.name,
+        color: transaction.category.color,
+        icon: transaction.category.icon ?? undefined
+      }
+    })
+  );
 }
 
 function toRecurringTransactionRow(row: {
@@ -743,8 +863,12 @@ async function getDatabaseFinanceInput(userId: string, emergencyFundTargetMonths
   const goalRows = goals.map(toGoalRow);
   const monthlyCashflow = buildMonthlyCashflow(transactions);
   const currentMonth = monthlyCashflow[monthlyCashflow.length - 1];
-  const averageExpense = monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(monthlyCashflow.length, 1);
-  const emergencyFund = accountRows.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
+  const averageExpense =
+    monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
+    Math.max(monthlyCashflow.length, 1);
+  const emergencyFund = accountRows
+    .filter((account) => account.type === "SAVINGS")
+    .reduce((sum, account) => sum + account.balance, 0);
   const { start, end } = currentMonthRange();
   const currentExpenseRows = transactions.filter((transaction) => {
     const date = new Date(transaction.date);
@@ -757,10 +881,16 @@ async function getDatabaseFinanceInput(userId: string, emergencyFundTargetMonths
   const softExpense = currentExpenseRows
     .filter((transaction) => {
       const category = categoryById.get(transaction.category.id);
-      return category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.name ?? "");
+      return (
+        category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.name ?? "")
+      );
     })
     .reduce((sum, row) => sum + row.amount, 0);
-  const budgetRows = await buildDatabaseBudgetRows(userId, transactions, categories.map(toCategoryOption));
+  const budgetRows = await buildDatabaseBudgetRows(
+    userId,
+    transactions,
+    categories.map(toCategoryOption)
+  );
   const freeCashflow = currentMonth.income - currentMonth.expense;
 
   return {
@@ -779,8 +909,10 @@ async function getDatabaseFinanceInput(userId: string, emergencyFundTargetMonths
       savingsRate: currentMonth.income > 0 ? percent(freeCashflow, currentMonth.income) : 0,
       emergencyFundMonths: averageExpense > 0 ? emergencyFund / averageExpense : 0,
       emergencyFundTargetMonths,
-      essentialExpenseShare: currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
-      subscriptionAndEntertainmentShare: currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
+      essentialExpenseShare:
+        currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
+      subscriptionAndEntertainmentShare:
+        currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
       goals: goalRows.map((goal) => ({
         title: goal.title,
         progress: goal.progress,
@@ -793,12 +925,21 @@ async function getDatabaseFinanceInput(userId: string, emergencyFundTargetMonths
   };
 }
 
-function toGoalRow(goal: { id: string; title: string; targetAmount: unknown; currentAmount: unknown; deadline: Date }): GoalRow {
+function toGoalRow(goal: {
+  id: string;
+  title: string;
+  targetAmount: unknown;
+  currentAmount: unknown;
+  deadline: Date;
+}): GoalRow {
   const targetAmount = toNumber(goal.targetAmount);
   const currentAmount = toNumber(goal.currentAmount);
   const monthsLeft = Math.max(
     1,
-    Math.ceil((startOfMonth(goal.deadline).getTime() - startOfMonth(new Date()).getTime()) / (1000 * 60 * 60 * 24 * 30))
+    Math.ceil(
+      (startOfMonth(goal.deadline).getTime() - startOfMonth(new Date()).getTime()) /
+        (1000 * 60 * 60 * 24 * 30)
+    )
   );
   const remaining = Math.max(targetAmount - currentAmount, 0);
 
@@ -839,7 +980,12 @@ async function buildDatabaseBudgetRows(
       const spent = transactions
         .filter((transaction) => {
           const date = new Date(transaction.date);
-          return transaction.type === "EXPENSE" && transaction.category.id === category.id && date >= start && date <= end;
+          return (
+            transaction.type === "EXPENSE" &&
+            transaction.category.id === category.id &&
+            date >= start &&
+            date <= end
+          );
         })
         .reduce((sum, row) => sum + row.amount, 0);
 
@@ -858,66 +1004,99 @@ async function buildDatabaseBudgetRows(
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  return safeData<DashboardData>(buildDemoDashboard, async () => {
-    const user = await getDefaultUser();
-    if (!user) return buildDemoDashboard();
+  return safeData<DashboardData>(
+    buildDemoDashboard,
+    async () => {
+      const user = await getDefaultUser();
+      if (!user) return buildDemoDashboard();
 
-    const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
-    const service = new FinanceRecommendationService();
-    const totalBalance = finance.accounts.reduce((sum, account) => sum + account.balance, 0);
-    const input = finance.input;
+      const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
+      const service = new FinanceRecommendationService();
+      const totalBalance = finance.accounts.reduce((sum, account) => sum + account.balance, 0);
+      const input = finance.input;
 
-    // Net worth = accounts + current portfolio value + goal savings (parity with desktop).
-    const investments = await getInvestmentData();
-    const portfolioValue = investments.portfolio.reduce((sum, position) => sum + position.currentValue, 0);
-    const goalSavings = finance.goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
-    const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
+      // Net worth = accounts + current portfolio value + goal savings (parity with desktop).
+      const investments = await getInvestmentData();
+      const portfolioValue = investments.portfolio.reduce(
+        (sum, position) => sum + position.currentValue,
+        0
+      );
+      const goalSavings = finance.goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
+      const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
 
-    const savingsBalance = finance.accounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
-    const averageMonthlyExpense = input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(input.monthlyCashflow.length, 1);
-    const emergencyFund = buildEmergencyFund({ savingsBalance, averageMonthlyExpense, targetMonths: user.emergencyFundMonthsTarget });
+      const savingsBalance = finance.accounts
+        .filter((account) => account.type === "SAVINGS")
+        .reduce((sum, account) => sum + account.balance, 0);
+      const averageMonthlyExpense =
+        input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
+        Math.max(input.monthlyCashflow.length, 1);
+      const emergencyFund = buildEmergencyFund({
+        savingsBalance,
+        averageMonthlyExpense,
+        targetMonths: user.emergencyFundMonthsTarget
+      });
 
-    const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
-    const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
+      const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
+      const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
 
-    return {
-      source: "database",
-      currency: user.currency,
-      metrics: [
-        { title: "Общий баланс", value: formatCurrency(totalBalance, user.currency), detail: "Все активные счета" },
-        {
-          title: "Доходы за месяц",
-          value: formatCurrency(input.currentMonthIncome, user.currency),
-          detail: "Текущий календарный месяц",
-          tone: "success",
-          trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
-        },
-        {
-          title: "Расходы за месяц",
-          value: formatCurrency(input.currentMonthExpense, user.currency),
-          detail: "Текущий календарный месяц",
-          tone: "warning",
-          trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
-        },
-        {
-          title: "Свободный остаток",
-          value: formatCurrency(input.freeCashflow, user.currency),
-          detail: "Доходы минус расходы",
-          tone: input.freeCashflow >= 0 ? "success" : "danger",
-          trend: buildTrend(input.freeCashflow, (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0))
-        },
-        { title: "Процент накоплений", value: `${input.savingsRate.toFixed(1)}%`, detail: "Доля свободного остатка" },
-        { title: "Финансовая подушка", value: `${input.emergencyFundMonths.toFixed(1)} мес.`, detail: "Резерв к средним расходам" }
-      ],
-      categoryExpenses: buildCategoryExpenses(finance.transactions),
-      monthlyCashflow: input.monthlyCashflow,
-      recommendations: service.build(input),
-      health: service.healthScore(input),
-      netWorth,
-      netWorthTrend: buildNetWorthTrend({ currentNetWorth: netWorth, transactions: finance.transactions }),
-      emergencyFund
-    };
-  }, emptyDashboard);
+      return {
+        source: "database",
+        currency: user.currency,
+        metrics: [
+          {
+            title: "Общий баланс",
+            value: formatCurrency(totalBalance, user.currency),
+            detail: "Все активные счета"
+          },
+          {
+            title: "Доходы за месяц",
+            value: formatCurrency(input.currentMonthIncome, user.currency),
+            detail: "Текущий календарный месяц",
+            tone: "success",
+            trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
+          },
+          {
+            title: "Расходы за месяц",
+            value: formatCurrency(input.currentMonthExpense, user.currency),
+            detail: "Текущий календарный месяц",
+            tone: "warning",
+            trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
+          },
+          {
+            title: "Свободный остаток",
+            value: formatCurrency(input.freeCashflow, user.currency),
+            detail: "Доходы минус расходы",
+            tone: input.freeCashflow >= 0 ? "success" : "danger",
+            trend: buildTrend(
+              input.freeCashflow,
+              (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0)
+            )
+          },
+          {
+            title: "Процент накоплений",
+            value: `${input.savingsRate.toFixed(1)}%`,
+            detail: "Доля свободного остатка"
+          },
+          {
+            title: "Финансовая подушка",
+            value: `${input.emergencyFundMonths.toFixed(1)} мес.`,
+            detail: "Резерв к средним расходам"
+          }
+        ],
+        categoryExpenses: buildCategoryExpenses(finance.transactions),
+        monthlyCashflow: input.monthlyCashflow,
+        recommendations: service.build(input),
+        health: service.healthScore(input),
+        netWorth,
+        netWorthTrend: buildNetWorthTrend({
+          currentNetWorth: netWorth,
+          transactions: finance.transactions
+        }),
+        emergencyFund
+      };
+    },
+    emptyDashboard
+  );
 }
 
 export async function getTransactionsPageData(
@@ -933,11 +1112,13 @@ export async function getTransactionsPageData(
         if (parsed.accountId && transaction.account.id !== parsed.accountId) return false;
         if (parsed.q) {
           const query = parsed.q.toLowerCase();
-          const haystack = `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
+          const haystack =
+            `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
           if (!haystack.includes(query)) return false;
         }
         if (parsed.from && new Date(transaction.date) < new Date(parsed.from)) return false;
-        if (parsed.to && new Date(transaction.date) > new Date(`${parsed.to}T23:59:59`)) return false;
+        if (parsed.to && new Date(transaction.date) > new Date(`${parsed.to}T23:59:59`))
+          return false;
         return true;
       });
       const start = (parsed.page - 1) * parsed.limit;
@@ -965,8 +1146,14 @@ export async function getTransactionsPageData(
       const [transactions, total, accounts, categories] = await Promise.all([
         getDatabaseTransactions(user.id, parsed),
         prisma.transaction.count({ where: transactionWhere(user.id, parsed) }),
-        prisma.account.findMany({ where: { userId: user.id, isArchived: false }, orderBy: { createdAt: "asc" } }),
-        prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ kind: "asc" }, { name: "asc" }] })
+        prisma.account.findMany({
+          where: { userId: user.id, isArchived: false },
+          orderBy: { createdAt: "asc" }
+        }),
+        prisma.category.findMany({
+          where: { userId: user.id },
+          orderBy: [{ kind: "asc" }, { name: "asc" }]
+        })
       ]);
       const start = (parsed.page - 1) * parsed.limit;
 
@@ -991,7 +1178,13 @@ export async function getTransactionsPageData(
       accounts: [],
       categories: [],
       filters: parsed,
-      pagination: { page: parsed.page, limit: parsed.limit, total: 0, hasPreviousPage: false, hasNextPage: false }
+      pagination: {
+        page: parsed.page,
+        limit: parsed.limit,
+        total: 0,
+        hasPreviousPage: false,
+        hasNextPage: false
+      }
     })
   );
 }
@@ -1021,10 +1214,18 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
           orderBy: [{ isActive: "desc" }, { nextDate: "asc" }],
           include: { account: true, category: true }
         }),
-        prisma.account.findMany({ where: { userId: user.id, isArchived: false }, orderBy: { createdAt: "asc" } }),
-        prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ kind: "asc" }, { name: "asc" }] })
+        prisma.account.findMany({
+          where: { userId: user.id, isArchived: false },
+          orderBy: { createdAt: "asc" }
+        }),
+        prisma.category.findMany({
+          where: { userId: user.id },
+          orderBy: [{ kind: "asc" }, { name: "asc" }]
+        })
       ]);
-      const recurringTransactions = service.sortUpcoming(recurringRows.map(toRecurringTransactionRow));
+      const recurringTransactions = service.sortUpcoming(
+        recurringRows.map(toRecurringTransactionRow)
+      );
 
       return {
         source: "database",
@@ -1041,7 +1242,13 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
       accounts: [],
       categories: [],
       currency: "RUB",
-      summary: { activeCount: 0, dueCount: 0, nextSevenDaysAmount: 0, monthlyPlannedExpense: 0, monthlyPlannedIncome: 0 }
+      summary: {
+        activeCount: 0,
+        dueCount: 0,
+        nextSevenDaysAmount: 0,
+        monthlyPlannedExpense: 0,
+        monthlyPlannedIncome: 0
+      }
     })
   );
 }
@@ -1065,7 +1272,10 @@ export async function getForecastData(): Promise<ForecastPageData> {
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
       const [accounts, recurringRows, goals] = await Promise.all([
-        prisma.account.findMany({ where: { userId: user.id, isArchived: false }, orderBy: { createdAt: "asc" } }),
+        prisma.account.findMany({
+          where: { userId: user.id, isArchived: false },
+          orderBy: { createdAt: "asc" }
+        }),
         prisma.recurringTransaction.findMany({
           where: { userId: user.id },
           orderBy: [{ isActive: "desc" }, { nextDate: "asc" }],
@@ -1098,10 +1308,12 @@ export async function getAccountsPageData(): Promise<AccountsPageData> {
       if (!prisma) throw new Error("Prisma client is not configured.");
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
-      const accounts = (await prisma.account.findMany({
-        where: { userId: user.id, isArchived: false },
-        orderBy: { createdAt: "asc" }
-      })).map(toAccountRow);
+      const accounts = (
+        await prisma.account.findMany({
+          where: { userId: user.id, isArchived: false },
+          orderBy: { createdAt: "asc" }
+        })
+      ).map(toAccountRow);
 
       return {
         source: "database",
@@ -1129,7 +1341,9 @@ export async function getBudgetsPageData(month?: string): Promise<BudgetsPageDat
         source: "demo-fallback",
         budgets: buildBudgetRows(transactions, demoCategories, targetMonthDate),
         categories: demoCategories,
-        recommendations: service.build(input).filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
+        recommendations: service
+          .build(input)
+          .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
         currency: "RUB",
         selectedMonth
       };
@@ -1139,11 +1353,19 @@ export async function getBudgetsPageData(month?: string): Promise<BudgetsPageDat
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
       const [categories, transactions] = await Promise.all([
-        prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ kind: "asc" }, { name: "asc" }] }),
+        prisma.category.findMany({
+          where: { userId: user.id },
+          orderBy: [{ kind: "asc" }, { name: "asc" }]
+        }),
         getDatabaseTransactions(user.id)
       ]);
       const categoryOptions = categories.map(toCategoryOption);
-      const budgets = await buildDatabaseBudgetRows(user.id, transactions, categoryOptions, targetMonthDate);
+      const budgets = await buildDatabaseBudgetRows(
+        user.id,
+        transactions,
+        categoryOptions,
+        targetMonthDate
+      );
       const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
       const recommendations = new FinanceRecommendationService()
         .build(finance.input)
@@ -1158,7 +1380,14 @@ export async function getBudgetsPageData(month?: string): Promise<BudgetsPageDat
         selectedMonth
       };
     },
-    () => ({ source: "database", budgets: [], categories: [], recommendations: [], currency: "RUB", selectedMonth })
+    () => ({
+      source: "database",
+      budgets: [],
+      categories: [],
+      recommendations: [],
+      currency: "RUB",
+      selectedMonth
+    })
   );
 }
 
@@ -1189,121 +1418,125 @@ export async function getGoalsPageData(): Promise<GoalsPageData> {
 }
 
 export async function getInvestmentData(): Promise<InvestmentData> {
-  return safeData<InvestmentData>(buildDemoInvestmentData, async (): Promise<InvestmentData> => {
-    if (!prisma) throw new Error("Prisma client is not configured.");
-    const user = await getDefaultUser();
-    if (!user) throw new Error("No user found.");
+  return safeData<InvestmentData>(
+    buildDemoInvestmentData,
+    async (): Promise<InvestmentData> => {
+      if (!prisma) throw new Error("Prisma client is not configured.");
+      const user = await getDefaultUser();
+      if (!user) throw new Error("No user found.");
 
-    const watchlistItems = await prisma.watchlistItem.findMany({
-      where: { userId: user.id },
-      include: {
-        security: {
-          include: {
-            prices: { orderBy: { date: "desc" }, take: 31 }
+      const watchlistItems = await prisma.watchlistItem.findMany({
+        where: { userId: user.id },
+        include: {
+          security: {
+            include: {
+              prices: { orderBy: { date: "desc" }, take: 31 }
+            }
           }
-        }
-      },
-      orderBy: { createdAt: "asc" }
-    });
+        },
+        orderBy: { createdAt: "asc" }
+      });
 
-    const securities = await prisma.security.findMany({
-      include: {
-        prices: { orderBy: { date: "desc" }, take: 1 }
-      },
-      orderBy: { ticker: "asc" }
-    });
+      const securities = await prisma.security.findMany({
+        include: {
+          prices: { orderBy: { date: "desc" }, take: 1 }
+        },
+        orderBy: { ticker: "asc" }
+      });
 
-    const portfolio = await prisma.portfolio.findFirst({
-      where: { userId: user.id },
-      include: {
-        positions: {
-          include: {
-            security: {
-              include: {
-                prices: { orderBy: { date: "desc" }, take: 45 }
+      const portfolio = await prisma.portfolio.findFirst({
+        where: { userId: user.id },
+        include: {
+          positions: {
+            include: {
+              security: {
+                include: {
+                  prices: { orderBy: { date: "desc" }, take: 45 }
+                }
               }
             }
           }
         }
-      }
-    });
+      });
 
-    const watchlist = watchlistItems.map((item) => {
-      const latest = item.security.prices[0];
-      return {
-        ticker: item.security.ticker,
-        name: item.security.name,
-        sector: item.security.sector,
-        price: latest ? toNumber(latest.price) : 0,
-        changeDay: latest ? toNumber(latest.changeDay) : 0,
-        change30d: latest ? toNumber(latest.change30d) : 0,
-        risk: item.security.risk,
-        comment: item.security.comment
-      };
-    });
-    const securityRows = securities.map((security) => {
-      const latest = security.prices[0];
-      return {
-        ticker: security.ticker,
-        name: security.name,
-        sector: security.sector,
-        price: latest ? toNumber(latest.price) : 0,
-        changeDay: latest ? toNumber(latest.changeDay) : 0,
-        change30d: latest ? toNumber(latest.change30d) : 0,
-        risk: security.risk,
-        comment: security.comment
-      };
-    });
-
-    const rowsWithoutShare =
-      portfolio?.positions.map((position) => {
-        const latest = position.security.prices[0];
-        const currentPrice = latest ? toNumber(latest.price) : 0;
-        const quantity = toNumber(position.quantity);
-        const averageBuyPrice = toNumber(position.averageBuyPrice);
-        const currentValue = roundMoney(currentPrice * quantity);
-
+      const watchlist = watchlistItems.map((item) => {
+        const latest = item.security.prices[0];
         return {
-          ticker: position.security.ticker,
-          name: position.security.name,
-          sector: position.security.sector,
-          quantity,
-          averageBuyPrice,
-          currentPrice,
-          currentValue,
-          pnl: roundMoney((currentPrice - averageBuyPrice) * quantity),
-          share: 0,
-          risk: position.security.risk
+          ticker: item.security.ticker,
+          name: item.security.name,
+          sector: item.security.sector,
+          price: latest ? toNumber(latest.price) : 0,
+          changeDay: latest ? toNumber(latest.changeDay) : 0,
+          change30d: latest ? toNumber(latest.change30d) : 0,
+          risk: item.security.risk,
+          comment: item.security.comment
         };
-      }) ?? [];
+      });
+      const securityRows = securities.map((security) => {
+        const latest = security.prices[0];
+        return {
+          ticker: security.ticker,
+          name: security.name,
+          sector: security.sector,
+          price: latest ? toNumber(latest.price) : 0,
+          changeDay: latest ? toNumber(latest.changeDay) : 0,
+          change30d: latest ? toNumber(latest.change30d) : 0,
+          risk: security.risk,
+          comment: security.comment
+        };
+      });
 
-    const total = rowsWithoutShare.reduce((sum, row) => sum + row.currentValue, 0);
-    const portfolioRows = rowsWithoutShare.map((row) => ({
-      ...row,
-      share: total > 0 ? percent(row.currentValue, total) : 0
-    }));
-    const historical: Record<string, number[]> = {};
-    for (const position of portfolio?.positions ?? []) {
-      historical[position.security.ticker] = [...position.security.prices]
-        .reverse()
-        .map((priceRow) => toNumber(priceRow.price));
-    }
-    const riskCode = user.riskProfile?.code ?? "MODERATE";
-    const analysis = new InvestmentAnalysisService().analyze(portfolioRows, riskCode, historical);
+      const rowsWithoutShare =
+        portfolio?.positions.map((position) => {
+          const latest = position.security.prices[0];
+          const currentPrice = latest ? toNumber(latest.price) : 0;
+          const quantity = toNumber(position.quantity);
+          const averageBuyPrice = toNumber(position.averageBuyPrice);
+          const currentValue = roundMoney(currentPrice * quantity);
 
-    return {
-      source: "database",
-      currency: user.currency,
-      riskProfile: RISK_PROFILE_LABELS[riskCode],
-      securities: securityRows,
-      watchlist,
-      portfolio: portfolioRows,
-      structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),
-      sectorStructure: buildSectorStructure(portfolioRows),
-      risks: analysis.risks,
-      education: analysis.education
-    };
-  }, emptyInvestments);
+          return {
+            ticker: position.security.ticker,
+            name: position.security.name,
+            sector: position.security.sector,
+            quantity,
+            averageBuyPrice,
+            currentPrice,
+            currentValue,
+            pnl: roundMoney((currentPrice - averageBuyPrice) * quantity),
+            share: 0,
+            risk: position.security.risk
+          };
+        }) ?? [];
+
+      const total = rowsWithoutShare.reduce((sum, row) => sum + row.currentValue, 0);
+      const portfolioRows = rowsWithoutShare.map((row) => ({
+        ...row,
+        share: total > 0 ? percent(row.currentValue, total) : 0
+      }));
+      const historical: Record<string, number[]> = {};
+      for (const position of portfolio?.positions ?? []) {
+        historical[position.security.ticker] = [...position.security.prices]
+          .reverse()
+          .map((priceRow) => toNumber(priceRow.price));
+      }
+      const riskCode = user.riskProfile?.code ?? "MODERATE";
+      const analysis = new InvestmentAnalysisService().analyze(portfolioRows, riskCode, historical);
+
+      return {
+        source: "database",
+        currency: user.currency,
+        riskProfile: RISK_PROFILE_LABELS[riskCode],
+        securities: securityRows,
+        watchlist,
+        portfolio: portfolioRows,
+        structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),
+        sectorStructure: buildSectorStructure(portfolioRows),
+        risks: analysis.risks,
+        education: analysis.education
+      };
+    },
+    emptyInvestments
+  );
 }
 
 async function buildDemoInvestmentData(): Promise<InvestmentData> {
@@ -1341,7 +1574,9 @@ async function buildDemoInvestmentData(): Promise<InvestmentData> {
   }));
   const historical: Record<string, number[]> = {};
   for (const row of portfolioRows) {
-    historical[row.ticker] = (await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())).map((item) => item.price);
+    historical[row.ticker] = (
+      await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())
+    ).map((item) => item.price);
   }
   const analysis = new InvestmentAnalysisService().analyze(portfolioRows, "MODERATE", historical);
 
@@ -1424,9 +1659,24 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
       density: "comfortable",
       defaultTransactionType: "EXPENSE" as const,
       riskProfiles: [
-        { id: "risk-conservative", code: "CONSERVATIVE", title: RISK_PROFILE_LABELS.CONSERVATIVE, description: "Стабильность и контроль просадки." },
-        { id: "risk-moderate", code: "MODERATE", title: RISK_PROFILE_LABELS.MODERATE, description: "Баланс роста и риска." },
-        { id: "risk-aggressive", code: "AGGRESSIVE", title: RISK_PROFILE_LABELS.AGGRESSIVE, description: "Готовность к заметной волатильности." }
+        {
+          id: "risk-conservative",
+          code: "CONSERVATIVE",
+          title: RISK_PROFILE_LABELS.CONSERVATIVE,
+          description: "Стабильность и контроль просадки."
+        },
+        {
+          id: "risk-moderate",
+          code: "MODERATE",
+          title: RISK_PROFILE_LABELS.MODERATE,
+          description: "Баланс роста и риска."
+        },
+        {
+          id: "risk-aggressive",
+          code: "AGGRESSIVE",
+          title: RISK_PROFILE_LABELS.AGGRESSIVE,
+          description: "Готовность к заметной волатильности."
+        }
       ]
     })
   );
@@ -1437,24 +1687,40 @@ export async function getImportPageData(): Promise<ImportPageData> {
     () => ({
       source: "demo-fallback",
       accounts: demoAccounts,
-      categories: demoCategories
+      categories: demoCategories,
+      lastBackupAt: null,
+      backupReminderDue: true
     }),
     async () => {
       if (!prisma) throw new Error("Prisma client is not configured.");
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
       const [accounts, categories] = await Promise.all([
-        prisma.account.findMany({ where: { userId: user.id, isArchived: false }, orderBy: { createdAt: "asc" } }),
-        prisma.category.findMany({ where: { userId: user.id }, orderBy: [{ kind: "asc" }, { name: "asc" }] })
+        prisma.account.findMany({
+          where: { userId: user.id, isArchived: false },
+          orderBy: { createdAt: "asc" }
+        }),
+        prisma.category.findMany({
+          where: { userId: user.id },
+          orderBy: [{ kind: "asc" }, { name: "asc" }]
+        })
       ]);
 
       return {
         source: "database",
         accounts: accounts.map(toAccountRow),
-        categories: categories.map(toCategoryOption)
+        categories: categories.map(toCategoryOption),
+        lastBackupAt: null,
+        backupReminderDue: false
       };
     },
-    () => ({ source: "database", accounts: [], categories: [] })
+    () => ({
+      source: "database",
+      accounts: [],
+      categories: [],
+      lastBackupAt: null,
+      backupReminderDue: true
+    })
   );
 }
 
@@ -1479,8 +1745,12 @@ function buildAnalyticsFromTransactions(
       const date = new Date(transaction.date);
       return date >= start && date <= end;
     });
-    const income = rows.filter((row) => row.type === "INCOME").reduce((sum, row) => sum + row.amount, 0);
-    const expense = rows.filter((row) => row.type === "EXPENSE").reduce((sum, row) => sum + row.amount, 0);
+    const income = rows
+      .filter((row) => row.type === "INCOME")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const expense = rows
+      .filter((row) => row.type === "EXPENSE")
+      .reduce((sum, row) => sum + row.amount, 0);
     const savings = income - expense;
     const savingsRate = income > 0 ? percent(savings, income) : 0;
     return {
@@ -1497,18 +1767,30 @@ function buildAnalyticsFromTransactions(
   const nonZeroMonths = monthlyCashflow.filter((m) => m.income > 0 || m.expense > 0).length || 1;
   const avgMonthlyIncome = roundMoney(totalIncome / nonZeroMonths);
   const avgMonthlyExpense = roundMoney(totalExpense / nonZeroMonths);
-  const avgSavingsRate = roundMoney(monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length);
+  const avgSavingsRate = roundMoney(
+    monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length
+  );
 
   const bestMonthData = [...monthlyCashflow].sort((a, b) => b.savings - a.savings)[0];
   const worstMonthData = [...monthlyCashflow].sort((a, b) => a.savings - b.savings)[0];
 
   // Top expense categories (last 6 months)
-  const categoryTotals = new Map<string, { categoryId: string; category: string; color: string; total: number }>();
+  const categoryTotals = new Map<
+    string,
+    { categoryId: string; category: string; color: string; total: number }
+  >();
   const sixMonthsAgo = startOfMonth(months[0]);
-  const expenseTransactions = transactions.filter((t) => t.type === "EXPENSE" && new Date(t.date) >= sixMonthsAgo);
+  const expenseTransactions = transactions.filter(
+    (t) => t.type === "EXPENSE" && new Date(t.date) >= sixMonthsAgo
+  );
   const totalExpenseAll = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
   for (const t of expenseTransactions) {
-    const existing = categoryTotals.get(t.category.id) ?? { categoryId: t.category.id, category: t.category.label, color: t.category.color, total: 0 };
+    const existing = categoryTotals.get(t.category.id) ?? {
+      categoryId: t.category.id,
+      category: t.category.label,
+      color: t.category.color,
+      total: 0
+    };
     existing.total += t.amount;
     categoryTotals.set(t.category.id, existing);
   }
@@ -1519,6 +1801,7 @@ function buildAnalyticsFromTransactions(
       ...item,
       share: totalExpenseAll > 0 ? percent(item.total, totalExpenseAll) : 0
     }));
+  const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories);
 
   return {
     source,
@@ -1529,7 +1812,10 @@ function buildAnalyticsFromTransactions(
     avgMonthlyExpense,
     avgSavingsRate,
     bestMonth: bestMonthData?.month ?? "-",
-    worstMonth: worstMonthData?.month ?? "-"
+    worstMonth: worstMonthData?.month ?? "-",
+    expenseChangePct: derived.expenseChangePct,
+    savingsRateTrend: derived.savingsRateTrend,
+    insights: derived.insights
   };
 }
 
@@ -1555,23 +1841,64 @@ function buildDemoAnalytics(): AnalyticsData {
     return m;
   });
 
-  const patchedTotals = patchedCashflow.reduce((acc, m) => ({ income: acc.income + m.income, expense: acc.expense + m.expense }), { income: 0, expense: 0 });
+  const patchedTotals = patchedCashflow.reduce(
+    (acc, m) => ({ income: acc.income + m.income, expense: acc.expense + m.expense }),
+    { income: 0, expense: 0 }
+  );
   const avgMonthlyIncome = roundMoney(patchedTotals.income / 6);
   const avgMonthlyExpense = roundMoney(patchedTotals.expense / 6);
   const avgSavingsRate = roundMoney(patchedCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / 6);
   const bestMonth = [...patchedCashflow].sort((a, b) => b.savings - a.savings)[0]?.month ?? "-";
   const worstMonth = [...patchedCashflow].sort((a, b) => a.savings - b.savings)[0]?.month ?? "-";
 
-  const topExpenseCategories = result.topExpenseCategories.length > 0
-    ? result.topExpenseCategories
-    : [
-        { categoryId: "cat-food", category: "Продукты", color: "#f97316", total: 260000, share: 28 },
-        { categoryId: "cat-utilities", category: "ЖКХ", color: "#7c3aed", total: 115000, share: 12 },
-        { categoryId: "cat-entertainment", category: "Развлечения", color: "#eab308", total: 130000, share: 14 },
-        { categoryId: "cat-transport", category: "Транспорт", color: "#2563eb", total: 68000, share: 7 },
-        { categoryId: "cat-restaurants", category: "Рестораны", color: "#ea580c", total: 95000, share: 10 },
-        { categoryId: "cat-health", category: "Здоровье", color: "#dc2626", total: 55000, share: 6 }
-      ];
+  const topExpenseCategories =
+    result.topExpenseCategories.length > 0
+      ? result.topExpenseCategories
+      : [
+          {
+            categoryId: "cat-food",
+            category: "Продукты",
+            color: "#f97316",
+            total: 260000,
+            share: 28
+          },
+          {
+            categoryId: "cat-utilities",
+            category: "ЖКХ",
+            color: "#7c3aed",
+            total: 115000,
+            share: 12
+          },
+          {
+            categoryId: "cat-entertainment",
+            category: "Развлечения",
+            color: "#eab308",
+            total: 130000,
+            share: 14
+          },
+          {
+            categoryId: "cat-transport",
+            category: "Транспорт",
+            color: "#2563eb",
+            total: 68000,
+            share: 7
+          },
+          {
+            categoryId: "cat-restaurants",
+            category: "Рестораны",
+            color: "#ea580c",
+            total: 95000,
+            share: 10
+          },
+          {
+            categoryId: "cat-health",
+            category: "Здоровье",
+            color: "#dc2626",
+            total: 55000,
+            share: 6
+          }
+        ];
+  const derived = buildAnalyticsDerived(patchedCashflow, topExpenseCategories);
 
   return {
     source: "demo-fallback",
@@ -1582,7 +1909,10 @@ function buildDemoAnalytics(): AnalyticsData {
     avgMonthlyExpense,
     avgSavingsRate,
     bestMonth,
-    worstMonth
+    worstMonth,
+    expenseChangePct: derived.expenseChangePct,
+    savingsRateTrend: derived.savingsRateTrend,
+    insights: derived.insights
   };
 }
 
@@ -1628,30 +1958,34 @@ export async function getCategoriesPageData(): Promise<CategoriesPageData> {
 }
 
 export async function getAnalyticsData(): Promise<AnalyticsData> {
-  return safeData<AnalyticsData>(buildDemoAnalytics, async () => {
-    if (!prisma) throw new Error("Prisma client is not configured.");
-    const user = await getDefaultUser();
-    if (!user) throw new Error("No user found.");
+  return safeData<AnalyticsData>(
+    buildDemoAnalytics,
+    async () => {
+      if (!prisma) throw new Error("Prisma client is not configured.");
+      const user = await getDefaultUser();
+      if (!user) throw new Error("No user found.");
 
-    const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-    const transactions = await prisma.transaction.findMany({
-      where: { userId: user.id, date: { gte: sixMonthsAgo } },
-      include: { category: true },
-      orderBy: { date: "desc" }
-    });
+      const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
+      const transactions = await prisma.transaction.findMany({
+        where: { userId: user.id, date: { gte: sixMonthsAgo } },
+        include: { category: true },
+        orderBy: { date: "desc" }
+      });
 
-    const transactionRows: TransactionRow[] = transactions.map((t) => ({
-      id: t.id,
-      amount: toNumber(t.amount),
-      type: t.type,
-      date: t.date.toISOString(),
-      description: t.description,
-      account: { id: t.accountId, label: "" },
-      category: { id: t.category.id, label: t.category.name, color: t.category.color }
-    }));
+      const transactionRows: TransactionRow[] = transactions.map((t) => ({
+        id: t.id,
+        amount: toNumber(t.amount),
+        type: t.type,
+        date: t.date.toISOString(),
+        description: t.description,
+        account: { id: t.accountId, label: "" },
+        category: { id: t.category.id, label: t.category.name, color: t.category.color }
+      }));
 
-    return buildAnalyticsFromTransactions(transactionRows, user.currency, "database");
-  }, emptyAnalytics);
+      return buildAnalyticsFromTransactions(transactionRows, user.currency, "database");
+    },
+    emptyAnalytics
+  );
 }
 
 export function dateInputValue(value: string | Date) {
