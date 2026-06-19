@@ -1,8 +1,18 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
 
 import { formatCurrency } from "@/lib/format";
+import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import type { ForecastPoint } from "@/types/finance";
 
 function axisCurrency(value: number) {
@@ -23,10 +33,22 @@ export function ForecastBalanceChart({ data }: { data: ForecastPoint[] }) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="label" tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={(value) => axisCurrency(Number(value))} tickLine={false} axisLine={false} width={78} />
-          <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+          <YAxis
+            tickFormatter={(value) => axisCurrency(Number(value))}
+            tickLine={false}
+            axisLine={false}
+            width={78}
+          />
+          <Tooltip {...chartTooltipProps} formatter={(value) => formatCurrency(Number(value))} />
           <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 4" />
-          <Area type="monotone" dataKey="balance" name="Прогноз остатка" stroke="#149365" strokeWidth={2} fill="url(#forecastBalance)" />
+          <Area
+            type="monotone"
+            dataKey="balance"
+            name="Прогноз остатка"
+            stroke="#149365"
+            strokeWidth={2}
+            fill="url(#forecastBalance)"
+          />
         </AreaChart>
       </ResponsiveContainer>
     </div>

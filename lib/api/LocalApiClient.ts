@@ -25,14 +25,29 @@ import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
+import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthTrend } from "@/lib/net-worth";
-import { SAMPLE_ACCOUNTS, SAMPLE_BUDGETS, SAMPLE_CATEGORIES, SAMPLE_GOALS, SAMPLE_TRANSACTIONS, sampleDate, sampleDeadline } from "@/lib/sample-data";
-import type { AccountRow, CategoryRow, DashboardData, InvestmentData, TransactionRow } from "@/types/finance";
+import {
+  SAMPLE_ACCOUNTS,
+  SAMPLE_BUDGETS,
+  SAMPLE_CATEGORIES,
+  SAMPLE_GOALS,
+  SAMPLE_TRANSACTIONS,
+  sampleDate,
+  sampleDeadline
+} from "@/lib/sample-data";
+import type {
+  AccountRow,
+  CategoryRow,
+  DashboardData,
+  InvestmentData,
+  TransactionRow
+} from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
 
 const LEGACY_STATE_KEY = "localFinanceState";
@@ -111,7 +126,12 @@ const recurringRowSchema = z.object({
   lastTransactionId: z.string().optional()
 });
 const watchlistRowSchema = z.object({
-  ticker: z.string().trim().min(1).max(16).transform((value) => value.toUpperCase()),
+  ticker: z
+    .string()
+    .trim()
+    .min(1)
+    .max(16)
+    .transform((value) => value.toUpperCase()),
   name: z.string().trim().min(1).max(120),
   sector: z.string().trim().min(1).max(80),
   price: z.coerce.number().finite().min(0),
@@ -121,7 +141,12 @@ const watchlistRowSchema = z.object({
   comment: z.string().trim().max(500).default("")
 });
 const portfolioRowSchema = z.object({
-  ticker: z.string().trim().min(1).max(16).transform((value) => value.toUpperCase()),
+  ticker: z
+    .string()
+    .trim()
+    .min(1)
+    .max(16)
+    .transform((value) => value.toUpperCase()),
   name: z.string().trim().min(1).max(120),
   sector: z.string().trim().min(1).max(80),
   quantity: z.coerce.number().finite().positive(),
@@ -139,16 +164,54 @@ const investmentSchema = z.object({
   securities: z.array(watchlistRowSchema).default([]),
   watchlist: z.array(watchlistRowSchema).default([]),
   portfolio: z.array(portfolioRowSchema).default([]),
-  structure: z.array(z.object({ name: z.string().min(1), value: z.coerce.number().finite(), fill: z.string().optional() })).default([]),
-  sectorStructure: z.array(z.object({ name: z.string().min(1), value: z.coerce.number().finite(), fill: z.string().optional() })).default([]),
-  risks: z.array(z.object({ id: z.string().min(1), title: z.string().min(1), description: z.string().min(1), severity: z.enum(["INFO", "SUCCESS", "WARNING", "CRITICAL"]) })).default([]),
-  education: z.array(z.object({ id: z.string().min(1), title: z.string().min(1), description: z.string().min(1), severity: z.enum(["INFO", "SUCCESS", "WARNING", "CRITICAL"]) })).default([])
+  structure: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        value: z.coerce.number().finite(),
+        fill: z.string().optional()
+      })
+    )
+    .default([]),
+  sectorStructure: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        value: z.coerce.number().finite(),
+        fill: z.string().optional()
+      })
+    )
+    .default([]),
+  risks: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        title: z.string().min(1),
+        description: z.string().min(1),
+        severity: z.enum(["INFO", "SUCCESS", "WARNING", "CRITICAL"])
+      })
+    )
+    .default([]),
+  education: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        title: z.string().min(1),
+        description: z.string().min(1),
+        severity: z.enum(["INFO", "SUCCESS", "WARNING", "CRITICAL"])
+      })
+    )
+    .default([])
 });
 const localStateSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
   currency: z.literal("RUB").default("RUB"),
   demoMode: z.boolean().default(false),
-  emergencyFundMonthsTarget: z.coerce.number().int().refine((value) => [3, 6, 12].includes(value)).default(6),
+  emergencyFundMonthsTarget: z.coerce
+    .number()
+    .int()
+    .refine((value) => [3, 6, 12].includes(value))
+    .default(6),
   riskProfileCode: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE"]).default("MODERATE"),
   accounts: z.array(accountSchema),
   categories: z.array(categorySchema),
@@ -171,14 +234,20 @@ const localStateSchema = z.object({
   theme: z.enum(["light", "dark", "system"]).default("system"),
   density: z.enum(["comfortable", "compact"]).default("comfortable"),
   defaultTransactionType: z.enum(["INCOME", "EXPENSE"]).default("EXPENSE"),
-  importBatches: z.array(z.object({
-    id: z.string().min(1),
-    importedAt: z.string().min(1),
-    transactionIds: z.array(z.string().min(1))
-  })).optional().default([])
+  lastBackupAt: z.string().nullable().optional().default(null),
+  importBatches: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        importedAt: z.string().min(1),
+        transactionIds: z.array(z.string().min(1))
+      })
+    )
+    .optional()
+    .default([])
 });
 type LocalState = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   currency: "RUB";
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -186,12 +255,15 @@ type LocalState = {
   theme: "light" | "dark" | "system";
   density: "comfortable" | "compact";
   defaultTransactionType: "INCOME" | "EXPENSE";
+  lastBackupAt: string | null;
   accounts: Array<AccountRow & { isArchived?: boolean }>;
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
   goals: GoalsPageData["goals"];
-  recurringTransactions: Array<RecurringTransactionsPageData["recurringTransactions"][number] & { lastTransactionId?: string }>;
+  recurringTransactions: Array<
+    RecurringTransactionsPageData["recurringTransactions"][number] & { lastTransactionId?: string }
+  >;
   investments: InvestmentData;
   importBatches?: Array<{
     id: string;
@@ -206,7 +278,13 @@ const defaultCategories: CategoryOption[] = [
   { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#f97316", isEssential: true },
   { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#2563eb", isEssential: true },
   { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#7c3aed", isEssential: true },
-  { id: "cat-subscriptions", label: "Подписки", kind: "EXPENSE", color: "#db2777", isSubscription: true },
+  {
+    id: "cat-subscriptions",
+    label: "Подписки",
+    kind: "EXPENSE",
+    color: "#db2777",
+    isSubscription: true
+  },
   { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#ea580c" },
   { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#dc2626", isEssential: true }
 ];
@@ -231,13 +309,21 @@ function normalizePath(path: string) {
 
 function toFormObject(body: unknown) {
   return Object.fromEntries(
-    Object.entries((body ?? {}) as Record<string, unknown>).map(([key, value]) => [key, firstOf(value as string | string[])])
+    Object.entries((body ?? {}) as Record<string, unknown>).map(([key, value]) => [
+      key,
+      firstOf(value as string | string[])
+    ])
   ) as Record<string, string>;
 }
 
-function recomputeGoal(goal: Omit<GoalsPageData["goals"][number], "progress" | "monthlyContribution">): GoalsPageData["goals"][number] {
+function recomputeGoal(
+  goal: Omit<GoalsPageData["goals"][number], "progress" | "monthlyContribution">
+): GoalsPageData["goals"][number] {
   const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
-  const months = Math.max(1, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30)));
+  const months = Math.max(
+    1,
+    Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30))
+  );
 
   return {
     ...goal,
@@ -280,7 +366,7 @@ function createInitialState(): LocalState {
   // the user adds their own. Default categories are kept only so that operations
   // can be categorized out of the box; they carry no monetary data.
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -288,6 +374,7 @@ function createInitialState(): LocalState {
     theme: "system",
     density: "comfortable",
     defaultTransactionType: "EXPENSE",
+    lastBackupAt: null,
     accounts: [],
     categories: defaultCategories,
     transactions: [],
@@ -303,7 +390,7 @@ function createInitialState(): LocalState {
 // Unlike createInitialState() this seeds nothing: no accounts, categories or watchlist.
 function createBlankState(): LocalState {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -311,6 +398,7 @@ function createBlankState(): LocalState {
     theme: "system",
     density: "comfortable",
     defaultTransactionType: "EXPENSE",
+    lastBackupAt: null,
     accounts: [],
     categories: [],
     transactions: [],
@@ -320,6 +408,22 @@ function createBlankState(): LocalState {
     investments: emptyInvestmentData(),
     importBatches: []
   };
+}
+
+function migrateLocalState(state: z.infer<typeof localStateSchema>): LocalState {
+  return {
+    ...(state as LocalState),
+    schemaVersion: 2,
+    lastBackupAt: state.lastBackupAt ?? null,
+    importBatches: state.importBatches ?? []
+  };
+}
+
+function isBackupReminderDue(lastBackupAt: string | null) {
+  if (!lastBackupAt) return true;
+  const last = new Date(lastBackupAt).getTime();
+  if (!Number.isFinite(last)) return true;
+  return Date.now() - last > 14 * 24 * 60 * 60 * 1000;
 }
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -338,14 +442,19 @@ export class LocalApiClient implements ApiClient {
 
     if (pathname === "/accounts") return this.accounts(state) as T;
     if (pathname === "/transactions") return this.transactions(state, searchParams) as T;
-    if (pathname === "/budgets") return this.budgets(state, searchParams.get("month") ?? undefined) as T;
+    if (pathname === "/budgets")
+      return this.budgets(state, searchParams.get("month") ?? undefined) as T;
     if (pathname === "/goals") return this.goals(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(state) as T;
     if (pathname === "/dashboard") return (await this.dashboard(state)) as T;
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
-    if (pathname === "/backup") return (await this.backup(state)) as T;
+    if (pathname === "/backup") {
+      state.lastBackupAt = new Date().toISOString();
+      await this.save(state);
+      return (await this.backup(state)) as T;
+    }
     if (pathname === "/investments") {
       const invData = await this.investments(state);
       // Persist last-known prices so they survive app restart
@@ -355,7 +464,7 @@ export class LocalApiClient implements ApiClient {
         watchlist: invData.watchlist,
         portfolio: invData.portfolio,
         structure: invData.structure,
-        sectorStructure: invData.sectorStructure,
+        sectorStructure: invData.sectorStructure
       };
       await this.save(state);
       return invData as T;
@@ -381,7 +490,9 @@ export class LocalApiClient implements ApiClient {
     const itemId = searchParams.get("id");
 
     if (pathname === "/accounts" && itemId) {
-      state.accounts = state.accounts.map((account) => (account.id === itemId ? { ...account, isArchived: true } : account));
+      state.accounts = state.accounts.map((account) =>
+        account.id === itemId ? { ...account, isArchived: true } : account
+      );
     } else if (pathname === "/transactions" && itemId) {
       this.deleteTransaction(state, itemId);
     } else if (pathname === "/goals" && itemId) {
@@ -392,7 +503,9 @@ export class LocalApiClient implements ApiClient {
       if (existing?.lastTransactionId) {
         this.deleteTransaction(state, existing.lastTransactionId);
       }
-      state.recurringTransactions = state.recurringTransactions.filter((item) => item.id !== itemId);
+      state.recurringTransactions = state.recurringTransactions.filter(
+        (item) => item.id !== itemId
+      );
     } else if (pathname === "/categories" && itemId) {
       const txCount = state.transactions.filter((t) => t.category.id === itemId).length;
       if (txCount > 0) {
@@ -429,27 +542,39 @@ export class LocalApiClient implements ApiClient {
       await this.save(sample);
       return { loaded: true } as TResponse;
     }
-    if (pathname === "/accounts") return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
-    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer") return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
+    if (pathname === "/accounts")
+      return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
+    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
+      return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
     if (pathname === "/transactions") {
       const tx = this.upsertTransaction(state, body, method);
       const budgetWarning = this.budgetWarningFor(state, tx);
       return this.saveAndReturn<TResponse>(state, { ...tx, budgetWarning });
     }
-    if (pathname === "/transactions/transfer") return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
-    if (pathname === "/budgets") return this.saveAndReturn<TResponse>(state, this.upsertBudget(state, body));
+    if (pathname === "/transactions/transfer")
+      return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
+    if (pathname === "/budgets")
+      return this.saveAndReturn<TResponse>(state, this.upsertBudget(state, body));
     if (pathname === "/goals" && (body as { action?: unknown })?.action === "deposit") {
       return this.saveAndReturn<TResponse>(state, this.depositToGoal(state, body));
     }
-    if (pathname === "/goals") return this.saveAndReturn<TResponse>(state, this.upsertGoal(state, body, method));
-    if (pathname === "/recurring") return this.saveAndReturn<TResponse>(state, this.upsertRecurring(state, body, method));
-    if (pathname === "/recurring/materialize") return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
-    if (pathname === "/import") return this.saveAndReturn<TResponse>(state, this.importCsvRows(state, body));
-    if (pathname === "/import/undo") return this.saveAndReturn<TResponse>(state, this.undoLastImport(state));
-    if (pathname === "/settings") return this.saveAndReturn<TResponse>(state, this.updateSettings(state, body));
+    if (pathname === "/goals")
+      return this.saveAndReturn<TResponse>(state, this.upsertGoal(state, body, method));
+    if (pathname === "/recurring")
+      return this.saveAndReturn<TResponse>(state, this.upsertRecurring(state, body, method));
+    if (pathname === "/recurring/materialize")
+      return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
+    if (pathname === "/import")
+      return this.saveAndReturn<TResponse>(state, this.importCsvRows(state, body));
+    if (pathname === "/import/undo")
+      return this.saveAndReturn<TResponse>(state, this.undoLastImport(state));
+    if (pathname === "/settings")
+      return this.saveAndReturn<TResponse>(state, this.updateSettings(state, body));
     if (pathname === "/backup") return this.restoreBackup<TResponse>(body);
-    if (pathname === "/investments") return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
-    if (pathname === "/categories") return this.saveAndReturn<TResponse>(state, this.upsertCategory(state, body, method));
+    if (pathname === "/investments")
+      return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
+    if (pathname === "/categories")
+      return this.saveAndReturn<TResponse>(state, this.upsertCategory(state, body, method));
     if (pathname === "/profiles/create") {
       const input = toFormObject(body);
       const profile = await this.createProfile(input.name ?? "Профиль", input.color ?? "#0d9488");
@@ -477,8 +602,9 @@ export class LocalApiClient implements ApiClient {
   private async restoreBackup<TResponse>(body: unknown) {
     const payload = (body as { backup?: unknown })?.backup;
     const parsed = localStateSchema.safeParse(payload);
-    if (!parsed.success) throw new Error("Backup payload is invalid or incompatible with local mode.");
-    await this.save(parsed.data as LocalState);
+    if (!parsed.success)
+      throw new Error("Backup payload is invalid or incompatible with local mode.");
+    await this.save(migrateLocalState(parsed.data));
     return { restored: true } as TResponse;
   }
 
@@ -506,20 +632,33 @@ export class LocalApiClient implements ApiClient {
       currency
     };
 
-    state.accounts = method === "PUT" ? state.accounts.map((item) => (item.id === account.id ? account : item)) : [...state.accounts, account];
+    state.accounts =
+      method === "PUT"
+        ? state.accounts.map((item) => (item.id === account.id ? account : item))
+        : [...state.accounts, account];
     state.transactions = state.transactions.map((transaction) =>
-      transaction.account.id === account.id ? { ...transaction, account: { id: account.id, label: account.name } } : transaction
+      transaction.account.id === account.id
+        ? { ...transaction, account: { id: account.id, label: account.name } }
+        : transaction
     );
     return account;
   }
 
-  private upsertTransaction(state: LocalState, body: unknown, method: "POST" | "PUT", recurringId?: string) {
+  private upsertTransaction(
+    state: LocalState,
+    body: unknown,
+    method: "POST" | "PUT",
+    recurringId?: string
+  ) {
     const input = toFormObject(body);
     const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
     const category = state.categories.find((item) => item.id === input.categoryId);
     if (!account || !category) throw new Error("Выберите существующий счет и категорию.");
 
-    const previous = method === "PUT" && input.id ? state.transactions.find((item) => item.id === input.id) : undefined;
+    const previous =
+      method === "PUT" && input.id
+        ? state.transactions.find((item) => item.id === input.id)
+        : undefined;
     if (method === "PUT" && input.id) this.deleteTransaction(state, input.id);
 
     const amount = Number(input.amount);
@@ -536,19 +675,30 @@ export class LocalApiClient implements ApiClient {
       ...(linkedRecurringId ? { recurringId: linkedRecurringId } : {})
     };
 
-    state.transactions = [transaction, ...state.transactions.filter((item) => item.id !== transaction.id)];
+    state.transactions = [
+      transaction,
+      ...state.transactions.filter((item) => item.id !== transaction.id)
+    ];
     this.applyBalance(state, account.id, type === "INCOME" ? amount : -amount);
     return transaction;
   }
 
   // Returns budget overflow info when an EXPENSE pushes its category over the limit.
-  private budgetWarningFor(state: LocalState, tx: TransactionRow): { category: string; spent: number; limit: number } | null {
+  private budgetWarningFor(
+    state: LocalState,
+    tx: TransactionRow
+  ): { category: string; spent: number; limit: number } | null {
     if (tx.type !== "EXPENSE") return null;
     const budget = state.budgets.find((item) => item.categoryId === tx.category.id);
     if (!budget || budget.limitAmount <= 0) return null;
     const month = tx.date.slice(0, 7);
     const spent = state.transactions
-      .filter((item) => item.type === "EXPENSE" && item.category.id === tx.category.id && item.date.startsWith(month))
+      .filter(
+        (item) =>
+          item.type === "EXPENSE" &&
+          item.category.id === tx.category.id &&
+          item.date.startsWith(month)
+      )
       .reduce((sum, item) => sum + item.amount, 0);
     if (spent > budget.limitAmount) {
       return { category: tx.category.label, spent: roundMoney(spent), limit: budget.limitAmount };
@@ -558,18 +708,25 @@ export class LocalApiClient implements ApiClient {
 
   private createTransfer(state: LocalState, body: unknown) {
     const input = toFormObject(body);
-    const fromAccount = state.accounts.find((item) => item.id === input.fromAccountId && !item.isArchived);
-    const toAccount = state.accounts.find((item) => item.id === input.toAccountId && !item.isArchived);
+    const fromAccount = state.accounts.find(
+      (item) => item.id === input.fromAccountId && !item.isArchived
+    );
+    const toAccount = state.accounts.find(
+      (item) => item.id === input.toAccountId && !item.isArchived
+    );
     const amount = Number(input.amount);
 
-    if (!fromAccount || !toAccount) throw new Error("Выберите существующие активные счета для перевода.");
-    if (fromAccount.id === toAccount.id) throw new Error("Счета списания и зачисления должны отличаться.");
+    if (!fromAccount || !toAccount)
+      throw new Error("Выберите существующие активные счета для перевода.");
+    if (fromAccount.id === toAccount.id)
+      throw new Error("Счета списания и зачисления должны отличаться.");
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
 
     const transferId = id("transfer");
     const expenseCategory = this.findOrCreateCategory(state, "Переводы", "EXPENSE");
     const incomeCategory = this.findOrCreateCategory(state, "Переводы", "INCOME");
-    const description = input.description?.trim() || `Перевод ${fromAccount.name} -> ${toAccount.name}`;
+    const description =
+      input.description?.trim() || `Перевод ${fromAccount.name} -> ${toAccount.name}`;
     const date = input.date || new Date().toISOString();
     const expense = this.upsertTransaction(
       state,
@@ -602,17 +759,27 @@ export class LocalApiClient implements ApiClient {
   private deleteTransaction(state: LocalState, transactionId: string) {
     const existing = state.transactions.find((item) => item.id === transactionId);
     if (!existing) return;
-    this.applyBalance(state, existing.account.id, existing.type === "INCOME" ? -existing.amount : existing.amount);
+    this.applyBalance(
+      state,
+      existing.account.id,
+      existing.type === "INCOME" ? -existing.amount : existing.amount
+    );
     state.transactions = state.transactions.filter((item) => item.id !== transactionId);
   }
 
   private applyBalance(state: LocalState, accountId: string, delta: number) {
-    state.accounts = state.accounts.map((account) => (account.id === accountId ? { ...account, balance: roundMoney(account.balance + delta) } : account));
+    state.accounts = state.accounts.map((account) =>
+      account.id === accountId
+        ? { ...account, balance: roundMoney(account.balance + delta) }
+        : account
+    );
   }
 
   private upsertBudget(state: LocalState, body: unknown) {
     const input = toFormObject(body);
-    const category = state.categories.find((item) => item.id === input.categoryId && item.kind === "EXPENSE");
+    const category = state.categories.find(
+      (item) => item.id === input.categoryId && item.kind === "EXPENSE"
+    );
     if (!category) throw new Error("Выберите расходную категорию.");
 
     const row = this.buildBudgetRow(state, category, Number(input.limitAmount));
@@ -629,7 +796,10 @@ export class LocalApiClient implements ApiClient {
       currentAmount: Number(input.currentAmount ?? 0),
       deadline: new Date(input.deadline).toISOString()
     });
-    state.goals = method === "PUT" ? state.goals.map((item) => (item.id === row.id ? row : item)) : [...state.goals, row];
+    state.goals =
+      method === "PUT"
+        ? state.goals.map((item) => (item.id === row.id ? row : item))
+        : [...state.goals, row];
     return row;
   }
 
@@ -668,7 +838,8 @@ export class LocalApiClient implements ApiClient {
     if (!account || !category) throw new Error("Выберите существующий счет и категорию.");
 
     const service = new RecurringTransactionService();
-    const frequency = input.frequency as RecurringTransactionsPageData["recurringTransactions"][number]["frequency"];
+    const frequency =
+      input.frequency as RecurringTransactionsPageData["recurringTransactions"][number]["frequency"];
     const isActive = input.isActive === "true" || input.isActive === "on";
     const amount = Number(input.amount);
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
@@ -680,7 +851,10 @@ export class LocalApiClient implements ApiClient {
     if (method === "PUT" && input.id) {
       const existing = state.recurringTransactions.find((item) => item.id === input.id);
       // Keep the already-created transaction in sync so budgets/balances reflect edits
-      if (existing?.lastTransactionId && state.transactions.some((item) => item.id === existing.lastTransactionId)) {
+      if (
+        existing?.lastTransactionId &&
+        state.transactions.some((item) => item.id === existing.lastTransactionId)
+      ) {
         const linked = state.transactions.find((item) => item.id === existing.lastTransactionId)!;
         this.upsertTransaction(
           state,
@@ -712,7 +886,9 @@ export class LocalApiClient implements ApiClient {
         category: categoryRef,
         lastTransactionId: existing?.lastTransactionId
       };
-      state.recurringTransactions = state.recurringTransactions.map((item) => (item.id === row.id ? row : item));
+      state.recurringTransactions = state.recurringTransactions.map((item) =>
+        item.id === row.id ? row : item
+      );
       return row;
     }
 
@@ -783,7 +959,9 @@ export class LocalApiClient implements ApiClient {
       );
     }
     state.recurringTransactions = state.recurringTransactions.map((item) =>
-      item.id === recurring.id ? { ...item, nextDate: status.nextDateAfterRun.toISOString(), isDue: false } : item
+      item.id === recurring.id
+        ? { ...item, nextDate: status.nextDateAfterRun.toISOString(), isDue: false }
+        : item
     );
     return { created: status.dueDates.length, nextDate: status.nextDateAfterRun.toISOString() };
   }
@@ -805,8 +983,13 @@ export class LocalApiClient implements ApiClient {
         continue;
       }
       const type = rawAmount >= 0 ? "INCOME" : "EXPENSE";
-      const accountName = String(row[input.accountColumn ?? ""] ?? "").trim().toLowerCase();
-      const account = state.accounts.find((item) => item.name.toLowerCase() === accountName && !item.isArchived) ?? fallbackAccount;
+      const accountName = String(row[input.accountColumn ?? ""] ?? "")
+        .trim()
+        .toLowerCase();
+      const account =
+        state.accounts.find(
+          (item) => item.name.toLowerCase() === accountName && !item.isArchived
+        ) ?? fallbackAccount;
       const rawCategoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
       const description = String(row[input.descriptionColumn ?? ""] ?? "").trim();
       // When the CSV row carries no category, try to auto-categorize it from
@@ -818,8 +1001,14 @@ export class LocalApiClient implements ApiClient {
       } else {
         const suggestedId = suggestCategoryId(description, state.transactions, { type });
         category =
-          (suggestedId ? state.categories.find((item) => item.id === suggestedId && item.kind === type) : undefined) ??
-          this.findOrCreateCategory(state, type === "INCOME" ? "Импорт доходов" : "Импорт расходов", type);
+          (suggestedId
+            ? state.categories.find((item) => item.id === suggestedId && item.kind === type)
+            : undefined) ??
+          this.findOrCreateCategory(
+            state,
+            type === "INCOME" ? "Импорт доходов" : "Импорт расходов",
+            type
+          );
       }
       const duplicate = state.transactions.some((transaction) => {
         return (
@@ -873,7 +1062,9 @@ export class LocalApiClient implements ApiClient {
   }
 
   private findOrCreateCategory(state: LocalState, label: string, kind: "INCOME" | "EXPENSE") {
-    const existing = state.categories.find((item) => item.kind === kind && item.label.toLowerCase() === label.toLowerCase());
+    const existing = state.categories.find(
+      (item) => item.kind === kind && item.label.toLowerCase() === label.toLowerCase()
+    );
     if (existing) return existing;
     const category = {
       id: id("cat"),
@@ -906,8 +1097,12 @@ export class LocalApiClient implements ApiClient {
     if (input.density && ["comfortable", "compact"].includes(input.density)) {
       state.density = input.density as LocalState["density"];
     }
-    if (input.defaultTransactionType && ["INCOME", "EXPENSE"].includes(input.defaultTransactionType)) {
-      state.defaultTransactionType = input.defaultTransactionType as LocalState["defaultTransactionType"];
+    if (
+      input.defaultTransactionType &&
+      ["INCOME", "EXPENSE"].includes(input.defaultTransactionType)
+    ) {
+      state.defaultTransactionType =
+        input.defaultTransactionType as LocalState["defaultTransactionType"];
     }
     return this.settings(state);
   }
@@ -932,21 +1127,27 @@ export class LocalApiClient implements ApiClient {
       const security = securities.find((item) => item.ticker === ticker);
       if (!security) throw new Error("Security not found in the market directory.");
       const exists = state.investments.watchlist.some((item) => item.ticker === ticker);
-      state.investments.watchlist = exists ? state.investments.watchlist : [...state.investments.watchlist, security];
+      state.investments.watchlist = exists
+        ? state.investments.watchlist
+        : [...state.investments.watchlist, security];
       state.investments = await this.investments(state);
       return state.investments.watchlist.find((item) => item.ticker === ticker);
     }
 
     if (action === "removeWatchlist") {
       if (!ticker) throw new Error("Ticker is required.");
-      state.investments.watchlist = state.investments.watchlist.filter((item) => item.ticker !== ticker);
+      state.investments.watchlist = state.investments.watchlist.filter(
+        (item) => item.ticker !== ticker
+      );
       state.investments = await this.investments(state);
       return undefined;
     }
 
     if (action === "delete") {
       if (!ticker) throw new Error("Ticker is required.");
-      state.investments.portfolio = state.investments.portfolio.filter((item) => item.ticker !== ticker);
+      state.investments.portfolio = state.investments.portfolio.filter(
+        (item) => item.ticker !== ticker
+      );
       state.investments = await this.investments(state);
       return undefined;
     }
@@ -957,8 +1158,10 @@ export class LocalApiClient implements ApiClient {
 
     const quantity = Number(input.quantity);
     const averageBuyPrice = Number(input.averageBuyPrice);
-    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Введите количество больше нуля.");
-    if (!Number.isFinite(averageBuyPrice) || averageBuyPrice <= 0) throw new Error("Введите среднюю цену больше нуля.");
+    if (!Number.isFinite(quantity) || quantity <= 0)
+      throw new Error("Введите количество больше нуля.");
+    if (!Number.isFinite(averageBuyPrice) || averageBuyPrice <= 0)
+      throw new Error("Введите среднюю цену больше нуля.");
 
     const position = {
       ticker: security.ticker,
@@ -972,7 +1175,10 @@ export class LocalApiClient implements ApiClient {
       share: 0,
       risk: security.risk
     };
-    state.investments.portfolio = [position, ...state.investments.portfolio.filter((item) => item.ticker !== ticker)];
+    state.investments.portfolio = [
+      position,
+      ...state.investments.portfolio.filter((item) => item.ticker !== ticker)
+    ];
     state.investments = await this.investments(state);
     return state.investments.portfolio.find((item) => item.ticker === ticker);
   }
@@ -1005,12 +1211,14 @@ export class LocalApiClient implements ApiClient {
         const date = transaction.date.slice(0, 10);
         if (filters.from && date < filters.from) return false;
         if (filters.to && date > filters.to) return false;
-        if (filters.type && filters.type !== "ALL" && transaction.type !== filters.type) return false;
+        if (filters.type && filters.type !== "ALL" && transaction.type !== filters.type)
+          return false;
         if (filters.categoryId && transaction.category.id !== filters.categoryId) return false;
         if (filters.accountId && transaction.account.id !== filters.accountId) return false;
         if (filters.q) {
           const query = filters.q.toLowerCase();
-          const haystack = `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
+          const haystack =
+            `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
           if (!haystack.includes(query)) return false;
         }
         return true;
@@ -1043,17 +1251,29 @@ export class LocalApiClient implements ApiClient {
       source: "database",
       budgets,
       categories: state.categories,
-      recommendations: new FinanceRecommendationService().build(finance).filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
+      recommendations: new FinanceRecommendationService()
+        .build(finance)
+        .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
       currency,
       selectedMonth
     };
   }
 
-  private buildBudgetRow(state: LocalState, category: CategoryOption, limitAmount: number, monthKey?: string): BudgetsPageData["budgets"][number] {
+  private buildBudgetRow(
+    state: LocalState,
+    category: CategoryOption,
+    limitAmount: number,
+    monthKey?: string
+  ): BudgetsPageData["budgets"][number] {
     const now = new Date();
     const month = monthKey ?? monthKeyOf(now);
     const spent = state.transactions
-      .filter((transaction) => transaction.type === "EXPENSE" && transaction.category.id === category.id && transaction.date.startsWith(month))
+      .filter(
+        (transaction) =>
+          transaction.type === "EXPENSE" &&
+          transaction.category.id === category.id &&
+          transaction.date.startsWith(month)
+      )
       .reduce((sum, transaction) => sum + transaction.amount, 0);
     return {
       id: `budget-${category.id}`,
@@ -1064,15 +1284,19 @@ export class LocalApiClient implements ApiClient {
       spent: roundMoney(spent),
       progress: limitAmount > 0 ? clamp(percent(spent, limitAmount), 0, 140) : 0,
       isExceeded: limitAmount > 0 && spent > limitAmount,
-      suggestedLimit: suggestedLimitFor(category.id, state.transactions, { now: monthKey ? new Date(`${monthKey}-01`) : now })
+      suggestedLimit: suggestedLimitFor(category.id, state.transactions, {
+        now: monthKey ? new Date(`${monthKey}-01`) : now
+      })
     };
   }
 
   private budgetRows(state: LocalState, monthKey?: string) {
-    return state.categories.filter((category) => category.kind === "EXPENSE").map((category) => {
-      const existing = state.budgets.find((budget) => budget.categoryId === category.id);
-      return this.buildBudgetRow(state, category, existing?.limitAmount ?? 0, monthKey);
-    });
+    return state.categories
+      .filter((category) => category.kind === "EXPENSE")
+      .map((category) => {
+        const existing = state.budgets.find((budget) => budget.categoryId === category.id);
+        return this.buildBudgetRow(state, category, existing?.limitAmount ?? 0, monthKey);
+      });
   }
 
   private goals(state: LocalState): GoalsPageData {
@@ -1083,13 +1307,25 @@ export class LocalApiClient implements ApiClient {
     const service = new RecurringTransactionService();
     const rows = service.sortUpcoming(
       state.recurringTransactions.map((item) => {
-        const status = service.getStatus({ nextDate: new Date(item.nextDate), frequency: item.frequency, isActive: item.isActive });
+        const status = service.getStatus({
+          nextDate: new Date(item.nextDate),
+          frequency: item.frequency,
+          isActive: item.isActive
+        });
         return { ...item, daysUntilNext: status.daysUntilNext, isDue: status.isDue };
       })
     );
     const active = rows.filter((row) => row.isActive);
     const monthly = (type: "INCOME" | "EXPENSE") =>
-      active.filter((row) => row.type === type).reduce((sum, row) => sum + row.amount * (row.frequency === "WEEKLY" ? 4.33 : row.frequency === "YEARLY" ? 1 / 12 : 1), 0);
+      active
+        .filter((row) => row.type === type)
+        .reduce(
+          (sum, row) =>
+            sum +
+            row.amount *
+              (row.frequency === "WEEKLY" ? 4.33 : row.frequency === "YEARLY" ? 1 / 12 : 1),
+          0
+        );
     return {
       source: "database",
       recurringTransactions: rows,
@@ -1099,7 +1335,11 @@ export class LocalApiClient implements ApiClient {
       summary: {
         activeCount: active.length,
         dueCount: active.filter((row) => row.isDue).length,
-        nextSevenDaysAmount: roundMoney(active.filter((row) => row.isDue || row.daysUntilNext <= 7).reduce((sum, row) => sum + row.amount, 0)),
+        nextSevenDaysAmount: roundMoney(
+          active
+            .filter((row) => row.isDue || row.daysUntilNext <= 7)
+            .reduce((sum, row) => sum + row.amount, 0)
+        ),
         monthlyPlannedIncome: roundMoney(monthly("INCOME")),
         monthlyPlannedExpense: roundMoney(monthly("EXPENSE"))
       }
@@ -1151,9 +1391,15 @@ export class LocalApiClient implements ApiClient {
     }));
     const historical: Record<string, number[]> = {};
     for (const row of portfolio) {
-      historical[row.ticker] = (await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())).map((item) => item.price);
+      historical[row.ticker] = (
+        await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())
+      ).map((item) => item.price);
     }
-    const analysis = new InvestmentAnalysisService().analyze(portfolio, state.riskProfileCode, historical);
+    const analysis = new InvestmentAnalysisService().analyze(
+      portfolio,
+      state.riskProfileCode,
+      historical
+    );
 
     return {
       source: "database",
@@ -1173,7 +1419,13 @@ export class LocalApiClient implements ApiClient {
   // budgets, goals) from the shared sample dataset, so a new user can explore a
   // realistic app in one click.
   private buildSampleState(): LocalState {
-    const accounts = SAMPLE_ACCOUNTS.map((account) => ({ id: account.id, name: account.name, type: account.type, balance: account.balance, currency }));
+    const accounts = SAMPLE_ACCOUNTS.map((account) => ({
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      balance: account.balance,
+      currency
+    }));
     const categories: CategoryOption[] = SAMPLE_CATEGORIES.map((category) => ({
       id: category.id,
       label: category.label,
@@ -1205,7 +1457,13 @@ export class LocalApiClient implements ApiClient {
       })
     );
 
-    const state: LocalState = { ...createInitialState(), accounts, categories, transactions, goals };
+    const state: LocalState = {
+      ...createInitialState(),
+      accounts,
+      categories,
+      transactions,
+      goals
+    };
     state.budgets = SAMPLE_BUDGETS.map((budget) => {
       const category = categories.find((item) => item.id === budget.categoryId);
       return category ? this.buildBudgetRow(state, category, budget.limitAmount) : null;
@@ -1221,21 +1479,53 @@ export class LocalApiClient implements ApiClient {
     // part of net worth (a deposit just moves it from a balance into a goal).
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
     const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
-    const netWorthTrend = buildNetWorthTrend({ currentNetWorth: netWorth, transactions: state.transactions });
-    const savingsBalance = state.accounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
-    const averageMonthlyExpense = finance.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(finance.monthlyCashflow.length, 1);
-    const emergencyFund = buildEmergencyFund({ savingsBalance, averageMonthlyExpense, targetMonths: state.emergencyFundMonthsTarget });
+    const netWorthTrend = buildNetWorthTrend({
+      currentNetWorth: netWorth,
+      transactions: state.transactions
+    });
+    const savingsBalance = state.accounts
+      .filter((account) => account.type === "SAVINGS")
+      .reduce((sum, account) => sum + account.balance, 0);
+    const averageMonthlyExpense =
+      finance.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
+      Math.max(finance.monthlyCashflow.length, 1);
+    const emergencyFund = buildEmergencyFund({
+      savingsBalance,
+      averageMonthlyExpense,
+      targetMonths: state.emergencyFundMonthsTarget
+    });
     const recommendationService = new FinanceRecommendationService();
     return {
       source: "database",
       currency,
       metrics: [
-        { title: "Общий баланс", value: formatCurrency(totalBalance, currency), detail: "Все активные счета" },
-        { title: "Доходы за месяц", value: formatCurrency(finance.currentMonthIncome, currency), detail: "Текущий календарный месяц", tone: "success" },
-        { title: "Расходы за месяц", value: formatCurrency(finance.currentMonthExpense, currency), detail: "Текущий календарный месяц", tone: "warning" },
-        { title: "Свободный остаток", value: formatCurrency(finance.freeCashflow, currency), detail: "Доходы минус расходы", tone: finance.freeCashflow >= 0 ? "success" : "danger" }
+        {
+          title: "Общий баланс",
+          value: formatCurrency(totalBalance, currency),
+          detail: "Все активные счета"
+        },
+        {
+          title: "Доходы за месяц",
+          value: formatCurrency(finance.currentMonthIncome, currency),
+          detail: "Текущий календарный месяц",
+          tone: "success"
+        },
+        {
+          title: "Расходы за месяц",
+          value: formatCurrency(finance.currentMonthExpense, currency),
+          detail: "Текущий календарный месяц",
+          tone: "warning"
+        },
+        {
+          title: "Свободный остаток",
+          value: formatCurrency(finance.freeCashflow, currency),
+          detail: "Доходы минус расходы",
+          tone: finance.freeCashflow >= 0 ? "success" : "danger"
+        }
       ],
-      categoryExpenses: this.budgetRows(state).filter((budget) => budget.spent > 0).map((budget) => ({ name: budget.category, value: budget.spent, fill: budget.color })),
+      categoryExpenses: this.budgetRows(state)
+        .filter((budget) => budget.spent > 0)
+        .map((budget) => ({ name: budget.category, value: budget.spent, fill: budget.color })),
       monthlyCashflow: finance.monthlyCashflow,
       recommendations: recommendationService.build(finance),
       health: recommendationService.healthScore(finance),
@@ -1270,15 +1560,36 @@ export class LocalApiClient implements ApiClient {
       density: state.density ?? "comfortable",
       defaultTransactionType: state.defaultTransactionType ?? "EXPENSE",
       riskProfiles: [
-        { id: "risk-conservative", code: "CONSERVATIVE", title: RISK_PROFILE_LABELS.CONSERVATIVE, description: "Стабильность и контроль просадки." },
-        { id: "risk-moderate", code: "MODERATE", title: RISK_PROFILE_LABELS.MODERATE, description: "Баланс роста и риска." },
-        { id: "risk-aggressive", code: "AGGRESSIVE", title: RISK_PROFILE_LABELS.AGGRESSIVE, description: "Готовность к заметной волатильности." }
+        {
+          id: "risk-conservative",
+          code: "CONSERVATIVE",
+          title: RISK_PROFILE_LABELS.CONSERVATIVE,
+          description: "Стабильность и контроль просадки."
+        },
+        {
+          id: "risk-moderate",
+          code: "MODERATE",
+          title: RISK_PROFILE_LABELS.MODERATE,
+          description: "Баланс роста и риска."
+        },
+        {
+          id: "risk-aggressive",
+          code: "AGGRESSIVE",
+          title: RISK_PROFILE_LABELS.AGGRESSIVE,
+          description: "Готовность к заметной волатильности."
+        }
       ]
     };
   }
 
   private importReferences(state: LocalState): ImportPageData {
-    return { source: "database", accounts: this.accounts(state).accounts, categories: state.categories };
+    return {
+      source: "database",
+      accounts: this.accounts(state).accounts,
+      categories: state.categories,
+      lastBackupAt: state.lastBackupAt,
+      backupReminderDue: isBackupReminderDue(state.lastBackupAt)
+    };
   }
 
   private categoriesPage(state: LocalState): CategoriesPageData {
@@ -1304,33 +1615,57 @@ export class LocalApiClient implements ApiClient {
       const key = monthKeyOf(d);
       const endDate = new Date(year, month + 1, 0);
       const shortLabel = d.toLocaleDateString("ru", { month: "short" });
-      months.push({ key, label: shortLabel, start: `${key}-01`, end: `${year}-${String(month + 1).padStart(2, "0")}-${endDate.getDate()}` });
+      months.push({
+        key,
+        label: shortLabel,
+        start: `${key}-01`,
+        end: `${year}-${String(month + 1).padStart(2, "0")}-${endDate.getDate()}`
+      });
     }
 
     const monthlyCashflow = months.map((m) => {
       const rows = state.transactions.filter((t) => t.date.startsWith(m.key));
       const income = rows.filter((r) => r.type === "INCOME").reduce((sum, r) => sum + r.amount, 0);
-      const expense = rows.filter((r) => r.type === "EXPENSE").reduce((sum, r) => sum + r.amount, 0);
+      const expense = rows
+        .filter((r) => r.type === "EXPENSE")
+        .reduce((sum, r) => sum + r.amount, 0);
       const savings = income - expense;
       const savingsRate = income > 0 ? Math.round((savings / income) * 1000) / 10 : 0;
       return { month: m.label, income, expense, savings, savingsRate };
     });
 
     const nonZero = monthlyCashflow.filter((m) => m.income > 0 || m.expense > 0).length || 1;
-    const avgMonthlyIncome = Math.round(monthlyCashflow.reduce((sum, m) => sum + m.income, 0) / nonZero);
-    const avgMonthlyExpense = Math.round(monthlyCashflow.reduce((sum, m) => sum + m.expense, 0) / nonZero);
-    const avgSavingsRate = Math.round((monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length) * 10) / 10;
+    const avgMonthlyIncome = Math.round(
+      monthlyCashflow.reduce((sum, m) => sum + m.income, 0) / nonZero
+    );
+    const avgMonthlyExpense = Math.round(
+      monthlyCashflow.reduce((sum, m) => sum + m.expense, 0) / nonZero
+    );
+    const avgSavingsRate =
+      Math.round(
+        (monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length) * 10
+      ) / 10;
 
     const bestMonth = [...monthlyCashflow].sort((a, b) => b.savings - a.savings)[0]?.month ?? "-";
     const worstMonth = [...monthlyCashflow].sort((a, b) => a.savings - b.savings)[0]?.month ?? "-";
 
     // Top expense categories over 6 months
     const sixMonthsAgoKey = months[0].key;
-    const expenseTxs = state.transactions.filter((t) => t.type === "EXPENSE" && t.date >= sixMonthsAgoKey);
+    const expenseTxs = state.transactions.filter(
+      (t) => t.type === "EXPENSE" && t.date >= sixMonthsAgoKey
+    );
     const totalExpense = expenseTxs.reduce((sum, t) => sum + t.amount, 0);
-    const catTotals = new Map<string, { categoryId: string; category: string; color: string; total: number }>();
+    const catTotals = new Map<
+      string,
+      { categoryId: string; category: string; color: string; total: number }
+    >();
     for (const t of expenseTxs) {
-      const existing = catTotals.get(t.category.id) ?? { categoryId: t.category.id, category: t.category.label, color: t.category.color, total: 0 };
+      const existing = catTotals.get(t.category.id) ?? {
+        categoryId: t.category.id,
+        category: t.category.label,
+        color: t.category.color,
+        total: 0
+      };
       existing.total += t.amount;
       catTotals.set(t.category.id, existing);
     }
@@ -1341,6 +1676,7 @@ export class LocalApiClient implements ApiClient {
         ...item,
         share: totalExpense > 0 ? Math.round((item.total / totalExpense) * 1000) / 10 : 0
       }));
+    const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories);
 
     return {
       source: "database",
@@ -1351,7 +1687,10 @@ export class LocalApiClient implements ApiClient {
       avgMonthlyExpense,
       avgSavingsRate,
       bestMonth,
-      worstMonth
+      worstMonth,
+      expenseChangePct: derived.expenseChangePct,
+      savingsRateTrend: derived.savingsRateTrend,
+      insights: derived.insights
     };
   }
 
@@ -1374,7 +1713,14 @@ export class LocalApiClient implements ApiClient {
       );
       if (duplicate) throw new Error("Категория с таким именем уже существует.");
 
-      const updated: CategoryOption = { ...existing, label: name, kind, color, isEssential, isSubscription };
+      const updated: CategoryOption = {
+        ...existing,
+        label: name,
+        kind,
+        color,
+        isEssential,
+        isSubscription
+      };
       state.categories = state.categories.map((c) => (c.id === input.id ? updated : c));
       // Update category label/color in existing transactions
       state.transactions = state.transactions.map((t) =>
@@ -1403,30 +1749,53 @@ export class LocalApiClient implements ApiClient {
 
   private financeInput(state: LocalState) {
     const now = new Date();
-    const monthKey = (offset: number) => monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset, 1));
+    const monthKey = (offset: number) =>
+      monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset, 1));
     const monthlyCashflow = [-2, -1, 0].map((offset) => {
       const key = monthKey(offset);
       const rows = state.transactions.filter((transaction) => transaction.date.startsWith(key));
       return {
         month: key,
-        income: rows.filter((row) => row.type === "INCOME").reduce((sum, row) => sum + row.amount, 0),
-        expense: rows.filter((row) => row.type === "EXPENSE").reduce((sum, row) => sum + row.amount, 0)
+        income: rows
+          .filter((row) => row.type === "INCOME")
+          .reduce((sum, row) => sum + row.amount, 0),
+        expense: rows
+          .filter((row) => row.type === "EXPENSE")
+          .reduce((sum, row) => sum + row.amount, 0)
       };
     });
     const currentMonth = monthlyCashflow[monthlyCashflow.length - 1];
-    const expenseRows = state.transactions.filter((row) => row.type === "EXPENSE" && row.date.startsWith(monthKey(0)));
-    const averageExpense = monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) / Math.max(monthlyCashflow.length, 1);
-    const emergencyFund = state.accounts.filter((account) => account.type === "SAVINGS").reduce((sum, account) => sum + account.balance, 0);
-    const softExpense = expenseRows.filter((row) => {
-      const category = state.categories.find((item) => item.id === row.category.id);
-      // Discretionary = subscriptions + entertainment + restaurants (same
-      // definition as the web/Prisma path, for parity).
-      return category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.label ?? "");
-    }).reduce((sum, row) => sum + row.amount, 0);
-    const essentialExpense = expenseRows.filter((row) => state.categories.find((category) => category.id === row.category.id)?.isEssential).reduce((sum, row) => sum + row.amount, 0);
+    const expenseRows = state.transactions.filter(
+      (row) => row.type === "EXPENSE" && row.date.startsWith(monthKey(0))
+    );
+    const averageExpense =
+      monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
+      Math.max(monthlyCashflow.length, 1);
+    const emergencyFund = state.accounts
+      .filter((account) => account.type === "SAVINGS")
+      .reduce((sum, account) => sum + account.balance, 0);
+    const softExpense = expenseRows
+      .filter((row) => {
+        const category = state.categories.find((item) => item.id === row.category.id);
+        // Discretionary = subscriptions + entertainment + restaurants (same
+        // definition as the web/Prisma path, for parity).
+        return (
+          category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.label ?? "")
+        );
+      })
+      .reduce((sum, row) => sum + row.amount, 0);
+    const essentialExpense = expenseRows
+      .filter(
+        (row) => state.categories.find((category) => category.id === row.category.id)?.isEssential
+      )
+      .reduce((sum, row) => sum + row.amount, 0);
     const freeCashflow = currentMonth.income - currentMonth.expense;
     return {
-      budgets: this.budgetRows(state).map((budget) => ({ ...budget, isSubscription: state.categories.find((category) => category.id === budget.categoryId)?.isSubscription })),
+      budgets: this.budgetRows(state).map((budget) => ({
+        ...budget,
+        isSubscription: state.categories.find((category) => category.id === budget.categoryId)
+          ?.isSubscription
+      })),
       monthlyCashflow,
       currentMonthIncome: currentMonth.income,
       currentMonthExpense: currentMonth.expense,
@@ -1434,18 +1803,30 @@ export class LocalApiClient implements ApiClient {
       savingsRate: currentMonth.income > 0 ? percent(freeCashflow, currentMonth.income) : 0,
       emergencyFundMonths: averageExpense > 0 ? emergencyFund / averageExpense : 0,
       emergencyFundTargetMonths: state.emergencyFundMonthsTarget,
-      essentialExpenseShare: currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
-      subscriptionAndEntertainmentShare: currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
-      goals: this.goals(state).goals.map((goal) => ({ title: goal.title, progress: goal.progress, monthlyContribution: goal.monthlyContribution }))
+      essentialExpenseShare:
+        currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
+      subscriptionAndEntertainmentShare:
+        currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
+      goals: this.goals(state).goals.map((goal) => ({
+        title: goal.title,
+        progress: goal.progress,
+        monthlyContribution: goal.monthlyContribution
+      }))
     };
   }
 
   private async state() {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
-    const existing = await this.storage.getItem<LocalState>(key);
+    const existing = await this.storage.getItem<unknown>(key);
     const parsed = localStateSchema.safeParse(existing);
-    if (parsed.success) return parsed.data as LocalState;
+    if (parsed.success) {
+      const migrated = migrateLocalState(parsed.data);
+      if (migrated.schemaVersion !== (existing as { schemaVersion?: unknown })?.schemaVersion) {
+        await this.storage.setItem(key, migrated);
+      }
+      return migrated;
+    }
     const initial = createInitialState();
     await this.storage.setItem(key, initial);
     return initial;
@@ -1466,7 +1847,7 @@ export class LocalApiClient implements ApiClient {
     if (stored && Array.isArray(stored.profiles) && stored.profiles.length > 0) return stored;
 
     // Migration: check for legacy state
-    const legacy = await this.storage.getItem<LocalState>(LEGACY_STATE_KEY);
+    const legacy = await this.storage.getItem<unknown>(LEGACY_STATE_KEY);
     const defaultProfile: UserProfile = {
       id: "profile-default",
       name: "Основной",
@@ -1476,7 +1857,11 @@ export class LocalApiClient implements ApiClient {
     const list: ProfileList = { profiles: [defaultProfile], activeProfileId: defaultProfile.id };
 
     if (legacy) {
-      await this.storage.setItem(profileStateKey(defaultProfile.id), legacy);
+      const parsed = localStateSchema.safeParse(legacy);
+      await this.storage.setItem(
+        profileStateKey(defaultProfile.id),
+        parsed.success ? migrateLocalState(parsed.data) : legacy
+      );
       await this.storage.removeItem(LEGACY_STATE_KEY);
     }
 

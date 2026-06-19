@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { shouldUseBuildFallbackData } from "@/lib/build-mode";
+import { APP_VERSION } from "@/lib/constants";
 import { runtimeConfig } from "@/lib/platform/env";
 import { prisma } from "@/lib/prisma";
 
@@ -14,7 +16,7 @@ export async function GET() {
   let database: "ok" | "unavailable" = "unavailable";
   let seeded = false;
 
-  if (prisma && process.env.NEXT_OUTPUT !== "export") {
+  if (prisma && !shouldUseBuildFallbackData()) {
     try {
       await prisma.$queryRaw`SELECT 1`;
       database = "ok";
@@ -27,7 +29,7 @@ export async function GET() {
   return NextResponse.json({
     ok: database === "ok",
     app: "financial-assistant",
-    version: "0.1.0",
+    version: APP_VERSION,
     database,
     seeded,
     runtime: runtimeConfig,

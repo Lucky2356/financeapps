@@ -1,63 +1,142 @@
 "use client";
 
 import { HelpCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-import { cn } from "@/lib/utils";
+import { clamp, cn } from "@/lib/utils";
 
 // Plain-language explanations for finance terms used across the app.
 export const FINANCE_TERM_HINTS: Record<string, string> = {
   "Чистый капитал":
     "Всё, чем вы владеете: деньги на счетах + текущая стоимость инвестиций + накопления по целям.",
   "Общий баланс": "Сумма средств на всех активных счетах (без инвестиций и целей).",
-  "Свободный остаток": "Доходы минус расходы за текущий месяц — сколько можно отложить или инвестировать.",
+  "Свободный остаток":
+    "Доходы минус расходы за текущий месяц — сколько можно отложить или инвестировать.",
   "Норма накоплений": "Доля доходов, которую вы сберегаете. Ориентир — от 15%.",
   "Финансовая подушка":
     "Резерв на накопительных счетах в месяцах ваших средних расходов. Цель — 3–6 месяцев на случай форс-мажора.",
-  "Риск-профиль": "Ваша готовность к колебаниям стоимости инвестиций. Влияет на анализ рисков и подбор бумаг."
+  "Риск-профиль":
+    "Ваша готовность к колебаниям стоимости инвестиций. Влияет на анализ рисков и подбор бумаг."
 };
 
 // Lightweight "?" hint with a click-to-open popover. No external popover/tooltip
 // dependency — closes on outside click or Escape. Used to explain finance terms.
 export function InfoHint({ text, className }: { text: string; className?: string }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
+  const [position, setPosition] = useState({
+    left: 0,
+    placement: "bottom" as "bottom" | "top",
+    ready: false,
+    top: 0,
+    width: 280
+  });
+  const tooltipId = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+
+  const updatePosition = useCallback(() => {
+    const button = buttonRef.current;
+    const tooltip = tooltipRef.current;
+    if (!button || !tooltip) return;
+
+    const edgePadding = 12;
+    const gap = 8;
+    const preferredWidth = 280;
+    const rect = button.getBoundingClientRect();
+    const width = Math.min(preferredWidth, Math.max(180, window.innerWidth - edgePadding * 2));
+    const tooltipHeight = tooltip.offsetHeight || 96;
+    const belowTop = rect.bottom + gap;
+    const aboveTop = rect.top - tooltipHeight - gap;
+    const canFitBelow = belowTop + tooltipHeight + edgePadding <= window.innerHeight;
+    const placement = canFitBelow || aboveTop < edgePadding ? "bottom" : "top";
+    const top =
+      placement === "bottom"
+        ? clamp(
+            belowTop,
+            edgePadding,
+            Math.max(edgePadding, window.innerHeight - tooltipHeight - edgePadding)
+          )
+        : Math.max(edgePadding, aboveTop);
+    const left = clamp(
+      rect.left + rect.width / 2 - width / 2,
+      edgePadding,
+      Math.max(edgePadding, window.innerWidth - width - edgePadding)
+    );
+
+    setPosition({ left, placement, ready: true, top, width });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    updatePosition();
+    const frame = window.requestAnimationFrame(updatePosition);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   useEffect(() => {
     if (!open) return;
-    function onPointer(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    function onPointer(event: PointerEvent) {
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target) || tooltipRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
-    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
+  function toggleHint() {
+    if (!open) setPosition((current) => ({ ...current, ready: false }));
+    setOpen((value) => !value);
+  }
+
   return (
-    <span ref={ref} className={cn("relative inline-flex align-middle", className)}>
+    <span className={cn("inline-flex align-middle", className)}>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleHint}
         className="text-muted-foreground transition-colors hover:text-foreground"
         aria-label="Пояснение"
+        aria-describedby={open ? tooltipId : undefined}
         aria-expanded={open}
       >
         <HelpCircle className="size-3.5" />
       </button>
-      {open ? (
-        <span
-          role="tooltip"
-          className="absolute left-1/2 top-6 z-50 w-60 -translate-x-1/2 rounded-md border bg-popover p-3 text-left text-xs font-normal leading-relaxed text-popover-foreground shadow-md"
-        >
-          {text}
-        </span>
-      ) : null}
+      {open
+        ? createPortal(
+            <span
+              ref={tooltipRef}
+              id={tooltipId}
+              role="tooltip"
+              className="fixed z-[100] rounded-md border bg-popover p-3 text-left text-xs font-normal leading-relaxed text-popover-foreground shadow-lg"
+              data-placement={position.placement}
+              style={{
+                left: position.left,
+                top: position.top,
+                visibility: position.ready ? "visible" : "hidden",
+                width: position.width
+              }}
+            >
+              {text}
+            </span>,
+            document.body
+          )
+        : null}
     </span>
   );
 }

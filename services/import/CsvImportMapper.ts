@@ -16,6 +16,13 @@ export type CsvColumnMapping = {
   accountColumn: string;
 };
 
+export type CsvImportPreset = {
+  id: string;
+  label: string;
+  description: string;
+  aliases: Partial<Record<keyof CsvColumnMapping, string[]>>;
+};
+
 export type CsvValidationResult = {
   validRows: number;
   invalidRows: number;
@@ -30,7 +37,62 @@ const aliases: Record<keyof CsvColumnMapping, string[]> = {
   accountColumn: ["account", "счет", "счёт", "карта", "кошелек"]
 };
 
+const presets: CsvImportPreset[] = [
+  {
+    id: "sber",
+    label: "Сбер",
+    description: "Типовые выгрузки СберБанк Онлайн",
+    aliases: {
+      dateColumn: ["Дата операции", "Дата"],
+      amountColumn: ["Сумма операции", "Сумма"],
+      descriptionColumn: ["Описание", "Назначение платежа", "Операция"],
+      categoryColumn: ["Категория"],
+      accountColumn: ["Карта", "Счет", "Счёт"]
+    }
+  },
+  {
+    id: "tbank",
+    label: "Т-Банк",
+    description: "Выписки Т-Банка / Т-Инвестиций",
+    aliases: {
+      dateColumn: ["Дата операции", "Дата платежа", "Дата"],
+      amountColumn: ["Сумма операции", "Сумма платежа", "Сумма"],
+      descriptionColumn: ["Описание операции", "Описание", "Место операции"],
+      categoryColumn: ["Категория"],
+      accountColumn: ["Счет", "Счёт", "Карта"]
+    }
+  },
+  {
+    id: "alfa",
+    label: "Альфа-Банк",
+    description: "CSV-выгрузки операций Альфа-Банка",
+    aliases: {
+      dateColumn: ["Дата операции", "Дата проводки", "Дата"],
+      amountColumn: ["Сумма", "Сумма в валюте счета", "Сумма операции"],
+      descriptionColumn: ["Описание", "Назначение", "Контрагент"],
+      categoryColumn: ["Категория"],
+      accountColumn: ["Счет", "Счёт", "Номер счета"]
+    }
+  },
+  {
+    id: "vtb",
+    label: "ВТБ",
+    description: "Базовые CSV/Excel-поля из выписок ВТБ",
+    aliases: {
+      dateColumn: ["Дата операции", "Дата"],
+      amountColumn: ["Сумма операции", "Сумма"],
+      descriptionColumn: ["Описание операции", "Описание", "Назначение платежа"],
+      categoryColumn: ["Категория"],
+      accountColumn: ["Счет списания", "Счет", "Счёт", "Карта"]
+    }
+  }
+];
+
 export class CsvImportMapper {
+  presets(): CsvImportPreset[] {
+    return presets;
+  }
+
   parse(content: string): ParsedCsv {
     const result = Papa.parse<Record<string, unknown>>(content, {
       header: true,
@@ -55,7 +117,29 @@ export class CsvImportMapper {
     };
   }
 
-  validateRows(rows: Array<Record<string, unknown>>, mapping: CsvColumnMapping): CsvValidationResult {
+  applyPreset(fields: string[], presetId: string): CsvColumnMapping {
+    const preset = presets.find((item) => item.id === presetId);
+    const suggested = this.suggestColumns(fields);
+    if (!preset) return suggested;
+
+    return {
+      dateColumn: this.findByCandidates(fields, preset.aliases.dateColumn) || suggested.dateColumn,
+      amountColumn:
+        this.findByCandidates(fields, preset.aliases.amountColumn) || suggested.amountColumn,
+      descriptionColumn:
+        this.findByCandidates(fields, preset.aliases.descriptionColumn) ||
+        suggested.descriptionColumn,
+      categoryColumn:
+        this.findByCandidates(fields, preset.aliases.categoryColumn) || suggested.categoryColumn,
+      accountColumn:
+        this.findByCandidates(fields, preset.aliases.accountColumn) || suggested.accountColumn
+    };
+  }
+
+  validateRows(
+    rows: Array<Record<string, unknown>>,
+    mapping: CsvColumnMapping
+  ): CsvValidationResult {
     const warnings: string[] = [];
     let validRows = 0;
 
@@ -89,7 +173,12 @@ export class CsvImportMapper {
   }
 
   private findByAlias(fields: string[], target: keyof CsvColumnMapping) {
+    return this.findByCandidates(fields, aliases[target]);
+  }
+
+  private findByCandidates(fields: string[], candidates: string[] = []) {
     const normalized = fields.map((field) => ({ field, value: field.trim().toLowerCase() }));
-    return normalized.find((item) => aliases[target].includes(item.value))?.field ?? "";
+    const normalizedCandidates = candidates.map((candidate) => candidate.trim().toLowerCase());
+    return normalized.find((item) => normalizedCandidates.includes(item.value))?.field ?? "";
   }
 }

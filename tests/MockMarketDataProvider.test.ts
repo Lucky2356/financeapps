@@ -8,9 +8,25 @@ describe("MockMarketDataProvider", () => {
   it("returns the expected Russian securities universe", async () => {
     const securities = await provider.getSecurities();
 
-    expect(securities).toHaveLength(10);
+    expect(securities).toHaveLength(15);
     expect(securities.map((security) => security.ticker)).toEqual(
-      expect.arrayContaining(["SBER", "GAZP", "LKOH", "YDEX", "T", "VTBR", "MGNT", "NVTK", "ROSN", "MOEX"])
+      expect.arrayContaining([
+        "SBER",
+        "GAZP",
+        "LKOH",
+        "YDEX",
+        "T",
+        "VTBR",
+        "MGNT",
+        "NVTK",
+        "ROSN",
+        "MOEX",
+        "PLZL",
+        "PHOR",
+        "CHMF",
+        "SNGS",
+        "AFLT"
+      ])
     );
   });
 

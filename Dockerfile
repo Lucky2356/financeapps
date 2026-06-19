@@ -1,15 +1,22 @@
 # syntax=docker/dockerfile:1
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Dependencies
 FROM base AS deps
 COPY package*.json ./
-RUN npm ci --frozen-lockfile
+RUN npm ci
 
 # Build
 FROM base AS builder
+ENV NEXT_OUTPUT=standalone
+ENV NEXT_PUBLIC_APP_PLATFORM=web
+ENV NEXT_PUBLIC_APP_ENV=production
+ENV NEXT_PUBLIC_API_MODE=cloud
+ENV NEXT_PUBLIC_API_BASE_URL=/api
+ENV NEXT_PUBLIC_DESKTOP_DATA_MODE=cloud
+ENV NEXT_PUBLIC_MARKET_DATA=moex
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate

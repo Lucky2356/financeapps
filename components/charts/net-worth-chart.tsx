@@ -1,8 +1,17 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
 
 import type { NetWorthPoint } from "@/types/finance";
+import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { formatCurrency } from "@/lib/format";
 
 function axisCurrency(value: number) {
@@ -26,8 +35,17 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="month" tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={(value) => axisCurrency(Number(value))} tickLine={false} axisLine={false} width={78} />
-          <Tooltip formatter={(value) => formatCurrency(Number(value))} labelFormatter={(label) => `Месяц: ${label}`} />
+          <YAxis
+            tickFormatter={(value) => axisCurrency(Number(value))}
+            tickLine={false}
+            axisLine={false}
+            width={78}
+          />
+          <Tooltip
+            {...chartTooltipProps}
+            formatter={(value) => formatCurrency(Number(value))}
+            labelFormatter={(label) => `Месяц: ${label}`}
+          />
           <Area
             type="monotone"
             dataKey="value"
