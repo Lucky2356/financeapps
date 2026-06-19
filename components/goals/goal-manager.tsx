@@ -9,12 +9,20 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, GoalsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { describeGoalPace } from "@/lib/goal-pace";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -35,15 +43,19 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    await run(() => (method === "POST" ? apiClient.post("/goals", payload) : apiClient.put("/goals", payload)), {
-      success: method === "POST" ? "Цель добавлена" : "Цель обновлена",
-      error: "Не удалось сохранить цель",
-      onSuccess: async () => {
-        if (method === "POST") setAddOpen(false);
-        else setEditingGoal(null);
-        await refresh();
+    await run(
+      () =>
+        method === "POST" ? apiClient.post("/goals", payload) : apiClient.put("/goals", payload),
+      {
+        success: method === "POST" ? "Цель добавлена" : "Цель обновлена",
+        error: "Не удалось сохранить цель",
+        onSuccess: async () => {
+          if (method === "POST") setAddOpen(false);
+          else setEditingGoal(null);
+          await refresh();
+        }
       }
-    });
+    );
   }
 
   async function removeGoal(id: string, title: string) {
@@ -82,59 +94,111 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
           }
         />
       ) : (
-      <div className="grid gap-4 lg:grid-cols-2">
-        {pageData.goals.map((goal) => (
-          <Card key={goal.id}>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <CardTitle>{goal.title}</CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">Дедлайн: {formatDate(goal.deadline)}</p>
-                </div>
-                <div className="flex gap-1">
-                  <DepositDialog goal={goal} currency={pageData.currency} onSuccess={async () => { await reload(); router.refresh(); }} />
-                  <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать цель" onClick={() => setEditingGoal(goal)}>
-                    <Edit2 className="size-4" />
-                  </Button>
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void removeGoal(goal.id, goal.title);
-                    }}
-                  >
-                    <Button type="submit" variant="ghost" size="icon" title="Удалить" aria-label="Удалить цель">
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </form>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Progress value={goal.progress} />
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Накоплено</p>
-                  <p className="text-sm font-semibold">{formatCurrency(goal.currentAmount, pageData.currency)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Цель</p>
-                  <p className="text-sm font-semibold">{formatCurrency(goal.targetAmount, pageData.currency)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">В месяц</p>
-                  <p className="text-sm font-semibold">{formatCurrency(goal.monthlyContribution, pageData.currency)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {pageData.goals.map((goal) => {
+            const pace = describeGoalPace(goal);
+            return (
+              <Card key={goal.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle>{goal.title}</CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Дедлайн: {formatDate(goal.deadline)}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <DepositDialog
+                        goal={goal}
+                        currency={pageData.currency}
+                        onSuccess={async () => {
+                          await reload();
+                          router.refresh();
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Редактировать"
+                        aria-label="Редактировать цель"
+                        onClick={() => setEditingGoal(goal)}
+                      >
+                        <Edit2 className="size-4" />
+                      </Button>
+                      <form
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void removeGoal(goal.id, goal.title);
+                        }}
+                      >
+                        <Button
+                          type="submit"
+                          variant="ghost"
+                          size="icon"
+                          title="Удалить"
+                          aria-label="Удалить цель"
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </form>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Progress value={goal.progress} />
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Накоплено</p>
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(goal.currentAmount, pageData.currency)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Цель</p>
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(goal.targetAmount, pageData.currency)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">В месяц</p>
+                      <p className="text-sm font-semibold">
+                        {pace.isComplete
+                          ? "—"
+                          : formatCurrency(goal.monthlyContribution, pageData.currency)}
+                      </p>
+                      <p
+                        className={
+                          pace.isOverdue
+                            ? "text-xs text-destructive"
+                            : pace.isComplete
+                              ? "text-xs text-success-foreground"
+                              : "text-xs text-muted-foreground"
+                        }
+                      >
+                        {pace.hint}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       {/* Single controlled dialog for editing any goal */}
-      <Dialog open={editingGoal !== null} onOpenChange={(open) => { if (!open) setEditingGoal(null); }}>
+      <Dialog
+        open={editingGoal !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingGoal(null);
+        }}
+      >
         {editingGoal && (
-          <GoalDialog title="Редактировать цель" goal={editingGoal} onSubmit={(event) => submitGoal(event, "PUT")} />
+          <GoalDialog
+            title="Редактировать цель"
+            goal={editingGoal}
+            onSubmit={(event) => submitGoal(event, "PUT")}
+          />
         )}
       </Dialog>
     </div>
@@ -219,7 +283,8 @@ function DepositDialog({
           <DialogTitle>Пополнить: {goal.title}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Накоплено {formatCurrency(goal.currentAmount, currency)} из {formatCurrency(goal.targetAmount, currency)}
+          Накоплено {formatCurrency(goal.currentAmount, currency)} из{" "}
+          {formatCurrency(goal.targetAmount, currency)}
         </p>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="space-y-2">
@@ -259,7 +324,9 @@ function DepositDialog({
             </p>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={loading || accounts.length === 0}>Пополнить</Button>
+            <Button type="submit" disabled={loading || accounts.length === 0}>
+              Пополнить
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -290,12 +357,26 @@ function GoalDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Целевая сумма</Label>
-            <Input name="targetAmount" type="number" min="0" step="100" defaultValue={goal?.targetAmount ?? ""} required />
+            <Input
+              name="targetAmount"
+              type="number"
+              min="0"
+              step="100"
+              defaultValue={goal?.targetAmount ?? ""}
+              required
+            />
           </div>
           {goal ? (
             <div className="space-y-2">
               <Label>Накоплено</Label>
-              <Input name="currentAmount" type="number" min="0" step="100" defaultValue={goal.currentAmount} required />
+              <Input
+                name="currentAmount"
+                type="number"
+                min="0"
+                step="100"
+                defaultValue={goal.currentAmount}
+                required
+              />
             </div>
           ) : (
             // New goals start at 0 and grow only through deposits, so the saved
@@ -306,7 +387,12 @@ function GoalDialog({
         </div>
         <div className="space-y-2">
           <Label>Дедлайн</Label>
-          <Input name="deadline" type="date" defaultValue={goal ? formatInputDate(goal.deadline) : formatInputDate(new Date())} required />
+          <Input
+            name="deadline"
+            type="date"
+            defaultValue={goal ? formatInputDate(goal.deadline) : formatInputDate(new Date())}
+            required
+          />
         </div>
         <DialogFooter>
           <Button type="submit">Сохранить</Button>
