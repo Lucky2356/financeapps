@@ -19,8 +19,19 @@ export default defineConfig({
     globals: true,
     setupFiles: ["tests/setup.ts"],
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    testTimeout: 10000,
     coverage: {
-      reporter: ["text", "json", "html"]
+      provider: "v8",
+      reporter: ["text", "text-summary", "json", "html"],
+      // Floor thresholds — intentionally set just below the current baseline so CI
+      // fails on regressions, not on the existing gap. Raise these as B2 (component
+      // tests) and B3 (route/error tests) land. See plan milestone B4.
+      thresholds: {
+        statements: 50,
+        branches: 45,
+        functions: 40,
+        lines: 52
+      }
     }
   }
 });

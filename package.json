@@ -2,6 +2,10 @@
   "name": "financial-assistant-mvp",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
   "scripts": {
     "dev": "cross-env NEXT_PUBLIC_MARKET_DATA=moex next dev",
     "build": "next build",
@@ -9,8 +13,12 @@
     "build:static": "cross-env NEXT_PUBLIC_APP_PLATFORM=desktop NEXT_PUBLIC_DESKTOP_DATA_MODE=local NEXT_PUBLIC_API_MODE=local NEXT_PUBLIC_MARKET_DATA=moex NEXT_OUTPUT=export next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage.enabled --coverage.reporter=text",
+    "test:smoke": "vitest run tests/user-journey.test.ts",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -27,7 +35,18 @@
     "desktop:icons": "powershell -ExecutionPolicy Bypass -File scripts/generate-tauri-icons.ps1",
     "desktop:preflight": "node scripts/desktop-preflight.mjs",
     "cap:sync": "cap sync",
-    "cap:android": "cap open android"
+    "cap:android": "cap open android",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write",
+      "vitest related --run"
+    ],
+    "*.{js,jsx,mjs,cjs,json,css}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -68,12 +87,16 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "^4.1.7",
     "autoprefixer": "^10.4.20",
     "cross-env": "^7.0.3",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.6",
+    "husky": "^9.1.7",
     "jsdom": "^25.0.1",
+    "lint-staged": "^17.0.7",
     "postcss": "^8.5.15",
+    "prettier": "^3.8.4",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.15",
     "tsx": "^4.19.2",
