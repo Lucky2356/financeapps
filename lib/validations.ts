@@ -14,16 +14,18 @@ export const transactionSchema = z.object({
   description: z.string().trim().max(180).optional()
 });
 
-export const transferSchema = z.object({
-  amount: positiveMoney,
-  fromAccountId: z.string().min(1, "Выберите счет списания"),
-  toAccountId: z.string().min(1, "Выберите счет зачисления"),
-  date: z.string().min(1, "Укажите дату"),
-  description: z.string().trim().max(180).optional()
-}).refine((input) => input.fromAccountId !== input.toAccountId, {
-  message: "Счета списания и зачисления должны отличаться.",
-  path: ["toAccountId"]
-});
+export const transferSchema = z
+  .object({
+    amount: positiveMoney,
+    fromAccountId: z.string().min(1, "Выберите счет списания"),
+    toAccountId: z.string().min(1, "Выберите счет зачисления"),
+    date: z.string().min(1, "Укажите дату"),
+    description: z.string().trim().max(180).optional()
+  })
+  .refine((input) => input.fromAccountId !== input.toAccountId, {
+    message: "Счета списания и зачисления должны отличаться.",
+    path: ["toAccountId"]
+  });
 
 export const transactionFilterSchema = z.object({
   from: z.string().optional(),
@@ -61,10 +63,13 @@ export const settingsSchema = z.object({
   currency: z.literal("RUB"),
   demoMode: z.preprocess((value) => value === "on" || value === true, z.boolean()),
   riskProfileCode: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE"]),
-  emergencyFundMonthsTarget: z.coerce.number().int().refine((value) => [3, 6, 12].includes(value)),
+  emergencyFundMonthsTarget: z.coerce
+    .number()
+    .int()
+    .refine((value) => [3, 6, 12].includes(value)),
   theme: z.enum(["light", "dark", "system"]).optional(),
   density: z.enum(["comfortable", "compact"]).optional(),
-  defaultTransactionType: z.enum(["INCOME", "EXPENSE"]).optional(),
+  defaultTransactionType: z.enum(["INCOME", "EXPENSE"]).optional()
 });
 
 export const recurringTransactionSchema = z.object({
@@ -76,17 +81,30 @@ export const recurringTransactionSchema = z.object({
   frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
   nextDate: z.string().min(1, "Укажите следующую дату"),
   description: z.string().trim().max(180).optional(),
-  isActive: z.preprocess((value) => value === "on" || value === true || value === "true", z.boolean().default(true))
+  isActive: z.preprocess(
+    (value) => (value === undefined ? true : value === "on" || value === true || value === "true"),
+    z.boolean()
+  )
 });
 
 export const portfolioPositionSchema = z.object({
-  ticker: z.string().trim().min(1).max(12).transform((value) => value.toUpperCase()),
+  ticker: z
+    .string()
+    .trim()
+    .min(1)
+    .max(12)
+    .transform((value) => value.toUpperCase()),
   quantity: z.coerce.number().finite().positive("Количество должно быть больше нуля"),
   averageBuyPrice: z.coerce.number().finite().positive("Средняя цена должна быть больше нуля")
 });
 
 export const watchlistItemSchema = z.object({
-  ticker: z.string().trim().min(1).max(12).transform((value) => value.toUpperCase())
+  ticker: z
+    .string()
+    .trim()
+    .min(1)
+    .max(12)
+    .transform((value) => value.toUpperCase())
 });
 
 export const csvImportSchema = z.object({
@@ -102,9 +120,18 @@ export const categoryInputSchema = z.object({
   id: optionalId,
   name: z.string().trim().min(2, "Название слишком короткое").max(80),
   kind: z.enum(["INCOME", "EXPENSE"]),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Неверный формат цвета").default("#64748b"),
-  isEssential: z.preprocess((v) => v === "on" || v === true || v === "true", z.boolean().default(false)),
-  isSubscription: z.preprocess((v) => v === "on" || v === true || v === "true", z.boolean().default(false))
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Неверный формат цвета")
+    .default("#64748b"),
+  isEssential: z.preprocess(
+    (v) => v === "on" || v === true || v === "true",
+    z.boolean().default(false)
+  ),
+  isSubscription: z.preprocess(
+    (v) => v === "on" || v === true || v === "true",
+    z.boolean().default(false)
+  )
 });
 
 export type CategoryInput = z.infer<typeof categoryInputSchema>;
