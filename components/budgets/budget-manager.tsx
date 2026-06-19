@@ -15,9 +15,17 @@ import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 
 function buildMonthOptions() {
   const options: Array<{ value: string; label: string }> = [];
@@ -39,6 +47,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   const { data: pageData, reload } = useApiPageData(data, apiPath);
 
   const { run } = useApiMutation();
+  const confirm = useConfirm();
   const monthOptions = buildMonthOptions();
   const currentIndex = monthOptions.findIndex((option) => option.value === selectedMonth);
   const hasPrev = currentIndex > 0;
@@ -63,7 +72,13 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   }
 
   async function resetBudget(budget: BudgetsPageData["budgets"][number]) {
-    if (!window.confirm(`Сбросить лимит для «${budget.category}»?`)) return;
+    const confirmed = await confirm({
+      title: "Сбросить лимит?",
+      description: `Лимит для категории «${budget.category}» будет удалён.`,
+      confirmLabel: "Сбросить",
+      destructive: true
+    });
+    if (!confirmed) return;
     await run(() => apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: 0 }), {
       success: "Лимит сброшен",
       error: "Не удалось сбросить лимит",
@@ -74,7 +89,9 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   // Fill limits for categories that have none yet, using the average spend
   // suggestion (history → budgets). Existing limits are left untouched.
   async function fillSuggestedLimits() {
-    const targets = pageData.budgets.filter((budget) => budget.limitAmount === 0 && budget.suggestedLimit > 0);
+    const targets = pageData.budgets.filter(
+      (budget) => budget.limitAmount === 0 && budget.suggestedLimit > 0
+    );
     if (targets.length === 0) {
       toast.info("Нет пустых категорий с историей трат для подсказки.");
       return;
@@ -82,7 +99,10 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
     await run(
       async () => {
         for (const budget of targets) {
-          await apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: String(budget.suggestedLimit) });
+          await apiClient.post("/budgets", {
+            categoryId: budget.categoryId,
+            limitAmount: String(budget.suggestedLimit)
+          });
         }
       },
       {
@@ -98,7 +118,12 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Лимиты по категориям</CardTitle>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fillSuggestedLimits} title="Заполнить пустые лимиты по средним тратам за 3 месяца">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fillSuggestedLimits}
+            title="Заполнить пустые лимиты по средним тратам за 3 месяца"
+          >
             <Sparkles className="size-4" />
             Предложить лимиты
           </Button>
@@ -153,21 +178,36 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                       className="inline-flex items-center gap-2 hover:text-primary hover:underline"
                       title={`Показать операции: ${budget.category}`}
                     >
-                      <span className="size-2.5 rounded-full" style={{ backgroundColor: budget.color }} />
+                      <span
+                        className="size-2.5 rounded-full"
+                        style={{ backgroundColor: budget.color }}
+                      />
                       {budget.category}
                     </Link>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Progress value={Math.min(budget.progress, 100)} className="h-2" />
-                      <span className={budget.isExceeded ? "w-14 text-right text-sm font-semibold text-destructive" : "w-14 text-right text-sm text-muted-foreground"}>
+                      <span
+                        className={
+                          budget.isExceeded
+                            ? "w-14 text-right text-sm font-semibold text-destructive"
+                            : "w-14 text-right text-sm text-muted-foreground"
+                        }
+                      >
                         {Math.round(budget.progress)}%
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{formatCurrency(budget.spent, pageData.currency)}</TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(budget.spent, pageData.currency)}
+                  </TableCell>
                   <TableCell>
-                    <BudgetForm budget={budget} onSave={saveLimit} onReset={() => resetBudget(budget)} />
+                    <BudgetForm
+                      budget={budget}
+                      onSave={saveLimit}
+                      onReset={() => resetBudget(budget)}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
@@ -185,7 +225,9 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                 >
                   {budget.category}
                 </Link>
-                <p className={budget.isExceeded ? "font-semibold text-destructive" : "font-semibold"}>
+                <p
+                  className={budget.isExceeded ? "font-semibold text-destructive" : "font-semibold"}
+                >
                   {Math.round(budget.progress)}%
                 </p>
               </div>
@@ -195,7 +237,11 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                 <span>{formatCurrency(budget.limitAmount, pageData.currency)}</span>
               </div>
               <div className="mt-3">
-                <BudgetForm budget={budget} onSave={saveLimit} onReset={() => resetBudget(budget)} />
+                <BudgetForm
+                  budget={budget}
+                  onSave={saveLimit}
+                  onReset={() => resetBudget(budget)}
+                />
               </div>
             </div>
           ))}
@@ -253,10 +299,19 @@ function BudgetForm({
           value={value}
           placeholder="нет лимита"
           onChange={(e) => handleChange(e.target.value)}
-          onBlur={() => { if (timer.current) clearTimeout(timer.current); commit(value); }}
+          onBlur={() => {
+            if (timer.current) clearTimeout(timer.current);
+            commit(value);
+          }}
           className="min-w-0"
         />
-        <Button type="button" size="icon" variant="outline" title="Сбросить лимит" onClick={onReset}>
+        <Button
+          type="button"
+          size="icon"
+          variant="outline"
+          title="Сбросить лимит"
+          onClick={onReset}
+        >
           <X className="size-4" />
         </Button>
       </div>

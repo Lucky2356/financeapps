@@ -9,21 +9,40 @@ const { apiClientMock } = vi.hoisted(() => ({
   apiClientMock: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }
 }));
 vi.mock("@/lib/api/client", () => ({ apiClient: apiClientMock }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/" }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/"
+}));
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }
+}));
 
 import { BudgetManager } from "@/components/budgets/budget-manager";
 import { RecurringManager } from "@/components/recurring/recurring-manager";
 import { InvestmentsView } from "@/components/investments/investments-view";
+import { renderWithConfirm } from "./ui-helpers";
 
-const budgetData: BudgetsPageData = { source: "database", budgets: [], categories: [], recommendations: [], currency: "RUB", selectedMonth: "2026-06" };
+const budgetData: BudgetsPageData = {
+  source: "database",
+  budgets: [],
+  categories: [],
+  recommendations: [],
+  currency: "RUB",
+  selectedMonth: "2026-06"
+};
 const recurringData: RecurringTransactionsPageData = {
   source: "database",
   recurringTransactions: [],
   accounts: [],
   categories: [],
   currency: "RUB",
-  summary: { activeCount: 0, dueCount: 0, nextSevenDaysAmount: 0, monthlyPlannedExpense: 0, monthlyPlannedIncome: 0 }
+  summary: {
+    activeCount: 0,
+    dueCount: 0,
+    nextSevenDaysAmount: 0,
+    monthlyPlannedExpense: 0,
+    monthlyPlannedIncome: 0
+  }
 };
 const investmentData: InvestmentData = {
   source: "database",
@@ -52,7 +71,7 @@ beforeEach(() => {
 // render their key UI / empty states.
 describe("manager smoke tests", () => {
   it("BudgetManager renders with the suggest-limits action", async () => {
-    render(<BudgetManager data={budgetData} />);
+    renderWithConfirm(<BudgetManager data={budgetData} />);
     expect(await screen.findByRole("button", { name: /Предложить лимиты/ })).toBeInTheDocument();
   });
 
