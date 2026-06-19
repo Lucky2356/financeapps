@@ -160,11 +160,16 @@ describe("recurringTransactionSchema", () => {
     expect(recurringTransactionSchema.parse({ ...base, isActive: "true" }).isActive).toBe(true);
   });
 
-  // NOTE: the schema's `.default(true)` on isActive is effectively dead code — the
-  // preprocess step always returns a defined boolean, so an omitted value resolves
-  // to false rather than the declared default. This test pins the actual behavior.
-  it("resolves an omitted isActive to false (default is unreachable)", () => {
-    expect(recurringTransactionSchema.parse(base).isActive).toBe(false);
+  // An omitted isActive defaults to true, matching the Prisma column default
+  // (@default(true)) and the backup schema. The form never omits the field (a
+  // hidden "false" input always accompanies the checkbox), so only programmatic
+  // callers hit this path.
+  it("defaults an omitted isActive to true", () => {
+    expect(recurringTransactionSchema.parse(base).isActive).toBe(true);
+  });
+
+  it("still coerces an explicit 'false' (unchecked form checkbox) to false", () => {
+    expect(recurringTransactionSchema.parse({ ...base, isActive: "false" }).isActive).toBe(false);
   });
 });
 
