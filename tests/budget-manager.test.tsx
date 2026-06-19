@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BudgetsPageData } from "@/lib/data";
 import type { BudgetRow } from "@/types/finance";
+import { renderWithConfirm } from "./ui-helpers";
 
 const { apiClientMock } = vi.hoisted(() => ({
   apiClientMock: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }
@@ -75,7 +76,7 @@ describe("BudgetManager", () => {
     ]);
     apiClientMock.get.mockResolvedValue(data);
 
-    render(<BudgetManager data={data} />);
+    renderWithConfirm(<BudgetManager data={data} />);
 
     // The category label renders in both the desktop table and the mobile grid.
     expect(await screen.findAllByText("Еда")).not.toHaveLength(0);
@@ -94,7 +95,7 @@ describe("BudgetManager", () => {
     ]);
     apiClientMock.get.mockResolvedValue(data);
 
-    render(<BudgetManager data={data} />);
+    renderWithConfirm(<BudgetManager data={data} />);
 
     const input = (await screen.findAllByRole("spinbutton"))[0];
     await user.clear(input);
@@ -117,7 +118,7 @@ describe("BudgetManager", () => {
     ]);
     apiClientMock.get.mockResolvedValue(data);
 
-    render(<BudgetManager data={data} />);
+    renderWithConfirm(<BudgetManager data={data} />);
 
     await user.click(await screen.findByRole("button", { name: /Предложить лимиты/ }));
 
@@ -137,7 +138,7 @@ describe("BudgetManager", () => {
     ]);
     apiClientMock.get.mockResolvedValue(data);
 
-    render(<BudgetManager data={data} />);
+    renderWithConfirm(<BudgetManager data={data} />);
 
     await user.click(await screen.findByRole("button", { name: /Предложить лимиты/ }));
 
@@ -150,9 +151,8 @@ describe("BudgetManager", () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
-  it("resets a limit to zero after the user confirms", async () => {
+  it("resets a limit to zero after the user confirms in the dialog", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const data = makeData([
       makeBudget({
         categoryId: "food",
@@ -164,10 +164,13 @@ describe("BudgetManager", () => {
     ]);
     apiClientMock.get.mockResolvedValue(data);
 
-    render(<BudgetManager data={data} />);
+    renderWithConfirm(<BudgetManager data={data} />);
 
     const resetButton = (await screen.findAllByRole("button", { name: "Сбросить лимит" }))[0];
     await user.click(resetButton);
+
+    // Styled confirm dialog appears; "Сбросить" is the confirm action.
+    await user.click(await screen.findByRole("button", { name: "Сбросить" }));
 
     await waitFor(() =>
       expect(apiClientMock.post).toHaveBeenCalledWith("/budgets", {
@@ -179,7 +182,6 @@ describe("BudgetManager", () => {
 
   it("does not reset when the user cancels the confirm dialog", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     const data = makeData([
       makeBudget({
         categoryId: "food",
@@ -191,10 +193,12 @@ describe("BudgetManager", () => {
     ]);
     apiClientMock.get.mockResolvedValue(data);
 
-    render(<BudgetManager data={data} />);
+    renderWithConfirm(<BudgetManager data={data} />);
 
     const resetButton = (await screen.findAllByRole("button", { name: "Сбросить лимит" }))[0];
     await user.click(resetButton);
+
+    await user.click(await screen.findByRole("button", { name: "Отмена" }));
 
     expect(apiClientMock.post).not.toHaveBeenCalled();
   });

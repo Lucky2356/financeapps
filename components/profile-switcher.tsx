@@ -14,15 +14,22 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 
 const PROFILE_COLORS = [
-  "#0d9488", "#2563eb", "#7c3aed", "#db2777",
-  "#ea580c", "#16a34a", "#0891b2", "#ca8a04",
+  "#0d9488",
+  "#2563eb",
+  "#7c3aed",
+  "#db2777",
+  "#ea580c",
+  "#16a34a",
+  "#0891b2",
+  "#ca8a04"
 ];
 
 export function ProfileSwitcher() {
@@ -41,6 +48,7 @@ function ProfileSwitcherInner() {
   const [renameOpen, setRenameOpen] = useState<UserProfile | null>(null);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(PROFILE_COLORS[0]);
+  const confirm = useConfirm();
 
   async function loadProfiles() {
     try {
@@ -55,9 +63,13 @@ function ProfileSwitcherInner() {
     let cancelled = false;
     apiClient
       .get<ProfileList>("/profiles")
-      .then((data) => { if (!cancelled) setList(data); })
+      .then((data) => {
+        if (!cancelled) setList(data);
+      })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!list) return null;
@@ -101,7 +113,13 @@ function ProfileSwitcherInner() {
   }
 
   async function deleteProfile(profileId: string) {
-    if (!window.confirm("Удалить профиль? Все данные этого профиля будут удалены.")) return;
+    const confirmed = await confirm({
+      title: "Удалить профиль?",
+      description: "Все данные этого профиля будут удалены без возможности восстановления.",
+      confirmLabel: "Удалить",
+      destructive: true
+    });
+    if (!confirmed) return;
     try {
       await apiClient.delete(`/profiles?id=${encodeURIComponent(profileId)}`);
       toast.success("Профиль удалён");
@@ -145,7 +163,9 @@ function ProfileSwitcherInner() {
               <div key={profile.id} className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => { void switchTo(profile.id); }}
+                  onClick={() => {
+                    void switchTo(profile.id);
+                  }}
                   className={cn(
                     "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-muted/50",
                     profile.id === list.activeProfileId && "bg-primary/10 font-semibold"
@@ -158,12 +178,17 @@ function ProfileSwitcherInner() {
                     {profile.name.charAt(0).toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{profile.name}</span>
-                  {profile.id === list.activeProfileId && <Check className="size-4 shrink-0 text-primary" />}
+                  {profile.id === list.activeProfileId && (
+                    <Check className="size-4 shrink-0 text-primary" />
+                  )}
                 </button>
                 <button
                   type="button"
                   aria-label="Переименовать профиль"
-                  onClick={() => { setRenameOpen(profile); setNewName(profile.name); }}
+                  onClick={() => {
+                    setRenameOpen(profile);
+                    setNewName(profile.name);
+                  }}
                   className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <Edit2 className="size-3.5" />
@@ -172,7 +197,9 @@ function ProfileSwitcherInner() {
                   <button
                     type="button"
                     aria-label="Удалить профиль"
-                    onClick={() => { void deleteProfile(profile.id); }}
+                    onClick={() => {
+                      void deleteProfile(profile.id);
+                    }}
                     className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="size-3.5" />
@@ -215,7 +242,10 @@ function ProfileSwitcherInner() {
                           key={c}
                           type="button"
                           onClick={() => setNewColor(c)}
-                          className={cn("size-8 rounded-full transition-all hover:scale-110", newColor === c && "ring-2 ring-offset-2 ring-foreground")}
+                          className={cn(
+                            "size-8 rounded-full transition-all hover:scale-110",
+                            newColor === c && "ring-2 ring-offset-2 ring-foreground"
+                          )}
                           style={{ backgroundColor: c }}
                           aria-label={`Цвет ${c}`}
                         />
@@ -236,7 +266,12 @@ function ProfileSwitcherInner() {
       </Dialog>
 
       {/* Rename dialog */}
-      <Dialog open={Boolean(renameOpen)} onOpenChange={(v) => { if (!v) setRenameOpen(null); }}>
+      <Dialog
+        open={Boolean(renameOpen)}
+        onOpenChange={(v) => {
+          if (!v) setRenameOpen(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Переименовать профиль</DialogTitle>
@@ -246,7 +281,9 @@ function ProfileSwitcherInner() {
             <Input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={40} />
           </div>
           <DialogFooter>
-            <Button onClick={renameProfile} disabled={!newName.trim()}>Сохранить</Button>
+            <Button onClick={renameProfile} disabled={!newName.trim()}>
+              Сохранить
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

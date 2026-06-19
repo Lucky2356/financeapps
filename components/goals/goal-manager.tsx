@@ -15,6 +15,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
   const router = useRouter();
   const { data: pageData, reload } = useApiPageData(data, "/goals");
   const { run } = useApiMutation();
+  const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalsPageData["goals"][number] | null>(null);
 
@@ -59,7 +61,13 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
   }
 
   async function removeGoal(id: string, title: string) {
-    if (!window.confirm(`Удалить цель «${title}»?`)) return;
+    const confirmed = await confirm({
+      title: "Удалить цель?",
+      description: `Цель «${title}» будет удалена.`,
+      confirmLabel: "Удалить",
+      destructive: true
+    });
+    if (!confirmed) return;
     await run(() => apiClient.delete(`/goals?id=${encodeURIComponent(id)}`), {
       success: "Цель удалена",
       error: "Не удалось удалить цель",
