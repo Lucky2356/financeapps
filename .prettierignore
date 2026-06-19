@@ -1,0 +1,20 @@
+# Build output
+.next/
+out/
+dist/
+coverage/
+
+# Dependencies
+node_modules/
+
+# Rust / Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Generated / lock files
+package-lock.json
+prisma/migrations/
+
+# Misc
+*.md
+public/
