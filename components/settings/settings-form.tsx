@@ -21,6 +21,7 @@ import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
+import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +46,7 @@ const shortcuts = [
 ];
 
 type EditableSettings = {
+  currency: CurrencyCode;
   demoMode: boolean;
   riskProfileCode: SettingsPageData["riskProfileCode"];
   emergencyFundMonthsTarget: number;
@@ -55,6 +57,7 @@ type EditableSettings = {
 
 function toEditable(data: SettingsPageData): EditableSettings {
   return {
+    currency: (data.currency as CurrencyCode) ?? "RUB",
     demoMode: data.demoMode,
     riskProfileCode: data.riskProfileCode,
     emergencyFundMonthsTarget: data.emergencyFundMonthsTarget,
@@ -92,7 +95,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     try {
       setStatus("saving");
       await apiClient.put("/settings", {
-        currency: "RUB",
+        currency: next.currency,
         demoMode: next.demoMode,
         riskProfileCode: next.riskProfileCode,
         emergencyFundMonthsTarget: String(next.emergencyFundMonthsTarget),
@@ -178,14 +181,19 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             <Label>Валюта</Label>
             <select
               name="currency"
-              defaultValue="RUB"
-              disabled
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm opacity-60"
+              value={settings.currency}
+              onChange={(e) => void persist({ currency: e.target.value as CurrencyCode })}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
-              <option value="RUB">RUB — Российский рубль</option>
+              {SUPPORTED_CURRENCIES.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.code} — {item.label}
+                </option>
+              ))}
             </select>
             <p className="text-xs text-muted-foreground">
-              Поддержка других валют запланирована в следующих версиях.
+              Валюта отображения для всего приложения. Суммы не пересчитываются — меняется только
+              обозначение валюты.
             </p>
           </div>
           <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">

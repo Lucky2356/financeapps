@@ -337,3 +337,32 @@ describe("LocalApiClient", () => {
     expect(food?.isExceeded).toBe(true);
   });
 });
+
+describe("LocalApiClient currency (plan C7)", () => {
+  it("changes the app currency and propagates it to accounts and page data", async () => {
+    const client = createClient();
+    await seedAccount(client, { name: "Карта", balance: "1000" });
+
+    let accounts = await client.get<AccountsPageData>("/accounts");
+    expect(accounts.currency).toBe("RUB");
+    expect(accounts.accounts[0].currency).toBe("RUB");
+
+    await client.put("/settings", { currency: "USD" });
+
+    const settings = await client.get<SettingsPageData>("/settings");
+    expect(settings.currency).toBe("USD");
+
+    accounts = await client.get<AccountsPageData>("/accounts");
+    expect(accounts.currency).toBe("USD");
+    expect(accounts.accounts[0].currency).toBe("USD");
+    // Single-currency model: amounts are not converted, only the label changes.
+    expect(accounts.accounts[0].balance).toBe(1000);
+  });
+
+  it("ignores an unsupported currency code", async () => {
+    const client = createClient();
+    await client.put("/settings", { currency: "ZZZ" });
+    const settings = await client.get<SettingsPageData>("/settings");
+    expect(settings.currency).toBe("RUB");
+  });
+});
