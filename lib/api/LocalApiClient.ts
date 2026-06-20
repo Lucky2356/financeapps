@@ -16,6 +16,7 @@ import type {
   SettingsPageData,
   TransactionsPageData
 } from "@/lib/data";
+import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
@@ -106,33 +107,6 @@ const defaultCategories: CategoryOption[] = [
   { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#ea580c" },
   { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#dc2626", isEssential: true }
 ];
-
-function id(prefix: string) {
-  return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
-}
-
-// "YYYY-MM" key used to bucket transactions by calendar month (local time).
-function monthKeyOf(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function firstOf<T>(value: T | T[] | null | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function normalizePath(path: string) {
-  const url = new URL(path, "http://local.app");
-  return { pathname: url.pathname, searchParams: url.searchParams };
-}
-
-function toFormObject(body: unknown) {
-  return Object.fromEntries(
-    Object.entries((body ?? {}) as Record<string, unknown>).map(([key, value]) => [
-      key,
-      firstOf(value as string | string[])
-    ])
-  ) as Record<string, string>;
-}
 
 function recomputeGoal(
   goal: Omit<GoalsPageData["goals"][number], "progress" | "monthlyContribution">
