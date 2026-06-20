@@ -1,4 +1,9 @@
-import type { RecommendationSeverity, RecurrenceFrequency, SecurityRisk, TransactionType } from "@prisma/client";
+import type {
+  RecommendationSeverity,
+  RecurrenceFrequency,
+  SecurityRisk,
+  TransactionType
+} from "@prisma/client";
 
 export type DataSource = "database" | "demo-fallback";
 
@@ -39,6 +44,14 @@ export type RecommendationView = {
   severity: RecommendationSeverity;
 };
 
+export type HealthFactor = {
+  label: string;
+  /** Points deducted from the 100-point score by this factor (0 when healthy). */
+  deduction: number;
+  /** True when this factor currently costs points. */
+  applied: boolean;
+};
+
 export type HealthScore = {
   score: number;
   summary: string;
@@ -47,6 +60,8 @@ export type HealthScore = {
     value: string;
     status: "good" | "warning" | "critical";
   }>;
+  /** Per-factor point deductions, explaining how the score was reached. */
+  factors: HealthFactor[];
 };
 
 export type NetWorthPoint = {

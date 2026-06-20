@@ -46,7 +46,8 @@ export class FinanceRecommendationService {
       recommendations.push({
         id: "emergency-fund-low",
         title: "Финансовая подушка ниже базового уровня",
-        description: "Резерв покрывает меньше 3 месяцев расходов. Часть свободного остатка можно направлять на восстановление подушки.",
+        description:
+          "Резерв покрывает меньше 3 месяцев расходов. Часть свободного остатка можно направлять на восстановление подушки.",
         severity: "CRITICAL"
       });
     } else if (input.emergencyFundMonths < input.emergencyFundTargetMonths) {
@@ -62,7 +63,8 @@ export class FinanceRecommendationService {
       recommendations.push({
         id: "subscriptions-entertainment",
         title: "Необязательные траты выше 10% расходов",
-        description: "Подписки, развлечения и рестораны занимают заметную долю бюджета. Полезно проверить, какие платежи повторяются автоматически.",
+        description:
+          "Подписки, развлечения и рестораны занимают заметную долю бюджета. Полезно проверить, какие платежи повторяются автоматически.",
         severity: "INFO"
       });
     }
@@ -71,7 +73,8 @@ export class FinanceRecommendationService {
       recommendations.push({
         id: "positive-cashflow",
         title: "Свободный остаток положительный",
-        description: "Можно распределить свободные деньги между целями, финансовой подушкой и долгосрочным капиталом с учетом риск-профиля.",
+        description:
+          "Можно распределить свободные деньги между целями, финансовой подушкой и долгосрочным капиталом с учетом риск-профиля.",
         severity: "SUCCESS"
       });
     }
@@ -80,7 +83,8 @@ export class FinanceRecommendationService {
       recommendations.push({
         id: "essential-share-high",
         title: "Обязательные платежи занимают большую долю бюджета",
-        description: "Если обязательные расходы превышают две трети доходов, финансовая гибкость снижается. Проверьте жилье, транспорт и регулярные счета.",
+        description:
+          "Если обязательные расходы превышают две трети доходов, финансовая гибкость снижается. Проверьте жилье, транспорт и регулярные счета.",
         severity: "WARNING"
       });
     }
@@ -89,17 +93,21 @@ export class FinanceRecommendationService {
       recommendations.push({
         id: "expense-growth",
         title: "Расходы растут два месяца подряд",
-        description: "Рост расходов несколько месяцев подряд может снижать норму накоплений. Сравните категории и выделите источники роста.",
+        description:
+          "Рост расходов несколько месяцев подряд может снижать норму накоплений. Сравните категории и выделите источники роста.",
         severity: "WARNING"
       });
     }
 
-    const slowGoal = input.goals.find((goal) => goal.progress < 35 && goal.monthlyContribution > input.freeCashflow);
+    const slowGoal = input.goals.find(
+      (goal) => goal.progress < 35 && goal.monthlyContribution > input.freeCashflow
+    );
     if (slowGoal) {
       recommendations.push({
         id: `goal-${slowGoal.title}`,
         title: `Цель «${slowGoal.title}» требует внимания`,
-        description: "Расчетный ежемесячный взнос выше текущего свободного остатка. Можно пересмотреть срок или темп пополнений.",
+        description:
+          "Расчетный ежемесячный взнос выше текущего свободного остатка. Можно пересмотреть срок или темп пополнений.",
         severity: "INFO"
       });
     }
@@ -111,29 +119,52 @@ export class FinanceRecommendationService {
     // Empty state: no income/expense anywhere and no reserve — nothing to
     // assess yet, so don't penalize the user with phantom "problems".
     const hasActivity =
-      input.monthlyCashflow.some((month) => month.income > 0 || month.expense > 0) || input.emergencyFundMonths > 0;
+      input.monthlyCashflow.some((month) => month.income > 0 || month.expense > 0) ||
+      input.emergencyFundMonths > 0;
     if (!hasActivity) {
       return {
         score: 100,
-        summary: "Пока нет данных для оценки. Добавьте счета и операции, чтобы увидеть финансовое здоровье.",
+        summary:
+          "Пока нет данных для оценки. Добавьте счета и операции, чтобы увидеть финансовое здоровье.",
         checks: [
           { label: "Свободный остаток", value: "—", status: "good" },
           { label: "Норма накоплений", value: "—", status: "good" },
           { label: "Финансовая подушка", value: "—", status: "good" }
-        ]
+        ],
+        factors: []
       };
     }
 
-    let score = 100;
+    // Penalties are modeled as data so the score and its per-factor breakdown
+    // (shown on the dashboard) stay in sync — one source of truth.
+    const rawFactors = [
+      { label: "Отрицательный остаток", deduction: input.freeCashflow < 0 ? 25 : 0 },
+      { label: "Низкая норма накоплений", deduction: input.savingsRate < 10 ? 15 : 0 },
+      {
+        label: "Недостаточная подушка",
+        deduction:
+          input.emergencyFundMonths < 3
+            ? 25
+            : input.emergencyFundMonths < input.emergencyFundTargetMonths
+              ? 10
+              : 0
+      },
+      {
+        label: "Превышены лимиты бюджета",
+        deduction: input.budgets.some((budget) => budget.isExceeded) ? 12 : 0
+      },
+      {
+        label: "Расходы растут 2 месяца",
+        deduction: this.expensesGrowTwoMonths(input.monthlyCashflow) ? 10 : 0
+      },
+      {
+        label: "Высокая доля необязательных трат",
+        deduction: input.subscriptionAndEntertainmentShare > 10 ? 6 : 0
+      }
+    ];
+    const factors = rawFactors.map((factor) => ({ ...factor, applied: factor.deduction > 0 }));
 
-    if (input.freeCashflow < 0) score -= 25;
-    if (input.savingsRate < 10) score -= 15;
-    if (input.emergencyFundMonths < 3) score -= 25;
-    else if (input.emergencyFundMonths < input.emergencyFundTargetMonths) score -= 10;
-    if (input.budgets.some((budget) => budget.isExceeded)) score -= 12;
-    if (this.expensesGrowTwoMonths(input.monthlyCashflow)) score -= 10;
-    if (input.subscriptionAndEntertainmentShare > 10) score -= 6;
-
+    const score = 100 - factors.reduce((sum, factor) => sum + factor.deduction, 0);
     const normalized = clamp(Math.round(score), 0, 100);
     const summary =
       normalized >= 80
@@ -159,9 +190,15 @@ export class FinanceRecommendationService {
         {
           label: "Финансовая подушка",
           value: `${input.emergencyFundMonths.toFixed(1)} мес.`,
-          status: input.emergencyFundMonths >= input.emergencyFundTargetMonths ? "good" : input.emergencyFundMonths >= 3 ? "warning" : "critical"
+          status:
+            input.emergencyFundMonths >= input.emergencyFundTargetMonths
+              ? "good"
+              : input.emergencyFundMonths >= 3
+                ? "warning"
+                : "critical"
         }
-      ]
+      ],
+      factors
     };
   }
 
@@ -169,6 +206,8 @@ export class FinanceRecommendationService {
     if (monthlyCashflow.length < 3) return false;
 
     const lastThree = monthlyCashflow.slice(-3);
-    return lastThree[0].expense < lastThree[1].expense && lastThree[1].expense < lastThree[2].expense;
+    return (
+      lastThree[0].expense < lastThree[1].expense && lastThree[1].expense < lastThree[2].expense
+    );
   }
 }

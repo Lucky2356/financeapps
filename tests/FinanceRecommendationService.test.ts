@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { FinanceRecommendationService, type FinanceRecommendationInput } from "@/services/FinanceRecommendationService";
+import {
+  FinanceRecommendationService,
+  type FinanceRecommendationInput
+} from "@/services/FinanceRecommendationService";
 
-function baseInput(overrides: Partial<FinanceRecommendationInput> = {}): FinanceRecommendationInput {
+function baseInput(
+  overrides: Partial<FinanceRecommendationInput> = {}
+): FinanceRecommendationInput {
   return {
     budgets: [],
     monthlyCashflow: [
@@ -51,7 +56,9 @@ describe("FinanceRecommendationService", () => {
         "expense-growth"
       ])
     );
-    expect(recommendations.find((item) => item.id === "emergency-fund-low")?.severity).toBe("CRITICAL");
+    expect(recommendations.find((item) => item.id === "emergency-fund-low")?.severity).toBe(
+      "CRITICAL"
+    );
   });
 
   it("does not warn about expense growth when monthly expense is stable", () => {
@@ -80,7 +87,40 @@ describe("FinanceRecommendationService", () => {
     );
 
     expect(health.score).toBeLessThan(50);
-    expect(health.checks.find((item) => item.label === "Свободный остаток")?.status).toBe("critical");
-    expect(health.checks.find((item) => item.label === "Финансовая подушка")?.status).toBe("critical");
+    expect(health.checks.find((item) => item.label === "Свободный остаток")?.status).toBe(
+      "critical"
+    );
+    expect(health.checks.find((item) => item.label === "Финансовая подушка")?.status).toBe(
+      "critical"
+    );
+
+    // The factor breakdown must reconcile with the score (single source of truth).
+    const totalDeduction = health.factors.reduce((sum, factor) => sum + factor.deduction, 0);
+    expect(health.score).toBe(100 - totalDeduction);
+    expect(health.factors.every((factor) => factor.applied === factor.deduction > 0)).toBe(true);
+    expect(
+      health.factors.some((factor) => factor.label === "Отрицательный остаток" && factor.applied)
+    ).toBe(true);
+  });
+
+  it("returns a full score with no applied factors for healthy, non-growing finances", () => {
+    const health = service.healthScore(
+      baseInput({
+        freeCashflow: 50000,
+        savingsRate: 25,
+        emergencyFundMonths: 6,
+        emergencyFundTargetMonths: 6,
+        subscriptionAndEntertainmentShare: 5,
+        budgets: [],
+        monthlyCashflow: [
+          { month: "март", income: 200000, expense: 120000 },
+          { month: "апр.", income: 200000, expense: 110000 },
+          { month: "май", income: 200000, expense: 100000 }
+        ]
+      })
+    );
+
+    expect(health.score).toBe(100);
+    expect(health.factors.some((factor) => factor.applied)).toBe(false);
   });
 });
