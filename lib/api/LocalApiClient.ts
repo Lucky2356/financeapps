@@ -18,6 +18,7 @@ import type {
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
+import { buildSectorStructure } from "@/lib/data/derive";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
@@ -137,20 +138,6 @@ function emptyInvestmentData(): InvestmentData {
     risks: [],
     education: []
   };
-}
-
-function sectorStructure(portfolio: InvestmentData["portfolio"]) {
-  const total = portfolio.reduce((sum, row) => sum + row.currentValue, 0);
-  if (total <= 0) return [];
-
-  const shares = new Map<string, number>();
-  for (const row of portfolio) {
-    shares.set(row.sector, (shares.get(row.sector) ?? 0) + row.currentValue);
-  }
-
-  return [...shares.entries()]
-    .map(([name, value]) => ({ name, value: percent(value, total) }))
-    .sort((left, right) => right.value - left.value);
 }
 
 function createInitialState(): LocalState {
@@ -1199,7 +1186,7 @@ export class LocalApiClient implements ApiClient {
       watchlist,
       portfolio,
       structure: portfolio.map((row) => ({ name: row.ticker, value: row.share })),
-      sectorStructure: sectorStructure(portfolio),
+      sectorStructure: buildSectorStructure(portfolio),
       risks: analysis.risks,
       education: analysis.education
     };
