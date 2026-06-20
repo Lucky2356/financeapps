@@ -19,6 +19,10 @@ import type {
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
+import {
+  runLocalStateMigrations,
+  type RawLocalState
+} from "@/lib/storage/migrations/runLocalStateMigrations";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { clamp, percent, roundMoney } from "@/lib/utils";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
@@ -411,12 +415,10 @@ function createBlankState(): LocalState {
 }
 
 function migrateLocalState(state: z.infer<typeof localStateSchema>): LocalState {
-  return {
-    ...(state as LocalState),
-    schemaVersion: 2,
-    lastBackupAt: state.lastBackupAt ?? null,
-    importBatches: state.importBatches ?? []
-  };
+  // Delegate version stepping to the shared migration runner so future schema
+  // bumps are append-only (see lib/storage/migrations). Zod has already applied
+  // field defaults by this point; the runner carries structural changes.
+  return runLocalStateMigrations(state as unknown as RawLocalState) as unknown as LocalState;
 }
 
 function isBackupReminderDue(lastBackupAt: string | null) {
