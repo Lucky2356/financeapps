@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CURRENCY_CODES } from "@/lib/currency";
+
 const optionalId = z.string().trim().optional();
 const positiveMoney = z.coerce.number().finite().positive("Введите сумму больше нуля");
 const nonNegativeMoney = z.coerce.number().finite().min(0, "Сумма не может быть отрицательной");
@@ -60,7 +62,7 @@ export const savingGoalSchema = z.object({
 });
 
 export const settingsSchema = z.object({
-  currency: z.literal("RUB"),
+  currency: z.enum(CURRENCY_CODES),
   demoMode: z.preprocess((value) => value === "on" || value === true, z.boolean()),
   riskProfileCode: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE"]),
   emergencyFundMonthsTarget: z.coerce

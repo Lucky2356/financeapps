@@ -19,7 +19,7 @@ import type {
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { buildSectorStructure } from "@/lib/data/derive";
-import type { CurrencyCode } from "@/lib/currency";
+import { isSupportedCurrency, type CurrencyCode } from "@/lib/currency";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
@@ -407,7 +407,7 @@ export class LocalApiClient implements ApiClient {
       name: input.name?.trim() || "Новый счет",
       type: input.type || "DEBIT_CARD",
       balance: Number(input.balance ?? 0),
-      currency
+      currency: state.currency
     };
 
     state.accounts =
@@ -866,6 +866,16 @@ export class LocalApiClient implements ApiClient {
     if (input.riskProfileCode) {
       state.riskProfileCode = input.riskProfileCode as LocalState["riskProfileCode"];
     }
+    if (input.currency && isSupportedCurrency(input.currency)) {
+      state.currency = input.currency;
+      // Single-currency model: keep every account on the app currency so the
+      // displayed currency stays consistent. Amounts are not converted — only
+      // the currency label changes (no invented FX rates).
+      state.accounts = state.accounts.map((account) => ({
+        ...account,
+        currency: state.currency
+      }));
+    }
     if (input.emergencyFundMonthsTarget !== undefined && input.emergencyFundMonthsTarget !== "") {
       state.emergencyFundMonthsTarget = Number(input.emergencyFundMonthsTarget);
     }
@@ -967,7 +977,7 @@ export class LocalApiClient implements ApiClient {
       source: "database",
       accounts,
       totalBalance: roundMoney(accounts.reduce((sum, account) => sum + account.balance, 0)),
-      currency
+      currency: state.currency
     };
   }
 
@@ -1032,7 +1042,7 @@ export class LocalApiClient implements ApiClient {
       recommendations: new FinanceRecommendationService()
         .build(finance)
         .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
-      currency,
+      currency: state.currency,
       selectedMonth
     };
   }
@@ -1078,7 +1088,7 @@ export class LocalApiClient implements ApiClient {
   }
 
   private goals(state: LocalState): GoalsPageData {
-    return { source: "database", goals: state.goals.map(recomputeGoal), currency };
+    return { source: "database", goals: state.goals.map(recomputeGoal), currency: state.currency };
   }
 
   private recurring(state: LocalState): RecurringTransactionsPageData {
@@ -1109,7 +1119,7 @@ export class LocalApiClient implements ApiClient {
       recurringTransactions: rows,
       accounts: this.accounts(state).accounts,
       categories: state.categories,
-      currency,
+      currency: state.currency,
       summary: {
         activeCount: active.length,
         dueCount: active.filter((row) => row.isDue).length,
@@ -1127,7 +1137,7 @@ export class LocalApiClient implements ApiClient {
   private forecast(state: LocalState): ForecastPageData {
     return new CashflowForecastService().build({
       source: "database",
-      currency,
+      currency: state.currency,
       accounts: this.accounts(state).accounts,
       recurringTransactions: this.recurring(state).recurringTransactions,
       goals: this.goals(state).goals
@@ -1181,7 +1191,7 @@ export class LocalApiClient implements ApiClient {
 
     return {
       source: "database",
-      currency,
+      currency: state.currency,
       riskProfile: RISK_PROFILE_LABELS[state.riskProfileCode],
       securities,
       watchlist,
@@ -1275,7 +1285,7 @@ export class LocalApiClient implements ApiClient {
     const recommendationService = new FinanceRecommendationService();
     return {
       source: "database",
-      currency,
+      currency: state.currency,
       metrics: [
         {
           title: "Общий баланс",
@@ -1330,7 +1340,7 @@ export class LocalApiClient implements ApiClient {
   private settings(state: LocalState): SettingsPageData {
     return {
       source: "database",
-      currency,
+      currency: state.currency,
       demoMode: state.demoMode,
       emergencyFundMonthsTarget: state.emergencyFundMonthsTarget,
       riskProfileCode: state.riskProfileCode,
@@ -1458,7 +1468,7 @@ export class LocalApiClient implements ApiClient {
 
     return {
       source: "database",
-      currency,
+      currency: state.currency,
       monthlyCashflow,
       topExpenseCategories,
       avgMonthlyIncome,
