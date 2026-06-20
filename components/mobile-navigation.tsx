@@ -32,7 +32,8 @@ export function MobileTopBar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium",
+                // min-h-11 keeps the tap target at ~44px for comfortable touch use.
+                "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium",
                 active ? "bg-secondary text-foreground" : "bg-card text-muted-foreground"
               )}
             >
@@ -53,7 +54,9 @@ export function MobileBottomNav() {
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur md:hidden">
       <div className="grid grid-cols-5 gap-1">
         {primaryItems.map((item) => {
-          const active = pathname === item.href || (item.href === "/settings" && secondaryItems.some((sub) => sub.href === pathname));
+          const active =
+            pathname === item.href ||
+            (item.href === "/settings" && secondaryItems.some((sub) => sub.href === pathname));
           const Icon = item.icon;
 
           return (
