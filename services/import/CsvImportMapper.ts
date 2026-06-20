@@ -1,6 +1,20 @@
+import { format, isValid } from "date-fns";
 import Papa from "papaparse";
 
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
+
+export type ExistingTransactionLike = {
+  date: string | Date;
+  amount: number;
+  description?: string | null;
+};
+
+// Stable key for duplicate detection. Amount sign is ignored because imported
+// rows are often signed (-1200) while stored transactions keep a positive amount
+// plus a separate INCOME/EXPENSE type.
+function dedupKey(date: Date, amount: number, description: string): string {
+  return `${format(date, "yyyy-MM-dd")}|${Math.abs(Math.round(amount))}|${description.trim().toLowerCase()}`;
+}
 
 export type ParsedCsv = {
   fields: string[];
@@ -170,6 +184,45 @@ export class CsvImportMapper {
       invalidRows: rows.length - validRows,
       warnings: warnings.slice(0, 20)
     };
+  }
+
+  // Returns the indices of imported rows that look like duplicates — either of an
+  // already-stored transaction or of an earlier row in the same file — keyed on
+  // (date, |amount|, description). Rows that cannot be parsed are never flagged.
+  findDuplicateRows(
+    rows: Array<Record<string, unknown>>,
+    mapping: CsvColumnMapping,
+    existing: ExistingTransactionLike[]
+  ): Set<number> {
+    const duplicates = new Set<number>();
+    if (!mapping.dateColumn || !mapping.amountColumn) return duplicates;
+
+    const existingKeys = new Set<string>();
+    for (const transaction of existing) {
+      const date = transaction.date instanceof Date ? transaction.date : new Date(transaction.date);
+      if (!isValid(date)) continue;
+      existingKeys.add(dedupKey(date, transaction.amount, transaction.description ?? ""));
+    }
+
+    const seen = new Set<string>();
+    rows.forEach((row, index) => {
+      const amount = parseImportedAmount(row[mapping.amountColumn]);
+      const date = parseImportedDate(row[mapping.dateColumn]);
+      if (amount === null || !date) return;
+
+      const description = mapping.descriptionColumn
+        ? String(row[mapping.descriptionColumn] ?? "")
+        : "";
+      const key = dedupKey(date, amount, description);
+
+      if (existingKeys.has(key) || seen.has(key)) {
+        duplicates.add(index);
+      } else {
+        seen.add(key);
+      }
+    });
+
+    return duplicates;
   }
 
   private findByAlias(fields: string[], target: keyof CsvColumnMapping) {

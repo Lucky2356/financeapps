@@ -139,6 +139,12 @@ export function ImportExportPanel({
   const mapper = useMemo(() => new CsvImportMapper(), []);
   const importPresets = useMemo(() => mapper.presets(), [mapper]);
   const validation = useMemo(() => mapper.validateRows(rows, mapping), [mapper, mapping, rows]);
+  const [skipDuplicates, setSkipDuplicates] = useState(true);
+  // Rows that match an already-stored transaction or repeat earlier in the file.
+  const duplicateIndices = useMemo(
+    () => mapper.findDuplicateRows(rows, mapping, transactions),
+    [mapper, rows, mapping, transactions]
+  );
   const router = useRouter();
 
   async function pickCsv() {
@@ -242,8 +248,12 @@ export function ImportExportPanel({
 
   async function submitImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const rowsToImport =
+      skipDuplicates && duplicateIndices.size > 0
+        ? rows.filter((_, index) => !duplicateIndices.has(index))
+        : rows;
     const payload = {
-      rows: JSON.stringify(rows),
+      rows: JSON.stringify(rowsToImport),
       ...mapping
     };
 
@@ -572,6 +582,21 @@ export function ImportExportPanel({
                 )}
               </div>
 
+              {duplicateIndices.size > 0 && (
+                <label className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={skipDuplicates}
+                    onChange={(event) => setSkipDuplicates(event.target.checked)}
+                    className="size-4"
+                  />
+                  <span>
+                    Найдено возможных дублей: <strong>{duplicateIndices.size}</strong>. Пропустить
+                    их при импорте (совпадение по дате, сумме и описанию).
+                  </span>
+                </label>
+              )}
+
               <div className="hidden overflow-x-auto rounded-lg border md:block">
                 <Table>
                   <TableHeader>
@@ -608,7 +633,11 @@ export function ImportExportPanel({
                 </Button>
                 <Button type="submit" disabled={validation.validRows === 0}>
                   <Upload className="size-4" />
-                  Импортировать {validation.validRows} строк
+                  Импортировать{" "}
+                  {skipDuplicates
+                    ? Math.max(validation.validRows - duplicateIndices.size, 0)
+                    : validation.validRows}{" "}
+                  строк
                 </Button>
               </div>
             </form>
