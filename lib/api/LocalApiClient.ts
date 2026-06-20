@@ -19,6 +19,7 @@ import type {
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { buildSectorStructure } from "@/lib/data/derive";
+import type { CurrencyCode } from "@/lib/currency";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
@@ -68,7 +69,7 @@ const currency = "RUB" as const;
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
   schemaVersion: 1 | 2;
-  currency: "RUB";
+  currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
   riskProfileCode: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE";
