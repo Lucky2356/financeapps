@@ -39,9 +39,36 @@ export function FinanceHealthCard({ health }: { health: HealthScore }) {
                 </div>
               ))}
             </div>
+            <HealthFactorsBreakdown factors={health.factors} />
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function HealthFactorsBreakdown({ factors }: { factors: HealthScore["factors"] }) {
+  if (factors.length === 0) return null;
+
+  const applied = factors.filter((factor) => factor.applied);
+
+  return (
+    <div className="mt-4 border-t pt-3">
+      <p className="text-xs font-medium text-muted-foreground">Что влияет на оценку</p>
+      {applied.length === 0 ? (
+        <p className="mt-2 text-sm text-success-foreground">
+          Все факторы в норме — баллы не теряются.
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {applied.map((factor) => (
+            <li key={factor.label} className="flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate text-muted-foreground">{factor.label}</span>
+              <span className="shrink-0 font-semibold text-destructive">−{factor.deduction}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
