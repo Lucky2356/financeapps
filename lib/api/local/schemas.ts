@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
+import { CURRENCY_CODES } from "@/lib/currency";
 
 // Zod schemas for the desktop LocalState document and its sub-entities,
 // extracted from LocalApiClient to keep the client a thinner router (plan A1).
@@ -12,7 +13,7 @@ export const accountSchema = z.object({
   name: z.string().trim().min(1).max(100),
   type: z.enum(["CASH", "DEBIT_CARD", "SAVINGS", "BROKERAGE"]),
   balance: z.coerce.number().finite(),
-  currency: z.literal("RUB").default("RUB"),
+  currency: z.enum(CURRENCY_CODES).default("RUB"),
   isArchived: z.boolean().optional()
 });
 export const categorySchema = z.object({
@@ -106,7 +107,7 @@ export const portfolioRowSchema = z.object({
 });
 export const investmentSchema = z.object({
   source: z.enum(["database", "demo-fallback"]).default("database"),
-  currency: z.literal("RUB").default("RUB"),
+  currency: z.enum(CURRENCY_CODES).default("RUB"),
   riskProfile: z.string().trim().min(1).default(RISK_PROFILE_LABELS.MODERATE),
   securities: z.array(watchlistRowSchema).default([]),
   watchlist: z.array(watchlistRowSchema).default([]),
@@ -152,7 +153,7 @@ export const investmentSchema = z.object({
 });
 export const localStateSchema = z.object({
   schemaVersion: z.union([z.literal(1), z.literal(2)]),
-  currency: z.literal("RUB").default("RUB"),
+  currency: z.enum(CURRENCY_CODES).default("RUB"),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

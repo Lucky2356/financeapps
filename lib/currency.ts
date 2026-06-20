@@ -8,7 +8,10 @@
 
 export const BASE_CURRENCY = "RUB" as const;
 
-export type CurrencyCode = "RUB" | "USD" | "EUR" | "GBP" | "CNY" | "KZT";
+// Single source of truth for the supported set (also feeds z.enum via a tuple).
+export const CURRENCY_CODES = ["RUB", "USD", "EUR", "GBP", "CNY", "KZT"] as const;
+
+export type CurrencyCode = (typeof CURRENCY_CODES)[number];
 
 export type CurrencyMeta = {
   code: CurrencyCode;
@@ -24,7 +27,7 @@ export const SUPPORTED_CURRENCIES: CurrencyMeta[] = [
   { code: "KZT", label: "₸ Тенге" }
 ];
 
-export const SUPPORTED_CURRENCY_CODES = SUPPORTED_CURRENCIES.map((item) => item.code);
+export const SUPPORTED_CURRENCY_CODES: readonly CurrencyCode[] = CURRENCY_CODES;
 
 export type CurrencyRates = Partial<Record<CurrencyCode, number>>;
 
