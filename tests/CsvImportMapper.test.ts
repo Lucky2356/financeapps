@@ -50,4 +50,43 @@ describe("CsvImportMapper", () => {
       expect.arrayContaining(["sber", "tbank", "alfa", "vtb"])
     );
   });
+
+  describe("findDuplicateRows", () => {
+    const mapping = {
+      dateColumn: "Дата",
+      amountColumn: "Сумма",
+      descriptionColumn: "Описание",
+      categoryColumn: "Категория",
+      accountColumn: "Счет"
+    };
+
+    it("flags rows matching an existing transaction, ignoring amount sign", () => {
+      const { rows } = mapper.parse(
+        "Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-1200,Кофе,Рестораны,Карта\n28.05.2026,5000,Книги,Покупки,Карта"
+      );
+      const existing = [{ date: "2026-05-27T00:00:00.000Z", amount: 1200, description: "Кофе" }];
+
+      const duplicates = mapper.findDuplicateRows(rows, mapping, existing);
+      expect(duplicates.has(0)).toBe(true);
+      expect(duplicates.has(1)).toBe(false);
+      expect(duplicates.size).toBe(1);
+    });
+
+    it("flags repeated rows within the same file", () => {
+      const { rows } = mapper.parse(
+        "Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-1200,Кофе,Рестораны,Карта\n27.05.2026,-1200,Кофе,Рестораны,Карта"
+      );
+
+      const duplicates = mapper.findDuplicateRows(rows, mapping, []);
+      // First occurrence is kept; the second is a duplicate.
+      expect(duplicates.has(0)).toBe(false);
+      expect(duplicates.has(1)).toBe(true);
+    });
+
+    it("returns nothing when date or amount column is unmapped", () => {
+      const { rows } = mapper.parse("Дата,Сумма\n27.05.2026,-1200");
+      const duplicates = mapper.findDuplicateRows(rows, { ...mapping, amountColumn: "" }, []);
+      expect(duplicates.size).toBe(0);
+    });
+  });
 });
