@@ -1368,6 +1368,12 @@ export async function getGoalsPageData(): Promise<GoalsPageData> {
   );
 }
 
+export async function getLiabilitiesPageData(): Promise<LiabilitiesPageData> {
+  // Desktop refetches from LocalApiClient via useApiPageData("/debts"); the web
+  // Prisma-backed read lands in D1e, so for now the web/demo view is empty.
+  return { source: "database", liabilities: [], total: 0, currency: "RUB" };
+}
+
 export async function getInvestmentData(): Promise<InvestmentData> {
   return safeData<InvestmentData>(
     buildDemoInvestmentData,

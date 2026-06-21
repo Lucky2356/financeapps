@@ -2,6 +2,7 @@ import {
   ArrowDownUp,
   BarChart3,
   CalendarClock,
+  CreditCard,
   Download,
   Flag,
   Gauge,
@@ -28,6 +29,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/transactions", label: "Операции", icon: ArrowDownUp },
       { href: "/accounts", label: "Счета", icon: WalletCards },
+      { href: "/debts", label: "Долги", icon: CreditCard },
       { href: "/categories", label: "Категории", icon: Tag }
     ]
   },
@@ -65,4 +67,6 @@ export const MOBILE_PRIMARY: NavItem[] = [
 const PRIMARY_DESTINATIONS = new Set(["/", "/transactions", "/budgets", "/investments"]);
 
 // Everything not already on the bottom bar — shown in the scrollable mobile top bar.
-export const MOBILE_SECONDARY: NavItem[] = NAV_ITEMS.filter((item) => !PRIMARY_DESTINATIONS.has(item.href));
+export const MOBILE_SECONDARY: NavItem[] = NAV_ITEMS.filter(
+  (item) => !PRIMARY_DESTINATIONS.has(item.href)
+);
