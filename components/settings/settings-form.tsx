@@ -2,6 +2,7 @@
 
 import {
   Check,
+  Download,
   GraduationCap,
   Keyboard,
   Loader2,
@@ -20,7 +21,7 @@ import { applyDensity } from "@/components/app-settings-sync";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
-import { RISK_PROFILE_LABELS } from "@/lib/constants";
+import { APP_VERSION, RISK_PROFILE_LABELS } from "@/lib/constants";
 import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
@@ -428,8 +429,23 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             <GraduationCap className="size-4" />
             Показать обучение снова
           </Button>
+          <Button
+            variant="outline"
+            type="button"
+            className="mt-2 w-full"
+            onClick={() =>
+              window.open(
+                "https://github.com/Lucky2356/financeapps/releases/latest",
+                "_blank",
+                "noopener,noreferrer"
+              )
+            }
+          >
+            <Download className="size-4" />
+            Проверить обновления
+          </Button>
           <p className="mt-3 text-center text-xs text-muted-foreground">
-            Финансовый помощник&nbsp;·&nbsp;версия 1.0.0
+            Финансовый помощник&nbsp;·&nbsp;версия {APP_VERSION}
           </p>
         </CardContent>
       </Card>
