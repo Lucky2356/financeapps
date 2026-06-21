@@ -214,6 +214,17 @@ const DEFAULT_PROFILE: UserProfile = {
 export class LocalApiClient implements ApiClient {
   constructor(private readonly storage: StorageAdapter = createStorageAdapter()) {}
 
+  // In-memory cache of the active profile's parsed state, keyed by its storage
+  // key. Reads return a deep clone so a handler that mutates-then-throws can't
+  // poison the cache; save() refreshes it and storage-bypassing writes (clear,
+  // profile ops) call invalidateStateCache(). Avoids re-reading and Zod-parsing
+  // storage on every request (plan A4).
+  private stateCache: { key: string; state: LocalState } | null = null;
+
+  private invalidateStateCache() {
+    this.stateCache = null;
+  }
+
   async get<T>(path: string): Promise<T> {
     const state = await this.state();
     const { pathname, searchParams } = normalizePath(path);
@@ -302,6 +313,7 @@ export class LocalApiClient implements ApiClient {
         activeProfileId: DEFAULT_PROFILE.id
       } satisfies ProfileList);
       await this.storage.setItem(profileStateKey(DEFAULT_PROFILE.id), createBlankState());
+      this.invalidateStateCache();
       return undefined as T;
     } else {
       throw new Error(`Local API delete route is not implemented: ${pathname}`);
@@ -1606,6 +1618,9 @@ export class LocalApiClient implements ApiClient {
   private async state() {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
+    if (this.stateCache && this.stateCache.key === key) {
+      return structuredClone(this.stateCache.state);
+    }
     const existing = await this.storage.getItem<unknown>(key);
     const parsed = localStateSchema.safeParse(existing);
     if (parsed.success) {
@@ -1613,16 +1628,20 @@ export class LocalApiClient implements ApiClient {
       if (migrated.schemaVersion !== (existing as { schemaVersion?: unknown })?.schemaVersion) {
         await this.storage.setItem(key, migrated);
       }
-      return migrated;
+      this.stateCache = { key, state: structuredClone(migrated) };
+      return structuredClone(migrated);
     }
     const initial = createInitialState();
     await this.storage.setItem(key, initial);
-    return initial;
+    this.stateCache = { key, state: structuredClone(initial) };
+    return structuredClone(initial);
   }
 
   private async save(state: LocalState) {
     const profileId = await this.getActiveProfileId();
-    await this.storage.setItem(profileStateKey(profileId), state);
+    const key = profileStateKey(profileId);
+    await this.storage.setItem(key, state);
+    this.stateCache = { key, state: structuredClone(state) };
   }
 
   private async getActiveProfileId(): Promise<string> {
@@ -1651,6 +1670,7 @@ export class LocalApiClient implements ApiClient {
         parsed.success ? migrateLocalState(parsed.data) : legacy
       );
       await this.storage.removeItem(LEGACY_STATE_KEY);
+      this.invalidateStateCache();
     }
 
     await this.storage.setItem(PROFILE_LIST_KEY, list);
@@ -1684,6 +1704,7 @@ export class LocalApiClient implements ApiClient {
     if (!list.profiles.find((p) => p.id === profileId)) throw new Error("Profile not found");
     list.activeProfileId = profileId;
     await this.storage.setItem(PROFILE_LIST_KEY, list);
+    this.invalidateStateCache();
   }
 
   private async deleteProfile(profileId: string): Promise<void> {
@@ -1693,5 +1714,6 @@ export class LocalApiClient implements ApiClient {
     if (list.activeProfileId === profileId) list.activeProfileId = list.profiles[0].id;
     await this.storage.setItem(PROFILE_LIST_KEY, list);
     await this.storage.removeItem(profileStateKey(profileId));
+    this.invalidateStateCache();
   }
 }

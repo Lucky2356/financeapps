@@ -366,3 +366,24 @@ describe("LocalApiClient currency (plan C7)", () => {
     expect(settings.currency).toBe("RUB");
   });
 });
+
+describe("LocalApiClient state cache (plan A4)", () => {
+  it("stays fresh across mutations and resets after clearing all data", async () => {
+    const client = createClient();
+
+    await seedAccount(client, { name: "Карта", balance: "500" });
+    let accounts = await client.get<AccountsPageData>("/accounts");
+    expect(accounts.accounts).toHaveLength(1);
+
+    // A second mutation must be visible on the next read (no stale cache).
+    await seedAccount(client, { name: "Наличные", balance: "100" });
+    accounts = await client.get<AccountsPageData>("/accounts");
+    expect(accounts.accounts).toHaveLength(2);
+    expect(accounts.totalBalance).toBe(600);
+
+    // Clearing wipes the cache too — the next read sees an empty state.
+    await client.delete("/storage/clear");
+    accounts = await client.get<AccountsPageData>("/accounts");
+    expect(accounts.accounts).toHaveLength(0);
+  });
+});
