@@ -443,6 +443,19 @@ describe("LocalApiClient automation (plan D2c)", () => {
     expect(settings.paymentReminders).toBe(true);
   });
 
+  it("persists AI assistant settings (plan D3)", async () => {
+    const client = createClient();
+    await client.put("/settings", {
+      aiEnabled: "on",
+      aiApiKey: "  sk-ant-test  ",
+      aiModel: " claude-opus-4-8 "
+    });
+    const settings = await client.get<SettingsPageData>("/settings");
+    expect(settings.aiEnabled).toBe(true);
+    expect(settings.aiApiKey).toBe("sk-ant-test");
+    expect(settings.aiModel).toBe("claude-opus-4-8");
+  });
+
   it("materializes overdue recurring payments idempotently", async () => {
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта", balance: "100000" });

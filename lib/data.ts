@@ -135,6 +135,11 @@ export type SettingsPageData = {
   defaultTransactionType: "INCOME" | "EXPENSE";
   autoMaterializeRecurring: boolean;
   paymentReminders: boolean;
+  aiEnabled: boolean;
+  // Only populated on desktop (the user's own key, stored locally). The web
+  // path uses a server-side key and never returns this.
+  aiApiKey?: string;
+  aiModel?: string;
   riskProfiles: Array<{
     id: string;
     code: RiskProfileCode;
@@ -1629,6 +1634,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
       defaultTransactionType: "EXPENSE" as const,
       autoMaterializeRecurring: false,
       paymentReminders: false,
+      aiEnabled: false,
       riskProfiles: [
         {
           id: "risk-conservative",
@@ -1667,6 +1673,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         defaultTransactionType: "EXPENSE" as const,
         autoMaterializeRecurring: false,
         paymentReminders: false,
+        aiEnabled: false,
         riskProfiles: riskProfiles.map((profile) => ({
           id: profile.id,
           code: profile.code,
@@ -1686,6 +1693,7 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
       defaultTransactionType: "EXPENSE" as const,
       autoMaterializeRecurring: false,
       paymentReminders: false,
+      aiEnabled: false,
       riskProfiles: [
         {
           id: "risk-conservative",

@@ -174,6 +174,9 @@ export const localStateSchema = z.object({
   rules: z.array(categorizationRuleSchema).default([]),
   autoMaterializeRecurring: z.boolean().default(false),
   paymentReminders: z.boolean().default(false),
+  aiEnabled: z.boolean().default(false),
+  aiApiKey: z.string().default(""),
+  aiModel: z.string().default(""),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

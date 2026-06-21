@@ -86,6 +86,9 @@ type LocalState = {
   rules: CategorizationRule[];
   autoMaterializeRecurring: boolean;
   paymentReminders: boolean;
+  aiEnabled: boolean;
+  aiApiKey: string;
+  aiModel: string;
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -177,6 +180,9 @@ function createInitialState(): LocalState {
     rules: [],
     autoMaterializeRecurring: false,
     paymentReminders: false,
+    aiEnabled: false,
+    aiApiKey: "",
+    aiModel: "",
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -205,6 +211,9 @@ function createBlankState(): LocalState {
     rules: [],
     autoMaterializeRecurring: false,
     paymentReminders: false,
+    aiEnabled: false,
+    aiApiKey: "",
+    aiModel: "",
     categories: [],
     transactions: [],
     budgets: [],
@@ -1024,6 +1033,16 @@ export class LocalApiClient implements ApiClient {
         raw.paymentReminders === "true" ||
         raw.paymentReminders === "on";
     }
+    if (raw.aiEnabled !== undefined) {
+      state.aiEnabled =
+        raw.aiEnabled === true || raw.aiEnabled === "true" || raw.aiEnabled === "on";
+    }
+    if (raw.aiApiKey !== undefined) {
+      state.aiApiKey = String(raw.aiApiKey ?? "").trim();
+    }
+    if (raw.aiModel !== undefined) {
+      state.aiModel = String(raw.aiModel ?? "").trim();
+    }
     return this.settings(state);
   }
 
@@ -1525,6 +1544,9 @@ export class LocalApiClient implements ApiClient {
       defaultTransactionType: state.defaultTransactionType ?? "EXPENSE",
       autoMaterializeRecurring: state.autoMaterializeRecurring ?? false,
       paymentReminders: state.paymentReminders ?? false,
+      aiEnabled: state.aiEnabled ?? false,
+      aiApiKey: state.aiApiKey ?? "",
+      aiModel: state.aiModel ?? "",
       riskProfiles: [
         {
           id: "risk-conservative",

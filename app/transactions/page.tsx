@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { AiQuickAdd } from "@/components/ai/ai-quick-add";
 import { PageHeader } from "@/components/page-header";
 import { SourceBanner } from "@/components/source-banner";
 import { TransactionManager } from "@/components/transactions/transaction-manager";
@@ -17,7 +18,14 @@ export default async function TransactionsPage() {
         description="Ручной ввод, редактирование, удаление и фильтрация доходов и расходов."
       />
       <SourceBanner source={data.source} />
-      <Suspense fallback={<div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">Загружаем операции...</div>}>
+      <AiQuickAdd />
+      <Suspense
+        fallback={
+          <div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
+            Загружаем операции...
+          </div>
+        }
+      >
         <TransactionManager data={data} />
       </Suspense>
     </div>
