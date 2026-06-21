@@ -2,13 +2,5 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "createUpdaterArtifacts": true
-  },
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/Lucky2356/financeapps/releases/latest/download/latest.json"
-      ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMzQTU2RTk4Q0Q5M0M1ODUKUldTRnhaUE5tRzZsTXpLT0x4U1E0T3FOcVhNQ0ZaUUVjVEVZd2F2aWZPRUpxc0FXS2piZTdpamkK"
-    }
   }
 }
