@@ -17,6 +17,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { isLocalDesktopMode } from "@/lib/platform/env";
 import { applyDensity } from "@/components/app-settings-sync";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
@@ -35,6 +36,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +58,9 @@ type EditableSettings = {
   defaultTransactionType: "INCOME" | "EXPENSE";
   autoMaterializeRecurring: boolean;
   paymentReminders: boolean;
+  aiEnabled: boolean;
+  aiApiKey: string;
+  aiModel: string;
 };
 
 function toEditable(data: SettingsPageData): EditableSettings {
@@ -68,7 +73,10 @@ function toEditable(data: SettingsPageData): EditableSettings {
     density: data.density ?? "comfortable",
     defaultTransactionType: data.defaultTransactionType,
     autoMaterializeRecurring: data.autoMaterializeRecurring ?? false,
-    paymentReminders: data.paymentReminders ?? false
+    paymentReminders: data.paymentReminders ?? false,
+    aiEnabled: data.aiEnabled ?? false,
+    aiApiKey: data.aiApiKey ?? "",
+    aiModel: data.aiModel ?? ""
   };
 }
 
@@ -108,7 +116,10 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         density: next.density,
         defaultTransactionType: next.defaultTransactionType,
         autoMaterializeRecurring: next.autoMaterializeRecurring,
-        paymentReminders: next.paymentReminders
+        paymentReminders: next.paymentReminders,
+        aiEnabled: next.aiEnabled,
+        aiApiKey: next.aiApiKey,
+        aiModel: next.aiModel
       });
       await reload();
       setStatus("saved");
@@ -277,6 +288,68 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           </label>
         </CardContent>
       </Card>
+
+      {/* Card: AI assistant (desktop only — uses the user's own Anthropic key) */}
+      {isLocalDesktopMode && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="size-4" />
+              ИИ-ассистент
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
+              <span>
+                <span className="block text-sm font-medium">Включить ИИ-ассистент</span>
+                <span className="block text-xs text-muted-foreground">
+                  Ввод операций текстом на странице «Операции» через Claude.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.aiEnabled}
+                onChange={(e) => void persist({ aiEnabled: e.target.checked })}
+                className="size-5 accent-primary"
+              />
+            </label>
+            {settings.aiEnabled && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-key">API-ключ Anthropic</Label>
+                  <Input
+                    id="ai-key"
+                    type="password"
+                    autoComplete="off"
+                    value={settings.aiApiKey}
+                    onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })}
+                    onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
+                    placeholder="sk-ant-..."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Ключ хранится только на вашем устройстве и используется для запросов к
+                    Anthropic.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ai-model">Модель (необязательно)</Label>
+                  <Input
+                    id="ai-model"
+                    value={settings.aiModel}
+                    onChange={(e) => setSettings({ ...settings, aiModel: e.target.value })}
+                    onBlur={(e) => void persist({ aiModel: e.target.value.trim() })}
+                    placeholder="claude-opus-4-8"
+                  />
+                </div>
+                <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
+                  Текст, который вы вводите, отправляется во внешний сервис Anthropic. Не указывайте
+                  конфиденциальные данные. Функцию можно отключить в любой момент.
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Card 2: Risk & Emergency Fund */}
       <Card>
