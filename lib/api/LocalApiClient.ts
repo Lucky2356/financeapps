@@ -1675,6 +1675,7 @@ export class LocalApiClient implements ApiClient {
         currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
       subscriptionAndEntertainmentShare:
         currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
+      monthlyDebtPayments: state.liabilities.reduce((sum, item) => sum + item.minPayment, 0),
       goals: this.goals(state).goals.map((goal) => ({
         title: goal.title,
         progress: goal.progress,

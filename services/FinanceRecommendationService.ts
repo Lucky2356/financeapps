@@ -26,6 +26,8 @@ export type FinanceRecommendationInput = {
   emergencyFundTargetMonths: number;
   essentialExpenseShare: number;
   subscriptionAndEntertainmentShare: number;
+  /** Sum of minimum monthly debt payments (0 when there are no liabilities). */
+  monthlyDebtPayments?: number;
   goals: GoalSignal[];
 };
 
@@ -160,6 +162,15 @@ export class FinanceRecommendationService {
       {
         label: "Высокая доля необязательных трат",
         deduction: input.subscriptionAndEntertainmentShare > 10 ? 6 : 0
+      },
+      {
+        // Debt-to-income: minimum debt payments above 40% of income is heavy.
+        label: "Высокая долговая нагрузка",
+        deduction:
+          input.currentMonthIncome > 0 &&
+          (input.monthlyDebtPayments ?? 0) / input.currentMonthIncome > 0.4
+            ? 12
+            : 0
       }
     ];
     const factors = rawFactors.map((factor) => ({ ...factor, applied: factor.deduction > 0 }));
