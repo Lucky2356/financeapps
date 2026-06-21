@@ -123,4 +123,15 @@ describe("FinanceRecommendationService", () => {
     expect(health.score).toBe(100);
     expect(health.factors.some((factor) => factor.applied)).toBe(false);
   });
+
+  it("flags a high debt-to-income load as a health factor", () => {
+    const health = service.healthScore(
+      baseInput({ currentMonthIncome: 100000, monthlyDebtPayments: 50000 })
+    );
+    expect(
+      health.factors.some(
+        (factor) => factor.label === "Высокая долговая нагрузка" && factor.applied
+      )
+    ).toBe(true);
+  });
 });
