@@ -84,6 +84,8 @@ type LocalState = {
   accounts: Array<AccountRow & { isArchived?: boolean }>;
   liabilities: Array<Omit<LiabilityRow, "progress">>;
   rules: CategorizationRule[];
+  autoMaterializeRecurring: boolean;
+  paymentReminders: boolean;
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -173,6 +175,8 @@ function createInitialState(): LocalState {
     accounts: [],
     liabilities: [],
     rules: [],
+    autoMaterializeRecurring: false,
+    paymentReminders: false,
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -199,6 +203,8 @@ function createBlankState(): LocalState {
     accounts: [],
     liabilities: [],
     rules: [],
+    autoMaterializeRecurring: false,
+    paymentReminders: false,
     categories: [],
     transactions: [],
     budgets: [],
@@ -383,6 +389,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertRecurring(state, body, method));
     if (pathname === "/recurring/materialize")
       return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
+    if (pathname === "/recurring/materialize-all")
+      return this.saveAndReturn<TResponse>(state, this.materializeAllDue(state));
     if (pathname === "/import")
       return this.saveAndReturn<TResponse>(state, this.importCsvRows(state, body));
     if (pathname === "/import/undo")
@@ -815,6 +823,44 @@ export class LocalApiClient implements ApiClient {
     return { created: status.dueDates.length, nextDate: status.nextDateAfterRun.toISOString() };
   }
 
+  // Materializes every currently-due active template at once (used by opt-in
+  // auto-posting on app start). Idempotent: each run advances nextDate past the
+  // due dates, so the next run only picks up newly-due templates.
+  private materializeAllDue(state: LocalState) {
+    const service = new RecurringTransactionService();
+    let created = 0;
+    for (const recurring of state.recurringTransactions) {
+      if (!recurring.isActive) continue;
+      const status = service.getStatus({
+        nextDate: new Date(recurring.nextDate),
+        frequency: recurring.frequency,
+        isActive: recurring.isActive
+      });
+      if (status.dueDates.length === 0) continue;
+      for (const dueDate of status.dueDates) {
+        this.upsertTransaction(
+          state,
+          {
+            amount: String(recurring.amount),
+            type: recurring.type,
+            accountId: recurring.account.id,
+            categoryId: recurring.category.id,
+            date: dueDate.toISOString(),
+            description: recurring.description ?? recurring.category.label
+          },
+          "POST"
+        );
+        created += 1;
+      }
+      state.recurringTransactions = state.recurringTransactions.map((item) =>
+        item.id === recurring.id
+          ? { ...item, nextDate: status.nextDateAfterRun.toISOString(), isDue: false }
+          : item
+      );
+    }
+    return { created };
+  }
+
   private importCsvRows(state: LocalState, body: unknown) {
     const input = toFormObject(body);
     const rows = JSON.parse(input.rows || "[]") as Array<Record<string, unknown>>;
@@ -965,6 +1011,18 @@ export class LocalApiClient implements ApiClient {
     ) {
       state.defaultTransactionType =
         input.defaultTransactionType as LocalState["defaultTransactionType"];
+    }
+    if (raw.autoMaterializeRecurring !== undefined) {
+      state.autoMaterializeRecurring =
+        raw.autoMaterializeRecurring === true ||
+        raw.autoMaterializeRecurring === "true" ||
+        raw.autoMaterializeRecurring === "on";
+    }
+    if (raw.paymentReminders !== undefined) {
+      state.paymentReminders =
+        raw.paymentReminders === true ||
+        raw.paymentReminders === "true" ||
+        raw.paymentReminders === "on";
     }
     return this.settings(state);
   }
@@ -1465,6 +1523,8 @@ export class LocalApiClient implements ApiClient {
       theme: state.theme ?? "system",
       density: state.density ?? "comfortable",
       defaultTransactionType: state.defaultTransactionType ?? "EXPENSE",
+      autoMaterializeRecurring: state.autoMaterializeRecurring ?? false,
+      paymentReminders: state.paymentReminders ?? false,
       riskProfiles: [
         {
           id: "risk-conservative",

@@ -53,6 +53,8 @@ type EditableSettings = {
   theme: "light" | "dark" | "system";
   density: "comfortable" | "compact";
   defaultTransactionType: "INCOME" | "EXPENSE";
+  autoMaterializeRecurring: boolean;
+  paymentReminders: boolean;
 };
 
 function toEditable(data: SettingsPageData): EditableSettings {
@@ -63,7 +65,9 @@ function toEditable(data: SettingsPageData): EditableSettings {
     emergencyFundMonthsTarget: data.emergencyFundMonthsTarget,
     theme: data.theme ?? "system",
     density: data.density ?? "comfortable",
-    defaultTransactionType: data.defaultTransactionType
+    defaultTransactionType: data.defaultTransactionType,
+    autoMaterializeRecurring: data.autoMaterializeRecurring ?? false,
+    paymentReminders: data.paymentReminders ?? false
   };
 }
 
@@ -101,7 +105,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         emergencyFundMonthsTarget: String(next.emergencyFundMonthsTarget),
         theme: next.theme,
         density: next.density,
-        defaultTransactionType: next.defaultTransactionType
+        defaultTransactionType: next.defaultTransactionType,
+        autoMaterializeRecurring: next.autoMaterializeRecurring,
+        paymentReminders: next.paymentReminders
       });
       await reload();
       setStatus("saved");
@@ -231,6 +237,43 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               Выбран при открытии формы быстрого добавления.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Card: Automation */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Автоматизация</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
+            <span>
+              <span className="block text-sm font-medium">Авто-проведение регулярных</span>
+              <span className="block text-xs text-muted-foreground">
+                При запуске автоматически создавать просроченные плановые платежи.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.autoMaterializeRecurring}
+              onChange={(e) => void persist({ autoMaterializeRecurring: e.target.checked })}
+              className="size-5 accent-primary"
+            />
+          </label>
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
+            <span>
+              <span className="block text-sm font-medium">Напоминания о платежах</span>
+              <span className="block text-xs text-muted-foreground">
+                Системные уведомления о платежах, которые нужно провести сегодня.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.paymentReminders}
+              onChange={(e) => void persist({ paymentReminders: e.target.checked })}
+              className="size-5 accent-primary"
+            />
+          </label>
         </CardContent>
       </Card>
 

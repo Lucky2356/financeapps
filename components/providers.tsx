@@ -5,6 +5,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { Toaster } from "sonner";
 
 import { AppSettingsSync } from "@/components/app-settings-sync";
+import { AutomationRunner } from "@/components/automation-runner";
 import { CommandPalette } from "@/components/command-palette";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
@@ -19,6 +20,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <ConfirmProvider>
         <AppSettingsSync />
+        <AutomationRunner />
         <CommandPalette />
         <OnboardingTour />
         {children}
