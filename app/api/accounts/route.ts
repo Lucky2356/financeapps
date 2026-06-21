@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAccountsPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { accountSchema } from "@/lib/validations";
 
 export const dynamic = "force-static";
 
 async function defaultUser() {
-  const user = await requirePrisma().user.findFirst({ orderBy: { createdAt: "asc" } });
+  const user = await findCurrentUser();
   if (!user) throw new Error("Demo user not found. Run seed first.");
   return user;
 }

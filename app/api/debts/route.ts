@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getLiabilitiesPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { liabilitySchema } from "@/lib/validations";
 
 export const dynamic = "force-static";
@@ -27,7 +28,7 @@ function toData(input: ReturnType<typeof liabilitySchema.parse>) {
 export async function POST(request: NextRequest) {
   try {
     const db = requirePrisma();
-    const user = await db.user.findFirst({ orderBy: { createdAt: "asc" } });
+    const user = await findCurrentUser();
     if (!user)
       return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
 
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const db = requirePrisma();
-    const user = await db.user.findFirst({ orderBy: { createdAt: "asc" } });
+    const user = await findCurrentUser();
     if (!user)
       return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
 
@@ -68,7 +69,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const db = requirePrisma();
-    const user = await db.user.findFirst({ orderBy: { createdAt: "asc" } });
+    const user = await findCurrentUser();
     if (!user)
       return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
     const id = request.nextUrl.searchParams.get("id");

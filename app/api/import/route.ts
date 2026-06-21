@@ -5,6 +5,7 @@ import { getImportPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { csvImportSchema } from "@/lib/validations";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 
@@ -49,15 +50,20 @@ async function findOrCreateImportCategory(
 export async function POST(request: NextRequest) {
   try {
     const db = requirePrisma();
-    const user = await db.user.findFirst({ orderBy: { createdAt: "asc" } });
-    if (!user) return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
+    const user = await findCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
 
     const input = csvImportSchema.parse(await request.json());
     const parsedRows = JSON.parse(input.rows) as unknown;
     const rows = Array.isArray(parsedRows) ? (parsedRows as Array<Record<string, unknown>>) : [];
     const accounts = await db.account.findMany({ where: { userId: user.id, isArchived: false } });
     const fallbackAccount = accounts[0];
-    if (!fallbackAccount) return NextResponse.json({ error: "Create an account before importing CSV." }, { status: 400 });
+    if (!fallbackAccount)
+      return NextResponse.json(
+        { error: "Create an account before importing CSV." },
+        { status: 400 }
+      );
 
     // History for auto-categorizing rows that arrive without a category column.
     const categories = await db.category.findMany({ where: { userId: user.id } });
@@ -65,7 +71,11 @@ export async function POST(request: NextRequest) {
       where: { userId: user.id },
       select: { description: true, type: true, categoryId: true }
     });
-    const history = historyRows.map((row) => ({ description: row.description, type: row.type, category: { id: row.categoryId } }));
+    const history = historyRows.map((row) => ({
+      description: row.description,
+      type: row.type,
+      category: { id: row.categoryId }
+    }));
 
     let imported = 0;
     let skipped = 0;
@@ -80,8 +90,11 @@ export async function POST(request: NextRequest) {
 
         const type: TransactionType = rawAmount >= 0 ? "INCOME" : "EXPENSE";
         const amount = Math.abs(rawAmount);
-        const accountName = String(row[input.accountColumn ?? ""] ?? "").trim().toLowerCase();
-        const account = accounts.find((item) => item.name.toLowerCase() === accountName) ?? fallbackAccount;
+        const accountName = String(row[input.accountColumn ?? ""] ?? "")
+          .trim()
+          .toLowerCase();
+        const account =
+          accounts.find((item) => item.name.toLowerCase() === accountName) ?? fallbackAccount;
         const categoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
         const description = String(row[input.descriptionColumn ?? ""] ?? "").trim() || null;
         // Use the explicit category if present; otherwise try to auto-categorize
@@ -92,8 +105,9 @@ export async function POST(request: NextRequest) {
         } else {
           const suggestedId = suggestCategoryId(description ?? "", history, { type });
           category =
-            (suggestedId ? categories.find((item) => item.id === suggestedId && item.kind === type) : undefined) ??
-            (await findOrCreateImportCategory(tx, user.id, "", type));
+            (suggestedId
+              ? categories.find((item) => item.id === suggestedId && item.kind === type)
+              : undefined) ?? (await findOrCreateImportCategory(tx, user.id, "", type));
         }
         const duplicate = await tx.transaction.findFirst({
           where: {

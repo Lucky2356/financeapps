@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCategoriesPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { categoryInputSchema } from "@/lib/validations";
 
 export const dynamic = "force-static";
 
 async function defaultUser() {
-  const user = await requirePrisma().user.findFirst({ orderBy: { createdAt: "asc" } });
+  const user = await findCurrentUser();
   if (!user) throw new Error("Demo user not found. Run seed first.");
   return user;
 }
@@ -25,10 +26,17 @@ export async function POST(request: NextRequest) {
 
     // Check uniqueness: @@unique([userId, name, kind])
     const existing = await db.category.findFirst({
-      where: { userId: user.id, name: { equals: input.name, mode: "insensitive" }, kind: input.kind }
+      where: {
+        userId: user.id,
+        name: { equals: input.name, mode: "insensitive" },
+        kind: input.kind
+      }
     });
     if (existing) {
-      return NextResponse.json({ error: "Категория с таким именем уже существует." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Категория с таким именем уже существует." },
+        { status: 409 }
+      );
     }
 
     const category = await db.category.create({
@@ -68,7 +76,10 @@ export async function PUT(request: NextRequest) {
       }
     });
     if (duplicate) {
-      return NextResponse.json({ error: "Категория с таким именем уже существует." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Категория с таким именем уже существует." },
+        { status: 409 }
+      );
     }
 
     const category = await db.category.update({

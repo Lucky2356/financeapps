@@ -4,6 +4,7 @@ import { startOfDay } from "date-fns";
 import { getInvestmentData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { portfolioPositionSchema, watchlistItemSchema } from "@/lib/validations";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 
@@ -14,8 +15,7 @@ export async function GET() {
 }
 
 async function defaultUser() {
-  const db = requirePrisma();
-  const user = await db.user.findFirst({ orderBy: { createdAt: "asc" } });
+  const user = await findCurrentUser();
   if (!user) {
     throw new Error("Demo user not found. Run seed first.");
   }
@@ -25,7 +25,10 @@ async function defaultUser() {
 
 async function findOrCreatePortfolio(userId: string) {
   const db = requirePrisma();
-  const existing = await db.portfolio.findFirst({ where: { userId }, orderBy: { createdAt: "asc" } });
+  const existing = await db.portfolio.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" }
+  });
   if (existing) return existing;
 
   const brokerageAccount = await db.account.findFirst({
@@ -44,7 +47,10 @@ async function findOrCreatePortfolio(userId: string) {
 
 async function deletePositionByTicker(userId: string, ticker: string) {
   const db = requirePrisma();
-  const portfolio = await db.portfolio.findFirst({ where: { userId }, orderBy: { createdAt: "asc" } });
+  const portfolio = await db.portfolio.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" }
+  });
   const security = await db.security.findUnique({ where: { ticker } });
 
   if (!portfolio || !security) return;
@@ -119,7 +125,10 @@ export async function POST(request: NextRequest) {
       const input = watchlistItemSchema.parse(payload);
       const security = await db.security.findUnique({ where: { ticker: input.ticker } });
       if (!security) {
-        return NextResponse.json({ error: "Security not found in the market directory." }, { status: 404 });
+        return NextResponse.json(
+          { error: "Security not found in the market directory." },
+          { status: 404 }
+        );
       }
 
       const item = await db.watchlistItem.upsert({
@@ -170,7 +179,10 @@ export async function POST(request: NextRequest) {
     const security = await db.security.findUnique({ where: { ticker: input.ticker } });
 
     if (!security) {
-      return NextResponse.json({ error: "Security not found in the market directory." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Security not found in the market directory." },
+        { status: 404 }
+      );
     }
 
     const portfolio = await findOrCreatePortfolio(user.id);

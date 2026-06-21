@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 
 export const dynamic = "force-static";
 
 async function defaultUser() {
-  const user = await requirePrisma().user.findFirst({ orderBy: { createdAt: "asc" } });
+  const user = await findCurrentUser();
   if (!user) throw new Error("Demo user not found. Run seed first.");
   return user;
 }
@@ -22,13 +23,15 @@ export async function POST(request: NextRequest) {
     const user = await defaultUser();
     const { id } = (await request.json()) as { id?: string };
 
-    if (!id) return NextResponse.json({ error: "Recurring transaction id is required." }, { status: 400 });
+    if (!id)
+      return NextResponse.json({ error: "Recurring transaction id is required." }, { status: 400 });
 
     const recurring = await db.recurringTransaction.findFirstOrThrow({
       where: { id, userId: user.id },
       include: { account: true, category: true }
     });
-    if (!recurring.isActive) return NextResponse.json({ error: "Шаблон отключен." }, { status: 400 });
+    if (!recurring.isActive)
+      return NextResponse.json({ error: "Шаблон отключен." }, { status: 400 });
 
     const service = new RecurringTransactionService();
     const status = service.getStatus({

@@ -16,6 +16,7 @@ import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import type { CategorizationRule } from "@/lib/categorization-rules";
 import { prisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
 import { transactionFilterSchema } from "@/lib/validations";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
@@ -580,8 +581,13 @@ function normalizeSearchParams(searchParams: Record<string, string | string[] | 
 async function getDefaultUser() {
   if (!prisma) return null;
 
+  // Resolve "who" through the shared seam (lib/auth/current-user), then load the
+  // full row with the relations this module needs. P0 auth changes the seam only.
+  const current = await findCurrentUser();
+  if (!current) return null;
+
   return prisma.user.findFirst({
-    orderBy: { createdAt: "asc" },
+    where: { id: current.id },
     include: { riskProfile: true }
   });
 }

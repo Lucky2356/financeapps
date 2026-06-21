@@ -3,17 +3,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { getRecurringTransactionsPageData } from "@/lib/data";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { recurringTransactionSchema } from "@/lib/validations";
 
 export const dynamic = "force-static";
 
 async function defaultUser() {
-  const user = await requirePrisma().user.findFirst({ orderBy: { createdAt: "asc" } });
+  const user = await findCurrentUser();
   if (!user) throw new Error("Demo user not found. Run seed first.");
   return user;
 }
 
-async function validateRecurringRefs(userId: string, accountId: string, categoryId: string, type: "INCOME" | "EXPENSE") {
+async function validateRecurringRefs(
+  userId: string,
+  accountId: string,
+  categoryId: string,
+  type: "INCOME" | "EXPENSE"
+) {
   const db = requirePrisma();
   const [account, category] = await Promise.all([
     db.account.findFirst({ where: { id: accountId, userId, isArchived: false } }),
@@ -36,7 +42,12 @@ export async function POST(request: NextRequest) {
     const db = requirePrisma();
     const user = await defaultUser();
     const input = recurringTransactionSchema.parse(await request.json());
-    const validationError = await validateRecurringRefs(user.id, input.accountId, input.categoryId, input.type);
+    const validationError = await validateRecurringRefs(
+      user.id,
+      input.accountId,
+      input.categoryId,
+      input.type
+    );
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
     const created = await db.recurringTransaction.create({
@@ -65,9 +76,15 @@ export async function PUT(request: NextRequest) {
     const user = await defaultUser();
     const input = recurringTransactionSchema.parse(await request.json());
 
-    if (!input.id) return NextResponse.json({ error: "Recurring transaction id is required." }, { status: 400 });
+    if (!input.id)
+      return NextResponse.json({ error: "Recurring transaction id is required." }, { status: 400 });
 
-    const validationError = await validateRecurringRefs(user.id, input.accountId, input.categoryId, input.type);
+    const validationError = await validateRecurringRefs(
+      user.id,
+      input.accountId,
+      input.categoryId,
+      input.type
+    );
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
     await db.recurringTransaction.findFirstOrThrow({ where: { id: input.id, userId: user.id } });
@@ -97,7 +114,8 @@ export async function DELETE(request: NextRequest) {
     const user = await defaultUser();
     const id = request.nextUrl.searchParams.get("id");
 
-    if (!id) return NextResponse.json({ error: "Recurring transaction id is required." }, { status: 400 });
+    if (!id)
+      return NextResponse.json({ error: "Recurring transaction id is required." }, { status: 400 });
 
     await db.recurringTransaction.findFirstOrThrow({ where: { id, userId: user.id } });
     await db.recurringTransaction.delete({ where: { id } });
