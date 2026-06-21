@@ -25,10 +25,11 @@ jobs:
       NEXT_PUBLIC_API_MODE: local
       NEXT_PUBLIC_DESKTOP_DATA_MODE: local
       NEXT_OUTPUT: export
-      # True only when the updater signing key secret is configured. Gates the
+      # True only when an updater signing key secret is configured. Gates the
       # signed-build + manifest path so the workflow still produces a plain
-      # installer before keys are set up.
-      HAS_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+      # installer before keys are set up. Accepts either the standard
+      # TAURI_SIGNING_PRIVATE_KEY or the AUTO_UPDATE secret name.
+      HAS_SIGNING_KEY: ${{ (secrets.TAURI_SIGNING_PRIVATE_KEY || secrets.AUTO_UPDATE) != '' }}
 
     steps:
       - name: Checkout
@@ -67,7 +68,7 @@ jobs:
       - name: Build Tauri Windows bundle
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || secrets.AUTO_UPDATE }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           if [ "$HAS_SIGNING_KEY" = "true" ]; then

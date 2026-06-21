@@ -1,5 +1,5 @@
 export const APP_NAME = "Финансовый помощник";
-export const APP_VERSION = "1.0.1";
+export const APP_VERSION = "1.0.2";
 
 export const INVESTMENT_DISCLAIMER =
   "Информация в этом разделе не является индивидуальной инвестиционной рекомендацией. Решения об инвестициях пользователь принимает самостоятельно.";
