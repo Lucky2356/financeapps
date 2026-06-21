@@ -12,6 +12,7 @@ import type {
   ForecastPageData,
   GoalsPageData,
   ImportPageData,
+  LiabilitiesPageData,
   RecurringTransactionsPageData,
   SettingsPageData,
   TransactionsPageData
@@ -39,7 +40,7 @@ import { createMarketDataProvider } from "@/services/market/createMarketDataProv
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
-import { buildNetWorthTrend } from "@/lib/net-worth";
+import { buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
@@ -54,6 +55,7 @@ import type {
   CategoryRow,
   DashboardData,
   InvestmentData,
+  LiabilityRow,
   TransactionRow
 } from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
@@ -68,7 +70,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2;
+  schemaVersion: 1 | 2 | 3;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -78,6 +80,7 @@ type LocalState = {
   defaultTransactionType: "INCOME" | "EXPENSE";
   lastBackupAt: string | null;
   accounts: Array<AccountRow & { isArchived?: boolean }>;
+  liabilities: Array<Omit<LiabilityRow, "progress">>;
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -126,6 +129,15 @@ function recomputeGoal(
   };
 }
 
+function recomputeLiability(liability: Omit<LiabilityRow, "progress">): LiabilityRow {
+  // Progress = share of the original principal already repaid. Falls back to 0
+  // when the original amount is unknown or smaller than the current balance.
+  const repaid = Math.max(liability.originalAmount - liability.balance, 0);
+  const progress =
+    liability.originalAmount > 0 ? clamp(percent(repaid, liability.originalAmount), 0, 100) : 0;
+  return { ...liability, progress };
+}
+
 function emptyInvestmentData(): InvestmentData {
   return {
     source: "demo-fallback",
@@ -146,7 +158,7 @@ function createInitialState(): LocalState {
   // the user adds their own. Default categories are kept only so that operations
   // can be categorized out of the box; they carry no monetary data.
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -156,6 +168,7 @@ function createInitialState(): LocalState {
     defaultTransactionType: "EXPENSE",
     lastBackupAt: null,
     accounts: [],
+    liabilities: [],
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -170,7 +183,7 @@ function createInitialState(): LocalState {
 // Unlike createInitialState() this seeds nothing: no accounts, categories or watchlist.
 function createBlankState(): LocalState {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -180,6 +193,7 @@ function createBlankState(): LocalState {
     defaultTransactionType: "EXPENSE",
     lastBackupAt: null,
     accounts: [],
+    liabilities: [],
     categories: [],
     transactions: [],
     budgets: [],
@@ -234,6 +248,7 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/budgets")
       return this.budgets(state, searchParams.get("month") ?? undefined) as T;
     if (pathname === "/goals") return this.goals(state) as T;
+    if (pathname === "/debts") return this.debts(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(state) as T;
     if (pathname === "/dashboard") return (await this.dashboard(state)) as T;
@@ -286,6 +301,8 @@ export class LocalApiClient implements ApiClient {
       this.deleteTransaction(state, itemId);
     } else if (pathname === "/goals" && itemId) {
       state.goals = state.goals.filter((goal) => goal.id !== itemId);
+    } else if (pathname === "/debts" && itemId) {
+      state.liabilities = state.liabilities.filter((liability) => liability.id !== itemId);
     } else if (pathname === "/recurring" && itemId) {
       const existing = state.recurringTransactions.find((item) => item.id === itemId);
       // Remove the linked materialized transaction so balances/budgets stay correct
@@ -350,6 +367,8 @@ export class LocalApiClient implements ApiClient {
     }
     if (pathname === "/goals")
       return this.saveAndReturn<TResponse>(state, this.upsertGoal(state, body, method));
+    if (pathname === "/debts")
+      return this.saveAndReturn<TResponse>(state, this.upsertLiability(state, body, method));
     if (pathname === "/recurring")
       return this.saveAndReturn<TResponse>(state, this.upsertRecurring(state, body, method));
     if (pathname === "/recurring/materialize")
@@ -591,6 +610,36 @@ export class LocalApiClient implements ApiClient {
         ? state.goals.map((item) => (item.id === row.id ? row : item))
         : [...state.goals, row];
     return row;
+  }
+
+  private upsertLiability(state: LocalState, body: unknown, method: "POST" | "PUT") {
+    const input = toFormObject(body);
+    const kindInput = input.kind ?? "";
+    const kind = (
+      ["CREDIT_CARD", "LOAN", "MORTGAGE", "INSTALLMENT", "OTHER"].includes(kindInput)
+        ? kindInput
+        : "OTHER"
+    ) as LiabilityRow["kind"];
+    const balance = Math.max(Number(input.balance ?? 0), 0);
+    const dueDayRaw = Number(input.dueDay);
+    const stored: Omit<LiabilityRow, "progress"> = {
+      id: method === "PUT" && input.id ? input.id : id("debt"),
+      name: input.name?.trim() || "Новое обязательство",
+      kind,
+      balance,
+      originalAmount: Math.max(Number(input.originalAmount ?? 0), balance),
+      interestRate: Math.max(Number(input.interestRate ?? 0), 0),
+      minPayment: Math.max(Number(input.minPayment ?? 0), 0),
+      ...(Number.isInteger(dueDayRaw) && dueDayRaw >= 1 && dueDayRaw <= 31
+        ? { dueDay: dueDayRaw }
+        : {}),
+      currency: isSupportedCurrency(input.currency ?? "") ? input.currency : state.currency
+    };
+    state.liabilities =
+      method === "PUT"
+        ? state.liabilities.map((item) => (item.id === stored.id ? stored : item))
+        : [...state.liabilities, stored];
+    return recomputeLiability(stored);
   }
 
   // Top up a goal by moving money from a chosen account into the goal — a
@@ -1103,6 +1152,16 @@ export class LocalApiClient implements ApiClient {
     return { source: "database", goals: state.goals.map(recomputeGoal), currency: state.currency };
   }
 
+  private debts(state: LocalState): LiabilitiesPageData {
+    const liabilities = state.liabilities.map(recomputeLiability);
+    return {
+      source: "database",
+      liabilities,
+      total: roundMoney(liabilities.reduce((sum, item) => sum + item.balance, 0)),
+      currency: state.currency
+    };
+  }
+
   private recurring(state: LocalState): RecurringTransactionsPageData {
     const service = new RecurringTransactionService();
     const rows = service.sortUpcoming(
@@ -1278,7 +1337,15 @@ export class LocalApiClient implements ApiClient {
     // Goal savings are money the user set aside from accounts, so they stay
     // part of net worth (a deposit just moves it from a balance into a goal).
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
-    const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
+    const liabilitiesTotal = roundMoney(
+      state.liabilities.reduce((sum, item) => sum + item.balance, 0)
+    );
+    const netWorth = computeNetWorth({
+      totalBalance,
+      portfolioValue,
+      goalSavings,
+      liabilitiesTotal
+    });
     const netWorthTrend = buildNetWorthTrend({
       currentNetWorth: netWorth,
       transactions: state.transactions
@@ -1330,6 +1397,7 @@ export class LocalApiClient implements ApiClient {
       recommendations: recommendationService.build(finance),
       health: recommendationService.healthScore(finance),
       netWorth,
+      liabilitiesTotal,
       netWorthTrend,
       emergencyFund
     };

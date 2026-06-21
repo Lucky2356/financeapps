@@ -16,6 +16,17 @@ export const accountSchema = z.object({
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   isArchived: z.boolean().optional()
 });
+export const liabilitySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(100),
+  kind: z.enum(["CREDIT_CARD", "LOAN", "MORTGAGE", "INSTALLMENT", "OTHER"]),
+  balance: z.coerce.number().finite().min(0),
+  originalAmount: z.coerce.number().finite().min(0).default(0),
+  interestRate: z.coerce.number().finite().min(0).default(0),
+  minPayment: z.coerce.number().finite().min(0).default(0),
+  dueDay: z.coerce.number().int().min(1).max(31).optional(),
+  currency: z.enum(CURRENCY_CODES).default("RUB")
+});
 export const categorySchema = z.object({
   id: z.string().min(1),
   label: z.string().trim().min(1).max(100),
@@ -152,8 +163,9 @@ export const investmentSchema = z.object({
     .default([])
 });
 export const localStateSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
+  liabilities: z.array(liabilitySchema).default([]),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

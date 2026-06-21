@@ -7,6 +7,7 @@ import type {
   BudgetsPageData,
   CategoriesPageData,
   GoalsPageData,
+  LiabilitiesPageData,
   RecurringTransactionsPageData,
   SettingsPageData,
   TransactionsPageData
@@ -103,7 +104,7 @@ describe("LocalApiClient", () => {
       "/backup"
     );
 
-    expect(backup.schemaVersion).toBe(2);
+    expect(backup.schemaVersion).toBe(3);
     expect(backup.lastBackupAt).toEqual(expect.any(String));
     await expect(client.post("/backup", { backup })).resolves.toEqual({ restored: true });
     await expect(
@@ -111,7 +112,7 @@ describe("LocalApiClient", () => {
     ).rejects.toThrow("Backup payload is invalid");
   });
 
-  it("restores compatible v1 local backups through the v2 state migration", async () => {
+  it("restores compatible v1 local backups through the state migration", async () => {
     const client = createClient();
     const backup = await client.get<Record<string, unknown>>("/backup");
     const legacyBackup = { ...backup, schemaVersion: 1 };
@@ -123,7 +124,7 @@ describe("LocalApiClient", () => {
     const migrated = await client.get<{ schemaVersion: number; lastBackupAt: string | null }>(
       "/backup"
     );
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(3);
     expect(migrated.lastBackupAt).toEqual(expect.any(String));
   });
 
@@ -385,5 +386,50 @@ describe("LocalApiClient state cache (plan A4)", () => {
     await client.delete("/storage/clear");
     accounts = await client.get<AccountsPageData>("/accounts");
     expect(accounts.accounts).toHaveLength(0);
+  });
+});
+
+describe("LocalApiClient debts (plan D1)", () => {
+  it("creates a liability, derives repayment progress, and totals balances", async () => {
+    const client = createClient();
+    const created = await client.post<LiabilitiesPageData["liabilities"][number]>("/debts", {
+      name: "Кредитка",
+      kind: "CREDIT_CARD",
+      balance: "30000",
+      originalAmount: "100000",
+      interestRate: "24",
+      minPayment: "5000"
+    });
+    expect(created.id).toBeTruthy();
+    // 70k of 100k repaid → 70% progress.
+    expect(created.progress).toBe(70);
+
+    const page = await client.get<LiabilitiesPageData>("/debts");
+    expect(page.liabilities).toHaveLength(1);
+    expect(page.total).toBe(30000);
+  });
+
+  it("reduces net worth by outstanding liabilities", async () => {
+    const client = createClient();
+    await seedAccount(client, { name: "Карта", balance: "100000" });
+
+    const before = await client.get<DashboardData>("/dashboard");
+    await client.post("/debts", { name: "Кредит", kind: "LOAN", balance: "40000" });
+    const after = await client.get<DashboardData>("/dashboard");
+
+    expect(after.liabilitiesTotal).toBe(40000);
+    expect(after.netWorth).toBe(before.netWorth - 40000);
+  });
+
+  it("deletes a liability", async () => {
+    const client = createClient();
+    const created = await client.post<LiabilitiesPageData["liabilities"][number]>("/debts", {
+      name: "Рассрочка",
+      kind: "INSTALLMENT",
+      balance: "12000"
+    });
+    await client.delete(`/debts?id=${encodeURIComponent(created.id)}`);
+    const page = await client.get<LiabilitiesPageData>("/debts");
+    expect(page.liabilities).toHaveLength(0);
   });
 });

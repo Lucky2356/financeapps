@@ -14,7 +14,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 2;
+export const LATEST_LOCAL_STATE_VERSION = 3;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -27,6 +27,13 @@ export const localStateMigrations: LocalStateMigration[] = [
       lastBackupAt: state.lastBackupAt ?? null,
       importBatches: Array.isArray(state.importBatches) ? state.importBatches : []
     })
+  },
+  {
+    from: 2,
+    to: 3,
+    // v3 added a liabilities/debt list. Existing data needs none; the Zod default
+    // fills the empty array, so the migration only stamps the version.
+    migrate: (state) => ({ ...state, schemaVersion: 3 })
   }
 ];
 

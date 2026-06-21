@@ -32,6 +32,7 @@ import type {
   ForecastData,
   GoalRow,
   InvestmentData,
+  LiabilityRow,
   Option,
   RecurringTransactionRow,
   RecommendationView,
@@ -104,6 +105,13 @@ export type BudgetsPageData = {
 export type GoalsPageData = {
   source: DataSource;
   goals: GoalRow[];
+  currency: string;
+};
+
+export type LiabilitiesPageData = {
+  source: DataSource;
+  liabilities: LiabilityRow[];
+  total: number;
   currency: string;
 };
 
@@ -532,6 +540,7 @@ function buildDemoDashboard(): DashboardData {
     recommendations: service.build(input),
     health: service.healthScore(input),
     netWorth: totalBalance,
+    liabilitiesTotal: 0,
     netWorthTrend: buildNetWorthTrend({ currentNetWorth: totalBalance, transactions }),
     emergencyFund: buildEmergencyFund({
       savingsBalance: demoAccounts
@@ -619,6 +628,7 @@ function emptyDashboard(): DashboardData {
     recommendations: [],
     health: service.healthScore(input),
     netWorth: 0,
+    liabilitiesTotal: 0,
     netWorthTrend: [],
     emergencyFund: buildEmergencyFund({
       savingsBalance: 0,
@@ -1028,6 +1038,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         recommendations: service.build(input),
         health: service.healthScore(input),
         netWorth,
+        liabilitiesTotal: 0,
         netWorthTrend: buildNetWorthTrend({
           currentNetWorth: netWorth,
           transactions: finance.transactions

@@ -7,6 +7,23 @@
 // needs no storage, works retroactively, and is deterministic.
 
 import type { NetWorthPoint } from "@/types/finance";
+import { roundMoney } from "@/lib/utils";
+
+// Single net-worth formula shared by web (data.ts) and desktop (LocalApiClient):
+// liquid balances + portfolio value + money saved in goals − outstanding debts.
+export function computeNetWorth(parts: {
+  totalBalance: number;
+  portfolioValue?: number;
+  goalSavings?: number;
+  liabilitiesTotal?: number;
+}): number {
+  return roundMoney(
+    parts.totalBalance +
+      (parts.portfolioValue ?? 0) +
+      (parts.goalSavings ?? 0) -
+      (parts.liabilitiesTotal ?? 0)
+  );
+}
 
 export type NetWorthFlowTx = {
   date: string | Date;
@@ -42,7 +59,10 @@ export function buildNetWorthTrend(params: {
   for (let i = monthsBack - 1; i >= 0; i--) {
     const monthEndDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
     const monthEnd = monthEndDate.getTime();
-    const flowAfter = flows.reduce((sum, flow) => (flow.time > monthEnd ? sum + flow.delta : sum), 0);
+    const flowAfter = flows.reduce(
+      (sum, flow) => (flow.time > monthEnd ? sum + flow.delta : sum),
+      0
+    );
     points.push({
       month: monthEndDate.toLocaleDateString("ru", { month: "short" }),
       value: Math.round((params.currentNetWorth - flowAfter) * 100) / 100

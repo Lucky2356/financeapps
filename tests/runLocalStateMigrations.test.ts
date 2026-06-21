@@ -32,16 +32,22 @@ describe("runLocalStateMigrations", () => {
   });
 
   it("leaves an already-current state unchanged (idempotent)", () => {
-    const v2: RawLocalState = {
-      schemaVersion: 2,
+    const current: RawLocalState = {
+      schemaVersion: LATEST_LOCAL_STATE_VERSION,
       lastBackupAt: null,
       importBatches: [],
       accounts: [{ id: "a1" }]
     };
-    const migrated = runLocalStateMigrations(v2);
+    const migrated = runLocalStateMigrations(current);
 
-    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.schemaVersion).toBe(LATEST_LOCAL_STATE_VERSION);
     expect(migrated.accounts).toEqual([{ id: "a1" }]);
+  });
+
+  it("upgrades a v2 state to v3", () => {
+    const v2: RawLocalState = { schemaVersion: 2, lastBackupAt: null, importBatches: [] };
+    const migrated = runLocalStateMigrations(v2);
+    expect(migrated.schemaVersion).toBe(3);
   });
 
   it("defaults a missing schemaVersion to 1 and migrates from there", () => {

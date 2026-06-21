@@ -78,6 +78,8 @@ export type DashboardData = {
   recommendations: RecommendationView[];
   health: HealthScore;
   netWorth: number;
+  /** Total outstanding liabilities subtracted from assets to get net worth. */
+  liabilitiesTotal: number;
   netWorthTrend: NetWorthPoint[];
   emergencyFund: EmergencyFundStatus;
 };
@@ -168,6 +170,22 @@ export type AccountRow = {
   type: string;
   balance: number;
   currency: string;
+};
+
+export type LiabilityKind = "CREDIT_CARD" | "LOAN" | "MORTGAGE" | "INSTALLMENT" | "OTHER";
+
+export type LiabilityRow = {
+  id: string;
+  name: string;
+  kind: LiabilityKind;
+  balance: number; // outstanding amount still owed
+  originalAmount: number; // original principal (0 if unknown)
+  interestRate: number; // annual %, 0 if interest-free
+  minPayment: number; // minimum monthly payment
+  dueDay?: number; // day of month the payment is due (1–31)
+  currency: string;
+  // Derived: 0..100 share of the original principal already repaid.
+  progress: number;
 };
 
 export type BudgetRow = {
