@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTransactionsPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
+import { findCurrentUser } from "@/lib/auth/current-user";
 import { transactionSchema, transferSchema } from "@/lib/validations";
 
 export const dynamic = "force-static";
 
 async function defaultUser() {
-  const user = await requirePrisma().user.findFirst({ orderBy: { createdAt: "asc" } });
+  const user = await findCurrentUser();
   if (!user) throw new Error("Demo user not found. Run seed first.");
   return user;
 }
@@ -17,7 +18,12 @@ function balanceDelta(type: "INCOME" | "EXPENSE", amount: number) {
   return type === "INCOME" ? amount : -amount;
 }
 
-async function validateTransactionRefs(userId: string, accountId: string, categoryId: string, type: "INCOME" | "EXPENSE") {
+async function validateTransactionRefs(
+  userId: string,
+  accountId: string,
+  categoryId: string,
+  type: "INCOME" | "EXPENSE"
+) {
   const db = requirePrisma();
   const [account, category] = await Promise.all([
     db.account.findFirst({ where: { id: accountId, userId, isArchived: false } }),
@@ -78,12 +84,19 @@ export async function POST(request: NextRequest) {
     if ((body as { action?: unknown }).action === "transfer") {
       const input = transferSchema.parse(body);
       const [fromAccount, toAccount] = await Promise.all([
-        db.account.findFirst({ where: { id: input.fromAccountId, userId: user.id, isArchived: false } }),
-        db.account.findFirst({ where: { id: input.toAccountId, userId: user.id, isArchived: false } })
+        db.account.findFirst({
+          where: { id: input.fromAccountId, userId: user.id, isArchived: false }
+        }),
+        db.account.findFirst({
+          where: { id: input.toAccountId, userId: user.id, isArchived: false }
+        })
       ]);
 
       if (!fromAccount || !toAccount) {
-        return NextResponse.json({ error: "Выберите существующие активные счета для перевода." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Выберите существующие активные счета для перевода." },
+          { status: 400 }
+        );
       }
 
       const transferId = crypto.randomUUID();
@@ -113,8 +126,14 @@ export async function POST(request: NextRequest) {
             description: `${description} [transfer:${transferId}]`
           }
         });
-        await tx.account.update({ where: { id: fromAccount.id }, data: { balance: { decrement: input.amount } } });
-        await tx.account.update({ where: { id: toAccount.id }, data: { balance: { increment: input.amount } } });
+        await tx.account.update({
+          where: { id: fromAccount.id },
+          data: { balance: { decrement: input.amount } }
+        });
+        await tx.account.update({
+          where: { id: toAccount.id },
+          data: { balance: { increment: input.amount } }
+        });
         return { transferId, transactions: [expense, income] };
       });
 
@@ -122,7 +141,12 @@ export async function POST(request: NextRequest) {
     }
 
     const input = transactionSchema.parse(body);
-    const validationError = await validateTransactionRefs(user.id, input.accountId, input.categoryId, input.type);
+    const validationError = await validateTransactionRefs(
+      user.id,
+      input.accountId,
+      input.categoryId,
+      input.type
+    );
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
     const [transaction] = await db.$transaction([
@@ -160,10 +184,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Transaction id is required." }, { status: 400 });
     }
 
-    const validationError = await validateTransactionRefs(user.id, input.accountId, input.categoryId, input.type);
+    const validationError = await validateTransactionRefs(
+      user.id,
+      input.accountId,
+      input.categoryId,
+      input.type
+    );
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    const existing = await db.transaction.findFirstOrThrow({ where: { id: input.id, userId: user.id } });
+    const existing = await db.transaction.findFirstOrThrow({
+      where: { id: input.id, userId: user.id }
+    });
     const transaction = await db.$transaction(async (tx) => {
       await tx.account.update({
         where: { id: existing.accountId },

@@ -3,7 +3,16 @@ import { NextResponse } from "next/server";
 
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requirePrisma } from "@/lib/prisma";
-import { SAMPLE_ACCOUNTS, SAMPLE_BUDGETS, SAMPLE_CATEGORIES, SAMPLE_GOALS, SAMPLE_TRANSACTIONS, sampleDate, sampleDeadline } from "@/lib/sample-data";
+import { findCurrentUser } from "@/lib/auth/current-user";
+import {
+  SAMPLE_ACCOUNTS,
+  SAMPLE_BUDGETS,
+  SAMPLE_CATEGORIES,
+  SAMPLE_GOALS,
+  SAMPLE_TRANSACTIONS,
+  sampleDate,
+  sampleDeadline
+} from "@/lib/sample-data";
 
 export const dynamic = "force-static";
 
@@ -13,8 +22,9 @@ export const dynamic = "force-static";
 export async function POST() {
   try {
     const db = requirePrisma();
-    const user = await db.user.findFirst({ orderBy: { createdAt: "asc" } });
-    if (!user) return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
+    const user = await findCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
 
     await db.$transaction(async (tx) => {
       await tx.transaction.deleteMany({ where: { userId: user.id } });
@@ -25,8 +35,14 @@ export async function POST() {
       const categoryIdMap = new Map<string, string>();
       for (const category of SAMPLE_CATEGORIES) {
         const row = await tx.category.upsert({
-          where: { userId_name_kind: { userId: user.id, name: category.label, kind: category.kind } },
-          update: { color: category.color, isEssential: Boolean(category.isEssential), isSubscription: Boolean(category.isSubscription) },
+          where: {
+            userId_name_kind: { userId: user.id, name: category.label, kind: category.kind }
+          },
+          update: {
+            color: category.color,
+            isEssential: Boolean(category.isEssential),
+            isSubscription: Boolean(category.isSubscription)
+          },
           create: {
             userId: user.id,
             name: category.label,
@@ -41,7 +57,14 @@ export async function POST() {
 
       for (const account of SAMPLE_ACCOUNTS) {
         await tx.account.create({
-          data: { id: account.id, userId: user.id, name: account.name, type: account.type, balance: account.balance, currency: "RUB" }
+          data: {
+            id: account.id,
+            userId: user.id,
+            name: account.name,
+            type: account.type,
+            balance: account.balance,
+            currency: "RUB"
+          }
         });
       }
 
@@ -62,13 +85,24 @@ export async function POST() {
       const month = startOfMonth(new Date());
       for (const budget of SAMPLE_BUDGETS) {
         await tx.budget.create({
-          data: { userId: user.id, categoryId: categoryIdMap.get(budget.categoryId)!, month, limitAmount: budget.limitAmount }
+          data: {
+            userId: user.id,
+            categoryId: categoryIdMap.get(budget.categoryId)!,
+            month,
+            limitAmount: budget.limitAmount
+          }
         });
       }
 
       for (const goal of SAMPLE_GOALS) {
         await tx.savingGoal.create({
-          data: { userId: user.id, title: goal.title, targetAmount: goal.targetAmount, currentAmount: goal.currentAmount, deadline: sampleDeadline(goal.monthsToDeadline) }
+          data: {
+            userId: user.id,
+            title: goal.title,
+            targetAmount: goal.targetAmount,
+            currentAmount: goal.currentAmount,
+            deadline: sampleDeadline(goal.monthsToDeadline)
+          }
         });
       }
     });
