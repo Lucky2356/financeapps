@@ -22,6 +22,7 @@ import { applyDensity } from "@/components/app-settings-sync";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
+import { AI_MODELS } from "@/lib/ai/models";
 import { APP_VERSION, RISK_PROFILE_LABELS } from "@/lib/constants";
 import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -332,14 +333,24 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="ai-model">Модель (необязательно)</Label>
-                  <Input
+                  <Label htmlFor="ai-model">Модель</Label>
+                  <select
                     id="ai-model"
                     value={settings.aiModel}
-                    onChange={(e) => setSettings({ ...settings, aiModel: e.target.value })}
-                    onBlur={(e) => void persist({ aiModel: e.target.value.trim() })}
-                    placeholder="claude-opus-4-8"
-                  />
+                    onChange={(e) => void persist({ aiModel: e.target.value })}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">По умолчанию (Opus 4.8)</option>
+                    {AI_MODELS.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Более мощные модели точнее, но дороже и медленнее. Для коротких фраз достаточно
+                    Haiku или Sonnet.
+                  </p>
                 </div>
                 <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
                   Текст, который вы вводите, отправляется во внешний сервис Anthropic. Не указывайте
