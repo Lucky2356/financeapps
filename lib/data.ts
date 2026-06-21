@@ -14,6 +14,7 @@ import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
+import type { CategorizationRule } from "@/lib/categorization-rules";
 import { prisma } from "@/lib/prisma";
 import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
 import { transactionFilterSchema } from "@/lib/validations";
@@ -113,6 +114,12 @@ export type LiabilitiesPageData = {
   liabilities: LiabilityRow[];
   total: number;
   currency: string;
+};
+
+export type RulesPageData = {
+  source: DataSource;
+  rules: CategorizationRule[];
+  categories: Array<{ id: string; label: string; kind: "INCOME" | "EXPENSE" }>;
 };
 
 export type ForecastPageData = ForecastData;

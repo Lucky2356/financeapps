@@ -13,6 +13,7 @@ import type {
   GoalsPageData,
   ImportPageData,
   LiabilitiesPageData,
+  RulesPageData,
   RecurringTransactionsPageData,
   SettingsPageData,
   TransactionsPageData
@@ -20,6 +21,7 @@ import type {
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { buildSectorStructure } from "@/lib/data/derive";
+import type { CategorizationRule } from "@/lib/categorization-rules";
 import { isSupportedCurrency, type CurrencyCode } from "@/lib/currency";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
@@ -81,6 +83,7 @@ type LocalState = {
   lastBackupAt: string | null;
   accounts: Array<AccountRow & { isArchived?: boolean }>;
   liabilities: Array<Omit<LiabilityRow, "progress">>;
+  rules: CategorizationRule[];
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -169,6 +172,7 @@ function createInitialState(): LocalState {
     lastBackupAt: null,
     accounts: [],
     liabilities: [],
+    rules: [],
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -194,6 +198,7 @@ function createBlankState(): LocalState {
     lastBackupAt: null,
     accounts: [],
     liabilities: [],
+    rules: [],
     categories: [],
     transactions: [],
     budgets: [],
@@ -249,6 +254,7 @@ export class LocalApiClient implements ApiClient {
       return this.budgets(state, searchParams.get("month") ?? undefined) as T;
     if (pathname === "/goals") return this.goals(state) as T;
     if (pathname === "/debts") return this.debts(state) as T;
+    if (pathname === "/rules") return this.rulesPage(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(state) as T;
     if (pathname === "/dashboard") return (await this.dashboard(state)) as T;
@@ -303,6 +309,8 @@ export class LocalApiClient implements ApiClient {
       state.goals = state.goals.filter((goal) => goal.id !== itemId);
     } else if (pathname === "/debts" && itemId) {
       state.liabilities = state.liabilities.filter((liability) => liability.id !== itemId);
+    } else if (pathname === "/rules" && itemId) {
+      state.rules = state.rules.filter((rule) => rule.id !== itemId);
     } else if (pathname === "/recurring" && itemId) {
       const existing = state.recurringTransactions.find((item) => item.id === itemId);
       // Remove the linked materialized transaction so balances/budgets stay correct
@@ -369,6 +377,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertGoal(state, body, method));
     if (pathname === "/debts")
       return this.saveAndReturn<TResponse>(state, this.upsertLiability(state, body, method));
+    if (pathname === "/rules")
+      return this.saveAndReturn<TResponse>(state, this.addRule(state, body));
     if (pathname === "/recurring")
       return this.saveAndReturn<TResponse>(state, this.upsertRecurring(state, body, method));
     if (pathname === "/recurring/materialize")
@@ -838,7 +848,10 @@ export class LocalApiClient implements ApiClient {
       if (rawCategoryName) {
         category = this.findOrCreateCategory(state, rawCategoryName, type);
       } else {
-        const suggestedId = suggestCategoryId(description, state.transactions, { type });
+        const suggestedId = suggestCategoryId(description, state.transactions, {
+          type,
+          rules: state.rules
+        });
         category =
           (suggestedId
             ? state.categories.find((item) => item.id === suggestedId && item.kind === type)
@@ -1160,6 +1173,31 @@ export class LocalApiClient implements ApiClient {
       total: roundMoney(liabilities.reduce((sum, item) => sum + item.balance, 0)),
       currency: state.currency
     };
+  }
+
+  private rulesPage(state: LocalState): RulesPageData {
+    return {
+      source: "database",
+      rules: state.rules,
+      categories: state.categories.map((category) => ({
+        id: category.id,
+        label: category.label,
+        kind: category.kind
+      }))
+    };
+  }
+
+  private addRule(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const match = input.match?.trim();
+    const categoryId = input.categoryId?.trim();
+    if (!match || !categoryId) throw new Error("Укажите текст и категорию для правила.");
+    if (!state.categories.some((category) => category.id === categoryId)) {
+      throw new Error("Выберите существующую категорию.");
+    }
+    const rule: CategorizationRule = { id: id("rule"), match, categoryId };
+    state.rules = [rule, ...state.rules];
+    return rule;
   }
 
   private recurring(state: LocalState): RecurringTransactionsPageData {
