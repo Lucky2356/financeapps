@@ -172,6 +172,8 @@ export const localStateSchema = z.object({
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   liabilities: z.array(liabilitySchema).default([]),
   rules: z.array(categorizationRuleSchema).default([]),
+  autoMaterializeRecurring: z.boolean().default(false),
+  paymentReminders: z.boolean().default(false),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

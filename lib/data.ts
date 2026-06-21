@@ -133,6 +133,8 @@ export type SettingsPageData = {
   theme: "light" | "dark" | "system";
   density: "comfortable" | "compact";
   defaultTransactionType: "INCOME" | "EXPENSE";
+  autoMaterializeRecurring: boolean;
+  paymentReminders: boolean;
   riskProfiles: Array<{
     id: string;
     code: RiskProfileCode;
@@ -1625,6 +1627,8 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
       theme: "system",
       density: "comfortable",
       defaultTransactionType: "EXPENSE" as const,
+      autoMaterializeRecurring: false,
+      paymentReminders: false,
       riskProfiles: [
         {
           id: "risk-conservative",
@@ -1661,6 +1665,8 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
         theme: "system" as const,
         density: "comfortable" as const,
         defaultTransactionType: "EXPENSE" as const,
+        autoMaterializeRecurring: false,
+        paymentReminders: false,
         riskProfiles: riskProfiles.map((profile) => ({
           id: profile.id,
           code: profile.code,
@@ -1678,6 +1684,8 @@ export async function getSettingsPageData(): Promise<SettingsPageData> {
       theme: "system",
       density: "comfortable",
       defaultTransactionType: "EXPENSE" as const,
+      autoMaterializeRecurring: false,
+      paymentReminders: false,
       riskProfiles: [
         {
           id: "risk-conservative",

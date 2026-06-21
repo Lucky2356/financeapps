@@ -433,3 +433,36 @@ describe("LocalApiClient debts (plan D1)", () => {
     expect(page.liabilities).toHaveLength(0);
   });
 });
+
+describe("LocalApiClient automation (plan D2c)", () => {
+  it("persists the automation toggles", async () => {
+    const client = createClient();
+    await client.put("/settings", { autoMaterializeRecurring: "true", paymentReminders: "on" });
+    const settings = await client.get<SettingsPageData>("/settings");
+    expect(settings.autoMaterializeRecurring).toBe(true);
+    expect(settings.paymentReminders).toBe(true);
+  });
+
+  it("materializes overdue recurring payments idempotently", async () => {
+    const client = createClient();
+    const account = await seedAccount(client, { name: "Карта", balance: "100000" });
+    const past = new Date();
+    past.setMonth(past.getMonth() - 3);
+    await client.post("/recurring", {
+      amount: "1000",
+      type: "EXPENSE",
+      categoryId: "cat-food",
+      accountId: account.id,
+      frequency: "MONTHLY",
+      nextDate: past.toISOString().slice(0, 10),
+      isActive: "true"
+    });
+
+    const first = await client.post<{ created: number }>("/recurring/materialize-all", {});
+    expect(first.created).toBeGreaterThanOrEqual(1);
+
+    // Second run finds nothing due — no duplicates created.
+    const second = await client.post<{ created: number }>("/recurring/materialize-all", {});
+    expect(second.created).toBe(0);
+  });
+});
