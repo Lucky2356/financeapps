@@ -23,8 +23,14 @@ const version = tag.replace(/^v/, "");
 const bundleDir = join("src-tauri", "target", "release", "bundle", "nsis");
 
 const files = readdirSync(bundleDir);
-const installer = files.find((f) => f.endsWith("-setup.exe"));
-const sigFile = files.find((f) => f.endsWith("-setup.exe.sig"));
+// Prefer the installer matching this release version (the bundle dir can hold
+// stale installers from earlier local builds); fall back to any setup.exe.
+const installer =
+  files.find((f) => f.includes(`_${version}_`) && f.endsWith("-setup.exe")) ??
+  files.find((f) => f.endsWith("-setup.exe"));
+const sigFile =
+  files.find((f) => f.includes(`_${version}_`) && f.endsWith("-setup.exe.sig")) ??
+  files.find((f) => f.endsWith("-setup.exe.sig"));
 
 if (!installer || !sigFile) {
   console.error(`Installer or .sig not found in ${bundleDir}. Found: ${files.join(", ")}`);
