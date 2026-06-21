@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LineChart,
   Menu,
+  Repeat,
   Settings,
   Tag,
   TrendingUp,
@@ -39,6 +40,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/budgets", label: "Бюджеты", icon: Gauge },
       { href: "/goals", label: "Цели", icon: Flag },
       { href: "/recurring", label: "Плановые", icon: CalendarClock },
+      { href: "/subscriptions", label: "Подписки", icon: Repeat },
       { href: "/forecast", label: "Прогноз", icon: LineChart },
       { href: "/analytics", label: "Аналитика", icon: TrendingUp }
     ]
