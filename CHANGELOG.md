@@ -2,22 +2,33 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [1.0.1] — 2026-06-21
 
 ### Added
+- Configurable display currency (RUB/USD/EUR/GBP/CNY/KZT) in Settings.
+- Goal cards show pacing context (months left / reached / overdue).
+- Finance health score now lists the factors that cost points.
+- CSV import detects and can skip duplicate rows.
+- Forecast events can be filtered by account and category.
 - Backup safety improvements: local schema v2, last-backup reminder, restore preview before replacing data.
 - CSV import presets for Sber, T-Bank, Alfa-Bank, and VTB column layouts.
 - Analytics insights: savings-rate trend, month-over-month expense change, and short actionable notes.
 - Expanded MOEX watchlist universe with additional liquid Russian equities.
-- Coverage/smoke commands and build-mode tests for safer release checks.
+- Coverage thresholds, Prettier, husky pre-commit, and Playwright E2E for the desktop build.
 - Settings action to replay onboarding after the first launch.
 
 ### Changed
+- Destructive confirmations (delete goal/profile, reset budget limit) use a styled dialog instead of the browser prompt.
+- Mobile secondary-navigation tap targets enlarged to ~44px.
+- Faster desktop reads: the parsed local state is cached per profile.
 - Onboarding footer now adapts on narrow screens without buttons overflowing the dialog.
 - Finance hints now render in a body-level portal, stay inside the viewport, and are not clipped by cards.
 - Chart tooltips can escape chart bounds near edges instead of disappearing inside the plot area.
 - Web production builds now avoid request-only `connection()` hangs and skip live DB reads during build-time fallback generation.
 - Docker build target uses Node 24 and explicit standalone Next.js output settings.
+
+### Fixed
+- Recurring transactions created without an explicit active flag now default to active.
 
 ## [1.0.0] — 2026-05-30
 
