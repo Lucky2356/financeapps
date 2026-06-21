@@ -17,3 +17,8 @@ playwright-report
 test-results
 blob-report
 .playwright
+.playwright-mcp
+
+# Tauri updater signing keys — must never be committed (store as GitHub secrets)
+*.key
+*.key.pub
