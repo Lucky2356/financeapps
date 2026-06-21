@@ -13,7 +13,7 @@ import {
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
-import { buildNetWorthTrend } from "@/lib/net-worth";
+import { buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { prisma } from "@/lib/prisma";
 import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
 import { transactionFilterSchema } from "@/lib/validations";
@@ -972,7 +972,18 @@ export async function getDashboardData(): Promise<DashboardData> {
         0
       );
       const goalSavings = finance.goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
-      const netWorth = roundMoney(totalBalance + portfolioValue + goalSavings);
+      const liabilities = prisma
+        ? (await prisma.liability.findMany({ where: { userId: user.id } })).map(toLiabilityRow)
+        : [];
+      const liabilitiesTotal = roundMoney(liabilities.reduce((sum, item) => sum + item.balance, 0));
+      const monthlyDebtPayments = liabilities.reduce((sum, item) => sum + item.minPayment, 0);
+      const healthInput = { ...input, monthlyDebtPayments };
+      const netWorth = computeNetWorth({
+        totalBalance,
+        portfolioValue,
+        goalSavings,
+        liabilitiesTotal
+      });
 
       const savingsBalance = finance.accounts
         .filter((account) => account.type === "SAVINGS")
@@ -1035,10 +1046,10 @@ export async function getDashboardData(): Promise<DashboardData> {
         ],
         categoryExpenses: buildCategoryExpenses(finance.transactions),
         monthlyCashflow: input.monthlyCashflow,
-        recommendations: service.build(input),
-        health: service.healthScore(input),
+        recommendations: service.build(healthInput),
+        health: service.healthScore(healthInput),
         netWorth,
-        liabilitiesTotal: 0,
+        liabilitiesTotal,
         netWorthTrend: buildNetWorthTrend({
           currentNetWorth: netWorth,
           transactions: finance.transactions
@@ -1368,10 +1379,55 @@ export async function getGoalsPageData(): Promise<GoalsPageData> {
   );
 }
 
+function toLiabilityRow(row: {
+  id: string;
+  name: string;
+  kind: string;
+  balance: unknown;
+  originalAmount: unknown;
+  interestRate: unknown;
+  minPayment: unknown;
+  dueDay: number | null;
+  currency: string;
+}): LiabilityRow {
+  const balance = toNumber(row.balance);
+  const originalAmount = toNumber(row.originalAmount);
+  const repaid = Math.max(originalAmount - balance, 0);
+  return {
+    id: row.id,
+    name: row.name,
+    kind: row.kind as LiabilityRow["kind"],
+    balance,
+    originalAmount,
+    interestRate: toNumber(row.interestRate),
+    minPayment: toNumber(row.minPayment),
+    ...(row.dueDay != null ? { dueDay: row.dueDay } : {}),
+    currency: row.currency,
+    progress: originalAmount > 0 ? clamp(percent(repaid, originalAmount), 0, 100) : 0
+  };
+}
+
 export async function getLiabilitiesPageData(): Promise<LiabilitiesPageData> {
-  // Desktop refetches from LocalApiClient via useApiPageData("/debts"); the web
-  // Prisma-backed read lands in D1e, so for now the web/demo view is empty.
-  return { source: "database", liabilities: [], total: 0, currency: "RUB" };
+  return safeData<LiabilitiesPageData>(
+    () => ({ source: "demo-fallback", liabilities: [], total: 0, currency: "RUB" }),
+    async () => {
+      if (!prisma) throw new Error("Prisma client is not configured.");
+      const user = await getDefaultUser();
+      if (!user) throw new Error("No user found.");
+      const liabilities = await prisma.liability.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "asc" }
+      });
+      const rows = liabilities.map(toLiabilityRow);
+      return {
+        source: "database",
+        liabilities: rows,
+        total: roundMoney(rows.reduce((sum, item) => sum + item.balance, 0)),
+        currency: user.currency
+      };
+    },
+    () => ({ source: "database", liabilities: [], total: 0, currency: "RUB" })
+  );
 }
 
 export async function getInvestmentData(): Promise<InvestmentData> {

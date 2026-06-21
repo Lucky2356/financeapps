@@ -61,6 +61,18 @@ export const savingGoalSchema = z.object({
   deadline: z.string().min(1)
 });
 
+export const liabilitySchema = z.object({
+  id: optionalId,
+  name: z.string().trim().min(1, "Введите название").max(100),
+  kind: z.enum(["CREDIT_CARD", "LOAN", "MORTGAGE", "INSTALLMENT", "OTHER"]),
+  balance: nonNegativeMoney,
+  originalAmount: z.coerce.number().finite().min(0).default(0),
+  interestRate: z.coerce.number().finite().min(0).default(0),
+  minPayment: z.coerce.number().finite().min(0).default(0),
+  dueDay: z.coerce.number().int().min(1).max(31).optional(),
+  currency: z.string().trim().default("RUB")
+});
+
 export const settingsSchema = z.object({
   currency: z.enum(CURRENCY_CODES),
   demoMode: z.preprocess((value) => value === "on" || value === true, z.boolean()),

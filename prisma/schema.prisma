@@ -81,6 +81,7 @@ model User {
   transactions              Transaction[]
   budgets                   Budget[]
   savingGoals               SavingGoal[]
+  liabilities               Liability[]
   recommendations           Recommendation[]
   portfolios                Portfolio[]
   watchlistItems            WatchlistItem[]
@@ -201,6 +202,32 @@ model SavingGoal {
   updatedAt     DateTime @updatedAt
 
   @@index([userId, deadline])
+}
+
+enum LiabilityKind {
+  CREDIT_CARD
+  LOAN
+  MORTGAGE
+  INSTALLMENT
+  OTHER
+}
+
+model Liability {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  kind           LiabilityKind @default(OTHER)
+  balance        Decimal       @default(0) @db.Decimal(14, 2)
+  originalAmount Decimal       @default(0) @db.Decimal(14, 2)
+  interestRate   Decimal       @default(0) @db.Decimal(6, 2)
+  minPayment     Decimal       @default(0) @db.Decimal(14, 2)
+  dueDay         Int?
+  currency       String        @default("RUB")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([userId])
 }
 
 model Recommendation {
