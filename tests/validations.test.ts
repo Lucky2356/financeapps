@@ -4,6 +4,7 @@ import {
   accountSchema,
   budgetSchema,
   categoryInputSchema,
+  liabilitySchema,
   portfolioPositionSchema,
   recurringTransactionSchema,
   settingsSchema,
@@ -170,6 +171,29 @@ describe("recurringTransactionSchema", () => {
 
   it("still coerces an explicit 'false' (unchecked form checkbox) to false", () => {
     expect(recurringTransactionSchema.parse({ ...base, isActive: "false" }).isActive).toBe(false);
+  });
+});
+
+describe("liabilitySchema", () => {
+  const valid = { name: "Кредит", kind: "LOAN", balance: "50000" };
+
+  it("coerces money fields and defaults optional ones", () => {
+    const parsed = liabilitySchema.parse(valid);
+    expect(parsed.balance).toBe(50000);
+    expect(parsed.originalAmount).toBe(0);
+    expect(parsed.interestRate).toBe(0);
+    expect(parsed.minPayment).toBe(0);
+    expect(parsed.currency).toBe("RUB");
+  });
+
+  it("rejects an unknown kind and a negative balance", () => {
+    expect(liabilitySchema.safeParse({ ...valid, kind: "BTC" }).success).toBe(false);
+    expect(liabilitySchema.safeParse({ ...valid, balance: "-1" }).success).toBe(false);
+  });
+
+  it("accepts a valid due day within 1–31", () => {
+    expect(liabilitySchema.parse({ ...valid, dueDay: "15" }).dueDay).toBe(15);
+    expect(liabilitySchema.safeParse({ ...valid, dueDay: "40" }).success).toBe(false);
   });
 });
 
