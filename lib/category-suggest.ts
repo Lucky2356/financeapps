@@ -6,6 +6,8 @@
 // suggestion improves as more transactions are entered. Returns null when
 // there is nothing confident to suggest.
 
+import { matchRule, type CategorizationRule } from "@/lib/categorization-rules";
+
 export type SuggestHistoryItem = {
   description?: string | null;
   type?: "INCOME" | "EXPENSE";
@@ -23,8 +25,14 @@ function tokenize(text: string): string[] {
 export function suggestCategoryId(
   description: string,
   history: SuggestHistoryItem[],
-  options?: { type?: "INCOME" | "EXPENSE" }
+  options?: { type?: "INCOME" | "EXPENSE"; rules?: CategorizationRule[] }
 ): string | null {
+  // User rules win over the history heuristic.
+  if (options?.rules && options.rules.length > 0) {
+    const ruled = matchRule(description, options.rules);
+    if (ruled) return ruled;
+  }
+
   const tokens = new Set(tokenize(description));
   if (tokens.size === 0) return null;
 

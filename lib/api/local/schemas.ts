@@ -27,6 +27,11 @@ export const liabilitySchema = z.object({
   dueDay: z.coerce.number().int().min(1).max(31).optional(),
   currency: z.enum(CURRENCY_CODES).default("RUB")
 });
+export const categorizationRuleSchema = z.object({
+  id: z.string().min(1),
+  match: z.string().trim().min(1).max(100),
+  categoryId: z.string().min(1)
+});
 export const categorySchema = z.object({
   id: z.string().min(1),
   label: z.string().trim().min(1).max(100),
@@ -166,6 +171,7 @@ export const localStateSchema = z.object({
   schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   liabilities: z.array(liabilitySchema).default([]),
+  rules: z.array(categorizationRuleSchema).default([]),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

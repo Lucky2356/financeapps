@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CategoryManager } from "@/components/categories/category-manager";
+import { RulesManager } from "@/components/rules/rules-manager";
 import { PageHeader } from "@/components/page-header";
 import { SourceBanner } from "@/components/source-banner";
 import { getCategoriesPageData } from "@/lib/data";
@@ -22,6 +23,7 @@ export default async function CategoriesPage() {
       />
       <SourceBanner source={data.source} />
       <CategoryManager data={data} />
+      <RulesManager />
     </div>
   );
 }
