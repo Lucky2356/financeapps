@@ -11,6 +11,8 @@
     "fs:allow-write-text-file",
     "window-state:allow-restore-state",
     "window-state:allow-save-window-state",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "fs:scope",
       "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**"]

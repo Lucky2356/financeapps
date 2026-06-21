@@ -28,6 +28,7 @@ import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -81,11 +82,15 @@ function toEditable(data: SettingsPageData): EditableSettings {
   };
 }
 
+const RELEASES_URL = "https://github.com/Lucky2356/financeapps/releases/latest";
+
 export function SettingsForm({ data }: { data: SettingsPageData }) {
   const { setTheme } = useTheme();
+  const confirm = useConfirm();
   const { data: pageData, reload } = useApiPageData(data, "/settings");
   const [clearing, setClearing] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [settings, setSettings] = useState<EditableSettings>(() => toEditable(pageData));
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
@@ -158,6 +163,44 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось очистить данные");
       setClearing(false);
+    }
+  }
+
+  // Built-in updater (plan D4). In a signed desktop build the Tauri updater
+  // checks GitHub for a newer release and installs it in place. In plain/dev
+  // builds (no updater config) check() throws — we fall back to opening the
+  // releases page so the button always does something useful.
+  async function checkForUpdates() {
+    if (!isLocalDesktopMode) {
+      window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
+      return;
+    }
+    try {
+      setCheckingUpdate(true);
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (!update) {
+        toast.success("У вас актуальная версия.");
+        return;
+      }
+      const confirmed = await confirm({
+        title: `Доступно обновление ${update.version}`,
+        description: update.body
+          ? `${update.body}\n\nСкачать и установить сейчас? Приложение перезапустится.`
+          : "Скачать и установить сейчас? Приложение перезапустится.",
+        confirmLabel: "Обновить"
+      });
+      if (!confirmed) return;
+      toast.info("Загрузка обновления…");
+      await update.downloadAndInstall();
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch {
+      // No updater config in this build, or network/verify error — fall back.
+      toast.message("Автообновление недоступно — открываю страницу релизов.");
+      window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
+    } finally {
+      setCheckingUpdate(false);
     }
   }
 
@@ -517,16 +560,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             variant="outline"
             type="button"
             className="mt-2 w-full"
-            onClick={() =>
-              window.open(
-                "https://github.com/Lucky2356/financeapps/releases/latest",
-                "_blank",
-                "noopener,noreferrer"
-              )
-            }
+            onClick={() => void checkForUpdates()}
+            disabled={checkingUpdate}
           >
             <Download className="size-4" />
-            Проверить обновления
+            {checkingUpdate ? "Проверка…" : "Проверить обновления"}
           </Button>
           <p className="mt-3 text-center text-xs text-muted-foreground">
             Финансовый помощник&nbsp;·&nbsp;версия {APP_VERSION}

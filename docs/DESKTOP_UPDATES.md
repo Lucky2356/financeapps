@@ -21,36 +21,49 @@
 
 ## 2. Авто-обновление (Tauri Updater)
 
-1. Сгенерировать пару ключей апдейтера:
-   ```
-   npx tauri signer generate -w ~/.tauri/financeapps.key
-   ```
-   Публичный ключ можно коммитить, приватный — **только** секрет.
-2. В `tauri.conf.json` включить плагин updater:
-   ```jsonc
-   "plugins": {
-     "updater": {
-       "pubkey": "<ПУБЛИЧНЫЙ_КЛЮЧ>",
-       "endpoints": ["https://github.com/Lucky2356/financeapps/releases/latest/download/latest.json"]
-     }
-   },
-   "bundle": { "createUpdaterArtifacts": true }
-   ```
-   и установить плагины: `npm i @tauri-apps/plugin-updater @tauri-apps/plugin-process`
-   + `cargo add tauri-plugin-updater` в `src-tauri`, зарегистрировать в `lib.rs`.
-3. В release-workflow ([desktop-release.yml](../.github/workflows/desktop-release.yml))
-   передать приватный ключ как env при сборке:
-   ```yaml
-   env:
-     TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-     TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-   ```
-   Tauri тогда сгенерирует `latest.json` + `.sig` и приложит их к релизу
-   (шаг публикации уже использует `softprops/action-gh-release`).
-4. В приложении добавить проверку через `@tauri-apps/plugin-updater` (check →
-   downloadAndInstall) — кнопку «Проверить обновления» можно переключить с
-   открытия страницы релизов на встроенную установку.
+Вся обвязка апдейтера уже реализована в коде:
 
-> Плагин updater намеренно не добавлен в сборку, пока нет ключей: без корректного
-> `pubkey`/подписи это сломало бы `tauri build`. После генерации ключей включение —
-> по шагам выше.
+- плагины `@tauri-apps/plugin-updater` + `@tauri-apps/plugin-process` (JS) и
+  `tauri-plugin-updater` + `tauri-plugin-process` (Rust, зарегистрированы в
+  [lib.rs](../src-tauri/src/lib.rs)); разрешения — в
+  [capabilities/default.json](../src-tauri/capabilities/default.json);
+- кнопка **Настройки → «Проверить обновления»** вызывает `check()` →
+  подтверждение → `downloadAndInstall()` → `relaunch()`. В обычной (неподписанной)
+  сборке `check()` падает, и кнопка просто открывает страницу релизов — поэтому
+  локальная `npm run tauri:build` работает **без** ключей;
+- конфиг апдейтера вынесен в [tauri.updater.conf.json](../src-tauri/tauri.updater.conf.json)
+  и подмешивается **только** в CI-сборке релиза (`tauri build --config …`), когда
+  задан секрет подписи. `tauri.conf.json` секции updater не содержит.
+
+Чтобы включить автообновления, нужно один раз сделать следующее:
+
+1. **Сгенерировать пару ключей** (на своей машине, приватный ключ никуда не
+   коммитить):
+   ```
+   npx tauri signer generate -w financeapps-updater.key
+   ```
+   Команда выведет публичный ключ и попросит пароль. Запомни путь к файлу
+   `financeapps-updater.key` (приватный ключ) и заданный пароль.
+2. **Вставить публичный ключ** в [tauri.updater.conf.json](../src-tauri/tauri.updater.conf.json):
+   заменить `REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY` на выведенный публичный ключ,
+   закоммитить (публичный ключ не секрет).
+3. **Добавить секреты** в репозитории GitHub (Settings → Secrets and variables →
+   Actions):
+   - `TAURI_SIGNING_PRIVATE_KEY` — содержимое файла `financeapps-updater.key`;
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — пароль из шага 1.
+4. **Выпустить релиз** через [desktop-release.yml](../.github/workflows/desktop-release.yml)
+   (ручной запуск с версией, напр. `v1.0.2`, или пуш тега `v*`). При наличии
+   секрета workflow соберёт подписанные артефакты, сгенерирует `latest.json`
+   ([scripts/make-latest-json.mjs](../scripts/make-latest-json.mjs)) и приложит к
+   релизу `*-setup.exe`, `*-setup.exe.sig` и `latest.json`.
+
+После этого установленное из такого релиза приложение будет находить новые версии
+и устанавливать их по кнопке «Проверить обновления».
+
+> Важно: бесшовно обновится только сборка, которая **уже содержит** updater-конфиг
+> и публичный ключ, т.е. собранная workflow-ом после шагов 1–3. Текущий
+> установщик (собранный без ключей) обновляться сам не будет — первую версию с
+> апдейтером нужно установить вручную.
+>
+> Подпись апдейтов (этот раздел) и code signing для SmartScreen (раздел 1) — разные
+> вещи: апдейтер не требует платного сертификата, SmartScreen — требует.

@@ -12,8 +12,11 @@ if (cargoBin && existsSync(cargoBin) && !env[pathKey]?.includes(cargoBin)) {
 env.PATH = env[pathKey];
 
 const command = ["build", "dev"].includes(process.argv[2]) ? process.argv[2] : "build";
+// Forward any extra args (e.g. `-- --config src-tauri/tauri.updater.conf.json`)
+// to the tauri CLI so the release build can opt into the updater config.
+const extraArgs = process.argv.slice(3);
 const runner = "npx";
-const result = spawnSync(runner, ["tauri", command], {
+const result = spawnSync(runner, ["tauri", command, ...extraArgs], {
   env,
   shell: process.platform === "win32",
   stdio: "inherit"
