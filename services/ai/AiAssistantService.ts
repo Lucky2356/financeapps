@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+import { AI_DEFAULT_MODEL } from "@/lib/ai/models";
 import {
   buildParsePrompt,
   parseTransactionDraft,
@@ -13,8 +14,6 @@ import {
 //   - web: called server-side from app/api/ai/parse/route.ts with a server key.
 // Network call only — all prompt building and reply parsing is the pure code in
 // lib/ai/parse-transaction.ts.
-
-export const AI_DEFAULT_MODEL = "claude-opus-4-8";
 
 export type RequestTransactionDraftArgs = {
   text: string;
