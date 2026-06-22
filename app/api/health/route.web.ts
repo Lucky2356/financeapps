@@ -5,11 +5,9 @@ import { APP_VERSION } from "@/lib/constants";
 import { runtimeConfig } from "@/lib/platform/env";
 import { prisma } from "@/lib/prisma";
 
-// force-static is required for NEXT_OUTPUT=export (Tauri/Capacitor shell).
-// Trade-off: in web deployments the GET response is a build-time snapshot.
-// For a real-time health check in web-only deployments, change this to
-// "force-dynamic" (then build:static must be run separately or excluded).
-export const dynamic = "force-static";
+// Web-only route (.web.ts) — excluded from the desktop static export, so it can
+// be fully dynamic and return live data.
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const startedAt = Date.now();
