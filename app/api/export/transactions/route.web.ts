@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTransactionsPageData } from "@/lib/data";
 import { ExportService } from "@/services/export/ExportService";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const format = request.nextUrl.searchParams.get("format") ?? "json";

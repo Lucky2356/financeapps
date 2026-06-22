@@ -9,7 +9,7 @@ import { findCurrentUser } from "@/lib/auth/current-user";
 import { csvImportSchema } from "@/lib/validations";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json(await getImportPageData());

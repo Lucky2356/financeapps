@@ -6,7 +6,7 @@ import { requirePrisma } from "@/lib/prisma";
 import { findCurrentUser } from "@/lib/auth/current-user";
 import { savingGoalSchema } from "@/lib/validations";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json(await getGoalsPageData());
