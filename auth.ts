@@ -15,6 +15,10 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Self-hosted / reverse-proxy deployments: trust the Host header (Auth.js v5
+  // otherwise rejects it in production with UntrustedHost). Override per-env with
+  // AUTH_TRUST_HOST if needed.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
