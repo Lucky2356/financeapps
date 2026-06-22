@@ -71,6 +71,7 @@ model User {
   id                        String               @id @default(cuid())
   email                     String               @unique
   name                      String
+  passwordHash              String?
   currency                  String               @default("RUB")
   demoMode                  Boolean              @default(true)
   emergencyFundMonthsTarget Int                  @default(6)
