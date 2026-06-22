@@ -7,8 +7,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-financial_assistant}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    # No host port mapping in production — the DB is reachable only on the
+    # internal compose network. (Add a mapping only if you need external access.)
+    expose:
+      - "5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +18,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # One-shot: applies Prisma migrations, then exits. Uses the builder stage
+  # (which has the prisma CLI + schema); the web image stays slim.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: financial-assistant-migrate
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   web:
     build:
@@ -26,12 +44,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
-      - "3000:3000"
+      - "${WEB_PORT:-3000}:3000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}
-      NEXT_PUBLIC_APP_PLATFORM: ${NEXT_PUBLIC_APP_PLATFORM:-web}
-      NEXT_OUTPUT: standalone
+      # NextAuth: required secret + trust the Host header (accessed by IP/proxy).
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      AUTH_TRUST_HOST: "true"
+      # Optional: server-side AI key for /api/ai/parse on the web.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       NODE_ENV: production
 
 volumes:
