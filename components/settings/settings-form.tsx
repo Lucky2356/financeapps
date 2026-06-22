@@ -333,77 +333,82 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </CardContent>
       </Card>
 
-      {/* Card: AI assistant (desktop only — uses the user's own Anthropic key) */}
-      {isLocalDesktopMode && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="size-4" />
-              ИИ-ассистент
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
-              <span>
-                <span className="block text-sm font-medium">Включить ИИ-ассистент</span>
-                <span className="block text-xs text-muted-foreground">
-                  Ввод операций текстом на странице «Операции» через Claude.
-                </span>
+      {/* Card: AI assistant. Desktop uses the user's own key (entered here);
+          web uses the server-side key — only the toggle is shown. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="size-4" />
+            ИИ-ассистент
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
+            <span>
+              <span className="block text-sm font-medium">Включить ИИ-ассистент</span>
+              <span className="block text-xs text-muted-foreground">
+                Ввод операций текстом на странице «Операции» через Claude.
               </span>
-              <input
-                type="checkbox"
-                checked={settings.aiEnabled}
-                onChange={(e) => void persist({ aiEnabled: e.target.checked })}
-                className="size-5 accent-primary"
-              />
-            </label>
-            {settings.aiEnabled && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="ai-key">API-ключ Anthropic</Label>
-                  <Input
-                    id="ai-key"
-                    type="password"
-                    autoComplete="off"
-                    value={settings.aiApiKey}
-                    onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })}
-                    onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
-                    placeholder="sk-ant-..."
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Ключ хранится только на вашем устройстве и используется для запросов к
-                    Anthropic.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ai-model">Модель</Label>
-                  <select
-                    id="ai-model"
-                    value={settings.aiModel}
-                    onChange={(e) => void persist({ aiModel: e.target.value })}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  >
-                    <option value="">По умолчанию (Opus 4.8)</option>
-                    {AI_MODELS.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    Более мощные модели точнее, но дороже и медленнее. Для коротких фраз достаточно
-                    Haiku или Sonnet.
-                  </p>
-                </div>
-                <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
-                  Текст, который вы вводите, отправляется во внешний сервис Anthropic. Не указывайте
-                  конфиденциальные данные. Функцию можно отключить в любой момент.
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.aiEnabled}
+              onChange={(e) => void persist({ aiEnabled: e.target.checked })}
+              className="size-5 accent-primary"
+            />
+          </label>
+          {settings.aiEnabled && (
+            <>
+              {isLocalDesktopMode && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-key">API-ключ Anthropic</Label>
+                    <Input
+                      id="ai-key"
+                      type="password"
+                      autoComplete="off"
+                      value={settings.aiApiKey}
+                      onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })}
+                      onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
+                      placeholder="sk-ant-..."
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Ключ хранится только на вашем устройстве и используется для запросов к
+                      Anthropic.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-model">Модель</Label>
+                    <select
+                      id="ai-model"
+                      value={settings.aiModel}
+                      onChange={(e) => void persist({ aiModel: e.target.value })}
+                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    >
+                      <option value="">По умолчанию (Opus 4.8)</option>
+                      {AI_MODELS.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      Более мощные модели точнее, но дороже и медленнее. Для коротких фраз
+                      достаточно Haiku или Sonnet.
+                    </p>
+                  </div>
+                </>
+              )}
+              <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
+                Текст, который вы вводите, отправляется во внешний сервис Anthropic. Не указывайте
+                конфиденциальные данные. Функцию можно отключить в любой момент.
+                {!isLocalDesktopMode &&
+                  " На сайте используется серверный ключ — если ИИ не настроен на сервере, запрос вернёт ошибку."}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Card 2: Risk & Emergency Fund */}
       <Card>
