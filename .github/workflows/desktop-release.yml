@@ -35,6 +35,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Resolve the release tag FIRST so a malformed version fails in seconds,
+      # not after the ~10-minute build. Trims all whitespace (the usual cause of
+      # "tag_name is not well-formed" — a stray space from copy-paste) and
+      # validates the shape (vX.Y.Z). Read via env to avoid shell injection.
+      - name: Resolve release target
+        id: rel
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ver="$(printf '%s' "$INPUT_VERSION" | tr -d '[:space:]')"
+          if [ -z "$ver" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "No version entered — build only, no Release."
+          elif printf '%s' "$ver" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$'; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$ver" >> "$GITHUB_OUTPUT"
+            echo "Release tag: $ver"
+          else
+            echo "::error::Некорректная версия '$INPUT_VERSION'. Введите vX.Y.Z, например v1.0.2"
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -87,24 +115,6 @@ jobs:
             src-tauri/target/release/financial-assistant.exe
             src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
-
-      # Decide whether to publish a Release and under which tag:
-      #  - tag push (v*)            → publish using that tag
-      #  - manual run with version  → publish using the entered tag (created here)
-      #  - manual run, blank input  → build only, no Release
-      - name: Resolve release target
-        id: rel
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ inputs.version }}" ]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          fi
 
       # Generates the updater manifest (latest.json) from the signed .sig so the
       # in-app updater can find and verify the new version. Only when signing.
