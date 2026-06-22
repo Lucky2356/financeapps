@@ -1,3 +1,7 @@
+# Production compose that PULLS prebuilt images from GHCR (no on-server build).
+# Use on a weak VPS:  docker compose -f docker-compose.prod.yml pull && \
+#                     docker compose -f docker-compose.prod.yml up -d
+# Images are produced by .github/workflows/web-image.yml (manual run).
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,8 +11,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-financial_assistant}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    # No host port mapping in production — the DB is reachable only on the
-    # internal compose network. (Add a mapping only if you need external access.)
     expose:
       - "5432"
     volumes:
@@ -19,15 +21,9 @@ services:
       timeout: 5s
       retries: 10
 
-  # One-shot: applies Prisma migrations, then exits. Uses the builder stage
-  # (which has the prisma CLI + schema); the web image stays slim.
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: builder
+    image: ghcr.io/lucky2356/financeapps-migrate:latest
     container_name: financial-assistant-migrate
-    # Apply migrations, then seed reference data (risk profiles) idempotently.
     command: ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/seed-reference.ts"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}
@@ -37,9 +33,7 @@ services:
     restart: "no"
 
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/lucky2356/financeapps-web:latest
     container_name: financial-assistant-web
     restart: unless-stopped
     depends_on:
@@ -52,10 +46,8 @@ services:
     environment:
       # connection_limit keeps Prisma's pool modest on a small single instance.
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}?connection_limit=10
-      # NextAuth: required secret + trust the Host header (accessed by IP/proxy).
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
       AUTH_TRUST_HOST: "true"
-      # Optional: server-side AI key for /api/ai/parse on the web.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       NODE_ENV: production
 

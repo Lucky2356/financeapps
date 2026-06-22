@@ -48,6 +48,24 @@ git pull
 docker compose up -d --build    # пересобрать и перезапустить (миграции применятся)
 ```
 
+## Вариант Б: готовый образ из GHCR (рекомендуется для слабого сервера)
+
+Не собирать Next на VPS, а подтянуть готовый образ, собранный в GitHub Actions.
+
+1. **Собрать образ в CI:** GitHub → Actions → **Build & Push Web Image** → Run
+   workflow. Он публикует `ghcr.io/lucky2356/financeapps-web` и `-migrate`.
+2. **Открыть доступ к образам:** на GitHub в Packages у обоих пакетов поставить
+   видимость Public (проще всего), либо на сервере `docker login ghcr.io` под PAT
+   с правом `read:packages`.
+3. **На сервере:**
+   ```bash
+   cd financeapps && git pull          # нужен только .env и compose-файл
+   cp .env.docker.example .env && nano .env   # как в шаге 3 выше
+   docker compose -f docker-compose.prod.yml pull
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+   Сборка на сервере не выполняется — только загрузка образов.
+
 ## Как это устроено
 - `postgres` — БД (только во внутренней сети, наружу не открыта).
 - `migrate` — одноразово применяет `prisma migrate deploy` и завершается.
