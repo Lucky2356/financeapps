@@ -4,6 +4,7 @@ import { z } from "zod";
 import { hashPassword } from "@/lib/auth/password";
 import { provisionNewUser } from "@/lib/auth/provisioning";
 import { apiErrorResponse } from "@/lib/api/route-errors";
+import { clientIp, rateLimit, tooManyRequests } from "@/lib/api/rate-limit";
 import { requirePrisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,10 @@ const registerSchema = z.object({
 // categories — the new account starts empty (demoMode off), isolated by userId.
 export async function POST(request: NextRequest) {
   try {
+    // Throttle signups per IP to blunt abuse/enumeration.
+    const limit = rateLimit(`register:${clientIp(request)}`, 5, 60_000);
+    if (!limit.ok) return tooManyRequests(limit.retryAfter);
+
     const db = requirePrisma();
     const { email, password, name } = registerSchema.parse(await request.json());
     const normalizedEmail = email.toLowerCase();
