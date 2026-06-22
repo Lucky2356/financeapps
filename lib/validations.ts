@@ -83,7 +83,12 @@ export const settingsSchema = z.object({
     .refine((value) => [3, 6, 12].includes(value)),
   theme: z.enum(["light", "dark", "system"]).optional(),
   density: z.enum(["comfortable", "compact"]).optional(),
-  defaultTransactionType: z.enum(["INCOME", "EXPENSE"]).optional()
+  defaultTransactionType: z.enum(["INCOME", "EXPENSE"]).optional(),
+  autoMaterializeRecurring: z.boolean().optional(),
+  paymentReminders: z.boolean().optional(),
+  aiEnabled: z.boolean().optional(),
+  aiApiKey: z.string().max(200).optional(),
+  aiModel: z.string().max(100).optional()
 });
 
 export const recurringTransactionSchema = z.object({

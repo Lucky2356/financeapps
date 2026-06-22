@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { ChromeGate } from "@/components/layout/chrome-gate";
 import { ToastListener } from "@/components/toast-listener";
 import { MobileBottomNav, MobileTopBar } from "@/components/mobile-navigation";
 import { QuickAddFab } from "@/components/quick-add-fab";
@@ -19,13 +20,19 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
       >
         Перейти к содержимому
       </a>
-      <AppSidebar />
-      <MobileTopBar />
+      <ChromeGate>
+        <AppSidebar />
+        <MobileTopBar />
+      </ChromeGate>
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 md:pb-6 lg:px-8">{children}</div>
+        <div className="mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 md:pb-6 lg:px-8">
+          {children}
+        </div>
       </main>
-      <MobileBottomNav />
-      <QuickAddFab accounts={importData.accounts} categories={importData.categories} />
+      <ChromeGate>
+        <MobileBottomNav />
+        <QuickAddFab accounts={importData.accounts} categories={importData.categories} />
+      </ChromeGate>
       <KeyboardShortcuts />
       <Suspense fallback={null}>
         <ToastListener />

@@ -16,8 +16,7 @@ export async function PUT(request: NextRequest) {
   try {
     const db = requirePrisma();
     const user = await findCurrentUser();
-    if (!user)
-      return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
+    if (!user) return NextResponse.json({ error: "Требуется вход." }, { status: 401 });
 
     const input = settingsSchema.parse(await request.json());
     const riskProfile = await db.riskProfile.findUnique({ where: { code: input.riskProfileCode } });
@@ -27,7 +26,16 @@ export async function PUT(request: NextRequest) {
         currency: input.currency,
         demoMode: input.demoMode,
         emergencyFundMonthsTarget: input.emergencyFundMonthsTarget,
-        riskProfileId: riskProfile?.id ?? user.riskProfileId
+        riskProfileId: riskProfile?.id ?? user.riskProfileId,
+        // Persist the rest of the settings (undefined fields are left untouched).
+        theme: input.theme,
+        density: input.density,
+        defaultTransactionType: input.defaultTransactionType,
+        autoMaterializeRecurring: input.autoMaterializeRecurring,
+        paymentReminders: input.paymentReminders,
+        aiEnabled: input.aiEnabled,
+        aiApiKey: input.aiApiKey,
+        aiModel: input.aiModel
       }
     });
 
