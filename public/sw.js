@@ -1,4 +1,4 @@
-const CACHE_NAME = "financial-assistant-v2";
+const CACHE_NAME = "financial-assistant-v3";
 const OFFLINE_URL = "/offline.html";
 const CORE_ASSETS = ["/", OFFLINE_URL, "/manifest.json", "/icons/icon.svg", "/icons/maskable.svg"];
 const IS_TAURI_ORIGIN = self.location.hostname.includes("tauri") || self.location.protocol.startsWith("tauri");
@@ -44,14 +44,32 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // API responses must never be served stale (financial data). Network-only;
+  // offline returns a 503 so the client shows an error instead of old numbers.
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(
+      fetch(request).catch(
+        () =>
+          new Response(JSON.stringify({ error: "Нет соединения с сервером." }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" }
+          })
+      )
+    );
+    return;
+  }
+
+  // Static assets: cache-first, populate cache on first successful same-origin fetch.
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
 
       return fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (response.ok && response.type === "basic") {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(OFFLINE_URL));
