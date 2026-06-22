@@ -51,6 +51,27 @@ describe("CsvImportMapper", () => {
     );
   });
 
+  describe("detectPreset", () => {
+    it("detects a bank-specific preset by its own column names", () => {
+      // "Сумма платежа" is T-Bank-specific (not in the generic aliases).
+      const fields = ["Дата платежа", "Сумма платежа", "Описание операции", "Категория", "Счёт"];
+      expect(mapper.detectPreset(fields)).toBe("tbank");
+    });
+
+    it("returns a preset whose mapping resolves date+amount for generic headers", () => {
+      const fields = ["Дата операции", "Сумма операции", "Описание", "Категория", "Счет"];
+      const detected = mapper.detectPreset(fields);
+      expect(detected).not.toBeNull();
+      const mapping = mapper.applyPreset(fields, detected!);
+      expect(mapping.dateColumn).toBe("Дата операции");
+      expect(mapping.amountColumn).toBe("Сумма операции");
+    });
+
+    it("returns null when date/amount can't be resolved by any preset", () => {
+      expect(mapper.detectPreset(["foo", "bar", "baz"])).toBeNull();
+    });
+  });
+
   describe("findDuplicateRows", () => {
     const mapping = {
       dateColumn: "Дата",

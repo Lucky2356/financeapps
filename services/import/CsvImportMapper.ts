@@ -131,6 +131,30 @@ export class CsvImportMapper {
     };
   }
 
+  // Auto-detects the best-matching bank preset from the CSV headers: the preset
+  // that resolves date+amount via its own aliases and matches the most columns.
+  // Returns null when no preset confidently resolves date+amount (caller then
+  // falls back to the generic suggestColumns). Column output is correct even when
+  // several banks tie, since presets mostly differ in alias lists, not targets.
+  detectPreset(fields: string[]): string | null {
+    let best: { id: string; score: number } | null = null;
+    for (const preset of presets) {
+      let score = 0;
+      let hasDate = false;
+      let hasAmount = false;
+      for (const key of Object.keys(preset.aliases) as Array<keyof CsvColumnMapping>) {
+        if (this.findByCandidates(fields, preset.aliases[key])) {
+          score += 1;
+          if (key === "dateColumn") hasDate = true;
+          if (key === "amountColumn") hasAmount = true;
+        }
+      }
+      if (!hasDate || !hasAmount) continue;
+      if (!best || score > best.score) best = { id: preset.id, score };
+    }
+    return best?.id ?? null;
+  }
+
   applyPreset(fields: string[], presetId: string): CsvColumnMapping {
     const preset = presets.find((item) => item.id === presetId);
     const suggested = this.suggestColumns(fields);
