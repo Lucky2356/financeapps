@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CreditCard,
   Download,
+  FileText,
   Flag,
   Gauge,
   LayoutDashboard,
@@ -49,6 +50,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Прочее",
     items: [
+      { href: "/reports", label: "Отчёты", icon: FileText },
       { href: "/import", label: "Импорт", icon: Download },
       { href: "/settings", label: "Настройки", icon: Settings }
     ]
