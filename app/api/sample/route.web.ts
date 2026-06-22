@@ -14,7 +14,7 @@ import {
   sampleDeadline
 } from "@/lib/sample-data";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 // Seeds the example dataset for the current user (web/Prisma mirror of the
 // desktop LocalApiClient loadSample). Replaces existing financial data so the

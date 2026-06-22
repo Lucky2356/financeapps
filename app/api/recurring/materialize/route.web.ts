@@ -5,7 +5,7 @@ import { requirePrisma } from "@/lib/prisma";
 import { findCurrentUser } from "@/lib/auth/current-user";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 async function defaultUser() {
   const user = await findCurrentUser();

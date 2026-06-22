@@ -7,7 +7,7 @@ import { requirePrisma } from "@/lib/prisma";
 import { findCurrentUser } from "@/lib/auth/current-user";
 import { budgetSchema } from "@/lib/validations";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const month = request.nextUrl.searchParams.get("month") ?? undefined;

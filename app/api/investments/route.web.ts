@@ -8,7 +8,7 @@ import { findCurrentUser } from "@/lib/auth/current-user";
 import { portfolioPositionSchema, watchlistItemSchema } from "@/lib/validations";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json(await getInvestmentData());

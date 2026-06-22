@@ -6,7 +6,7 @@ import { requirePrisma } from "@/lib/prisma";
 import { findCurrentUser } from "@/lib/auth/current-user";
 import { transactionSchema, transferSchema } from "@/lib/validations";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 async function defaultUser() {
   const user = await findCurrentUser();

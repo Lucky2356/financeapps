@@ -4,7 +4,7 @@ import { z } from "zod";
 import { apiErrorResponse } from "@/lib/api/route-errors";
 import { requestTransactionDraft } from "@/services/ai/AiAssistantService";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 // Web proxy for AI-assisted transaction entry (plan D3). The browser sends a
 // short description plus a minimal context slice; the key stays server-side.
