@@ -14,22 +14,20 @@ export const DEFAULT_NEW_USER_CATEGORIES = [
   { name: "Здоровье", kind: "EXPENSE", color: "#dc2626", isEssential: true }
 ] as const;
 
-// Seeds a fresh account's default categories. Accepts a transaction client so it
-// can run inside the same transaction as user creation.
+// Seeds a fresh account's default categories in a single insert. Accepts a
+// transaction client so it can run inside the same transaction as user creation.
 export async function provisionNewUser(
   db: Prisma.TransactionClient,
   userId: string
 ): Promise<void> {
-  for (const c of DEFAULT_NEW_USER_CATEGORIES) {
-    await db.category.create({
-      data: {
-        userId,
-        name: c.name,
-        kind: c.kind,
-        color: c.color,
-        isEssential: "isEssential" in c ? c.isEssential : false,
-        isSubscription: "isSubscription" in c ? c.isSubscription : false
-      }
-    });
-  }
+  await db.category.createMany({
+    data: DEFAULT_NEW_USER_CATEGORIES.map((c) => ({
+      userId,
+      name: c.name,
+      kind: c.kind,
+      color: c.color,
+      isEssential: "isEssential" in c ? c.isEssential : false,
+      isSubscription: "isSubscription" in c ? c.isSubscription : false
+    }))
+  });
 }
