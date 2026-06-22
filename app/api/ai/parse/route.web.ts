@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { apiErrorResponse } from "@/lib/api/route-errors";
+import { findCurrentUser } from "@/lib/auth/current-user";
+import { rateLimit, tooManyRequests } from "@/lib/api/rate-limit";
 import { requestTransactionDraft } from "@/services/ai/AiAssistantService";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +35,17 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth required: this route uses the server's Anthropic key, so it must not
+    // be callable anonymously (otherwise anyone could drain the key/budget).
+    const user = await findCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Требуется вход." }, { status: 401 });
+    }
+
+    // Per-user limit to cap AI spend.
+    const limit = rateLimit(`ai:${user.id}`, 20, 60_000);
+    if (!limit.ok) return tooManyRequests(limit.retryAfter);
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
