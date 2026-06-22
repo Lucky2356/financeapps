@@ -155,7 +155,12 @@ export function ImportExportPanel({
     setFields(parsed.fields);
     setRows(parsed.rows);
     setErrors(parsed.errors);
-    setMapping(mapper.suggestColumns(parsed.fields));
+    // Auto-apply a detected bank preset (catches bank-specific headers the
+    // generic aliases miss); fall back to generic column suggestions.
+    const detected = mapper.detectPreset(parsed.fields);
+    setMapping(
+      detected ? mapper.applyPreset(parsed.fields, detected) : mapper.suggestColumns(parsed.fields)
+    );
     if (parsed.fields.length > 0) setImportStep(2);
   }
 
