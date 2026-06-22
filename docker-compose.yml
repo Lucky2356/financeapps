@@ -27,7 +27,8 @@ services:
       dockerfile: Dockerfile
       target: builder
     container_name: financial-assistant-migrate
-    command: ["npx", "prisma", "migrate", "deploy"]
+    # Apply migrations, then seed reference data (risk profiles) idempotently.
+    command: ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/seed-reference.ts"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}
     depends_on:

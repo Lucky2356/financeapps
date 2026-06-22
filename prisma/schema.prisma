@@ -77,6 +77,14 @@ model User {
   currency                  String               @default("RUB")
   demoMode                  Boolean              @default(true)
   emergencyFundMonthsTarget Int                  @default(6)
+  theme                     String               @default("system")
+  density                   String               @default("comfortable")
+  defaultTransactionType    TransactionType      @default(EXPENSE)
+  autoMaterializeRecurring  Boolean              @default(false)
+  paymentReminders          Boolean              @default(false)
+  aiEnabled                 Boolean              @default(false)
+  aiApiKey                  String?
+  aiModel                   String?
   riskProfileId             String?
   riskProfile               RiskProfile?         @relation(fields: [riskProfileId], references: [id])
   accounts                  Account[]
