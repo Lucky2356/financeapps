@@ -2,6 +2,9 @@
 FROM node:24-alpine AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+# Prisma on Alpine needs OpenSSL present to load its query/schema engines,
+# otherwise: "Could not parse schema engine response" / libssl detection warnings.
+RUN apk add --no-cache openssl libc6-compat
 
 # Dependencies
 FROM base AS deps
