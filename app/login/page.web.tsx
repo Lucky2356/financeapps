@@ -67,6 +67,15 @@ export default function LoginPage() {
               Зарегистрироваться
             </Link>
           </p>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            <Link href="/legal/terms" className="hover:underline">
+              Условия
+            </Link>
+            {" · "}
+            <Link href="/legal/privacy" className="hover:underline">
+              Конфиденциальность
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

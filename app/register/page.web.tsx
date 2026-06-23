@@ -89,6 +89,17 @@ export default function RegisterPage() {
               Войти
             </Link>
           </p>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Регистрируясь, вы принимаете{" "}
+            <Link href="/legal/terms" className="hover:underline">
+              Условия
+            </Link>{" "}
+            и{" "}
+            <Link href="/legal/privacy" className="hover:underline">
+              Политику конфиденциальности
+            </Link>
+            .
+          </p>
         </CardContent>
       </Card>
     </div>
