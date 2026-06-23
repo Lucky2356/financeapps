@@ -12,3 +12,5 @@
 *.prisma text eol=lf
 *.rs text eol=lf
 *.toml text eol=lf
+*.sh text eol=lf
+Caddyfile text eol=lf
