@@ -49,6 +49,8 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
       AUTH_TRUST_HOST: "true"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Optional: error monitoring (set to your Sentry DSN to enable).
+      SENTRY_DSN: ${SENTRY_DSN:-}
       NODE_ENV: production
 
   # HTTPS termination (self-signed, no domain). Access via https://<server-ip>.
