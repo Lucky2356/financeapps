@@ -1,0 +1,23 @@
+# HTTPS for the web app WITHOUT a domain (plan: safe-launch).
+# Caddy terminates TLS on :443 and proxies to the Next.js container.
+#
+# `tls internal` uses Caddy's own (self-signed) CA — traffic IS encrypted, but
+# browsers show a one-time "not trusted" warning when accessing by IP. To remove
+# the warning later, point a real domain here and switch to:  your-domain { reverse_proxy web:3000 }
+{
+	# No ACME/public CA possible for a bare IP — disable auto-redirect noise.
+	auto_https disable_redirects
+}
+
+:443 {
+	tls internal
+	reverse_proxy web:3000 {
+		# Pass real scheme/host so NextAuth issues Secure cookies correctly.
+		header_up X-Forwarded-Proto https
+	}
+}
+
+# Redirect plain HTTP to HTTPS.
+:80 {
+	redir https://{host}{uri} permanent
+}
