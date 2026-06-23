@@ -51,5 +51,41 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       NODE_ENV: production
 
+  # HTTPS termination (self-signed, no domain). Access via https://<server-ip>.
+  caddy:
+    image: caddy:2-alpine
+    container_name: financial-assistant-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # Daily PostgreSQL backups to a volume (prunes after BACKUP_RETENTION_DAYS).
+  backup:
+    image: postgres:16-alpine
+    container_name: financial-assistant-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-financial_assistant}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./scripts/db-backup.sh:/db-backup.sh:ro
+      - db-backups:/backups
+    entrypoint: ["sh", "/db-backup.sh"]
+
 volumes:
   postgres-data:
+  caddy-data:
+  caddy-config:
+  db-backups:

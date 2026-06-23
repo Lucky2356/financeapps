@@ -72,6 +72,42 @@ docker compose up -d --build    # пересобрать и перезапуст
 - `web` — Next.js (standalone), слушает 3000. `AUTH_TRUST_HOST=true`, чтобы Auth.js
   принимал доступ по IP.
 
+## HTTPS (без домена, самоподписанный)
+
+В compose добавлен сервис **Caddy** — терминирует HTTPS на :443 и проксирует на
+приложение. Без домена используется самоподписанный сертификат (`tls internal`).
+
+```bash
+sudo ufw allow 80
+sudo ufw allow 443
+docker compose up -d        # (или -f docker-compose.prod.yml)
+```
+
+Открой **https://130.49.213.234** — браузер один раз предупредит «сертификат не
+доверенный» (это нормально для IP без домена; нажми «всё равно открыть»). Трафик
+уже шифруется. `http://<ip>:3000` пока тоже работает — после проверки HTTPS убери
+маппинг `3000:3000` у сервиса `web` для безопасности. Когда появится домен —
+заменишь `:443 { tls internal ... }` в [Caddyfile](../Caddyfile) на
+`your-domain.ru { reverse_proxy web:3000 }` и Caddy сам получит доверенный
+сертификат Let's Encrypt.
+
+## Резервные копии БД
+
+Сервис **backup** раз в сутки делает `pg_dump` в том `db-backups` (хранит
+`BACKUP_RETENTION_DAYS`, по умолчанию 7 дней).
+
+```bash
+docker compose logs backup                    # проверить, что бэкапы идут
+# забрать копии с сервера на свою машину:
+docker run --rm -v financeapps_db-backups:/b -v "$PWD":/out alpine \
+  sh -c "cp /b/db-*.sql.gz /out/"
+# восстановление:
+gunzip -c db-YYYYMMDD-HHMMSS.sql.gz | docker compose exec -T postgres \
+  psql -U postgres -d financial_assistant
+```
+
+> Для настоящей off-site сохранности периодически копируй дампы за пределы сервера.
+
 ## Оговорки (это «проверочный», не боевой контур)
 - **HTTP без шифрования.** Пароли/сессии идут в открытом виде. Для реального
   использования нужен домен + HTTPS (Caddy/Nginx + Let's Encrypt) — тогда трафик
