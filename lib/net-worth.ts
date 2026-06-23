@@ -1,12 +1,14 @@
 // Shared net-worth helpers used by BOTH the desktop LocalApiClient and the
 // web Prisma path, so the dashboard behaves identically in either mode.
 //
-// The trend is reconstructed from the current net worth and the transaction
-// history rather than persisted snapshots: net worth at the end of a past
-// month = current net worth minus the net flow that happened after it. This
-// needs no storage, works retroactively, and is deterministic.
+// The trend prefers persisted daily snapshots (plan B7) — real net worth on a
+// given day, incl. portfolio market value — and falls back to flow-reconstruction
+// for months before snapshots existed (net worth at a past month-end = current
+// net worth minus the net flow after it). So history is accurate going forward
+// and still populated retroactively.
 
 import type { NetWorthPoint } from "@/types/finance";
+import { isoDay, snapshotAsOf, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import { roundMoney } from "@/lib/utils";
 
 // Single net-worth formula shared by web (data.ts) and desktop (LocalApiClient):
@@ -39,11 +41,13 @@ const SAVINGS_CATEGORY = "Накопления";
 export function buildNetWorthTrend(params: {
   currentNetWorth: number;
   transactions: NetWorthFlowTx[];
+  snapshots?: NetWorthSnapshot[];
   now?: Date;
   monthsBack?: number;
 }): NetWorthPoint[] {
   const now = params.now ?? new Date();
   const monthsBack = params.monthsBack ?? 6;
+  const snapshots = params.snapshots ?? [];
 
   // Net-worth-affecting flows: income (+) and expense (−). Transfers are stored
   // as paired EXPENSE+INCOME and cancel out; goal-deposit expenses are excluded.
@@ -59,13 +63,18 @@ export function buildNetWorthTrend(params: {
   for (let i = monthsBack - 1; i >= 0; i--) {
     const monthEndDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
     const monthEnd = monthEndDate.getTime();
+    // Prefer a real captured snapshot at/before this month-end; otherwise fall
+    // back to the flow-reconstructed value (months before snapshots existed).
+    const snapshot = snapshotAsOf(snapshots, isoDay(monthEndDate));
     const flowAfter = flows.reduce(
       (sum, flow) => (flow.time > monthEnd ? sum + flow.delta : sum),
       0
     );
     points.push({
       month: monthEndDate.toLocaleDateString("ru", { month: "short" }),
-      value: Math.round((params.currentNetWorth - flowAfter) * 100) / 100
+      value: snapshot
+        ? snapshot.value
+        : Math.round((params.currentNetWorth - flowAfter) * 100) / 100
     });
   }
   return points;

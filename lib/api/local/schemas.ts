@@ -177,6 +177,9 @@ export const localStateSchema = z.object({
   aiEnabled: z.boolean().default(false),
   aiApiKey: z.string().default(""),
   aiModel: z.string().default(""),
+  netWorthSnapshots: z
+    .array(z.object({ date: z.string().min(1), value: z.coerce.number().finite() }))
+    .default([]),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

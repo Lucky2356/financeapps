@@ -32,6 +32,14 @@ async function runAutomation() {
     return;
   }
 
+  // Record today's net worth snapshot once per load (plan B7) — best-effort,
+  // both web and desktop. Builds an accurate capital history going forward.
+  try {
+    await apiClient.post("/networth/snapshot");
+  } catch {
+    // Ignore (offline / unauthenticated).
+  }
+
   if (isLocalDesktopMode && settings.autoMaterializeRecurring) {
     try {
       await apiClient.post("/recurring/materialize-all");

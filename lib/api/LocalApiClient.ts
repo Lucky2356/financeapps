@@ -43,6 +43,7 @@ import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
+import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
@@ -89,6 +90,7 @@ type LocalState = {
   aiEnabled: boolean;
   aiApiKey: string;
   aiModel: string;
+  netWorthSnapshots: NetWorthSnapshot[];
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -183,6 +185,7 @@ function createInitialState(): LocalState {
     aiEnabled: false,
     aiApiKey: "",
     aiModel: "",
+    netWorthSnapshots: [],
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -214,6 +217,7 @@ function createBlankState(): LocalState {
     aiEnabled: false,
     aiApiKey: "",
     aiModel: "",
+    netWorthSnapshots: [],
     categories: [],
     transactions: [],
     budgets: [],
@@ -400,6 +404,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
     if (pathname === "/recurring/materialize-all")
       return this.saveAndReturn<TResponse>(state, this.materializeAllDue(state));
+    if (pathname === "/networth/snapshot")
+      return this.saveAndReturn<TResponse>(state, await this.recordNetWorthSnapshot(state));
     if (pathname === "/import")
       return this.saveAndReturn<TResponse>(state, this.importCsvRows(state, body));
     if (pathname === "/import/undo")
@@ -1445,6 +1451,30 @@ export class LocalApiClient implements ApiClient {
     return state;
   }
 
+  // Current net worth (liquid + portfolio + goals − debts) — used by the
+  // dashboard and the daily snapshot recorder (plan B7).
+  private async computeNetWorthValue(state: LocalState): Promise<number> {
+    const totalBalance = this.accounts(state).totalBalance;
+    const portfolioValue = await this.portfolioValue(state);
+    const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
+    const liabilitiesTotal = roundMoney(
+      state.liabilities.reduce((sum, item) => sum + item.balance, 0)
+    );
+    return computeNetWorth({ totalBalance, portfolioValue, goalSavings, liabilitiesTotal });
+  }
+
+  // Records today's net worth snapshot (idempotent per day). Called once on app
+  // load via the automation runner so the capital trend reflects real values.
+  private async recordNetWorthSnapshot(state: LocalState) {
+    const value = await this.computeNetWorthValue(state);
+    state.netWorthSnapshots = recordSnapshot(
+      state.netWorthSnapshots ?? [],
+      isoDay(new Date()),
+      value
+    );
+    return { recorded: true, value };
+  }
+
   private async dashboard(state: LocalState): Promise<DashboardData> {
     const finance = this.financeInput(state);
     const totalBalance = this.accounts(state).totalBalance;
@@ -1463,6 +1493,7 @@ export class LocalApiClient implements ApiClient {
     });
     const netWorthTrend = buildNetWorthTrend({
       currentNetWorth: netWorth,
+      snapshots: state.netWorthSnapshots ?? [],
       transactions: state.transactions
     });
     const savingsBalance = state.accounts
