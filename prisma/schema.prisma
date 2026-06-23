@@ -98,6 +98,7 @@ model User {
   watchlistItems            WatchlistItem[]
   recurringTransactions     RecurringTransaction[]
   externalConnections       ExternalConnection[]
+  netWorthSnapshots         NetWorthSnapshot[]
   createdAt                 DateTime             @default(now())
   updatedAt                 DateTime             @updatedAt
 
@@ -239,6 +240,19 @@ model Liability {
   updatedAt      DateTime      @updatedAt
 
   @@index([userId])
+}
+
+// Daily captured net worth (plan B7) — real value incl. portfolio market value,
+// so the capital trend is accurate going forward instead of flow-reconstructed.
+model NetWorthSnapshot {
+  id     String  @id @default(cuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   String // YYYY-MM-DD (local day)
+  value  Decimal @db.Decimal(16, 2)
+
+  @@unique([userId, date])
+  @@index([userId, date])
 }
 
 model Recommendation {

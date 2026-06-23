@@ -1020,6 +1020,17 @@ export async function getDashboardData(): Promise<DashboardData> {
       const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
       const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
 
+      // Captured daily net worth (plan B7) — preferred over flow-reconstruction.
+      const netWorthSnapshots = prisma
+        ? (
+            await prisma.netWorthSnapshot.findMany({
+              where: { userId: user.id },
+              orderBy: { date: "asc" },
+              select: { date: true, value: true }
+            })
+          ).map((s) => ({ date: s.date, value: Number(s.value) }))
+        : [];
+
       return {
         source: "database",
         currency: user.currency,
@@ -1072,6 +1083,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         liabilitiesTotal,
         netWorthTrend: buildNetWorthTrend({
           currentNetWorth: netWorth,
+          snapshots: netWorthSnapshots,
           transactions: finance.transactions
         }),
         emergencyFund
