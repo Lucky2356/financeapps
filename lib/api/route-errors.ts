@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
+import { reportError } from "@/lib/observability";
+
 type PrismaLikeError = {
   code?: string;
   message?: string;
@@ -30,5 +32,10 @@ export function apiErrorResponse(error: unknown, fallback = "Request failed") {
     }
   }
 
-  return NextResponse.json({ error: error instanceof Error ? error.message : fallback }, { status: 400 });
+  // Unexpected error (not a validation/known-DB case) — log + report to Sentry.
+  reportError(error);
+  return NextResponse.json(
+    { error: error instanceof Error ? error.message : fallback },
+    { status: 400 }
+  );
 }
