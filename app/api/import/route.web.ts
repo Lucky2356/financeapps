@@ -87,6 +87,9 @@ export async function POST(request: NextRequest) {
       categoryId: rule.categoryId
     }));
 
+    // One batch id per import call, stamped on every created row so the whole
+    // import can be undone as a unit (see /api/import/undo).
+    const batchId = crypto.randomUUID();
     let imported = 0;
     let skipped = 0;
     await db.$transaction(async (tx) => {
@@ -147,7 +150,8 @@ export async function POST(request: NextRequest) {
             amount,
             type,
             date,
-            description
+            description,
+            importBatchId: batchId
           }
         });
         await tx.account.update({
@@ -158,7 +162,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({ imported, skipped });
+    return NextResponse.json({ imported, skipped, batchId: imported > 0 ? batchId : null });
   } catch (error) {
     return apiErrorResponse(error, "Не удалось импортировать CSV.");
   }
