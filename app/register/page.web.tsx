@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState, type FormEvent } from "react";
 
+import { AuthScreen } from "@/components/auth/auth-screen";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,7 +53,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-sm items-center">
+    <AuthScreen>
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Регистрация</CardTitle>
@@ -110,6 +111,6 @@ export default function RegisterPage() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </AuthScreen>
   );
 }
