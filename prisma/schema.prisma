@@ -99,6 +99,7 @@ model User {
   recurringTransactions     RecurringTransaction[]
   externalConnections       ExternalConnection[]
   netWorthSnapshots         NetWorthSnapshot[]
+  rules                     Rule[]
   createdAt                 DateTime             @default(now())
   updatedAt                 DateTime             @updatedAt
 
@@ -136,11 +137,28 @@ model Category {
   transactions   Transaction[]
   recurringTransactions RecurringTransaction[]
   budgets        Budget[]
+  rules          Rule[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
   @@unique([userId, name, kind])
   @@index([userId, kind])
+}
+
+// User-defined auto-categorization rule: "if a transaction description contains
+// `match`, assign `category`". Web mirror of the desktop local-state rules; rules
+// take priority over the history-based suggestion (see lib/category-suggest.ts).
+model Rule {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match      String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([categoryId])
 }
 
 model Transaction {

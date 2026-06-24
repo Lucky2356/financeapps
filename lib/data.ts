@@ -1247,6 +1247,47 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
   );
 }
 
+export async function getRulesPageData(): Promise<RulesPageData> {
+  return safeData<RulesPageData>(
+    () => ({
+      source: "demo-fallback",
+      rules: [],
+      categories: demoCategories.map((category) => ({
+        id: category.id,
+        label: category.label,
+        kind: category.kind
+      }))
+    }),
+    async () => {
+      if (!prisma) throw new Error("Prisma client is not configured.");
+      const user = await getDefaultUser();
+      if (!user) throw new Error("No user found.");
+      const [rules, categories] = await Promise.all([
+        prisma.rule.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }),
+        prisma.category.findMany({
+          where: { userId: user.id },
+          orderBy: [{ kind: "asc" }, { name: "asc" }]
+        })
+      ]);
+
+      return {
+        source: "database",
+        rules: rules.map((rule) => ({
+          id: rule.id,
+          match: rule.match,
+          categoryId: rule.categoryId
+        })),
+        categories: categories.map((category) => ({
+          id: category.id,
+          label: category.name,
+          kind: category.kind
+        }))
+      };
+    },
+    () => ({ source: "database", rules: [], categories: [] })
+  );
+}
+
 export async function getForecastData(): Promise<ForecastPageData> {
   return safeData<ForecastPageData>(
     () => {
