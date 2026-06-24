@@ -1,8 +1,10 @@
 "use client";
 
-import { ArrowRight, Check, Plus, X } from "lucide-react";
+import { ArrowRight, Check, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import type {
@@ -28,35 +30,54 @@ type Counts = {
 // Tracks the first-setup progress from real data and guides the next action.
 // Auto-hides once every step is done (or when dismissed).
 export function SetupChecklist() {
+  const router = useRouter();
   const [counts, setCounts] = useState<Counts | null>(null);
+  const [loadingSample, setLoadingSample] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem(STORAGE_KEY) === "true";
   });
 
+  const loadCounts = useCallback(async () => {
+    const [accounts, transactions, budgets, goals, importRefs] = await Promise.all([
+      apiClient.get<AccountsPageData>("/accounts").catch(() => null),
+      apiClient.get<TransactionsPageData>("/transactions").catch(() => null),
+      apiClient.get<BudgetsPageData>("/budgets").catch(() => null),
+      apiClient.get<GoalsPageData>("/goals").catch(() => null),
+      apiClient.get<ImportPageData>("/import").catch(() => null)
+    ]);
+    setCounts({
+      accounts: accounts?.accounts.length ?? 0,
+      transactions: transactions?.pagination.total ?? transactions?.transactions.length ?? 0,
+      budgets: budgets?.budgets.filter((b) => b.limitAmount > 0).length ?? 0,
+      goals: goals?.goals.length ?? 0,
+      backupFresh: importRefs?.backupReminderDue === false
+    });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [accounts, transactions, budgets, goals, importRefs] = await Promise.all([
-        apiClient.get<AccountsPageData>("/accounts").catch(() => null),
-        apiClient.get<TransactionsPageData>("/transactions").catch(() => null),
-        apiClient.get<BudgetsPageData>("/budgets").catch(() => null),
-        apiClient.get<GoalsPageData>("/goals").catch(() => null),
-        apiClient.get<ImportPageData>("/import").catch(() => null)
-      ]);
-      if (cancelled) return;
-      setCounts({
-        accounts: accounts?.accounts.length ?? 0,
-        transactions: transactions?.pagination.total ?? transactions?.transactions.length ?? 0,
-        budgets: budgets?.budgets.filter((b) => b.limitAmount > 0).length ?? 0,
-        goals: goals?.goals.length ?? 0,
-        backupFresh: importRefs?.backupReminderDue === false
-      });
+      if (!cancelled) await loadCounts();
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadCounts]);
+
+  async function loadSampleData() {
+    setLoadingSample(true);
+    try {
+      await apiClient.post("/sample");
+      toast.success("Демо-данные загружены");
+      await loadCounts();
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось загрузить демо-данные");
+    } finally {
+      setLoadingSample(false);
+    }
+  }
 
   if (dismissed || !counts) return null;
 
@@ -117,9 +138,22 @@ export function SetupChecklist() {
             Выполнено {doneCount} из {steps.length} — пройдите шаги, чтобы получить максимум.
           </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={dismiss} aria-label="Скрыть быстрый старт">
-          <X className="size-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {counts.accounts === 0 && counts.transactions === 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void loadSampleData()}
+              disabled={loadingSample}
+            >
+              <Sparkles className="size-3.5" />
+              {loadingSample ? "Загрузка…" : "Загрузить демо-данные"}
+            </Button>
+          ) : null}
+          <Button variant="ghost" size="icon" onClick={dismiss} aria-label="Скрыть быстрый старт">
+            <X className="size-4" />
+          </Button>
+        </div>
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {steps.map((step, index) => (
