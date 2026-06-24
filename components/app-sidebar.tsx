@@ -8,11 +8,13 @@ import { NotificationBell } from "@/components/notification-bell";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
+import { useI18n } from "@/lib/i18n/context";
 import { NAV_SECTIONS } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
@@ -24,7 +26,7 @@ export function AppSidebar() {
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-foreground">{APP_NAME}</span>
-            <span className="block text-[11px] text-muted-foreground">Личные финансы</span>
+            <span className="block text-[11px] text-muted-foreground">{t("shell.subtitle")}</span>
           </span>
         </Link>
       </div>
@@ -39,7 +41,7 @@ export function AppSidebar() {
           className="flex w-full items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60"
         >
           <Search className="size-4" />
-          <span className="flex-1 text-left">Поиск…</span>
+          <span className="flex-1 text-left">{t("shell.search")}</span>
           <kbd className="rounded bg-background px-1.5 py-0.5 font-mono text-[10px]">Ctrl K</kbd>
         </button>
       </div>
@@ -50,7 +52,7 @@ export function AppSidebar() {
           <div key={si} className={si > 0 ? "mt-4" : undefined}>
             {section.label ? (
               <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
-                {section.label}
+                {section.labelKey ? t(section.labelKey) : section.label}
               </p>
             ) : null}
             <div className="space-y-0.5">
@@ -69,7 +71,7 @@ export function AppSidebar() {
                     )}
                   >
                     <Icon className="size-4 shrink-0" />
-                    {item.label}
+                    {t(item.labelKey)}
                   </Link>
                 );
               })}
@@ -81,7 +83,7 @@ export function AppSidebar() {
       {/* Footer */}
       <div className="border-t px-4 py-3">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">Тема и уведомления</p>
+          <p className="text-[11px] text-muted-foreground">{t("shell.themeAndNotifications")}</p>
           <div className="flex items-center gap-0.5">
             <NotificationBell />
             <ThemeToggle />

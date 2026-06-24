@@ -17,6 +17,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { useI18n } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { applyDensity } from "@/components/app-settings-sync";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
@@ -86,6 +87,7 @@ const RELEASES_URL = "https://github.com/Lucky2356/financeapps/releases/latest";
 
 export function SettingsForm({ data }: { data: SettingsPageData }) {
   const { setTheme } = useTheme();
+  const { t, locale, setLocale } = useI18n();
   const confirm = useConfirm();
   const { data: pageData, reload } = useApiPageData(data, "/settings");
   const [clearing, setClearing] = useState(false);
@@ -528,6 +530,36 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </label>
               ))}
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("settings.language.title")}</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { value: "ru", label: t("settings.language.ru") },
+                  { value: "en", label: t("settings.language.en") }
+                ] as const
+              ).map(({ value, label }) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
+                    locale === value && "border-primary bg-primary/8 font-medium text-primary"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="locale"
+                    value={value}
+                    checked={locale === value}
+                    onChange={() => setLocale(value)}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("settings.language.hint")}</p>
           </div>
         </CardContent>
       </Card>
