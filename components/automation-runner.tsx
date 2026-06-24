@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { formatCurrency } from "@/lib/format";
 import type { SettingsPageData } from "@/lib/data";
 import type { ForecastData } from "@/types/finance";
@@ -40,8 +39,10 @@ async function runAutomation() {
     // Ignore (offline / unauthenticated).
   }
 
-  if (isLocalDesktopMode && settings.autoMaterializeRecurring) {
+  if (settings.autoMaterializeRecurring) {
     try {
+      // Both modes expose /recurring/materialize-all (desktop LocalApiClient,
+      // web batch route) — auto-post all due templates once per load.
       await apiClient.post("/recurring/materialize-all");
     } catch {
       // Best-effort; ignore failures (e.g. no accounts yet).
