@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+- Account self-service (web): change password in-session
+  (`POST /api/account/password`) and delete account with all data
+  (`DELETE /api/account`, 152-ФЗ right to erasure), both confirmed by password.
+- Explicit consent checkbox at registration (active consent to Terms & Privacy).
+
+### Security
+- Login attempts are rate-limited per IP (brute-force / credential-stuffing).
+
+### SEO
+- OpenGraph metadata, keywords, and `robots.txt`.
+
 ## [1.0.3] — 2026-06-24
 
 ### Added
