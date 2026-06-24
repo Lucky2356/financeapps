@@ -6,7 +6,7 @@ import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { PortfolioStructureChart } from "@/components/charts/portfolio-structure-chart";
+import { PortfolioStructureChart } from "@/components/charts/lazy";
 import { RecommendationList } from "@/components/recommendation-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

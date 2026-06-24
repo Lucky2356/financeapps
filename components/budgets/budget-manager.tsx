@@ -171,7 +171,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
             </TableHeader>
             <TableBody>
               {pageData.budgets.map((budget) => (
-                <TableRow key={budget.categoryId}>
+                <TableRow key={budget.categoryId} className={budget.isExceeded ? "bg-destructive/5" : undefined}>
                   <TableCell className="font-medium">
                     <Link
                       href={`/transactions?categoryId=${encodeURIComponent(budget.categoryId)}&type=EXPENSE`}
@@ -187,7 +187,11 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <Progress value={Math.min(budget.progress, 100)} className="h-2" />
+                      <Progress
+                        value={Math.min(budget.progress, 100)}
+                        className="h-2"
+                        indicatorClassName={budget.isExceeded ? "bg-destructive" : undefined}
+                      />
                       <span
                         className={
                           budget.isExceeded
@@ -217,7 +221,14 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
 
         <div className="grid gap-3 md:hidden">
           {pageData.budgets.map((budget) => (
-            <div key={budget.categoryId} className="rounded-lg border p-4">
+            <div
+              key={budget.categoryId}
+              className={
+                budget.isExceeded
+                  ? "rounded-lg border border-destructive/40 bg-destructive/5 p-4"
+                  : "rounded-lg border p-4"
+              }
+            >
               <div className="flex items-center justify-between gap-3">
                 <Link
                   href={`/transactions?categoryId=${encodeURIComponent(budget.categoryId)}&type=EXPENSE`}
@@ -231,7 +242,11 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                   {Math.round(budget.progress)}%
                 </p>
               </div>
-              <Progress value={Math.min(budget.progress, 100)} className="mt-3" />
+              <Progress
+                value={Math.min(budget.progress, 100)}
+                className="mt-3"
+                indicatorClassName={budget.isExceeded ? "bg-destructive" : undefined}
+              />
               <div className="mt-3 flex justify-between text-sm text-muted-foreground">
                 <span>{formatCurrency(budget.spent, pageData.currency)}</span>
                 <span>{formatCurrency(budget.limitAmount, pageData.currency)}</span>
