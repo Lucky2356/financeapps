@@ -65,7 +65,7 @@ body:
       description: ОС, версия приложения, браузер (для веба).
       placeholder: |
         - ОС: Windows 11
-        - Версия приложения: 1.0.2
+        - Версия приложения: 1.0.3
         - Браузер: Chrome 130 (если веб)
     validations:
       required: false

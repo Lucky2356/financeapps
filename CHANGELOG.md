@@ -2,6 +2,39 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.3] — 2026-06-24
+
+### Added
+- Web parity with desktop:
+  - Auto-categorization rules on the web (`Rule` model, `/api/rules`); rules are
+    applied on CSV import and take priority over the history-based suggestion.
+  - Batch auto-posting of all due recurring payments on the web
+    (`/api/recurring/materialize-all`); the "auto-post recurring" setting now
+    works in both modes.
+  - Undo last CSV import on the web (`importBatchId`, `/api/import/undo`) with
+    account-balance rollback.
+- Dashboard: net-worth breakdown by component (accounts / investments / goals / debts).
+- Command palette: search individual transactions by description.
+- Empty state: "Load demo data" button in the setup checklist when there are no
+  accounts or transactions yet.
+- Internationalization: lightweight RU/EN layer with a language switcher in
+  Settings; navigation and the error screen are translated (incremental, falls
+  back to Russian).
+
+### Changed
+- Performance: charts (Recharts) are lazy-loaded via `next/dynamic`, removing the
+  heavy charting bundle from the initial load.
+- UX: skeleton loaders instead of spinners on key pages; budget overrun is
+  highlighted directly on the card.
+
+### Accessibility
+- Text alternatives (`role="img"` + `aria-label`) for all charts.
+
+### Deferred (v1.0.4)
+- Email password reset (needs SMTP) and OAuth providers.
+- Full content-string translation; AI-prompt language on the server path.
+- Budget rollover; custom domain and trusted TLS certificate.
+
 ## [1.0.1] — 2026-06-21
 
 ### Added
