@@ -8,7 +8,7 @@ import { formatCurrency } from "@/lib/format";
 
 export function ExpenseCategoryChart({ data }: { data: ChartDatum[] }) {
   return (
-    <div className="h-72 w-full sm:h-80">
+    <div className="h-72 w-full sm:h-80" role="img" aria-label="Круговая диаграмма расходов по категориям">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie

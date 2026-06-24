@@ -80,8 +80,21 @@ export type DashboardData = {
   netWorth: number;
   /** Total outstanding liabilities subtracted from assets to get net worth. */
   liabilitiesTotal: number;
+  /** Net worth split into its components (assets minus debts). */
+  netWorthBreakdown: NetWorthBreakdown;
   netWorthTrend: NetWorthPoint[];
   emergencyFund: EmergencyFundStatus;
+};
+
+export type NetWorthBreakdown = {
+  /** Liquid account balances. */
+  liquid: number;
+  /** Market value of the investment portfolio. */
+  portfolio: number;
+  /** Money set aside in savings goals. */
+  goals: number;
+  /** Outstanding debts (positive number, subtracted from assets). */
+  debts: number;
 };
 
 export type EmergencyFundStatus = {

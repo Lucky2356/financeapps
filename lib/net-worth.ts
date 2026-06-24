@@ -7,9 +7,25 @@
 // net worth minus the net flow after it). So history is accurate going forward
 // and still populated retroactively.
 
-import type { NetWorthPoint } from "@/types/finance";
+import type { NetWorthBreakdown, NetWorthPoint } from "@/types/finance";
 import { isoDay, snapshotAsOf, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import { roundMoney } from "@/lib/utils";
+
+// Net worth split into its components for the dashboard breakdown. Same inputs
+// as computeNetWorth, so the parts always sum to the headline net worth.
+export function buildNetWorthBreakdown(parts: {
+  totalBalance: number;
+  portfolioValue?: number;
+  goalSavings?: number;
+  liabilitiesTotal?: number;
+}): NetWorthBreakdown {
+  return {
+    liquid: roundMoney(parts.totalBalance),
+    portfolio: roundMoney(parts.portfolioValue ?? 0),
+    goals: roundMoney(parts.goalSavings ?? 0),
+    debts: roundMoney(parts.liabilitiesTotal ?? 0)
+  };
+}
 
 // Single net-worth formula shared by web (data.ts) and desktop (LocalApiClient):
 // liquid balances + portfolio value + money saved in goals − outstanding debts.

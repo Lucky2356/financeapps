@@ -13,7 +13,7 @@ import {
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
-import { buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
+import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import type { CategorizationRule } from "@/lib/categorization-rules";
 import { prisma } from "@/lib/prisma";
 import { findCurrentUser } from "@/lib/auth/current-user";
@@ -556,6 +556,7 @@ function buildDemoDashboard(): DashboardData {
     health: service.healthScore(input),
     netWorth: totalBalance,
     liabilitiesTotal: 0,
+    netWorthBreakdown: buildNetWorthBreakdown({ totalBalance }),
     netWorthTrend: buildNetWorthTrend({ currentNetWorth: totalBalance, transactions }),
     emergencyFund: buildEmergencyFund({
       savingsBalance: demoAccounts
@@ -649,6 +650,7 @@ function emptyDashboard(): DashboardData {
     health: service.healthScore(input),
     netWorth: 0,
     liabilitiesTotal: 0,
+    netWorthBreakdown: buildNetWorthBreakdown({ totalBalance: 0 }),
     netWorthTrend: [],
     emergencyFund: buildEmergencyFund({
       savingsBalance: 0,
@@ -1081,6 +1083,12 @@ export async function getDashboardData(): Promise<DashboardData> {
         health: service.healthScore(healthInput),
         netWorth,
         liabilitiesTotal,
+        netWorthBreakdown: buildNetWorthBreakdown({
+          totalBalance,
+          portfolioValue,
+          goalSavings,
+          liabilitiesTotal
+        }),
         netWorthTrend: buildNetWorthTrend({
           currentNetWorth: netWorth,
           snapshots: netWorthSnapshots,

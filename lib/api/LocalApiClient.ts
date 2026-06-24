@@ -42,7 +42,7 @@ import { createMarketDataProvider } from "@/services/market/createMarketDataProv
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
-import { buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
+import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import {
   SAMPLE_ACCOUNTS,
@@ -1544,6 +1544,12 @@ export class LocalApiClient implements ApiClient {
       health: recommendationService.healthScore(finance),
       netWorth,
       liabilitiesTotal,
+      netWorthBreakdown: buildNetWorthBreakdown({
+        totalBalance,
+        portfolioValue,
+        goalSavings,
+        liabilitiesTotal
+      }),
       netWorthTrend,
       emergencyFund
     };

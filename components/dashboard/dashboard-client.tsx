@@ -5,6 +5,7 @@ import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
+import { NetWorthBreakdownCard } from "@/components/dashboard/net-worth-breakdown";
 import { MetricCard } from "@/components/metric-card";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { SourceBanner } from "@/components/source-banner";
@@ -44,6 +45,7 @@ export function DashboardClient({
           </CardHeader>
           <CardContent>
             <NetWorthChart data={data.netWorthTrend} />
+            <NetWorthBreakdownCard breakdown={data.netWorthBreakdown} currency={data.currency} />
           </CardContent>
         </Card>
       ) : null}
