@@ -14,9 +14,14 @@ All notable changes to this project are documented in this file.
 
 ### Security
 - Login attempts are rate-limited per IP (brute-force / credential-stuffing).
+- `Strict-Transport-Security` (HSTS) header for HTTPS deployments.
 
-### SEO
+### SEO / PWA
 - OpenGraph metadata, keywords, and `robots.txt`.
+- PNG app icons (favicon, apple-touch, 192/512 + maskable) alongside SVG.
+
+### CI
+- GitHub Actions upgraded to current majors (resolves Node 20 deprecation).
 
 ## [1.0.3] — 2026-06-24
 
