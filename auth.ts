@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { verifyPassword } from "@/lib/auth/password";
+import { clientIp, rateLimit } from "@/lib/api/rate-limit";
 import { requirePrisma } from "@/lib/prisma";
 
 // NextAuth v5 config for email+password auth (plan P0). JWT session strategy —
@@ -24,9 +25,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },
-      authorize: async (raw) => {
+      authorize: async (raw, request) => {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
+        // Throttle login attempts per IP to blunt brute-force / credential
+        // stuffing. Over the limit fails like a wrong password (no info leak).
+        const ip = request ? clientIp(request) : "unknown";
+        if (!rateLimit(`login:${ip}`, 10, 60_000).ok) return null;
         const email = parsed.data.email.toLowerCase();
         const user = await requirePrisma().user.findUnique({ where: { email } });
         if (!user?.passwordHash) return null;
