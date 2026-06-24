@@ -21,7 +21,8 @@ import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
-import type { AccountsPageData, CategoriesPageData } from "@/lib/data";
+import type { AccountsPageData, CategoriesPageData, TransactionsPageData } from "@/lib/data";
+import { formatCurrency } from "@/lib/format";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +56,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [dynamic, setDynamic] = useState<Command[]>([]);
+  const [txResults, setTxResults] = useState<Command[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   // Global Ctrl/Cmd+K toggle. event.code is layout-independent (works on the
@@ -113,6 +115,42 @@ export function CommandPalette() {
     };
   }, [open]);
 
+  // Search individual transactions by description/account/category once the user
+  // types (debounced). Server-side `q` filter, so results are pre-matched.
+  useEffect(() => {
+    const q = query.trim();
+    // Stale results are gated out of `filtered` by query length, so there is no
+    // need to clear state synchronously here (avoids set-state-in-effect).
+    if (!open || q.length < 2) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const data = await apiClient.get<TransactionsPageData>(
+            `/transactions?q=${encodeURIComponent(q)}&limit=6`
+          );
+          if (cancelled) return;
+          setTxResults(
+            data.transactions.map((tx) => ({
+              id: `tx-${tx.id}`,
+              label: tx.description || tx.category.label,
+              hint: `${tx.type === "INCOME" ? "+" : "−"}${formatCurrency(tx.amount)} · ${tx.category.label}`,
+              href: `/transactions?q=${encodeURIComponent(q)}`,
+              group: "Операции",
+              icon: ReceiptText
+            }))
+          );
+        } catch {
+          /* offline / unavailable — other results still work */
+        }
+      })();
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, query]);
+
   const actionCommands: Command[] = useMemo(
     () => [
       {
@@ -128,11 +166,15 @@ export function CommandPalette() {
   );
 
   const filtered = useMemo(() => {
-    const all = [...actionCommands, ...navCommands, ...dynamic];
+    const base = [...actionCommands, ...navCommands, ...dynamic];
     const q = query.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((command) => command.label.toLowerCase().includes(q));
-  }, [actionCommands, dynamic, query]);
+    if (!q) return base;
+    // Transaction results are already matched server-side; append them after the
+    // label-filtered navigation/account/category commands.
+    const matchedBase = base.filter((command) => command.label.toLowerCase().includes(q));
+    // Transaction results only apply once the search is long enough to fetch them.
+    return q.length >= 2 ? [...matchedBase, ...txResults] : matchedBase;
+  }, [actionCommands, dynamic, query, txResults]);
 
   // Reset highlight when the query changes (set-state-during-render pattern).
   const [lastQuery, setLastQuery] = useState(query);
@@ -174,7 +216,7 @@ export function CommandPalette() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Поиск разделов, счетов, категорий…"
+            placeholder="Поиск разделов, счетов, категорий, операций…"
             className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
