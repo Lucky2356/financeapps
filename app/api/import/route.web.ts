@@ -65,16 +65,26 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
 
-    // History for auto-categorizing rows that arrive without a category column.
-    const categories = await db.category.findMany({ where: { userId: user.id } });
-    const historyRows = await db.transaction.findMany({
-      where: { userId: user.id },
-      select: { description: true, type: true, categoryId: true }
-    });
+    // History + user rules for auto-categorizing rows that arrive without a
+    // category column. Rules take priority over the history heuristic (handled
+    // inside suggestCategoryId).
+    const [categories, historyRows, rules] = await Promise.all([
+      db.category.findMany({ where: { userId: user.id } }),
+      db.transaction.findMany({
+        where: { userId: user.id },
+        select: { description: true, type: true, categoryId: true }
+      }),
+      db.rule.findMany({ where: { userId: user.id } })
+    ]);
     const history = historyRows.map((row) => ({
       description: row.description,
       type: row.type,
       category: { id: row.categoryId }
+    }));
+    const categorizationRules = rules.map((rule) => ({
+      id: rule.id,
+      match: rule.match,
+      categoryId: rule.categoryId
     }));
 
     let imported = 0;
@@ -103,7 +113,10 @@ export async function POST(request: NextRequest) {
         if (categoryName) {
           category = await findOrCreateImportCategory(tx, user.id, categoryName, type);
         } else {
-          const suggestedId = suggestCategoryId(description ?? "", history, { type });
+          const suggestedId = suggestCategoryId(description ?? "", history, {
+            type,
+            rules: categorizationRules
+          });
           category =
             (suggestedId
               ? categories.find((item) => item.id === suggestedId && item.kind === type)

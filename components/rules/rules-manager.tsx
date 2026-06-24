@@ -5,21 +5,15 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import type { RulesPageData } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Desktop-only: categorization rules live in the local profile state. Hidden on
-// the web build where there is no /rules endpoint.
+// Categorization rules live in the local profile state (desktop) or the Rule
+// table (web) — both behind the /rules endpoint, so the UI is identical.
 export function RulesManager() {
-  if (!isLocalDesktopMode) return null;
-  return <RulesManagerInner />;
-}
-
-function RulesManagerInner() {
   const [data, setData] = useState<RulesPageData | null>(null);
   const [match, setMatch] = useState("");
   const [categoryId, setCategoryId] = useState("");
