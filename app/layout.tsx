@@ -14,12 +14,22 @@ export const metadata: Metadata = {
     default: APP_NAME,
     template: `%s | ${APP_NAME}`
   },
-  description: "MVP для учета личных финансов, бюджета, целей и аналитики российского фондового рынка.",
+  description:
+    "Учёт личных финансов: операции, бюджеты, цели, долги, прогноз и аналитика. Десктоп (офлайн) и веб.",
+  keywords: ["личные финансы", "бюджет", "учёт расходов", "финансовый помощник", "накопления"],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     title: APP_NAME,
     statusBarStyle: "default"
+  },
+  openGraph: {
+    title: APP_NAME,
+    description:
+      "Учёт личных финансов: операции, бюджеты, цели, долги, прогноз и аналитика. Десктоп (офлайн) и веб.",
+    type: "website",
+    locale: "ru_RU",
+    siteName: APP_NAME
   }
 };
 
