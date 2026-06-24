@@ -1,7 +1,7 @@
 import { AlertTriangle, CalendarClock, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import Link from "next/link";
 
-import { ForecastBalanceChart } from "@/components/charts/forecast-balance-chart";
+import { ForecastBalanceChart } from "@/components/charts/lazy";
 import { ForecastEventsCard } from "@/components/forecast/forecast-events-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

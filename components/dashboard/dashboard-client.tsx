@@ -1,12 +1,10 @@
 "use client";
 
-import { CashflowChart } from "@/components/charts/cashflow-chart";
-import { NetWorthChart } from "@/components/charts/net-worth-chart";
+import { CashflowChart, ExpenseCategoryChart, NetWorthChart } from "@/components/charts/lazy";
 import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
-import { ExpenseCategoryChart } from "@/components/charts/expense-category-chart";
 import { MetricCard } from "@/components/metric-card";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { SourceBanner } from "@/components/source-banner";
