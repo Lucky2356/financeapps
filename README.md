@@ -7,7 +7,7 @@
 [![CI](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml/badge.svg)](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-![Tests](https://img.shields.io/badge/tests-248%20passing-success)
+![Tests](https://img.shields.io/badge/tests-258%20passing-success)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20desktop%20%7C%20Web-blue)
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org/)
@@ -183,7 +183,7 @@ docs/               # деплой, релизы, десктоп, установ
 
 ## ✅ Качество
 
-- **248** модульных тестов (Vitest) + E2E (Playwright)
+- **258** модульных тестов (Vitest) + E2E (Playwright)
 - Пороги покрытия в CI; гейты: `typecheck`, `lint`, `test`, `build:web`, `build:static`
 - Pre-commit хук (Husky + lint-staged): ESLint + Prettier + связанные тесты + typecheck
 - Строгая типизация (без `as any`), валидация ввода через Zod
