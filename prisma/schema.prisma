@@ -173,6 +173,9 @@ model Transaction {
   type        TransactionType
   date        DateTime
   description String?
+  // Groups transactions created by a single CSV import so the import can be
+  // undone as a unit (web parity with the desktop local-state importBatches).
+  importBatchId String?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -180,6 +183,7 @@ model Transaction {
   @@index([accountId])
   @@index([categoryId])
   @@index([type])
+  @@index([userId, importBatchId])
 }
 
 model RecurringTransaction {

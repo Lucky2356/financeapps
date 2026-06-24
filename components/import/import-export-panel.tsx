@@ -134,8 +134,10 @@ export function ImportExportPanel({
   const [undoPending, setUndoPending] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2 | 3>(1);
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
+  // Undo is available on the web (Rule/importBatchId in Postgres) and on the
+  // desktop in local-data mode (importBatches in local state).
   const supportsImportUndo =
-    runtimeConfig.platform === "desktop" && runtimeConfig.desktopDataMode === "local";
+    runtimeConfig.platform !== "desktop" || runtimeConfig.desktopDataMode === "local";
   const mapper = useMemo(() => new CsvImportMapper(), []);
   const importPresets = useMemo(() => mapper.presets(), [mapper]);
   const validation = useMemo(() => mapper.validateRows(rows, mapping), [mapper, mapping, rows]);
