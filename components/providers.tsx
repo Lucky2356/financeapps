@@ -12,6 +12,7 @@ import { OnboardingTour } from "@/components/onboarding-tour";
 import { SessionGate } from "@/components/auth/session-gate";
 import { UserMenu } from "@/components/auth/user-menu";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
+import { I18nProvider } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -27,22 +28,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <NextThemesProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      {isLocalDesktopMode ? (
-        // Desktop (local): no web auth — data lives on-device.
-        inner
-      ) : (
-        // Web: gate the app behind a session and expose sign-out.
-        <SessionProvider>
-          <SessionGate>{inner}</SessionGate>
-          <UserMenu />
-        </SessionProvider>
-      )}
-    </NextThemesProvider>
+    <I18nProvider>
+      <NextThemesProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        {isLocalDesktopMode ? (
+          // Desktop (local): no web auth — data lives on-device.
+          inner
+        ) : (
+          // Web: gate the app behind a session and expose sign-out.
+          <SessionProvider>
+            <SessionGate>{inner}</SessionGate>
+            <UserMenu />
+          </SessionProvider>
+        )}
+      </NextThemesProvider>
+    </I18nProvider>
   );
 }

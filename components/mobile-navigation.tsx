@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
+import { useI18n } from "@/lib/i18n/context";
 import { MOBILE_PRIMARY, MOBILE_SECONDARY } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
@@ -13,13 +14,14 @@ const secondaryItems = MOBILE_SECONDARY;
 
 export function MobileTopBar() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <header className="sticky top-0 z-40 border-b bg-card/95 px-4 py-3 shadow-soft backdrop-blur md:hidden">
       <div className="flex items-center justify-between gap-3">
         <Link href="/" className="min-w-0">
           <span className="block truncate text-sm font-semibold">{APP_NAME}</span>
-          <span className="block text-xs text-muted-foreground">Личные финансы</span>
+          <span className="block text-xs text-muted-foreground">{t("shell.subtitle")}</span>
         </Link>
         <ThemeToggle />
       </div>
@@ -38,7 +40,7 @@ export function MobileTopBar() {
               )}
             >
               <Icon className="size-3.5" />
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           );
         })}
@@ -49,6 +51,7 @@ export function MobileTopBar() {
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur md:hidden">
@@ -69,7 +72,7 @@ export function MobileBottomNav() {
               )}
             >
               <Icon className="size-4" />
-              <span className="max-w-full truncate">{item.label}</span>
+              <span className="max-w-full truncate">{t(item.labelKey)}</span>
             </Link>
           );
         })}
