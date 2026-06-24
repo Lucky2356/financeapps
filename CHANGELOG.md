@@ -9,6 +9,8 @@ All notable changes to this project are documented in this file.
   (`POST /api/account/password`) and delete account with all data
   (`DELETE /api/account`, 152-ФЗ right to erasure), both confirmed by password.
 - Explicit consent checkbox at registration (active consent to Terms & Privacy).
+- Product "front door": a value-proposition panel next to the login/register
+  form on large screens.
 
 ### Security
 - Login attempts are rate-limited per IP (brute-force / credential-stuffing).
