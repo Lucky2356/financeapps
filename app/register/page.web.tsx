@@ -78,6 +78,25 @@ export default function RegisterPage() {
                 required
               />
             </div>
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                name="consent"
+                required
+                className="mt-0.5 size-4 shrink-0"
+              />
+              <span>
+                Я принимаю{" "}
+                <Link href="/legal/terms" className="hover:underline">
+                  Условия
+                </Link>{" "}
+                и даю согласие на обработку персональных данных согласно{" "}
+                <Link href="/legal/privacy" className="hover:underline">
+                  Политике конфиденциальности
+                </Link>
+                .
+              </span>
+            </label>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Создание…" : "Создать аккаунт"}
@@ -88,17 +107,6 @@ export default function RegisterPage() {
             <Link href="/login" className="text-primary hover:underline">
               Войти
             </Link>
-          </p>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Регистрируясь, вы принимаете{" "}
-            <Link href="/legal/terms" className="hover:underline">
-              Условия
-            </Link>{" "}
-            и{" "}
-            <Link href="/legal/privacy" className="hover:underline">
-              Политику конфиденциальности
-            </Link>
-            .
           </p>
         </CardContent>
       </Card>

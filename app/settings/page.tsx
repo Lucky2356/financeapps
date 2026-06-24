@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { AccountSection } from "@/components/settings/account-section";
 import { LocalModePanel } from "@/components/settings/local-mode-panel";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { SourceBanner } from "@/components/source-banner";
@@ -15,6 +16,7 @@ export default async function SettingsPage() {
       <PageHeader title="Настройки" description="Валюта, демо-режим, риск-профиль и целевой размер финансовой подушки." />
       <SourceBanner source={data.source} />
       <SettingsForm data={data} />
+      <AccountSection />
       <LocalModePanel />
       <Card>
         <CardHeader>
