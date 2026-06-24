@@ -1,27 +1,24 @@
-Финансовый помощник (Financial Assistant)
-Copyright (c) 2026. Все права защищены / All rights reserved.
+MIT License
 
-УСЛОВИЯ ИСПОЛЬЗОВАНИЯ
+Copyright (c) 2026 Lucky2356 and the Financial Assistant contributors
 
-1. Разрешается бесплатно скачивать, устанавливать и использовать собранное
-   приложение «Финансовый помощник» в личных целях.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-2. Исходный код предоставляется «как есть». Копирование, изменение,
-   распространение или коммерческое использование исходного кода без
-   письменного разрешения правообладателя не допускается.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-ОТКАЗ ОТ ГАРАНТИЙ
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-ПРОГРАММА ПРЕДОСТАВЛЯЕТСЯ «КАК ЕСТЬ», БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ, ЯВНЫХ ИЛИ
-ПОДРАЗУМЕВАЕМЫХ. АВТОР НЕ НЕСЁТ ОТВЕТСТВЕННОСТИ ЗА ЛЮБОЙ УЩЕРБ, ВОЗНИКШИЙ В
-РЕЗУЛЬТАТЕ ИСПОЛЬЗОВАНИЯ ПРОГРАММЫ.
-
-НЕ ЯВЛЯЕТСЯ ФИНАНСОВОЙ КОНСУЛЬТАЦИЕЙ
-
-Приложение является инструментом учёта и анализа личных финансов. Аналитика,
-прогнозы, оценки рисков и подбор ценных бумаг носят справочный характер и НЕ
-являются индивидуальной инвестиционной рекомендацией. Решения о расходах,
-сбережениях и инвестициях пользователь принимает самостоятельно и на свой риск.
-
-Рыночные данные предоставляются Московской Биржей (MOEX ISS) и могут быть
-неточными или задержанными.
+Note: The investment section provides analytics and educational content only and
+is not individual investment advice. The Software is provided without warranty.

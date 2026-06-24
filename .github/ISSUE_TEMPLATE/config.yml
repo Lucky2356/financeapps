@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Вопрос или обсуждение
+    url: https://github.com/Lucky2356/financeapps/discussions
+    about: Задайте вопрос или предложите идею в Discussions
+  - name: 🔐 Уязвимость безопасности
+    url: https://github.com/Lucky2356/financeapps/security/advisories/new
+    about: Сообщайте об уязвимостях приватно, не через публичные issue

@@ -1,0 +1,79 @@
+name: 🐞 Баг-репорт
+description: Сообщить об ошибке в работе приложения
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за отчёт! Пожалуйста, заполните поля ниже — это ускорит исправление.
+        Не сообщайте об уязвимостях здесь — используйте [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Предварительные проверки
+      options:
+        - label: Я поискал среди существующих issue и не нашёл дубликата
+          required: true
+        - label: Я использую последнюю версию
+          required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Режим
+      description: Где воспроизводится проблема?
+      options:
+        - Десктоп (Windows)
+        - Веб
+        - Оба
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Что произошло?
+      description: Чёткое описание бага.
+      placeholder: При нажатии «…» происходит «…»
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Перейти на «…»
+        2. Нажать на «…»
+        3. Увидеть ошибку
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Окружение
+      description: ОС, версия приложения, браузер (для веба).
+      placeholder: |
+        - ОС: Windows 11
+        - Версия приложения: 1.0.2
+        - Браузер: Chrome 130 (если веб)
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи / скриншоты
+      description: Приложите скриншоты или вывод консоли, если есть.
+    validations:
+      required: false
