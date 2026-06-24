@@ -1,0 +1,60 @@
+name: ✨ Предложение фичи
+description: Предложить новую возможность или улучшение
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Спасибо за идею! Опишите её как можно конкретнее.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Предварительные проверки
+      options:
+        - label: Я поискал среди существующих issue и не нашёл похожего предложения
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решает фича?
+      description: Опишите задачу пользователя или неудобство.
+      placeholder: Сейчас неудобно «…», потому что «…»
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+      description: Как, по-вашему, это должно работать?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Режим
+      options:
+        - Десктоп (Windows)
+        - Веб
+        - Оба
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Какие другие варианты вы рассматривали?
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Доп. контекст
+      description: Скриншоты, макеты, ссылки.
+    validations:
+      required: false
