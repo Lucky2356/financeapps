@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- No console errors / spurious Sentry reports on public pages (login/register):
+  the data layer no longer logs the expected "no session" state, and the
+  automation runner no longer calls authenticated endpoints there.
+- Onboarding dialog no longer pops over the registration form; its welcome copy
+  is now correct for the web (account-based, not "data on this device").
+- Settings showed version 1.0.2 — the displayed version is now sourced from
+  package.json (`NEXT_PUBLIC_APP_VERSION`) and can't go stale.
+- The desktop "local mode" snapshot panel is hidden on the web app.
+
 ### Added
 - Account self-service (web): change password in-session
   (`POST /api/account/password`) and delete account with all data
