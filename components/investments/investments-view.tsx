@@ -409,6 +409,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               />
             ) : (
             <>
+            <PortfolioSummary portfolio={data.portfolio} currency={data.currency} />
             <div className="hidden md:block">
               <Table>
                 <TableHeader>
@@ -420,12 +421,16 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                     <TableHead className="text-right">Текущая</TableHead>
                     <TableHead className="text-right">Стоимость</TableHead>
                     <TableHead className="text-right">P/L</TableHead>
+                    <TableHead className="text-right">Доходность</TableHead>
                     <TableHead className="text-right">Доля</TableHead>
                     <TableHead className="w-28 text-right">Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.portfolio.map((position) => (
+                  {data.portfolio.map((position) => {
+                    const cost = position.quantity * position.averageBuyPrice;
+                    const returnPct = cost > 0 ? (position.pnl / cost) * 100 : 0;
+                    return (
                     <TableRow key={position.ticker}>
                       <TableCell className="font-semibold">{position.ticker}</TableCell>
                       <TableCell className="text-muted-foreground">{position.sector}</TableCell>
@@ -435,6 +440,9 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                       <TableCell className="text-right">{formatCurrency(position.currentValue, data.currency)}</TableCell>
                       <TableCell className={position.pnl >= 0 ? "text-right text-success-foreground" : "text-right text-destructive"}>
                         {formatCurrency(position.pnl, data.currency)}
+                      </TableCell>
+                      <TableCell className={returnPct >= 0 ? "text-right text-success-foreground" : "text-right text-destructive"}>
+                        {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
                       </TableCell>
                       <TableCell className="text-right">{formatPercent(position.share)}</TableCell>
                       <TableCell>
@@ -455,7 +463,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -643,5 +652,47 @@ function PositionDialog({
         </DialogFooter>
       </form>
     </DialogContent>
+  );
+}
+
+// Portfolio-level summary an investor expects: invested (cost basis), current
+// market value, and total unrealized return in both currency and percent.
+function PortfolioSummary({
+  portfolio,
+  currency
+}: {
+  portfolio: InvestmentData["portfolio"];
+  currency: string;
+}) {
+  const cost = portfolio.reduce((sum, p) => sum + p.quantity * p.averageBuyPrice, 0);
+  const value = portfolio.reduce((sum, p) => sum + p.currentValue, 0);
+  const pnl = value - cost;
+  const returnPct = cost > 0 ? (pnl / cost) * 100 : 0;
+  const positive = pnl >= 0;
+
+  const items = [
+    { label: "Вложено", value: formatCurrency(cost, currency), tone: "" },
+    { label: "Текущая стоимость", value: formatCurrency(value, currency), tone: "" },
+    {
+      label: "Прибыль/убыток",
+      value: `${positive ? "+" : ""}${formatCurrency(pnl, currency)}`,
+      tone: positive ? "text-success-foreground" : "text-destructive"
+    },
+    {
+      label: "Доходность",
+      value: `${positive ? "+" : ""}${returnPct.toFixed(1)}%`,
+      tone: positive ? "text-success-foreground" : "text-destructive"
+    }
+  ];
+
+  return (
+    <dl className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {items.map((item) => (
+        <div key={item.label} className="rounded-lg border bg-muted/20 p-3">
+          <dt className="text-xs text-muted-foreground">{item.label}</dt>
+          <dd className={`mt-1 text-sm font-semibold ${item.tone}`}>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
