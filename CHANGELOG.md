@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-06-25
+
 ### Changed
 - **Settings redesigned**: a long single-scroll page became a sectioned layout
   with a left section nav (top scrollable tabs on mobile), a settings search, and
@@ -15,8 +17,10 @@ All notable changes to this project are documented in this file.
   signing key was rotated between those releases, so v1.0.2 (which has the old
   public key baked in) can't verify v1.0.3's signature. This can't be repaired
   retroactively (install the new version manually once). The key is now pinned by
-  a guard test so it can't be silently rotated again, and the displayed version
-  now comes from package.json (was a stale hardcoded "1.0.2").
+  a guard test, and the release workflow cryptographically verifies the build's
+  signature against the baked public key before publishing — so a build that
+  installed clients can't verify is never released. The displayed version now
+  comes from package.json (was a stale hardcoded "1.0.2").
 - No console errors / spurious Sentry reports on public pages (login/register):
   the data layer no longer logs the expected "no session" state, and the
   automation runner no longer calls authenticated endpoints there.
