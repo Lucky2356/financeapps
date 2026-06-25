@@ -213,6 +213,10 @@ export type BudgetRow = {
   isExceeded: boolean;
   // Suggested monthly limit derived from average spend in this category.
   suggestedLimit: number;
+  // Carry the previous month's unspent remainder into this month's limit.
+  rollover: boolean;
+  // Amount carried over from the previous month (0 when rollover is off / none).
+  rolloverAmount: number;
 };
 
 export type GoalRow = {

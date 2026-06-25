@@ -65,10 +65,36 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
 
   // Auto-save a single category limit (no explicit save button; silent success).
   async function saveLimit(categoryId: string, limitAmount: number) {
-    await run(() => apiClient.post("/budgets", { categoryId, limitAmount: String(limitAmount) }), {
-      error: "Не удалось сохранить лимит",
-      onSuccess: refresh
-    });
+    await run(
+      () =>
+        apiClient.post("/budgets", {
+          categoryId,
+          limitAmount: String(limitAmount),
+          month: selectedMonth
+        }),
+      {
+        error: "Не удалось сохранить лимит",
+        onSuccess: refresh
+      }
+    );
+  }
+
+  // Toggle carry-over of the previous month's remainder into this category.
+  async function toggleRollover(budget: BudgetsPageData["budgets"][number]) {
+    await run(
+      () =>
+        apiClient.post("/budgets", {
+          categoryId: budget.categoryId,
+          limitAmount: String(budget.limitAmount),
+          rollover: !budget.rollover,
+          month: selectedMonth
+        }),
+      {
+        success: budget.rollover ? "Перенос остатка выключен" : "Перенос остатка включён",
+        error: "Не удалось изменить перенос остатка",
+        onSuccess: refresh
+      }
+    );
   }
 
   async function resetBudget(budget: BudgetsPageData["budgets"][number]) {
@@ -79,11 +105,19 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
       destructive: true
     });
     if (!confirmed) return;
-    await run(() => apiClient.post("/budgets", { categoryId: budget.categoryId, limitAmount: 0 }), {
-      success: "Лимит сброшен",
-      error: "Не удалось сбросить лимит",
-      onSuccess: refresh
-    });
+    await run(
+      () =>
+        apiClient.post("/budgets", {
+          categoryId: budget.categoryId,
+          limitAmount: 0,
+          month: selectedMonth
+        }),
+      {
+        success: "Лимит сброшен",
+        error: "Не удалось сбросить лимит",
+        onSuccess: refresh
+      }
+    );
   }
 
   // Fill limits for categories that have none yet, using the average spend
@@ -101,7 +135,8 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
         for (const budget of targets) {
           await apiClient.post("/budgets", {
             categoryId: budget.categoryId,
-            limitAmount: String(budget.suggestedLimit)
+            limitAmount: String(budget.suggestedLimit),
+            month: selectedMonth
           });
         }
       },
@@ -205,12 +240,19 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                   </TableCell>
                   <TableCell className="text-right">
                     {formatCurrency(budget.spent, pageData.currency)}
+                    {budget.rolloverAmount > 0 ? (
+                      <span className="block text-xs text-muted-foreground">
+                        лимит {formatCurrency(budget.limitAmount + budget.rolloverAmount, pageData.currency)}{" "}
+                        (+{formatCurrency(budget.rolloverAmount, pageData.currency)} перенос)
+                      </span>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <BudgetForm
                       budget={budget}
                       onSave={saveLimit}
                       onReset={() => resetBudget(budget)}
+                      onToggleRollover={() => toggleRollover(budget)}
                     />
                   </TableCell>
                 </TableRow>
@@ -249,13 +291,19 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
               />
               <div className="mt-3 flex justify-between text-sm text-muted-foreground">
                 <span>{formatCurrency(budget.spent, pageData.currency)}</span>
-                <span>{formatCurrency(budget.limitAmount, pageData.currency)}</span>
+                <span>
+                  {formatCurrency(budget.limitAmount + budget.rolloverAmount, pageData.currency)}
+                  {budget.rolloverAmount > 0 ? (
+                    <span className="ml-1 text-xs">(+{formatCurrency(budget.rolloverAmount, pageData.currency)})</span>
+                  ) : null}
+                </span>
               </div>
               <div className="mt-3">
                 <BudgetForm
                   budget={budget}
                   onSave={saveLimit}
                   onReset={() => resetBudget(budget)}
+                  onToggleRollover={() => toggleRollover(budget)}
                 />
               </div>
             </div>
@@ -269,11 +317,13 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
 function BudgetForm({
   budget,
   onSave,
-  onReset
+  onReset,
+  onToggleRollover
 }: {
   budget: BudgetsPageData["budgets"][number];
   onSave: (categoryId: string, limit: number) => void;
   onReset: () => void;
+  onToggleRollover?: () => void;
 }) {
   const [value, setValue] = useState(budget.limitAmount ? String(budget.limitAmount) : "");
   // Re-sync when the saved value changes (month switch / reload).
@@ -339,6 +389,20 @@ function BudgetForm({
         >
           по средним: {budget.suggestedLimit.toLocaleString("ru-RU")} ₽
         </button>
+      ) : null}
+      {onToggleRollover && budget.limitAmount > 0 ? (
+        <label
+          className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground"
+          title="Неизрасходованный остаток переносится на следующий месяц"
+        >
+          <input
+            type="checkbox"
+            checked={budget.rollover}
+            onChange={onToggleRollover}
+            className="size-3.5 accent-primary"
+          />
+          Переносить остаток
+        </label>
       ) : null}
     </div>
   );

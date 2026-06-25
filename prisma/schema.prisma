@@ -217,6 +217,9 @@ model Budget {
   category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   month       DateTime
   limitAmount Decimal  @db.Decimal(14, 2)
+  // When true, the previous month's unspent remainder is added to this month's
+  // available limit (single-month carryover).
+  rollover    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

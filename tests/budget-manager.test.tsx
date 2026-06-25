@@ -34,6 +34,8 @@ function makeBudget(
     progress: 0,
     isExceeded: false,
     suggestedLimit: 0,
+    rollover: false,
+    rolloverAmount: 0,
     ...overrides
   };
 }
@@ -105,7 +107,8 @@ describe("BudgetManager", () => {
     await waitFor(() =>
       expect(apiClientMock.post).toHaveBeenCalledWith("/budgets", {
         categoryId: "food",
-        limitAmount: "2500"
+        limitAmount: "2500",
+        month: currentMonth
       })
     );
   });
@@ -145,7 +148,8 @@ describe("BudgetManager", () => {
     await waitFor(() =>
       expect(apiClientMock.post).toHaveBeenCalledWith("/budgets", {
         categoryId: "fun",
-        limitAmount: "1500"
+        limitAmount: "1500",
+        month: currentMonth
       })
     );
     expect(toast.success).toHaveBeenCalled();
@@ -175,7 +179,8 @@ describe("BudgetManager", () => {
     await waitFor(() =>
       expect(apiClientMock.post).toHaveBeenCalledWith("/budgets", {
         categoryId: "food",
-        limitAmount: 0
+        limitAmount: 0,
+        month: currentMonth
       })
     );
   });

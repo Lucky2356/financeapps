@@ -50,7 +50,16 @@ export const accountSchema = z.object({
 
 export const budgetSchema = z.object({
   categoryId: z.string().min(1),
-  limitAmount: positiveMoney
+  // 0 means "reset" (remove the budget); nonNegative so reset is valid.
+  limitAmount: nonNegativeMoney,
+  // Optional: only updated when explicitly provided (so saving a limit does not
+  // silently turn rollover off).
+  rollover: z.boolean().optional(),
+  // Target month "yyyy-MM"; defaults to the current month.
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional()
 });
 
 export const savingGoalSchema = z.object({

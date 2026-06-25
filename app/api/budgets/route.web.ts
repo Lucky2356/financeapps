@@ -31,21 +31,30 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const month = startOfMonth(new Date());
+    const month = input.month ? startOfMonth(new Date(`${input.month}-01`)) : startOfMonth(new Date());
+
+    // A zero limit means "reset" — remove the budget for this month.
+    if (input.limitAmount === 0) {
+      await db.budget.deleteMany({
+        where: { userId: user.id, categoryId: input.categoryId, month }
+      });
+      return NextResponse.json({ removed: true });
+    }
+
     const budget = await db.budget.upsert({
       where: {
-        userId_categoryId_month: {
-          userId: user.id,
-          categoryId: input.categoryId,
-          month
-        }
+        userId_categoryId_month: { userId: user.id, categoryId: input.categoryId, month }
       },
-      update: { limitAmount: input.limitAmount },
+      update: {
+        limitAmount: input.limitAmount,
+        ...(input.rollover !== undefined ? { rollover: input.rollover } : {})
+      },
       create: {
         userId: user.id,
         categoryId: input.categoryId,
         month,
-        limitAmount: input.limitAmount
+        limitAmount: input.limitAmount,
+        rollover: input.rollover ?? false
       }
     });
 
