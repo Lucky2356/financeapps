@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Settings redesigned**: a long single-scroll page became a sectioned layout
+  with a left section nav (top scrollable tabs on mobile), a settings search, and
+  larger touch targets. Account, data-management and "about" are folded in; the
+  desktop-only local-mode panel and confusing copy were cleaned up.
+
 ### Fixed
 - **Desktop auto-update**: diagnosed why v1.0.2 → v1.0.3 failed — the updater
   signing key was rotated between those releases, so v1.0.2 (which has the old
