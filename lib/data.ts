@@ -607,7 +607,11 @@ async function safeData<T>(
   try {
     return await query();
   } catch (error) {
-    console.error("Data layer fallback:", error);
+    // "No user found" is the expected unauthenticated state on public pages
+    // (login / register / legal) — return the fallback without logging it as an
+    // error (avoids noise and spurious Sentry reports on every public visit).
+    const expectedNoSession = error instanceof Error && error.message.includes("No user found");
+    if (!expectedNoSession) console.error("Data layer fallback:", error);
     return fallback();
   }
 }
