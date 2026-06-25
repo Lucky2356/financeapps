@@ -25,7 +25,7 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
         <MobileTopBar />
       </ChromeGate>
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-7xl px-4 pb-24 pt-5 sm:px-6 md:pb-6 lg:px-8">
+        <div className="mx-auto w-full max-w-[1760px] px-4 pb-24 pt-5 sm:px-6 md:pb-6 lg:px-8 2xl:px-12">
           {children}
         </div>
       </main>
