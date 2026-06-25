@@ -1,8 +1,10 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { apiClient } from "@/lib/api/client";
+import { isPublicPath } from "@/lib/public-paths";
 import { formatCurrency } from "@/lib/format";
 import type { SettingsPageData } from "@/lib/data";
 import type { ForecastData } from "@/types/finance";
@@ -13,12 +15,16 @@ import type { ForecastData } from "@/types/finance";
 // native plugin. Renders nothing.
 export function AutomationRunner() {
   const ran = useRef(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (ran.current) return;
+    // Skip on public auth pages (login/register/legal): there is no session, so
+    // the snapshot/materialize calls would just 401.
+    if (isPublicPath(pathname)) return;
     ran.current = true;
     void runAutomation();
-  }, []);
+  }, [pathname]);
 
   return null;
 }

@@ -1,5 +1,14 @@
+import { readFileSync } from "node:fs";
+
+// Single source of truth for the displayed version: package.json. Exposed as a
+// public env var so the UI never drifts from the real release version.
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: pkg.version
+  },
   output:
     process.env.NEXT_OUTPUT === "export"
       ? "export"

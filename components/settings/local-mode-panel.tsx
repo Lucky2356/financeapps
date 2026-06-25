@@ -9,10 +9,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { LocalSnapshotService, type LocalSnapshotMetadata } from "@/lib/local/LocalSnapshotService";
-import { runtimeConfig } from "@/lib/platform/env";
+import { isLocalDesktopMode, runtimeConfig } from "@/lib/platform/env";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
 
+// Desktop local-mode utility (IndexedDB snapshot). Hidden on the web app, where
+// it is irrelevant and confusing for end users.
 export function LocalModePanel() {
+  if (!isLocalDesktopMode) return null;
+  return <LocalModePanelInner />;
+}
+
+function LocalModePanelInner() {
   const [metadata, setMetadata] = useState<LocalSnapshotMetadata | null>(null);
   const [loading, setLoading] = useState(false);
   const service = useMemo(() => new LocalSnapshotService(apiClient, createStorageAdapter()), []);

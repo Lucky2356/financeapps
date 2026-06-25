@@ -1,5 +1,7 @@
 export const APP_NAME = "Финансовый помощник";
-export const APP_VERSION = "1.0.2";
+// Sourced from package.json via next.config (NEXT_PUBLIC_APP_VERSION) so the
+// displayed version always matches the real release.
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
 
 export const INVESTMENT_DISCLAIMER =
   "Информация в этом разделе не является индивидуальной инвестиционной рекомендацией. Решения об инвестициях пользователь принимает самостоятельно.";

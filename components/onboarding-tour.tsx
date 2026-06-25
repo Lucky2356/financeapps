@@ -10,10 +10,13 @@ import {
   Sparkles,
   Wallet
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { isLocalDesktopMode } from "@/lib/platform/env";
+import { isPublicPath } from "@/lib/public-paths";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +33,10 @@ const STEPS = [
     icon: CircleDollarSign,
     title: "Добро пожаловать в Финансовый помощник",
     description:
-      "Все данные хранятся локально на вашем устройстве — без облака. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках."
+      (isLocalDesktopMode
+        ? "Все данные хранятся локально на вашем устройстве — без облака. "
+        : "Ваши данные привязаны к аккаунту и защищены — доступны после входа с любого устройства. ") +
+      "Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках."
   },
   {
     icon: Wallet,
@@ -80,6 +86,7 @@ export function OnboardingTour() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [loadingSample, setLoadingSample] = useState(false);
+  const pathname = usePathname();
 
   async function loadSample() {
     setLoadingSample(true);
@@ -94,6 +101,9 @@ export function OnboardingTour() {
   }
 
   useEffect(() => {
+    // Never auto-open on public auth pages (login / register / legal) — onboarding
+    // belongs inside the app, after sign-in.
+    if (isPublicPath(pathname)) return;
     // localStorage is only available on the client, so this first-run check must
     // run in an effect rather than during render.
     try {
@@ -102,7 +112,7 @@ export function OnboardingTour() {
     } catch {
       /* localStorage unavailable — skip onboarding */
     }
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     function replayOnboarding() {
