@@ -49,7 +49,22 @@ const ru: Messages = {
   "settings.language.hint":
     "Часть интерфейса уже переведена; остальные разделы переводятся постепенно.",
   "settings.language.ru": "Русский",
-  "settings.language.en": "English"
+  "settings.language.en": "English",
+  // Command palette
+  "cmd.placeholder": "Поиск разделов, счетов, категорий, операций…",
+  "cmd.nothingFound": "Ничего не найдено",
+  "cmd.footer": "↑↓ выбрать · Enter открыть · Esc закрыть",
+  "cmd.group.navigation": "Навигация",
+  "cmd.group.actions": "Действия",
+  "cmd.group.accounts": "Счета",
+  "cmd.group.categories": "Категории",
+  "cmd.group.transactions": "Операции",
+  "cmd.addTransaction": "Добавить операцию",
+  "cmd.recurring": "Плановые платежи",
+  "cmd.importExport": "Импорт и экспорт",
+  "cmd.account": "Счёт",
+  "cmd.incomeCategory": "Категория дохода",
+  "cmd.expenseCategory": "Категория расхода"
 };
 
 const en: Messages = {
@@ -89,7 +104,22 @@ const en: Messages = {
   "settings.language.hint":
     "Part of the interface is translated; the rest is migrated gradually.",
   "settings.language.ru": "Русский",
-  "settings.language.en": "English"
+  "settings.language.en": "English",
+  // Command palette
+  "cmd.placeholder": "Search sections, accounts, categories, transactions…",
+  "cmd.nothingFound": "Nothing found",
+  "cmd.footer": "↑↓ select · Enter open · Esc close",
+  "cmd.group.navigation": "Navigation",
+  "cmd.group.actions": "Actions",
+  "cmd.group.accounts": "Accounts",
+  "cmd.group.categories": "Categories",
+  "cmd.group.transactions": "Transactions",
+  "cmd.addTransaction": "Add transaction",
+  "cmd.recurring": "Scheduled payments",
+  "cmd.importExport": "Import & export",
+  "cmd.account": "Account",
+  "cmd.incomeCategory": "Income category",
+  "cmd.expenseCategory": "Expense category"
 };
 
 export const CATALOGS: Record<Locale, Messages> = { ru, en };
