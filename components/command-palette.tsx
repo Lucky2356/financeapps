@@ -18,17 +18,20 @@ import {
   Wallet
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, CategoriesPageData, TransactionsPageData } from "@/lib/data";
+import { useI18n } from "@/lib/i18n/context";
 import { formatCurrency } from "@/lib/format";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type Command = {
   id: string;
-  label: string;
+  // Either a literal label (for data like account names) or a catalog key.
+  label?: string;
+  labelKey?: string;
   hint?: string;
   href?: string;
   action?: () => void;
@@ -37,22 +40,27 @@ type Command = {
 };
 
 const navCommands: Command[] = [
-  { id: "nav-home", label: "Главная", href: "/", group: "Навигация", icon: LayoutDashboard },
-  { id: "nav-tx", label: "Операции", href: "/transactions", group: "Навигация", icon: ReceiptText },
-  { id: "nav-accounts", label: "Счета", href: "/accounts", group: "Навигация", icon: Wallet },
-  { id: "nav-budgets", label: "Бюджеты", href: "/budgets", group: "Навигация", icon: CreditCard },
-  { id: "nav-goals", label: "Цели", href: "/goals", group: "Навигация", icon: PiggyBank },
-  { id: "nav-recurring", label: "Плановые платежи", href: "/recurring", group: "Навигация", icon: CalendarClock },
-  { id: "nav-forecast", label: "Прогноз", href: "/forecast", group: "Навигация", icon: TrendingUp },
-  { id: "nav-analytics", label: "Аналитика", href: "/analytics", group: "Навигация", icon: BarChart3 },
-  { id: "nav-investments", label: "Инвестиции", href: "/investments", group: "Навигация", icon: LineChart },
-  { id: "nav-categories", label: "Категории", href: "/categories", group: "Навигация", icon: Tags },
-  { id: "nav-import", label: "Импорт и экспорт", href: "/import", group: "Навигация", icon: Download },
-  { id: "nav-settings", label: "Настройки", href: "/settings", group: "Навигация", icon: Settings }
+  { id: "nav-home", labelKey: "nav.home", href: "/", group: "nav", icon: LayoutDashboard },
+  { id: "nav-tx", labelKey: "nav.transactions", href: "/transactions", group: "nav", icon: ReceiptText },
+  { id: "nav-accounts", labelKey: "nav.accounts", href: "/accounts", group: "nav", icon: Wallet },
+  { id: "nav-budgets", labelKey: "nav.budgets", href: "/budgets", group: "nav", icon: CreditCard },
+  { id: "nav-goals", labelKey: "nav.goals", href: "/goals", group: "nav", icon: PiggyBank },
+  { id: "nav-recurring", labelKey: "cmd.recurring", href: "/recurring", group: "nav", icon: CalendarClock },
+  { id: "nav-forecast", labelKey: "nav.forecast", href: "/forecast", group: "nav", icon: TrendingUp },
+  { id: "nav-analytics", labelKey: "nav.analytics", href: "/analytics", group: "nav", icon: BarChart3 },
+  { id: "nav-investments", labelKey: "nav.investments", href: "/investments", group: "nav", icon: LineChart },
+  { id: "nav-categories", labelKey: "nav.categories", href: "/categories", group: "nav", icon: Tags },
+  { id: "nav-import", labelKey: "cmd.importExport", href: "/import", group: "nav", icon: Download },
+  { id: "nav-settings", labelKey: "nav.settings", href: "/settings", group: "nav", icon: Settings }
 ];
 
 export function CommandPalette() {
   const router = useRouter();
+  const { t } = useI18n();
+  const labelOf = useCallback(
+    (command: Command) => (command.labelKey ? t(command.labelKey) : (command.label ?? "")),
+    [t]
+  );
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [dynamic, setDynamic] = useState<Command[]>([]);
@@ -92,17 +100,17 @@ export function CommandPalette() {
           ...accounts.accounts.map((account) => ({
             id: `acc-${account.id}`,
             label: account.name,
-            hint: "Счёт",
+            hint: t("cmd.account"),
             href: `/transactions?accountId=${encodeURIComponent(account.id)}`,
-            group: "Счета",
+            group: "accounts",
             icon: Wallet
           })),
           ...categories.categories.map((category) => ({
             id: `cat-${category.id}`,
             label: category.name,
-            hint: category.kind === "INCOME" ? "Категория дохода" : "Категория расхода",
+            hint: category.kind === "INCOME" ? t("cmd.incomeCategory") : t("cmd.expenseCategory"),
             href: `/transactions?categoryId=${encodeURIComponent(category.id)}${category.kind === "EXPENSE" ? "&type=EXPENSE" : ""}`,
-            group: "Категории",
+            group: "categories",
             icon: Tags
           }))
         ]);
@@ -113,7 +121,7 @@ export function CommandPalette() {
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, t]);
 
   // Search individual transactions by description/account/category once the user
   // types (debounced). Server-side `q` filter, so results are pre-matched.
@@ -136,7 +144,7 @@ export function CommandPalette() {
               label: tx.description || tx.category.label,
               hint: `${tx.type === "INCOME" ? "+" : "−"}${formatCurrency(tx.amount)} · ${tx.category.label}`,
               href: `/transactions?q=${encodeURIComponent(q)}`,
-              group: "Операции",
+              group: "transactions",
               icon: ReceiptText
             }))
           );
@@ -155,10 +163,10 @@ export function CommandPalette() {
     () => [
       {
         id: "act-add",
-        label: "Добавить операцию",
+        labelKey: "cmd.addTransaction",
         hint: "Alt+N",
         action: () => window.dispatchEvent(new Event("quick-add-open")),
-        group: "Действия",
+        group: "actions",
         icon: Plus
       }
     ],
@@ -171,10 +179,10 @@ export function CommandPalette() {
     if (!q) return base;
     // Transaction results are already matched server-side; append them after the
     // label-filtered navigation/account/category commands.
-    const matchedBase = base.filter((command) => command.label.toLowerCase().includes(q));
+    const matchedBase = base.filter((command) => labelOf(command).toLowerCase().includes(q));
     // Transaction results only apply once the search is long enough to fetch them.
     return q.length >= 2 ? [...matchedBase, ...txResults] : matchedBase;
-  }, [actionCommands, dynamic, query, txResults]);
+  }, [actionCommands, dynamic, query, txResults, labelOf]);
 
   // Reset highlight when the query changes (set-state-during-render pattern).
   const [lastQuery, setLastQuery] = useState(query);
@@ -216,13 +224,13 @@ export function CommandPalette() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Поиск разделов, счетов, категорий, операций…"
+            placeholder={t("cmd.placeholder")}
             className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
         <div className="max-h-80 overflow-y-auto p-1.5">
           {filtered.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">Ничего не найдено</p>
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("cmd.nothingFound")}</p>
           ) : (
             filtered.map((command, index) => {
               const Icon = command.icon;
@@ -238,7 +246,7 @@ export function CommandPalette() {
                   )}
                 >
                   <Icon className="size-4 shrink-0 opacity-80" />
-                  <span className="flex-1 truncate">{command.label}</span>
+                  <span className="flex-1 truncate">{labelOf(command)}</span>
                   {command.hint ? <span className="shrink-0 text-xs text-muted-foreground">{command.hint}</span> : null}
                 </button>
               );
@@ -250,7 +258,7 @@ export function CommandPalette() {
             <CircleDollarSign className="size-3" />
             Финансовый помощник
           </span>
-          <span>↑↓ выбрать · Enter открыть · Esc закрыть</span>
+          <span>{t("cmd.footer")}</span>
         </div>
       </DialogContent>
     </Dialog>
