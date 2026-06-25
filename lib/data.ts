@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/derive";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
+import { effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import type { CategorizationRule } from "@/lib/categorization-rules";
@@ -399,6 +400,8 @@ function buildBudgetRows(
         color: category.color,
         limitAmount,
         spent,
+        rollover: false,
+        rolloverAmount: 0,
         progress: limitAmount > 0 ? clamp(percent(spent, limitAmount), 0, 140) : 0,
         isExceeded: limitAmount > 0 && spent > limitAmount,
         suggestedLimit: suggestedLimitFor(category.id, transactions, { now: monthDate })
@@ -862,11 +865,7 @@ async function getDatabaseFinanceInput(userId: string, emergencyFundTargetMonths
       );
     })
     .reduce((sum, row) => sum + row.amount, 0);
-  const budgetRows = await buildDatabaseBudgetRows(
-    userId,
-    transactions,
-    categories.map(toCategoryOption)
-  );
+  const budgetRows = await buildDatabaseBudgetRows(userId, categories.map(toCategoryOption));
   const freeCashflow = currentMonth.income - currentMonth.expense;
 
   return {
@@ -932,7 +931,6 @@ function toGoalRow(goal: {
 
 async function buildDatabaseBudgetRows(
   userId: string,
-  transactions: TransactionRow[],
   categories: CategoryOption[],
   targetMonthDate?: Date
 ): Promise<BudgetRow[]> {
@@ -942,28 +940,54 @@ async function buildDatabaseBudgetRows(
   const month = startOfMonth(monthDate);
   const start = startOfMonth(monthDate);
   const end = endOfMonth(monthDate);
-  const budgets = await prisma.budget.findMany({
-    where: { userId, month },
-    include: { category: true }
-  });
+  const prevMonthDate = subMonths(monthDate, 1);
+  const prevMonth = startOfMonth(prevMonthDate);
+  const prevStart = startOfMonth(prevMonthDate);
+  const prevEnd = endOfMonth(prevMonthDate);
+  // History window covering the current month, the previous month (rollover) and
+  // the 3-month average used for the suggested limit. Aggregated directly from
+  // the DB so `spent` is correct regardless of how many transactions exist
+  // (the page's transaction list is paginated and must NOT be used here).
+  const windowStart = startOfMonth(subMonths(monthDate, 3));
+
+  const [budgets, prevBudgets, expenseRows] = await Promise.all([
+    prisma.budget.findMany({ where: { userId, month } }),
+    prisma.budget.findMany({ where: { userId, month: prevMonth } }),
+    prisma.transaction.findMany({
+      where: { userId, type: "EXPENSE", date: { gte: windowStart, lte: end } },
+      select: { categoryId: true, amount: true, date: true }
+    })
+  ]);
+
   const budgetByCategory = new Map(budgets.map((budget) => [budget.categoryId, budget]));
+  const prevLimitByCategory = new Map(
+    prevBudgets.map((budget) => [budget.categoryId, toNumber(budget.limitAmount)])
+  );
+  const spentInRange = (categoryId: string, from: Date, to: Date) =>
+    expenseRows
+      .filter((row) => row.categoryId === categoryId && row.date >= from && row.date <= to)
+      .reduce((sum, row) => sum + toNumber(row.amount), 0);
+  // Shape the rows for suggestedLimitFor (which averages the trailing months).
+  const suggestHistory = expenseRows.map((row) => ({
+    category: { id: row.categoryId },
+    type: "EXPENSE" as const,
+    date: row.date,
+    amount: toNumber(row.amount)
+  }));
 
   return categories
     .filter((category) => category.kind === "EXPENSE")
     .map((category) => {
       const budget = budgetByCategory.get(category.id);
       const limitAmount = budget ? toNumber(budget.limitAmount) : 0;
-      const spent = transactions
-        .filter((transaction) => {
-          const date = new Date(transaction.date);
-          return (
-            transaction.type === "EXPENSE" &&
-            transaction.category.id === category.id &&
-            date >= start &&
-            date <= end
-          );
-        })
-        .reduce((sum, row) => sum + row.amount, 0);
+      const spent = spentInRange(category.id, start, end);
+      const rollover = budget?.rollover ?? false;
+      const carried = rolloverCarry(
+        rollover,
+        prevLimitByCategory.get(category.id) ?? 0,
+        spentInRange(category.id, prevStart, prevEnd)
+      );
+      const effective = effectiveLimit(limitAmount, carried);
 
       return {
         id: budget?.id ?? `new-${category.id}`,
@@ -972,9 +996,11 @@ async function buildDatabaseBudgetRows(
         color: category.color,
         limitAmount,
         spent,
-        progress: limitAmount > 0 ? clamp(percent(spent, limitAmount), 0, 140) : 0,
-        isExceeded: limitAmount > 0 && spent > limitAmount,
-        suggestedLimit: suggestedLimitFor(category.id, transactions, { now: monthDate })
+        rollover,
+        rolloverAmount: carried,
+        progress: effective > 0 ? clamp(percent(spent, effective), 0, 140) : 0,
+        isExceeded: effective > 0 && spent > effective,
+        suggestedLimit: suggestedLimitFor(category.id, suggestHistory, { now: monthDate })
       };
     });
 }
@@ -1399,20 +1425,12 @@ export async function getBudgetsPageData(month?: string): Promise<BudgetsPageDat
       if (!prisma) throw new Error("Prisma client is not configured.");
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
-      const [categories, transactions] = await Promise.all([
-        prisma.category.findMany({
-          where: { userId: user.id },
-          orderBy: [{ kind: "asc" }, { name: "asc" }]
-        }),
-        getDatabaseTransactions(user.id)
-      ]);
+      const categories = await prisma.category.findMany({
+        where: { userId: user.id },
+        orderBy: [{ kind: "asc" }, { name: "asc" }]
+      });
       const categoryOptions = categories.map(toCategoryOption);
-      const budgets = await buildDatabaseBudgetRows(
-        user.id,
-        transactions,
-        categoryOptions,
-        targetMonthDate
-      );
+      const budgets = await buildDatabaseBudgetRows(user.id, categoryOptions, targetMonthDate);
       const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
       const recommendations = new FinanceRecommendationService()
         .build(finance.input)

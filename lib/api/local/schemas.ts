@@ -63,7 +63,11 @@ export const budgetRowSchema = z.object({
   limitAmount: z.coerce.number().finite().min(0),
   spent: z.coerce.number().finite().min(0).default(0),
   progress: z.coerce.number().finite().min(0).default(0),
-  isExceeded: z.boolean().default(false)
+  isExceeded: z.boolean().default(false),
+  suggestedLimit: z.coerce.number().finite().min(0).default(0),
+  // Persisted carry-over flag (recomputed amount lives in rolloverAmount).
+  rollover: z.boolean().default(false),
+  rolloverAmount: z.coerce.number().finite().min(0).default(0)
 });
 export const goalRowSchema = z.object({
   id: z.string().min(1),

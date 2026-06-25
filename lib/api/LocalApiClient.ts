@@ -41,6 +41,7 @@ import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvPar
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
+import { effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
@@ -624,7 +625,22 @@ export class LocalApiClient implements ApiClient {
     );
     if (!category) throw new Error("Выберите расходную категорию.");
 
-    const row = this.buildBudgetRow(state, category, Number(input.limitAmount));
+    const limit = Number(input.limitAmount);
+    const monthKey = typeof input.month === "string" && input.month ? input.month : undefined;
+
+    // A zero limit means "reset" — remove the budget for this category.
+    if (limit === 0) {
+      state.budgets = state.budgets.filter((item) => item.categoryId !== category.id);
+      return { removed: true };
+    }
+
+    const existing = state.budgets.find((item) => item.categoryId === category.id);
+    // Update rollover only when explicitly provided (so saving a limit doesn't
+    // silently turn it off). toFormObject stringifies values.
+    const rolloverProvided = input.rollover === "true" || input.rollover === "false";
+    const rollover = rolloverProvided ? input.rollover === "true" : (existing?.rollover ?? false);
+
+    const row = this.buildBudgetRow(state, category, limit, monthKey, rollover);
     state.budgets = [row, ...state.budgets.filter((item) => item.categoryId !== category.id)];
     return row;
   }
@@ -1204,22 +1220,37 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
+  private spentInMonth(state: LocalState, categoryId: string, monthKey: string): number {
+    return state.transactions
+      .filter(
+        (transaction) =>
+          transaction.type === "EXPENSE" &&
+          transaction.category.id === categoryId &&
+          transaction.date.startsWith(monthKey)
+      )
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+  }
+
   private buildBudgetRow(
     state: LocalState,
     category: CategoryOption,
     limitAmount: number,
-    monthKey?: string
+    monthKey?: string,
+    rollover = false
   ): BudgetsPageData["budgets"][number] {
     const now = new Date();
     const month = monthKey ?? monthKeyOf(now);
-    const spent = state.transactions
-      .filter(
-        (transaction) =>
-          transaction.type === "EXPENSE" &&
-          transaction.category.id === category.id &&
-          transaction.date.startsWith(month)
-      )
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const spent = this.spentInMonth(state, category.id, month);
+    // Previous month (single-month carryover); desktop stores one limit per
+    // category, so the previous limit equals the current limit.
+    const [y, m] = month.split("-").map(Number);
+    const prevMonthKey = monthKeyOf(new Date(y, m - 2, 1));
+    const carried = rolloverCarry(
+      rollover,
+      limitAmount,
+      this.spentInMonth(state, category.id, prevMonthKey)
+    );
+    const effective = effectiveLimit(limitAmount, carried);
     return {
       id: `budget-${category.id}`,
       categoryId: category.id,
@@ -1227,8 +1258,10 @@ export class LocalApiClient implements ApiClient {
       color: category.color,
       limitAmount,
       spent: roundMoney(spent),
-      progress: limitAmount > 0 ? clamp(percent(spent, limitAmount), 0, 140) : 0,
-      isExceeded: limitAmount > 0 && spent > limitAmount,
+      rollover,
+      rolloverAmount: carried,
+      progress: effective > 0 ? clamp(percent(spent, effective), 0, 140) : 0,
+      isExceeded: effective > 0 && spent > effective,
       suggestedLimit: suggestedLimitFor(category.id, state.transactions, {
         now: monthKey ? new Date(`${monthKey}-01`) : now
       })
@@ -1240,7 +1273,13 @@ export class LocalApiClient implements ApiClient {
       .filter((category) => category.kind === "EXPENSE")
       .map((category) => {
         const existing = state.budgets.find((budget) => budget.categoryId === category.id);
-        return this.buildBudgetRow(state, category, existing?.limitAmount ?? 0, monthKey);
+        return this.buildBudgetRow(
+          state,
+          category,
+          existing?.limitAmount ?? 0,
+          monthKey,
+          existing?.rollover ?? false
+        );
       });
   }
 
