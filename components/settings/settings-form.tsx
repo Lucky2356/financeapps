@@ -236,7 +236,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       icon: SlidersHorizontal,
       keywords: "валюта currency демо тип операции по умолчанию доход расход",
       node: (
-        <SectionCard title="Основные настройки">
+        <SectionCard title="Основные настройки" fields>
           <div className="space-y-2">
             <Label>Валюта</Label>
             <select
@@ -292,7 +292,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       icon: Repeat,
       keywords: "авто-проведение регулярные напоминания платежи уведомления",
       node: (
-        <SectionCard title="Автоматизация">
+        <SectionCard title="Автоматизация" fields>
           <ToggleRow
             title="Авто-проведение регулярных"
             description="При запуске автоматически создавать просроченные плановые платежи."
@@ -315,7 +315,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       icon: Palette,
       keywords: "тема оформление светлая тёмная системная плотность язык language русский english",
       node: (
-        <SectionCard title="Внешний вид">
+        <SectionCard title="Внешний вид" fields>
           <div className="space-y-2">
             <Label>Тема оформления</Label>
             <div className="grid grid-cols-3 gap-2">
@@ -484,7 +484,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       icon: ShieldCheck,
       keywords: "риск профиль подушка резерв emergency fund инвестиции",
       node: (
-        <SectionCard title="Риск и финансовая подушка">
+        <SectionCard title="Риск и финансовая подушка" fields>
           <div className="space-y-2">
             <Label className="inline-flex items-center gap-1">
               Риск-профиль <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
@@ -750,14 +750,18 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   );
 }
 
-// Compact reusable card wrapper for a settings section.
+// Compact reusable card wrapper for a settings section. `fields` lays the
+// controls out in a responsive 2-column grid so wide screens are used well
+// instead of stretching a single control across the whole width.
 function SectionCard({
   title,
   icon: Icon,
+  fields,
   children
 }: {
   title: string;
   icon?: LucideIcon;
+  fields?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -768,7 +772,11 @@ function SectionCard({
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">{children}</CardContent>
+      <CardContent
+        className={fields ? "grid items-start gap-4 lg:grid-cols-2" : "space-y-4"}
+      >
+        {children}
+      </CardContent>
     </Card>
   );
 }
