@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **Desktop auto-update**: diagnosed why v1.0.2 → v1.0.3 failed — the updater
+  signing key was rotated between those releases, so v1.0.2 (which has the old
+  public key baked in) can't verify v1.0.3's signature. This can't be repaired
+  retroactively (install the new version manually once). The key is now pinned by
+  a guard test so it can't be silently rotated again, and the displayed version
+  now comes from package.json (was a stale hardcoded "1.0.2").
 - No console errors / spurious Sentry reports on public pages (login/register):
   the data layer no longer logs the expected "no session" state, and the
   automation runner no longer calls authenticated endpoints there.
