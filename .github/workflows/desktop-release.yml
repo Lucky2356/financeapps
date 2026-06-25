@@ -107,6 +107,17 @@ jobs:
             npm run tauri:build
           fi
 
+      # GATE: prove the just-built signature verifies against the public key baked
+      # into the app (and into every already-installed client). If it doesn't,
+      # those installs could not auto-update to this build — fail before publishing
+      # so a broken update never reaches users (this is exactly what broke 1.0.2→1.0.3).
+      - name: Verify updater signature against baked pubkey
+        if: env.HAS_SIGNING_KEY == 'true'
+        shell: bash
+        run: |
+          exe="$(ls src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)"
+          node scripts/verify-updater-signature.mjs "$exe" "$exe.sig"
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
