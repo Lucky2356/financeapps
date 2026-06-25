@@ -192,6 +192,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 data={pageData}
                 pending={isMutating}
                 onSubmit={(event) => submitTransaction(event, "POST")}
+                onRefsReload={() => loadTransactions(true)}
               />
             </Dialog>
           </div>
@@ -403,6 +404,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             transaction={editingTransaction}
             pending={isMutating}
             onSubmit={(event) => submitTransaction(event, "PUT")}
+            onRefsReload={() => loadTransactions(true)}
           />
         )}
       </Dialog>
@@ -492,13 +494,21 @@ function TransferDialog({
   );
 }
 
+const ACCOUNT_TYPE_OPTIONS = [
+  { value: "DEBIT_CARD", label: "Дебетовая карта" },
+  { value: "CASH", label: "Наличные" },
+  { value: "SAVINGS", label: "Накопительный" },
+  { value: "BROKERAGE", label: "Брокерский" }
+];
+
 function TransactionDialog({
   title,
   description,
   data,
   transaction,
   pending,
-  onSubmit
+  onSubmit,
+  onRefsReload
 }: {
   title: string;
   description: string;
@@ -506,16 +516,71 @@ function TransactionDialog({
   transaction?: TransactionsPageData["transactions"][number];
   pending?: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onRefsReload?: () => Promise<void>;
 }) {
   const type = transaction?.type ?? "EXPENSE";
   const [selectedType, setSelectedType] = useState(type);
   const matchingCategories = useMemo(() => data.categories.filter((category) => category.kind === selectedType), [data.categories, selectedType]);
   const [categoryId, setCategoryId] = useState(transaction?.category.id ?? matchingCategories[0]?.id ?? "");
   const effectiveCategoryId = matchingCategories.some((category) => category.id === categoryId) ? categoryId : matchingCategories[0]?.id ?? "";
+  const [accountId, setAccountId] = useState(transaction?.account.id ?? data.accounts[0]?.id ?? "");
   // Auto-categorization: while the user has not manually chosen a category,
   // suggest one from past transactions as they type the description.
   const [manualCategory, setManualCategory] = useState(false);
   const [autoSuggested, setAutoSuggested] = useState(false);
+
+  // Inline creation of a new category / account without leaving the form.
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [showNewAccount, setShowNewAccount] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountType, setNewAccountType] = useState("DEBIT_CARD");
+  const [creating, setCreating] = useState(false);
+
+  async function createCategory() {
+    if (!newCategoryName.trim()) return;
+    setCreating(true);
+    try {
+      const created = await apiClient.post<{ id: string }>("/categories", {
+        name: newCategoryName.trim(),
+        kind: selectedType,
+        color: selectedType === "INCOME" ? "#16a34a" : "#64748b",
+        isEssential: false,
+        isSubscription: false
+      });
+      await onRefsReload?.();
+      setCategoryId(created.id);
+      setManualCategory(true);
+      setNewCategoryName("");
+      setShowNewCategory(false);
+      toast.success("Категория создана");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось создать категорию");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function createAccount() {
+    if (!newAccountName.trim()) return;
+    setCreating(true);
+    try {
+      const created = await apiClient.post<{ id: string }>("/accounts", {
+        name: newAccountName.trim(),
+        type: newAccountType,
+        balance: "0"
+      });
+      await onRefsReload?.();
+      setAccountId(created.id);
+      setNewAccountName("");
+      setShowNewAccount(false);
+      toast.success("Счёт создан");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось создать счёт");
+    } finally {
+      setCreating(false);
+    }
+  }
 
   function changeType(value: "INCOME" | "EXPENSE") {
     const nextCategories = data.categories.filter((category) => category.kind === value);
@@ -523,6 +588,7 @@ function TransactionDialog({
     setCategoryId(nextCategories[0]?.id ?? "");
     setManualCategory(false);
     setAutoSuggested(false);
+    setShowNewCategory(false);
   }
 
   function pickCategory(value: string) {
@@ -550,6 +616,11 @@ function TransactionDialog({
       </DialogHeader>
       <form onSubmit={onSubmit} className="grid gap-4">
         {transaction ? <input type="hidden" name="id" value={transaction.id} /> : null}
+        {/* Submitted values — kept in hidden inputs so they persist even while an
+            inline "create new" form is shown in place of the select. */}
+        <input type="hidden" name="categoryId" value={effectiveCategoryId} />
+        <input type="hidden" name="accountId" value={accountId} />
+        <input type="hidden" name="type" value={selectedType} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`${transaction?.id ?? "new"}-amount`}>Сумма</Label>
@@ -557,31 +628,72 @@ function TransactionDialog({
           </div>
           <div className="space-y-2">
             <Label>Тип</Label>
-            <select name="type" value={selectedType} onChange={(event) => changeType(event.target.value as "INCOME" | "EXPENSE")} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <select value={selectedType} onChange={(event) => changeType(event.target.value as "INCOME" | "EXPENSE")} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
               <option value="EXPENSE">Расход</option>
               <option value="INCOME">Доход</option>
             </select>
           </div>
           <div className="space-y-2">
-            <Label>Категория</Label>
-            <select name="categoryId" value={effectiveCategoryId} onChange={(event) => pickCategory(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              {matchingCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
-            {autoSuggested ? <p className="text-xs text-primary">Категория подобрана по описанию</p> : null}
+            <div className="flex items-center justify-between">
+              <Label>Категория</Label>
+              <button type="button" className="text-xs text-primary hover:underline" onClick={() => setShowNewCategory((v) => !v)}>
+                {showNewCategory ? "Отмена" : "+ Новая"}
+              </button>
+            </div>
+            {showNewCategory ? (
+              <div className="flex gap-2">
+                <Input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder={selectedType === "INCOME" ? "Напр.: Премия" : "Напр.: Аптека"}
+                />
+                <Button type="button" variant="outline" onClick={() => void createCategory()} disabled={creating}>
+                  Создать
+                </Button>
+              </div>
+            ) : (
+              <>
+                <select value={effectiveCategoryId} onChange={(event) => pickCategory(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                  {matchingCategories.length === 0 ? <option value="">Создайте категорию →</option> : null}
+                  {matchingCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+                {autoSuggested ? <p className="text-xs text-primary">Категория подобрана по описанию</p> : null}
+              </>
+            )}
           </div>
           <div className="space-y-2">
-            <Label>Счет</Label>
-            <select name="accountId" defaultValue={transaction?.account.id ?? data.accounts[0]?.id} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              {data.accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center justify-between">
+              <Label>Счет</Label>
+              <button type="button" className="text-xs text-primary hover:underline" onClick={() => setShowNewAccount((v) => !v)}>
+                {showNewAccount ? "Отмена" : "+ Новый"}
+              </button>
+            </div>
+            {showNewAccount ? (
+              <div className="flex gap-2">
+                <Input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Напр.: Тинькофф" />
+                <select value={newAccountType} onChange={(e) => setNewAccountType(e.target.value)} className="h-10 rounded-md border bg-background px-2 text-sm">
+                  {ACCOUNT_TYPE_OPTIONS.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+                <Button type="button" variant="outline" onClick={() => void createAccount()} disabled={creating}>
+                  Создать
+                </Button>
+              </div>
+            ) : (
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                {data.accounts.length === 0 ? <option value="">Создайте счёт →</option> : null}
+                {data.accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>Дата</Label>
