@@ -2,24 +2,35 @@
 
 import {
   Check,
+  Database,
   Download,
   GraduationCap,
+  Info,
   Keyboard,
+  KeyRound,
   Loader2,
   Monitor,
   Moon,
+  Palette,
+  Repeat,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Sun,
-  Trash2
+  Trash2,
+  type LucideIcon
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { applyDensity } from "@/components/app-settings-sync";
+import { AccountSection } from "@/components/settings/account-section";
+import { LocalModePanel } from "@/components/settings/local-mode-panel";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
@@ -85,6 +96,8 @@ function toEditable(data: SettingsPageData): EditableSettings {
 
 const RELEASES_URL = "https://github.com/Lucky2356/financeapps/releases/latest";
 
+type Section = { id: string; label: string; icon: LucideIcon; keywords: string; node: React.ReactNode };
+
 export function SettingsForm({ data }: { data: SettingsPageData }) {
   const { setTheme } = useTheme();
   const { t, locale, setLocale } = useI18n();
@@ -95,11 +108,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [settings, setSettings] = useState<EditableSettings>(() => toEditable(pageData));
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [activeId, setActiveId] = useState("general");
+  const [query, setQuery] = useState("");
 
   // Re-sync controlled fields whenever fresh data arrives (e.g. the real values
   // load from IndexedDB after mount, or a save round-trips through reload()).
-  // Derived-state-on-prop-change pattern — adjusts state during render instead
-  // of in an effect, so there is no extra paint with stale values.
   const [syncedFrom, setSyncedFrom] = useState(pageData);
   if (syncedFrom !== pageData) {
     setSyncedFrom(pageData);
@@ -159,7 +172,6 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       setClearing(true);
       await apiClient.delete("/storage/clear");
       toast.success("Данные очищены.");
-      // Give IndexedDB time to finish the write before reload
       await new Promise((r) => setTimeout(r, 600));
       window.location.reload();
     } catch (error) {
@@ -169,9 +181,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   }
 
   // Built-in updater (plan D4). In a signed desktop build the Tauri updater
-  // checks GitHub for a newer release and installs it in place. In plain/dev
-  // builds (no updater config) check() throws — we fall back to opening the
-  // releases page so the button always does something useful.
+  // checks GitHub for a newer release and installs it in place; otherwise the
+  // button opens the releases page.
   async function checkForUpdates() {
     if (!isLocalDesktopMode) {
       window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
@@ -198,7 +209,6 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch {
-      // No updater config in this build, or network/verify error — fall back.
       toast.message("Автообновление недоступно — открываю страницу релизов.");
       window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
     } finally {
@@ -216,31 +226,17 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     }
   }
 
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {/* Auto-save status — changes apply immediately, no Save button */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground md:col-span-2">
-        {status === "saving" ? (
-          <>
-            <Loader2 className="size-3.5 animate-spin" />
-            Сохранение…
-          </>
-        ) : status === "saved" ? (
-          <>
-            <Check className="size-3.5 text-primary" />
-            <span className="text-primary">Сохранено</span>
-          </>
-        ) : (
-          "Изменения применяются и сохраняются автоматически."
-        )}
-      </div>
+  // ── Section definitions ─────────────────────────────────────────────
+  const sections = useMemo<Section[]>(() => {
+    const list: Section[] = [];
 
-      {/* Card 1: Basic */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Основные настройки</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    list.push({
+      id: "general",
+      label: "Основные",
+      icon: SlidersHorizontal,
+      keywords: "валюта currency демо тип операции по умолчанию доход расход",
+      node: (
+        <SectionCard title="Основные настройки">
           <div className="space-y-2">
             <Label>Валюта</Label>
             <select
@@ -260,21 +256,12 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               обозначение валюты.
             </p>
           </div>
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
-            <span>
-              <span className="block text-sm font-medium">Режим демо-данных</span>
-              <span className="block text-xs text-muted-foreground">
-                Показывает встроенный набор при пустой базе.
-              </span>
-            </span>
-            <input
-              name="demoMode"
-              type="checkbox"
-              checked={settings.demoMode}
-              onChange={(e) => void persist({ demoMode: e.target.checked })}
-              className="size-5 accent-primary"
-            />
-          </label>
+          <ToggleRow
+            title="Режим демо-данных"
+            description="Показывает встроенный пример, когда у вас ещё нет своих данных."
+            checked={settings.demoMode}
+            onChange={(v) => void persist({ demoMode: v })}
+          />
           <div className="space-y-2">
             <Label>Тип операции по умолчанию</Label>
             <select
@@ -295,70 +282,148 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               Выбран при открытии формы быстрого добавления.
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </SectionCard>
+      )
+    });
 
-      {/* Card: Automation */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Автоматизация</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
-            <span>
-              <span className="block text-sm font-medium">Авто-проведение регулярных</span>
-              <span className="block text-xs text-muted-foreground">
-                При запуске автоматически создавать просроченные плановые платежи.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={settings.autoMaterializeRecurring}
-              onChange={(e) => void persist({ autoMaterializeRecurring: e.target.checked })}
-              className="size-5 accent-primary"
-            />
-          </label>
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
-            <span>
-              <span className="block text-sm font-medium">Напоминания о платежах</span>
-              <span className="block text-xs text-muted-foreground">
-                Системные уведомления о платежах, которые нужно провести сегодня.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={settings.paymentReminders}
-              onChange={(e) => void persist({ paymentReminders: e.target.checked })}
-              className="size-5 accent-primary"
-            />
-          </label>
-        </CardContent>
-      </Card>
+    list.push({
+      id: "automation",
+      label: "Автоматизация",
+      icon: Repeat,
+      keywords: "авто-проведение регулярные напоминания платежи уведомления",
+      node: (
+        <SectionCard title="Автоматизация">
+          <ToggleRow
+            title="Авто-проведение регулярных"
+            description="При запуске автоматически создавать просроченные плановые платежи."
+            checked={settings.autoMaterializeRecurring}
+            onChange={(v) => void persist({ autoMaterializeRecurring: v })}
+          />
+          <ToggleRow
+            title="Напоминания о платежах"
+            description="Системные уведомления о платежах, которые нужно провести сегодня."
+            checked={settings.paymentReminders}
+            onChange={(v) => void persist({ paymentReminders: v })}
+          />
+        </SectionCard>
+      )
+    });
 
-      {/* Card: AI assistant. Desktop uses the user's own key (entered here);
-          web uses the server-side key — only the toggle is shown. */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="size-4" />
-            ИИ-ассистент
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
-            <span>
-              <span className="block text-sm font-medium">Включить ИИ-ассистент</span>
-              <span className="block text-xs text-muted-foreground">
-                Ввод операций текстом на странице «Операции» через Claude.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={settings.aiEnabled}
-              onChange={(e) => void persist({ aiEnabled: e.target.checked })}
-              className="size-5 accent-primary"
-            />
-          </label>
+    list.push({
+      id: "appearance",
+      label: "Внешний вид",
+      icon: Palette,
+      keywords: "тема оформление светлая тёмная системная плотность язык language русский english",
+      node: (
+        <SectionCard title="Внешний вид">
+          <div className="space-y-2">
+            <Label>Тема оформления</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { value: "light", label: "Светлая", icon: Sun },
+                  { value: "system", label: "Системная", icon: Monitor },
+                  { value: "dark", label: "Тёмная", icon: Moon }
+                ] as const
+              ).map(({ value, label, icon: Icon }) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer flex-col items-center gap-2 rounded-lg border p-3 text-center text-sm transition-colors hover:bg-muted/40",
+                    selectedTheme === value && "border-primary bg-primary/8 font-medium text-primary"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="theme"
+                    value={value}
+                    checked={selectedTheme === value}
+                    onChange={() => void persist({ theme: value })}
+                    className="sr-only"
+                  />
+                  <Icon className="size-5" />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Плотность интерфейса</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { value: "comfortable", label: "Комфортная" },
+                  { value: "compact", label: "Компактная" }
+                ] as const
+              ).map(({ value, label }) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
+                    selectedDensity === value &&
+                      "border-primary bg-primary/8 font-medium text-primary"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="density"
+                    value={value}
+                    checked={selectedDensity === value}
+                    onChange={() => void persist({ density: value })}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("settings.language.title")}</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { value: "ru", label: t("settings.language.ru") },
+                  { value: "en", label: t("settings.language.en") }
+                ] as const
+              ).map(({ value, label }) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
+                    locale === value && "border-primary bg-primary/8 font-medium text-primary"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="locale"
+                    value={value}
+                    checked={locale === value}
+                    onChange={() => setLocale(value)}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("settings.language.hint")}</p>
+          </div>
+        </SectionCard>
+      )
+    });
+
+    list.push({
+      id: "ai",
+      label: "ИИ-ассистент",
+      icon: Sparkles,
+      keywords: "ии ai claude ассистент ключ api модель",
+      node: (
+        <SectionCard title="ИИ-ассистент" icon={Sparkles}>
+          <ToggleRow
+            title="Включить ИИ-ассистент"
+            description="Ввод операций текстом на странице «Операции» через Claude."
+            checked={settings.aiEnabled}
+            onChange={(v) => void persist({ aiEnabled: v })}
+          />
           {settings.aiEnabled && (
             <>
               {isLocalDesktopMode && (
@@ -395,8 +460,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                       ))}
                     </select>
                     <p className="text-xs text-muted-foreground">
-                      Более мощные модели точнее, но дороже и медленнее. Для коротких фраз
-                      достаточно Haiku или Sonnet.
+                      Более мощные модели точнее, но дороже и медленнее. Для коротких фраз достаточно
+                      Haiku или Sonnet.
                     </p>
                   </div>
                 </>
@@ -409,15 +474,17 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
+        </SectionCard>
+      )
+    });
 
-      {/* Card 2: Risk & Emergency Fund */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Риск и финансовая подушка</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    list.push({
+      id: "risk",
+      label: "Риск и подушка",
+      icon: ShieldCheck,
+      keywords: "риск профиль подушка резерв emergency fund инвестиции",
+      node: (
+        <SectionCard title="Риск и финансовая подушка">
           <div className="space-y-2">
             <Label className="inline-flex items-center gap-1">
               Риск-профиль <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
@@ -460,205 +527,276 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               Рекомендуется минимум 3 месяца. 6–12 — для большей уверенности.
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </SectionCard>
+      )
+    });
 
-      {/* Card 3: Appearance */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Внешний вид</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Тема оформления</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { value: "light", label: "Светлая", icon: Sun },
-                  { value: "system", label: "Системная", icon: Monitor },
-                  { value: "dark", label: "Тёмная", icon: Moon }
-                ] as const
-              ).map(({ value, label, icon: Icon }) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex cursor-pointer flex-col items-center gap-2 rounded-lg border p-3 text-center text-sm transition-colors hover:bg-muted/40",
-                    selectedTheme === value &&
-                      "border-primary bg-primary/8 font-medium text-primary"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="theme"
-                    value={value}
-                    checked={selectedTheme === value}
-                    onChange={() => void persist({ theme: value })}
-                    className="sr-only"
-                  />
-                  <Icon className="size-5" />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Плотность интерфейса</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  { value: "comfortable", label: "Комфортная" },
-                  { value: "compact", label: "Компактная" }
-                ] as const
-              ).map(({ value, label }) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
-                    selectedDensity === value &&
-                      "border-primary bg-primary/8 font-medium text-primary"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="density"
-                    value={value}
-                    checked={selectedDensity === value}
-                    onChange={() => void persist({ density: value })}
-                    className="sr-only"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("settings.language.title")}</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  { value: "ru", label: t("settings.language.ru") },
-                  { value: "en", label: t("settings.language.en") }
-                ] as const
-              ).map(({ value, label }) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
-                    locale === value && "border-primary bg-primary/8 font-medium text-primary"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="locale"
-                    value={value}
-                    checked={locale === value}
-                    onChange={() => setLocale(value)}
-                    className="sr-only"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground">{t("settings.language.hint")}</p>
-          </div>
-        </CardContent>
-      </Card>
+    // Account (web only): change password / delete account.
+    if (!isLocalDesktopMode) {
+      list.push({
+        id: "account",
+        label: "Аккаунт",
+        icon: KeyRound,
+        keywords: "аккаунт пароль сменить удалить безопасность выход",
+        node: <AccountSection />
+      });
+    }
 
-      {/* Card 5: About */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Keyboard className="size-4" />
-            Горячие клавиши
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2">
-            {shortcuts.map((s) => (
-              <div
-                key={s.keys}
-                className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2"
+    list.push({
+      id: "data",
+      label: "Данные",
+      icon: Database,
+      keywords: "демо данные очистить backup резервная копия снимок local",
+      node: (
+        <>
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle className="text-destructive">Управление данными</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы
+                посмотреть, как всё работает. Текущие данные при этом будут заменены.
+              </p>
+              <Button
+                variant="outline"
+                type="button"
+                className="w-full"
+                onClick={loadSampleData}
+                disabled={loadingSample}
               >
-                <span className="text-sm text-muted-foreground">{s.label}</span>
-                <kbd className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{s.keys}</kbd>
-              </div>
-            ))}
-          </div>
-          <Button
-            variant="outline"
-            type="button"
-            className="mt-4 w-full"
-            onClick={replayOnboarding}
-          >
-            <GraduationCap className="size-4" />
-            Показать обучение снова
-          </Button>
-          <Button
-            variant="outline"
-            type="button"
-            className="mt-2 w-full"
-            onClick={() => void checkForUpdates()}
-            disabled={checkingUpdate}
-          >
-            <Download className="size-4" />
-            {checkingUpdate ? "Проверка…" : "Проверить обновления"}
-          </Button>
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Финансовый помощник&nbsp;·&nbsp;версия {APP_VERSION}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Card 6: Data Management */}
-      <Card className="border-destructive/30">
-        <CardHeader>
-          <CardTitle className="text-destructive">Управление данными</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы
-            посмотреть, как всё работает. Текущие данные при этом будут заменены.
-          </p>
-          <Button
-            variant="outline"
-            type="button"
-            className="w-full"
-            onClick={loadSampleData}
-            disabled={loadingSample}
-          >
-            <Sparkles className="size-4" />
-            {loadingSample ? "Загрузка…" : "Загрузить демо-данные"}
-          </Button>
-          <p className="pt-1 text-sm text-muted-foreground">
-            Очистка удалит все счета, операции, цели, бюджеты и настройки. Это действие необратимо.
-          </p>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="destructive" type="button" className="w-full">
-                <Trash2 className="size-4" />
-                Очистить все данные
+                <Sparkles className="size-4" />
+                {loadingSample ? "Загрузка…" : "Загрузить демо-данные"}
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Очистить все данные?</DialogTitle>
-                <DialogDescription>
-                  Все ваши операции, счета, цели, бюджеты, плановые платежи, портфель и настройки
-                  будут безвозвратно удалены. Резервную копию можно сохранить на странице Импорт.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
-                Это действие нельзя отменить. Сначала сделайте резервную копию.
-              </div>
-              <DialogFooter>
-                <Button variant="destructive" onClick={clearAllData} disabled={clearing}>
-                  {clearing ? "Очистка..." : "Да, удалить всё"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardContent>
-      </Card>
+              <p className="pt-1 text-sm text-muted-foreground">
+                Очистка удалит все счета, операции, цели, бюджеты и настройки. Это действие
+                необратимо.
+              </p>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="destructive" type="button" className="w-full">
+                    <Trash2 className="size-4" />
+                    Очистить все данные
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Очистить все данные?</DialogTitle>
+                    <DialogDescription>
+                      Все ваши операции, счета, цели, бюджеты, плановые платежи, портфель и настройки
+                      будут безвозвратно удалены. Резервную копию можно сохранить на странице Импорт.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
+                    Это действие нельзя отменить. Сначала сделайте резервную копию.
+                  </div>
+                  <DialogFooter>
+                    <Button variant="destructive" onClick={clearAllData} disabled={clearing}>
+                      {clearing ? "Очистка..." : "Да, удалить всё"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
+          {/* Desktop-only local snapshot tool (self-hides on web). */}
+          <LocalModePanel />
+        </>
+      )
+    });
+
+    list.push({
+      id: "about",
+      label: "О приложении",
+      icon: Info,
+      keywords: "версия обновления горячие клавиши обучение безопасность интеграции банк",
+      node: (
+        <div className="space-y-4">
+          <SectionCard title="Горячие клавиши" icon={Keyboard}>
+            <div className="grid gap-2">
+              {shortcuts.map((s) => (
+                <div
+                  key={s.keys}
+                  className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2"
+                >
+                  <span className="text-sm text-muted-foreground">{s.label}</span>
+                  <kbd className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{s.keys}</kbd>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" type="button" className="mt-4 w-full" onClick={replayOnboarding}>
+              <GraduationCap className="size-4" />
+              Показать обучение снова
+            </Button>
+            <Button
+              variant="outline"
+              type="button"
+              className="mt-2 w-full"
+              onClick={() => void checkForUpdates()}
+              disabled={checkingUpdate}
+            >
+              <Download className="size-4" />
+              {checkingUpdate ? "Проверка…" : "Проверить обновления"}
+            </Button>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Финансовый помощник&nbsp;·&nbsp;версия {APP_VERSION}
+            </p>
+          </SectionCard>
+          <SectionCard title="Безопасность и интеграции" icon={ShieldCheck}>
+            <p className="text-sm text-muted-foreground">
+              Приложение не хранит банковские логины и пароли и не выполняет screen scraping банков.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Будущие банковские интеграции должны использовать официальные API, явное согласие
+              пользователя и encrypted/secure storage для токенов.
+            </p>
+          </SectionCard>
+        </div>
+      )
+    });
+
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings, pageData, status, locale, loadingSample, clearing, checkingUpdate]);
+
+  const trimmedQuery = query.trim().toLowerCase();
+  const matches = trimmedQuery
+    ? sections.filter(
+        (s) =>
+          s.label.toLowerCase().includes(trimmedQuery) ||
+          s.keywords.toLowerCase().includes(trimmedQuery)
+      )
+    : [];
+  const active = sections.find((s) => s.id === activeId) ?? sections[0];
+  const visible = trimmedQuery ? matches : active ? [active] : [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {status === "saving" ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" />
+              Сохранение…
+            </>
+          ) : status === "saved" ? (
+            <>
+              <Check className="size-3.5 text-primary" />
+              <span className="text-primary">Сохранено</span>
+            </>
+          ) : (
+            "Изменения применяются и сохраняются автоматически."
+          )}
+        </div>
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск по настройкам…"
+            className="pl-9"
+            aria-label="Поиск по настройкам"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        {/* Section nav: vertical on desktop, horizontal scroll on mobile. */}
+        <nav
+          aria-label="Разделы настроек"
+          className={cn(
+            "flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0",
+            trimmedQuery && "pointer-events-none opacity-50"
+          )}
+        >
+          {sections.map((s) => {
+            const Icon = s.icon;
+            const isActive = !trimmedQuery && s.id === active?.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setActiveId(s.id);
+                }}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex min-h-11 shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg border px-3 py-2 text-sm transition-colors lg:w-full",
+                  isActive
+                    ? "border-primary/30 bg-primary/10 font-medium text-primary"
+                    : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                <Icon className="size-4 shrink-0" />
+                {s.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="min-w-0 space-y-4">
+          {visible.length === 0 ? (
+            <p className="rounded-lg border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+              Ничего не найдено по запросу «{query}».
+            </p>
+          ) : (
+            visible.map((s) => <div key={s.id}>{s.node}</div>)
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+// Compact reusable card wrapper for a settings section.
+function SectionCard({
+  title,
+  icon: Icon,
+  children
+}: {
+  title: string;
+  icon?: LucideIcon;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className={Icon ? "flex items-center gap-2" : undefined}>
+          {Icon ? <Icon className="size-4" /> : null}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">{children}</CardContent>
+    </Card>
+  );
+}
+
+// Reusable labelled toggle row.
+function ToggleRow({
+  title,
+  description,
+  checked,
+  onChange
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
+      <span>
+        <span className="block text-sm font-medium">{title}</span>
+        <span className="block text-xs text-muted-foreground">{description}</span>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-5 accent-primary"
+      />
+    </label>
   );
 }
