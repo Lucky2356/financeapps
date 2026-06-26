@@ -2,23 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n/context";
 
 const shortcuts = [
-  { keys: "Alt+N", description: "Быстрое добавление операции" },
-  { keys: "Alt+T", description: "Перейти к операциям" },
-  { keys: "Alt+D", description: "Перейти на главную" },
-  { keys: "Alt+A", description: "Перейти к аналитике" },
-  { keys: "?", description: "Показать эту справку" },
+  { keys: "Alt+N", descKey: "set.shortcut.add" },
+  { keys: "Alt+T", descKey: "set.shortcut.transactions" },
+  { keys: "Alt+D", descKey: "set.shortcut.home" },
+  { keys: "Alt+A", descKey: "set.shortcut.analytics" },
+  { keys: "?", descKey: "set.shortcut.help" }
 ];
 
 export function KeyboardShortcuts() {
   const router = useRouter();
+  const { t } = useI18n();
   const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
@@ -46,7 +43,12 @@ export function KeyboardShortcuts() {
       } else if (event.altKey && event.code === "KeyA") {
         event.preventDefault();
         router.push("/analytics");
-      } else if ((event.key === "?" || (event.code === "Slash" && event.shiftKey)) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      } else if (
+        (event.key === "?" || (event.code === "Slash" && event.shiftKey)) &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
         event.preventDefault();
         setShowHelp(true);
       }
@@ -60,17 +62,20 @@ export function KeyboardShortcuts() {
     <Dialog open={showHelp} onOpenChange={setShowHelp}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Горячие клавиши</DialogTitle>
+          <DialogTitle>{t("set.about.shortcuts")}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-2">
           {shortcuts.map((s) => (
-            <div key={s.keys} className="flex items-center justify-between rounded-md border px-3 py-2">
-              <span className="text-sm text-muted-foreground">{s.description}</span>
+            <div
+              key={s.keys}
+              className="flex items-center justify-between rounded-md border px-3 py-2"
+            >
+              <span className="text-sm text-muted-foreground">{t(s.descKey)}</span>
               <kbd className="rounded bg-muted px-2 py-1 font-mono text-xs">{s.keys}</kbd>
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">Горячие клавиши не работают, когда фокус находится в поле ввода.</p>
+        <p className="text-xs text-muted-foreground">{t("ks.footer")}</p>
       </DialogContent>
     </Dialog>
   );

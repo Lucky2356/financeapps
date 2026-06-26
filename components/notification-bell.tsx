@@ -12,28 +12,23 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { buildNotifications, countUrgent, type NotificationItem, type NotificationSeverity } from "@/lib/notifications";
+import { useI18n } from "@/lib/i18n/context";
+import { buildNotifications, countUrgent, type NotificationItem } from "@/lib/notifications";
 import type { BudgetsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
-
-const severityLabel: Record<NotificationSeverity, string> = {
-  INFO: "Инфо",
-  SUCCESS: "Ок",
-  WARNING: "Важно",
-  CRITICAL: "Срочно",
-};
 
 const badgeVariant = {
   INFO: "info",
   SUCCESS: "success",
   WARNING: "warning",
-  CRITICAL: "destructive",
+  CRITICAL: "destructive"
 } as const;
 
 export function NotificationBell() {
+  const { t } = useI18n();
   const [items, setItems] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
@@ -43,7 +38,9 @@ export function NotificationBell() {
       // not blank out the others.
       const [dashboard, forecast, budgets] = await Promise.all([
         apiClient.get<Pick<DashboardData, "recommendations">>("/dashboard").catch(() => null),
-        apiClient.get<Pick<ForecastData, "upcomingEvents" | "warnings" | "currency">>("/forecast").catch(() => null),
+        apiClient
+          .get<Pick<ForecastData, "upcomingEvents" | "warnings" | "currency">>("/forecast")
+          .catch(() => null),
         apiClient.get<BudgetsPageData>("/budgets").catch(() => null)
       ]);
       if (cancelled) return;
@@ -71,7 +68,9 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={urgentCount > 0 ? `${urgentCount} важных уведомлений` : "Уведомления"}
+          aria-label={
+            urgentCount > 0 ? t("notif.ariaSome", { count: urgentCount }) : t("notif.title")
+          }
         >
           <Bell className="size-5" />
           {urgentCount > 0 && (
@@ -83,13 +82,11 @@ export function NotificationBell() {
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Уведомления</DialogTitle>
+          <DialogTitle>{t("notif.title")}</DialogTitle>
         </DialogHeader>
         <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
           {items.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Нет активных уведомлений
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t("notif.empty")}</p>
           ) : (
             items.map((item) => (
               <div
@@ -99,7 +96,7 @@ export function NotificationBell() {
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium leading-snug">{item.title}</p>
                   <Badge variant={badgeVariant[item.severity]} className="shrink-0 text-[11px]">
-                    {severityLabel[item.severity]}
+                    {t(`notifSev.${item.severity}`)}
                   </Badge>
                 </div>
                 <p className="mt-1 text-xs opacity-80">{item.description}</p>

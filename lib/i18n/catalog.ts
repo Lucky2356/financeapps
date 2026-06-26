@@ -404,6 +404,27 @@ const ru: Messages = {
   "rec.dialog.period": "Период",
   "rec.dialog.nextDate": "Следующая дата",
   "rec.dialog.active": "Активный шаблон",
+  // Finance term hints
+  "hint.aria": "Пояснение",
+  "hint.netWorth":
+    "Всё, чем вы владеете: деньги на счетах + текущая стоимость инвестиций + накопления по целям.",
+  "hint.totalBalance": "Сумма средств на всех активных счетах (без инвестиций и целей).",
+  "hint.freeCash":
+    "Доходы минус расходы за текущий месяц — сколько можно отложить или инвестировать.",
+  "hint.savingsRate": "Доля доходов, которую вы сберегаете. Ориентир — от 15%.",
+  "hint.cushion":
+    "Резерв на накопительных счетах в месяцах ваших средних расходов. Цель — 3–6 месяцев на случай форс-мажора.",
+  "hint.riskProfile":
+    "Ваша готовность к колебаниям стоимости инвестиций. Влияет на анализ рисков и подбор бумаг.",
+  "ks.footer": "Горячие клавиши не работают, когда фокус находится в поле ввода.",
+  // Notifications
+  "notif.title": "Уведомления",
+  "notif.empty": "Нет активных уведомлений",
+  "notif.ariaSome": "{count} важных уведомлений",
+  "notifSev.INFO": "Инфо",
+  "notifSev.SUCCESS": "Ок",
+  "notifSev.WARNING": "Важно",
+  "notifSev.CRITICAL": "Срочно",
   "reco.empty": "Рекомендаций пока нет. Добавьте больше данных, чтобы анализ стал точнее.",
   "inv.portfolioRisks": "Риски портфеля",
   "inv.educationTips": "Образовательные подсказки",
@@ -938,6 +959,27 @@ const en: Messages = {
   "rec.dialog.period": "Period",
   "rec.dialog.nextDate": "Next date",
   "rec.dialog.active": "Active template",
+  // Finance term hints
+  "hint.aria": "Explanation",
+  "hint.netWorth":
+    "Everything you own: money in accounts + current value of investments + savings toward goals.",
+  "hint.totalBalance": "Total funds across all active accounts (excluding investments and goals).",
+  "hint.freeCash":
+    "Income minus expenses for the current month — how much you can set aside or invest.",
+  "hint.savingsRate": "The share of income you save. A good benchmark is 15%+.",
+  "hint.cushion":
+    "A reserve in savings accounts measured in months of your average expenses. Target: 3–6 months for emergencies.",
+  "hint.riskProfile":
+    "Your tolerance for swings in investment value. Affects risk analysis and security selection.",
+  "ks.footer": "Keyboard shortcuts don't fire while the focus is in an input field.",
+  // Notifications
+  "notif.title": "Notifications",
+  "notif.empty": "No active notifications",
+  "notif.ariaSome": "{count} important notifications",
+  "notifSev.INFO": "Info",
+  "notifSev.SUCCESS": "OK",
+  "notifSev.WARNING": "Important",
+  "notifSev.CRITICAL": "Urgent",
   "reco.empty": "No recommendations yet. Add more data so the analysis becomes more accurate.",
   "inv.portfolioRisks": "Portfolio risks",
   "inv.educationTips": "Educational tips",
