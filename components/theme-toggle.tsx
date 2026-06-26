@@ -5,12 +5,14 @@ import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
+import { useI18n } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 
 export function ThemeToggle() {
   // resolvedTheme reflects what is actually on screen (resolving "system"),
   // so every click reliably flips the *visible* theme — using `theme` here
   // caused a dead first click while on the default "system" setting.
+  const { t } = useI18n();
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -28,8 +30,8 @@ export function ThemeToggle() {
       type="button"
       variant="ghost"
       size="icon"
-      aria-label="Переключить тему"
-      title="Переключить тему"
+      aria-label={t("common.themeToggle")}
+      title={t("common.themeToggle")}
       onClick={toggle}
     >
       <Sun className="hidden size-4 dark:block" />

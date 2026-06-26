@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 const PROFILE_COLORS = [
@@ -49,6 +50,7 @@ function ProfileSwitcherInner() {
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(PROFILE_COLORS[0]);
   const confirm = useConfirm();
+  const { t } = useI18n();
 
   async function loadProfiles() {
     try {
@@ -82,7 +84,7 @@ function ProfileSwitcherInner() {
       await apiClient.post("/profiles/switch", { profileId });
       window.location.reload();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось переключить профиль");
+      toast.error(error instanceof Error ? error.message : t("prof.switchFail"));
     }
   }
 
@@ -90,12 +92,12 @@ function ProfileSwitcherInner() {
     if (!newName.trim()) return;
     try {
       await apiClient.post("/profiles/create", { name: newName, color: newColor });
-      toast.success(`Профиль «${newName}» создан`);
+      toast.success(t("prof.created", { name: newName }));
       setCreateOpen(false);
       setNewName("");
       await loadProfiles();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось создать профиль");
+      toast.error(error instanceof Error ? error.message : t("prof.createFail"));
     }
   }
 
@@ -103,33 +105,33 @@ function ProfileSwitcherInner() {
     if (!renameOpen || !newName.trim()) return;
     try {
       await apiClient.post("/profiles/rename", { profileId: renameOpen.id, name: newName });
-      toast.success("Профиль переименован");
+      toast.success(t("prof.renamed"));
       setRenameOpen(null);
       setNewName("");
       await loadProfiles();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось переименовать");
+      toast.error(error instanceof Error ? error.message : t("prof.renameFail"));
     }
   }
 
   async function deleteProfile(profileId: string) {
     const confirmed = await confirm({
-      title: "Удалить профиль?",
-      description: "Все данные этого профиля будут удалены без возможности восстановления.",
-      confirmLabel: "Удалить",
+      title: t("prof.deleteConfirmTitle"),
+      description: t("prof.deleteConfirmDesc"),
+      confirmLabel: t("common.delete"),
       destructive: true
     });
     if (!confirmed) return;
     try {
       await apiClient.delete(`/profiles?id=${encodeURIComponent(profileId)}`);
-      toast.success("Профиль удалён");
+      toast.success(t("prof.deleted"));
       if (profileId === list?.activeProfileId) {
         window.location.reload();
       } else {
         await loadProfiles();
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить профиль");
+      toast.error(error instanceof Error ? error.message : t("prof.deleteFail"));
     }
   }
 
@@ -155,7 +157,7 @@ function ProfileSwitcherInner() {
 
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Профили</DialogTitle>
+            <DialogTitle>{t("prof.title")}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-1">
@@ -184,7 +186,7 @@ function ProfileSwitcherInner() {
                 </button>
                 <button
                   type="button"
-                  aria-label="Переименовать профиль"
+                  aria-label={t("prof.rename")}
                   onClick={() => {
                     setRenameOpen(profile);
                     setNewName(profile.name);
@@ -196,7 +198,7 @@ function ProfileSwitcherInner() {
                 {list.profiles.length > 1 && (
                   <button
                     type="button"
-                    aria-label="Удалить профиль"
+                    aria-label={t("prof.delete")}
                     onClick={() => {
                       void deleteProfile(profile.id);
                     }}
@@ -217,25 +219,25 @@ function ProfileSwitcherInner() {
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
                 >
                   <Plus className="size-4" />
-                  Добавить профиль
+                  {t("prof.add")}
                 </button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Новый профиль</DialogTitle>
+                  <DialogTitle>{t("prof.new")}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4">
                   <div className="space-y-2">
-                    <Label>Имя профиля</Label>
+                    <Label>{t("prof.name")}</Label>
                     <Input
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      placeholder="Например: Жена, Бизнес, Инвестиции"
+                      placeholder={t("prof.namePlaceholder")}
                       maxLength={40}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Цвет</Label>
+                    <Label>{t("prof.color")}</Label>
                     <div className="flex flex-wrap gap-2">
                       {PROFILE_COLORS.map((c) => (
                         <button
@@ -247,7 +249,7 @@ function ProfileSwitcherInner() {
                             newColor === c && "ring-2 ring-offset-2 ring-foreground"
                           )}
                           style={{ backgroundColor: c }}
-                          aria-label={`Цвет ${c}`}
+                          aria-label={t("prof.colorAria", { color: c })}
                         />
                       ))}
                     </div>
@@ -256,7 +258,7 @@ function ProfileSwitcherInner() {
                 <DialogFooter>
                   <Button onClick={createProfile} disabled={!newName.trim()}>
                     <User className="size-4" />
-                    Создать профиль
+                    {t("prof.create")}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -274,15 +276,15 @@ function ProfileSwitcherInner() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Переименовать профиль</DialogTitle>
+            <DialogTitle>{t("prof.rename")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Новое имя</Label>
+            <Label>{t("prof.newName")}</Label>
             <Input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={40} />
           </div>
           <DialogFooter>
             <Button onClick={renameProfile} disabled={!newName.trim()}>
-              Сохранить
+              {t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>

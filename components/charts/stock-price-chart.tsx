@@ -11,24 +11,28 @@ import {
 } from "recharts";
 
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { useI18n } from "@/lib/i18n/context";
 
 export type StockPricePoint = { date: string; price: number };
 
-function axisPrice(value: number) {
-  if (Math.abs(value) >= 1000) return `${Math.round(value / 1000)}т`;
-  if (Math.abs(value) >= 1) return `${Math.round(value)}`;
-  return value.toFixed(2);
-}
-
 // Historical close-price chart for a single security (real MOEX data).
 export function StockPriceChart({ data, up }: { data: StockPricePoint[]; up: boolean }) {
+  const { t, locale } = useI18n();
   const stroke = up ? "#149365" : "#dc2626";
+  const axisPrice = (value: number) => {
+    if (Math.abs(value) >= 1000) return `${Math.round(value / 1000)}${t("chart.thousandShort")}`;
+    if (Math.abs(value) >= 1) return `${Math.round(value)}`;
+    return value.toFixed(2);
+  };
   const points = data.map((p) => ({
-    label: new Date(p.date).toLocaleDateString("ru", { day: "numeric", month: "short" }),
+    label: new Date(p.date).toLocaleDateString(locale === "en" ? "en-US" : "ru", {
+      day: "numeric",
+      month: "short"
+    }),
     price: p.price
   }));
   return (
-    <div className="h-64 w-full" role="img" aria-label="График исторических котировок">
+    <div className="h-64 w-full" role="img" aria-label={t("chart.aria.stockPrice")}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={points} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
           <defs>
@@ -48,12 +52,12 @@ export function StockPriceChart({ data, up }: { data: StockPricePoint[]; up: boo
           />
           <Tooltip
             {...chartTooltipProps}
-            formatter={(v) => `${Number(v).toLocaleString("ru-RU")} ₽`}
+            formatter={(v) => `${Number(v).toLocaleString(locale === "en" ? "en-US" : "ru-RU")} ₽`}
           />
           <Area
             type="monotone"
             dataKey="price"
-            name="Цена"
+            name={t("chart.series.price")}
             stroke={stroke}
             strokeWidth={2}
             fill="url(#stockFill)"

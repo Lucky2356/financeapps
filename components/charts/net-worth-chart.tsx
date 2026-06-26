@@ -13,18 +13,14 @@ import {
 import type { NetWorthPoint } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { formatCurrency } from "@/lib/format";
-
-function axisCurrency(value: number) {
-  if (Math.abs(value) >= 1000) {
-    return `${Math.round(value / 1000)} тыс. ₽`;
-  }
-
-  return `${value} ₽`;
-}
+import { useI18n } from "@/lib/i18n/context";
 
 export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
+  const { t } = useI18n();
+  const axisCurrency = (value: number) =>
+    Math.abs(value) >= 1000 ? `${Math.round(value / 1000)} ${t("chart.thousand")}` : `${value} ₽`;
   return (
-    <div className="h-64 w-full sm:h-72" role="img" aria-label="График динамики чистого капитала по месяцам">
+    <div className="h-64 w-full sm:h-72" role="img" aria-label={t("chart.aria.netWorth")}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
           <defs>
@@ -44,12 +40,12 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
           <Tooltip
             {...chartTooltipProps}
             formatter={(value) => formatCurrency(Number(value))}
-            labelFormatter={(label) => `Месяц: ${label}`}
+            labelFormatter={(label) => t("chart.month", { label: String(label) })}
           />
           <Area
             type="monotone"
             dataKey="value"
-            name="Чистый капитал"
+            name={t("chart.series.netWorth")}
             stroke="#149365"
             strokeWidth={2}
             fill="url(#netWorthFill)"

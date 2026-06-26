@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n/context";
 
 export type ConfirmOptions = {
   title: string;
@@ -29,6 +30,7 @@ const ConfirmContext = React.createContext<ConfirmFn | null>(null);
 // (see components/providers.tsx); call sites use the useConfirm() hook and await
 // the boolean result, keeping the familiar "if (!confirmed) return" flow.
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const [options, setOptions] = React.useState<ConfirmOptions | null>(null);
   const resolverRef = React.useRef<((value: boolean) => void) | null>(null);
 
@@ -64,13 +66,13 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => settle(false)}>
-                {options.cancelLabel ?? "Отмена"}
+                {options.cancelLabel ?? t("common.cancel")}
               </Button>
               <Button
                 variant={options.destructive ? "destructive" : "default"}
                 onClick={() => settle(true)}
               >
-                {options.confirmLabel ?? "Подтвердить"}
+                {options.confirmLabel ?? t("common.confirm")}
               </Button>
             </DialogFooter>
           </DialogContent>

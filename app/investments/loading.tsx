@@ -1,10 +1,14 @@
+"use client";
+
 import { ChartSkeleton } from "@/components/charts/chart-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useI18n } from "@/lib/i18n/context";
 
 // Investments skeleton: heading, summary cards, and a chart placeholder.
 export default function Loading() {
+  const { t } = useI18n();
   return (
-    <div className="page-grid" role="status" aria-label="Загрузка инвестиций">
+    <div className="page-grid" role="status" aria-label={t("loading.investments")}>
       <div className="space-y-2">
         <Skeleton className="h-7 w-44" />
         <Skeleton className="h-4 w-64" />
