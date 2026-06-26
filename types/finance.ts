@@ -8,6 +8,8 @@ import type {
 export type DataSource = "database" | "demo-fallback";
 
 export type MetricCard = {
+  /** Stable identifier for matching a metric regardless of display language. */
+  key?: string;
   title: string;
   value: string;
   detail: string;

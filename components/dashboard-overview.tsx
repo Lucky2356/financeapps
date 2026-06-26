@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
 
 export function DashboardOverview({ data }: { data: DashboardData }) {
   const { t } = useI18n();
-  const balance = data.metrics.find((metric) => metric.title === "Общий баланс") ?? data.metrics[0];
-  const freeCash = data.metrics.find((metric) => metric.title === "Свободный остаток");
-  const savingsRate = data.metrics.find((metric) => metric.title === "Процент накоплений");
-  const cushion = data.metrics.find((metric) => metric.title === "Финансовая подушка");
+  const balance = data.metrics.find((metric) => metric.key === "totalBalance") ?? data.metrics[0];
+  const freeCash = data.metrics.find((metric) => metric.key === "freeCash");
+  const savingsRate = data.metrics.find((metric) => metric.key === "savingsRate");
+  const cushion = data.metrics.find((metric) => metric.key === "emergencyFund");
   const healthTone =
     data.health.score >= 75 ? "good" : data.health.score >= 50 ? "warning" : "critical";
   // Net worth (accounts + investments) is the headline; the plain account

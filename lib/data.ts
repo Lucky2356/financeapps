@@ -11,6 +11,8 @@ import {
   currentMonthRange
 } from "@/lib/data/derive";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
+import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
+import { getServerLocale } from "@/lib/i18n/server-locale";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
@@ -503,7 +505,8 @@ function buildTrend(
   return { value: diff, label: "vs прошлый мес." };
 }
 
-function buildDemoDashboard(): DashboardData {
+function buildDemoDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const transactions = buildDemoTransactions();
   const goals = buildDemoGoals();
   const input = buildFinanceInput(transactions, demoAccounts, goals);
@@ -517,46 +520,52 @@ function buildDemoDashboard(): DashboardData {
     currency: "RUB",
     metrics: [
       {
-        title: "Общий баланс",
+        key: "totalBalance",
+        title: t("svc.metric.totalBalance"),
         value: formatCurrency(totalBalance),
-        detail: "Все счета и брокерский счет"
+        detail: t("svc.metric.totalBalance.detail")
       },
       {
-        title: "Доходы за месяц",
+        key: "monthIncome",
+        title: t("svc.metric.monthIncome"),
         value: formatCurrency(input.currentMonthIncome),
-        detail: "Текущий календарный месяц",
+        detail: t("svc.metric.month.detail"),
         tone: "success",
         trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
       },
       {
-        title: "Расходы за месяц",
+        key: "monthExpense",
+        title: t("svc.metric.monthExpense"),
         value: formatCurrency(input.currentMonthExpense),
-        detail: "Текущий календарный месяц",
+        detail: t("svc.metric.month.detail"),
         tone: "warning",
         trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
       },
       {
-        title: "Свободный остаток",
+        key: "freeCash",
+        title: t("svc.metric.freeCash"),
         value: formatCurrency(input.freeCashflow),
-        detail: "Доходы минус расходы",
+        detail: t("svc.metric.freeCash.detail"),
         tone: input.freeCashflow >= 0 ? "success" : "danger",
         trend: buildTrend(input.freeCashflow, (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0))
       },
       {
-        title: "Процент накоплений",
+        key: "savingsRate",
+        title: t("svc.metric.savingsRate"),
         value: `${input.savingsRate.toFixed(1)}%`,
-        detail: "Доля свободного остатка"
+        detail: t("svc.metric.savingsRate.detail")
       },
       {
-        title: "Финансовая подушка",
-        value: `${input.emergencyFundMonths.toFixed(1)} мес.`,
-        detail: "Резерв к средним расходам"
+        key: "emergencyFund",
+        title: t("svc.metric.emergencyFund"),
+        value: t("svc.value.months", { months: input.emergencyFundMonths.toFixed(1) }),
+        detail: t("svc.metric.emergencyFund.detail")
       }
     ],
     categoryExpenses: buildCategoryExpenses(transactions),
     monthlyCashflow: input.monthlyCashflow,
-    recommendations: service.build(input),
-    health: service.healthScore(input),
+    recommendations: service.build(input, locale),
+    health: service.healthScore(input, locale),
     netWorth: totalBalance,
     liabilitiesTotal: 0,
     netWorthBreakdown: buildNetWorthBreakdown({ totalBalance }),
@@ -622,39 +631,58 @@ async function safeData<T>(
 // ---- Empty fallbacks for static (desktop) builds ----
 // source "database" so the SourceBanner does not flag a demo state.
 
-function emptyDashboard(): DashboardData {
+function emptyDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const input = buildFinanceInput([], [], []);
   const service = new FinanceRecommendationService();
   return {
     source: "database",
     currency: "RUB",
     metrics: [
-      { title: "Общий баланс", value: formatCurrency(0), detail: "Все активные счета" },
       {
-        title: "Доходы за месяц",
+        key: "totalBalance",
+        title: t("svc.metric.totalBalance"),
         value: formatCurrency(0),
-        detail: "Текущий календарный месяц",
+        detail: t("svc.metric.totalBalance.detail")
+      },
+      {
+        key: "monthIncome",
+        title: t("svc.metric.monthIncome"),
+        value: formatCurrency(0),
+        detail: t("svc.metric.month.detail"),
         tone: "success"
       },
       {
-        title: "Расходы за месяц",
+        key: "monthExpense",
+        title: t("svc.metric.monthExpense"),
         value: formatCurrency(0),
-        detail: "Текущий календарный месяц",
+        detail: t("svc.metric.month.detail"),
         tone: "warning"
       },
       {
-        title: "Свободный остаток",
+        key: "freeCash",
+        title: t("svc.metric.freeCash"),
         value: formatCurrency(0),
-        detail: "Доходы минус расходы",
+        detail: t("svc.metric.freeCash.detail"),
         tone: "success"
       },
-      { title: "Процент накоплений", value: "0.0%", detail: "Доля свободного остатка" },
-      { title: "Финансовая подушка", value: "0.0 мес.", detail: "Резерв к средним расходам" }
+      {
+        key: "savingsRate",
+        title: t("svc.metric.savingsRate"),
+        value: "0.0%",
+        detail: t("svc.metric.savingsRate.detail")
+      },
+      {
+        key: "emergencyFund",
+        title: t("svc.metric.emergencyFund"),
+        value: t("svc.value.months", { months: "0.0" }),
+        detail: t("svc.metric.emergencyFund.detail")
+      }
     ],
     categoryExpenses: [],
     monthlyCashflow: input.monthlyCashflow,
     recommendations: [],
-    health: service.healthScore(input),
+    health: service.healthScore(input, locale),
     netWorth: 0,
     liabilitiesTotal: 0,
     netWorthBreakdown: buildNetWorthBreakdown({ totalBalance: 0 }),
@@ -1006,12 +1034,15 @@ async function buildDatabaseBudgetRows(
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
+  const locale = await getServerLocale();
   return safeData<DashboardData>(
-    buildDemoDashboard,
+    () => buildDemoDashboard(locale),
     async () => {
       const user = await getDefaultUser();
-      if (!user) return buildDemoDashboard();
+      if (!user) return buildDemoDashboard(locale);
 
+      const t = (key: string, vars?: Record<string, string | number>) =>
+        translate(locale, key, vars);
       const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
       const service = new FinanceRecommendationService();
       const totalBalance = finance.accounts.reduce((sum, account) => sum + account.balance, 0);
@@ -1068,28 +1099,32 @@ export async function getDashboardData(): Promise<DashboardData> {
         currency: user.currency,
         metrics: [
           {
-            title: "Общий баланс",
+            key: "totalBalance",
+            title: t("svc.metric.totalBalance"),
             value: formatCurrency(totalBalance, user.currency),
-            detail: "Все активные счета"
+            detail: t("svc.metric.totalBalance.detail")
           },
           {
-            title: "Доходы за месяц",
+            key: "monthIncome",
+            title: t("svc.metric.monthIncome"),
             value: formatCurrency(input.currentMonthIncome, user.currency),
-            detail: "Текущий календарный месяц",
+            detail: t("svc.metric.month.detail"),
             tone: "success",
             trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
           },
           {
-            title: "Расходы за месяц",
+            key: "monthExpense",
+            title: t("svc.metric.monthExpense"),
             value: formatCurrency(input.currentMonthExpense, user.currency),
-            detail: "Текущий календарный месяц",
+            detail: t("svc.metric.month.detail"),
             tone: "warning",
             trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
           },
           {
-            title: "Свободный остаток",
+            key: "freeCash",
+            title: t("svc.metric.freeCash"),
             value: formatCurrency(input.freeCashflow, user.currency),
-            detail: "Доходы минус расходы",
+            detail: t("svc.metric.freeCash.detail"),
             tone: input.freeCashflow >= 0 ? "success" : "danger",
             trend: buildTrend(
               input.freeCashflow,
@@ -1097,20 +1132,22 @@ export async function getDashboardData(): Promise<DashboardData> {
             )
           },
           {
-            title: "Процент накоплений",
+            key: "savingsRate",
+            title: t("svc.metric.savingsRate"),
             value: `${input.savingsRate.toFixed(1)}%`,
-            detail: "Доля свободного остатка"
+            detail: t("svc.metric.savingsRate.detail")
           },
           {
-            title: "Финансовая подушка",
-            value: `${input.emergencyFundMonths.toFixed(1)} мес.`,
-            detail: "Резерв к средним расходам"
+            key: "emergencyFund",
+            title: t("svc.metric.emergencyFund"),
+            value: t("svc.value.months", { months: input.emergencyFundMonths.toFixed(1) }),
+            detail: t("svc.metric.emergencyFund.detail")
           }
         ],
         categoryExpenses: buildCategoryExpenses(finance.transactions),
         monthlyCashflow: input.monthlyCashflow,
-        recommendations: service.build(healthInput),
-        health: service.healthScore(healthInput),
+        recommendations: service.build(healthInput, locale),
+        health: service.healthScore(healthInput, locale),
         netWorth,
         liabilitiesTotal,
         netWorthBreakdown: buildNetWorthBreakdown({
@@ -1127,7 +1164,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         emergencyFund
       };
     },
-    emptyDashboard
+    () => emptyDashboard(locale)
   );
 }
 
@@ -1402,6 +1439,7 @@ export async function getAccountsPageData(): Promise<AccountsPageData> {
 export async function getBudgetsPageData(month?: string): Promise<BudgetsPageData> {
   const targetMonthDate = month ? new Date(`${month}-01`) : new Date();
   const selectedMonth = format(startOfMonth(targetMonthDate), "yyyy-MM");
+  const locale = await getServerLocale();
 
   return safeData<BudgetsPageData>(
     () => {
@@ -1415,7 +1453,7 @@ export async function getBudgetsPageData(month?: string): Promise<BudgetsPageDat
         budgets: buildBudgetRows(transactions, demoCategories, targetMonthDate),
         categories: demoCategories,
         recommendations: service
-          .build(input)
+          .build(input, locale)
           .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
         currency: "RUB",
         selectedMonth
@@ -1433,7 +1471,7 @@ export async function getBudgetsPageData(month?: string): Promise<BudgetsPageDat
       const budgets = await buildDatabaseBudgetRows(user.id, categoryOptions, targetMonthDate);
       const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
       const recommendations = new FinanceRecommendationService()
-        .build(finance.input)
+        .build(finance.input, locale)
         .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity));
 
       return {

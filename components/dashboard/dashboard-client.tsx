@@ -29,7 +29,7 @@ export function DashboardClient({
   const { data } = useApiPageData(initialData, "/dashboard");
   const { data: forecast } = useApiPageData(initialForecast, "/forecast");
 
-  const freeCash = data.metrics.find((metric) => metric.title === "Свободный остаток");
+  const freeCash = data.metrics.find((metric) => metric.key === "freeCash");
   const showDistribute = freeCash?.tone === "success";
 
   return (

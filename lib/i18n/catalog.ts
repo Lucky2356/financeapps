@@ -701,6 +701,63 @@ const ru: Messages = {
   "cmd.title": "Командная палитра",
   "auto.notifTitle": "Платежи сегодня",
   "auto.notifBody": "{count} к оплате на сумму {amount}",
+  // ── Generated content (services / data layer) ──────────────────────
+  // Dashboard metrics
+  "svc.metric.totalBalance": "Общий баланс",
+  "svc.metric.totalBalance.detail": "Все активные счета",
+  "svc.metric.monthIncome": "Доходы за месяц",
+  "svc.metric.monthExpense": "Расходы за месяц",
+  "svc.metric.month.detail": "Текущий календарный месяц",
+  "svc.metric.freeCash": "Свободный остаток",
+  "svc.metric.freeCash.detail": "Доходы минус расходы",
+  "svc.metric.savingsRate": "Процент накоплений",
+  "svc.metric.savingsRate.detail": "Доля свободного остатка",
+  "svc.metric.emergencyFund": "Финансовая подушка",
+  "svc.metric.emergencyFund.detail": "Резерв к средним расходам",
+  "svc.value.months": "{months} мес.",
+  // Health score
+  "svc.health.noData":
+    "Пока нет данных для оценки. Добавьте счета и операции, чтобы увидеть финансовое здоровье.",
+  "svc.health.check.freeCash": "Свободный остаток",
+  "svc.health.check.savingsRate": "Норма накоплений",
+  "svc.health.check.cushion": "Финансовая подушка",
+  "svc.health.value.positive": "Положительный",
+  "svc.health.value.negative": "Отрицательный",
+  "svc.health.factor.negBalance": "Отрицательный остаток",
+  "svc.health.factor.lowSavings": "Низкая норма накоплений",
+  "svc.health.factor.lowCushion": "Недостаточная подушка",
+  "svc.health.factor.budgetExceeded": "Превышены лимиты бюджета",
+  "svc.health.factor.expenseGrowth": "Расходы растут 2 месяца",
+  "svc.health.factor.highDiscretionary": "Высокая доля необязательных трат",
+  "svc.health.factor.highDebt": "Высокая долговая нагрузка",
+  "svc.health.summary.good": "Финансы устойчивы, сохраняйте регулярный контроль бюджета.",
+  "svc.health.summary.mid": "Есть рабочая база, но несколько зон требуют внимания.",
+  "svc.health.summary.low":
+    "Финансовая устойчивость снижена, стоит сфокусироваться на резерве и расходах.",
+  // Recommendations
+  "svc.rec.budgetExceeded.title": "Лимит по категории «{category}» превышен",
+  "svc.rec.budgetExceeded.desc":
+    "Расходы составили {pct}% от лимита. Проверьте крупные операции и регулярные платежи в этой категории.",
+  "svc.rec.efLow.title": "Финансовая подушка ниже базового уровня",
+  "svc.rec.efLow.desc":
+    "Резерв покрывает меньше 3 месяцев расходов. Часть свободного остатка можно направлять на восстановление подушки.",
+  "svc.rec.efTarget.title": "Подушка еще не достигла выбранной цели",
+  "svc.rec.efTarget.desc": "Текущий запас покрывает {months} мес. расходов при цели {target} мес.",
+  "svc.rec.subs.title": "Необязательные траты выше 10% расходов",
+  "svc.rec.subs.desc":
+    "Подписки, развлечения и рестораны занимают заметную долю бюджета. Полезно проверить, какие платежи повторяются автоматически.",
+  "svc.rec.positive.title": "Свободный остаток положительный",
+  "svc.rec.positive.desc":
+    "Можно распределить свободные деньги между целями, финансовой подушкой и долгосрочным капиталом с учетом риск-профиля.",
+  "svc.rec.essential.title": "Обязательные платежи занимают большую долю бюджета",
+  "svc.rec.essential.desc":
+    "Если обязательные расходы превышают две трети доходов, финансовая гибкость снижается. Проверьте жилье, транспорт и регулярные счета.",
+  "svc.rec.expenseGrowth.title": "Расходы растут два месяца подряд",
+  "svc.rec.expenseGrowth.desc":
+    "Рост расходов несколько месяцев подряд может снижать норму накоплений. Сравните категории и выделите источники роста.",
+  "svc.rec.slowGoal.title": "Цель «{title}» требует внимания",
+  "svc.rec.slowGoal.desc":
+    "Расчетный ежемесячный взнос выше текущего свободного остатка. Можно пересмотреть срок или темп пополнений.",
   // Auth marketing panel
   "auth.tagline": "Личные финансы — на десктопе и в вебе",
   "auth.heading": "Держите личные финансы под контролем — без таблиц и хаоса.",
@@ -1527,6 +1584,63 @@ const en: Messages = {
   "cmd.title": "Command palette",
   "auto.notifTitle": "Payments due today",
   "auto.notifBody": "{count} to pay, totaling {amount}",
+  // ── Generated content (services / data layer) ──────────────────────
+  // Dashboard metrics
+  "svc.metric.totalBalance": "Total balance",
+  "svc.metric.totalBalance.detail": "All active accounts",
+  "svc.metric.monthIncome": "Income this month",
+  "svc.metric.monthExpense": "Expenses this month",
+  "svc.metric.month.detail": "Current calendar month",
+  "svc.metric.freeCash": "Free balance",
+  "svc.metric.freeCash.detail": "Income minus expenses",
+  "svc.metric.savingsRate": "Savings rate",
+  "svc.metric.savingsRate.detail": "Share of the free balance",
+  "svc.metric.emergencyFund": "Emergency fund",
+  "svc.metric.emergencyFund.detail": "Reserve vs average expenses",
+  "svc.value.months": "{months} mo.",
+  // Health score
+  "svc.health.noData":
+    "No data to assess yet. Add accounts and transactions to see your financial health.",
+  "svc.health.check.freeCash": "Free balance",
+  "svc.health.check.savingsRate": "Savings rate",
+  "svc.health.check.cushion": "Emergency fund",
+  "svc.health.value.positive": "Positive",
+  "svc.health.value.negative": "Negative",
+  "svc.health.factor.negBalance": "Negative balance",
+  "svc.health.factor.lowSavings": "Low savings rate",
+  "svc.health.factor.lowCushion": "Insufficient cushion",
+  "svc.health.factor.budgetExceeded": "Budget limits exceeded",
+  "svc.health.factor.expenseGrowth": "Expenses rising 2 months",
+  "svc.health.factor.highDiscretionary": "High share of discretionary spending",
+  "svc.health.factor.highDebt": "High debt burden",
+  "svc.health.summary.good": "Finances are stable; keep up regular budget control.",
+  "svc.health.summary.mid": "You have a working base, but a few areas need attention.",
+  "svc.health.summary.low": "Financial stability is reduced; focus on your reserve and expenses.",
+  // Recommendations
+  "svc.rec.budgetExceeded.title": "Limit for category “{category}” exceeded",
+  "svc.rec.budgetExceeded.desc":
+    "Spending reached {pct}% of the limit. Review large transactions and recurring payments in this category.",
+  "svc.rec.efLow.title": "Emergency fund below the baseline",
+  "svc.rec.efLow.desc":
+    "The reserve covers less than 3 months of expenses. Part of the free balance can go toward rebuilding the cushion.",
+  "svc.rec.efTarget.title": "Cushion hasn't reached the chosen target",
+  "svc.rec.efTarget.desc":
+    "The current reserve covers {months} months of expenses against a {target}-month target.",
+  "svc.rec.subs.title": "Discretionary spending above 10% of expenses",
+  "svc.rec.subs.desc":
+    "Subscriptions, entertainment and dining take a notable share of the budget. It's worth checking which payments recur automatically.",
+  "svc.rec.positive.title": "Free balance is positive",
+  "svc.rec.positive.desc":
+    "You can distribute the free money between goals, the emergency fund and long-term capital based on your risk profile.",
+  "svc.rec.essential.title": "Essential payments take a large share of the budget",
+  "svc.rec.essential.desc":
+    "If essential expenses exceed two thirds of income, financial flexibility drops. Review housing, transport and recurring bills.",
+  "svc.rec.expenseGrowth.title": "Expenses rising two months in a row",
+  "svc.rec.expenseGrowth.desc":
+    "Rising expenses several months in a row can lower your savings rate. Compare categories and pinpoint the sources of growth.",
+  "svc.rec.slowGoal.title": "Goal “{title}” needs attention",
+  "svc.rec.slowGoal.desc":
+    "The estimated monthly contribution is higher than your current free balance. You can revise the deadline or the funding pace.",
   // Auth marketing panel
   "auth.tagline": "Personal finance — on desktop and on the web",
   "auth.heading": "Keep your personal finances under control — without spreadsheets and chaos.",

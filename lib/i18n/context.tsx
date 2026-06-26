@@ -33,8 +33,17 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
 
   useEffect(() => {
+    const initial = resolveInitialLocale();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLocaleState(resolveInitialLocale());
+    setLocaleState(initial);
+    // Seed the cookie on first load so the web server renders generated content
+    // (recommendations, metrics, insights) in the resolved locale even before
+    // the user explicitly changes the language setting.
+    try {
+      document.cookie = `${STORAGE_KEY}=${initial}; path=/; max-age=31536000; samesite=lax`;
+    } catch {
+      /* document unavailable */
+    }
   }, []);
 
   useEffect(() => {
@@ -49,6 +58,13 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.setItem(STORAGE_KEY, next);
     } catch {
       /* storage unavailable — in-memory only */
+    }
+    // Mirror to a cookie so the web server (SSR / API routes) can render
+    // locale-aware generated content (recommendations, metrics, insights).
+    try {
+      document.cookie = `${STORAGE_KEY}=${next}; path=/; max-age=31536000; samesite=lax`;
+    } catch {
+      /* document unavailable */
     }
   }, []);
 
