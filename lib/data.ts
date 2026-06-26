@@ -695,18 +695,21 @@ function emptyDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
   };
 }
 
-function emptyForecast(): ForecastPageData {
-  return new CashflowForecastService().build({
-    source: "database",
-    currency: "RUB",
-    accounts: [],
-    recurringTransactions: [],
-    goals: []
-  });
+function emptyForecast(locale: Locale = DEFAULT_LOCALE): ForecastPageData {
+  return new CashflowForecastService().build(
+    {
+      source: "database",
+      currency: "RUB",
+      accounts: [],
+      recurringTransactions: [],
+      goals: []
+    },
+    locale
+  );
 }
 
-function emptyAnalytics(): AnalyticsData {
-  return buildAnalyticsFromTransactions([], "RUB", "database");
+function emptyAnalytics(locale: Locale = DEFAULT_LOCALE): AnalyticsData {
+  return buildAnalyticsFromTransactions([], "RUB", "database", locale);
 }
 
 function emptyInvestments(): InvestmentData {
@@ -1364,18 +1367,22 @@ export async function getRulesPageData(): Promise<RulesPageData> {
 }
 
 export async function getForecastData(): Promise<ForecastPageData> {
+  const locale = await getServerLocale();
   return safeData<ForecastPageData>(
     () => {
       const recurringTransactions = buildDemoRecurringTransactions();
       const goals = buildDemoGoals();
 
-      return new CashflowForecastService().build({
-        source: "demo-fallback",
-        currency: "RUB",
-        accounts: demoAccounts,
-        recurringTransactions,
-        goals
-      });
+      return new CashflowForecastService().build(
+        {
+          source: "demo-fallback",
+          currency: "RUB",
+          accounts: demoAccounts,
+          recurringTransactions,
+          goals
+        },
+        locale
+      );
     },
     async () => {
       if (!prisma) throw new Error("Prisma client is not configured.");
@@ -1394,15 +1401,18 @@ export async function getForecastData(): Promise<ForecastPageData> {
         prisma.savingGoal.findMany({ where: { userId: user.id }, orderBy: { deadline: "asc" } })
       ]);
 
-      return new CashflowForecastService().build({
-        source: "database",
-        currency: user.currency,
-        accounts: accounts.map(toAccountRow),
-        recurringTransactions: recurringRows.map(toRecurringTransactionRow),
-        goals: goals.map(toGoalRow)
-      });
+      return new CashflowForecastService().build(
+        {
+          source: "database",
+          currency: user.currency,
+          accounts: accounts.map(toAccountRow),
+          recurringTransactions: recurringRows.map(toRecurringTransactionRow),
+          goals: goals.map(toGoalRow)
+        },
+        locale
+      );
     },
-    emptyForecast
+    () => emptyForecast(locale)
   );
 }
 
@@ -1572,8 +1582,9 @@ export async function getLiabilitiesPageData(): Promise<LiabilitiesPageData> {
 }
 
 export async function getInvestmentData(): Promise<InvestmentData> {
+  const locale = await getServerLocale();
   return safeData<InvestmentData>(
-    buildDemoInvestmentData,
+    () => buildDemoInvestmentData(locale),
     async (): Promise<InvestmentData> => {
       if (!prisma) throw new Error("Prisma client is not configured.");
       const user = await getDefaultUser();
@@ -1674,7 +1685,12 @@ export async function getInvestmentData(): Promise<InvestmentData> {
           .map((priceRow) => toNumber(priceRow.price));
       }
       const riskCode = user.riskProfile?.code ?? "MODERATE";
-      const analysis = new InvestmentAnalysisService().analyze(portfolioRows, riskCode, historical);
+      const analysis = new InvestmentAnalysisService().analyze(
+        portfolioRows,
+        riskCode,
+        historical,
+        locale
+      );
 
       return {
         source: "database",
@@ -1693,7 +1709,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
   );
 }
 
-async function buildDemoInvestmentData(): Promise<InvestmentData> {
+async function buildDemoInvestmentData(locale: Locale = DEFAULT_LOCALE): Promise<InvestmentData> {
   const provider = createMarketDataProvider();
   const securities = await provider.getSecurities();
   const positionConfig = [
@@ -1732,7 +1748,12 @@ async function buildDemoInvestmentData(): Promise<InvestmentData> {
       await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())
     ).map((item) => item.price);
   }
-  const analysis = new InvestmentAnalysisService().analyze(portfolioRows, "MODERATE", historical);
+  const analysis = new InvestmentAnalysisService().analyze(
+    portfolioRows,
+    "MODERATE",
+    historical,
+    locale
+  );
 
   return {
     source: "demo-fallback",
@@ -1890,7 +1911,8 @@ export async function getImportPageData(): Promise<ImportPageData> {
 function buildAnalyticsFromTransactions(
   transactions: TransactionRow[],
   currency: string,
-  source: DataSource
+  source: DataSource,
+  locale: Locale = DEFAULT_LOCALE
 ): AnalyticsData {
   const months = [
     subMonths(new Date(), 5),
@@ -1964,7 +1986,7 @@ function buildAnalyticsFromTransactions(
       ...item,
       share: totalExpenseAll > 0 ? percent(item.total, totalExpenseAll) : 0
     }));
-  const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories);
+  const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories, locale);
 
   return {
     source,
@@ -1982,7 +2004,7 @@ function buildAnalyticsFromTransactions(
   };
 }
 
-function buildDemoAnalytics(): AnalyticsData {
+function buildDemoAnalytics(locale: Locale = DEFAULT_LOCALE): AnalyticsData {
   const transactions = buildDemoTransactions();
   const result = buildAnalyticsFromTransactions(transactions, "RUB", "demo-fallback");
 
@@ -2061,7 +2083,7 @@ function buildDemoAnalytics(): AnalyticsData {
             share: 6
           }
         ];
-  const derived = buildAnalyticsDerived(patchedCashflow, topExpenseCategories);
+  const derived = buildAnalyticsDerived(patchedCashflow, topExpenseCategories, locale);
 
   return {
     source: "demo-fallback",
@@ -2121,8 +2143,9 @@ export async function getCategoriesPageData(): Promise<CategoriesPageData> {
 }
 
 export async function getAnalyticsData(): Promise<AnalyticsData> {
+  const locale = await getServerLocale();
   return safeData<AnalyticsData>(
-    buildDemoAnalytics,
+    () => buildDemoAnalytics(locale),
     async () => {
       if (!prisma) throw new Error("Prisma client is not configured.");
       const user = await getDefaultUser();
@@ -2145,9 +2168,9 @@ export async function getAnalyticsData(): Promise<AnalyticsData> {
         category: { id: t.category.id, label: t.category.name, color: t.category.color }
       }));
 
-      return buildAnalyticsFromTransactions(transactionRows, user.currency, "database");
+      return buildAnalyticsFromTransactions(transactionRows, user.currency, "database", locale);
     },
-    emptyAnalytics
+    () => emptyAnalytics(locale)
   );
 }
 

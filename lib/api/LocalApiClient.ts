@@ -1392,13 +1392,16 @@ export class LocalApiClient implements ApiClient {
   }
 
   private forecast(state: LocalState): ForecastPageData {
-    return new CashflowForecastService().build({
-      source: "database",
-      currency: state.currency,
-      accounts: this.accounts(state).accounts,
-      recurringTransactions: this.recurring(state).recurringTransactions,
-      goals: this.goals(state).goals
-    });
+    return new CashflowForecastService().build(
+      {
+        source: "database",
+        currency: state.currency,
+        accounts: this.accounts(state).accounts,
+        recurringTransactions: this.recurring(state).recurringTransactions,
+        goals: this.goals(state).goals
+      },
+      getClientLocale()
+    );
   }
 
   private async investments(state: LocalState): Promise<InvestmentData> {
@@ -1443,7 +1446,8 @@ export class LocalApiClient implements ApiClient {
     const analysis = new InvestmentAnalysisService().analyze(
       portfolio,
       state.riskProfileCode,
-      historical
+      historical,
+      getClientLocale()
     );
 
     return {
@@ -1772,7 +1776,7 @@ export class LocalApiClient implements ApiClient {
         ...item,
         share: totalExpense > 0 ? Math.round((item.total / totalExpense) * 1000) / 10 : 0
       }));
-    const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories);
+    const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories, getClientLocale());
 
     return {
       source: "database",
