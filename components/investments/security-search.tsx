@@ -7,17 +7,19 @@ import { apiClient } from "@/lib/api/client";
 import type { MarketSecurity } from "@/services/market/MarketDataService";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 
 // Live search over the whole MOEX universe so the user can add ANY listed stock.
 export function SecuritySearch({
   currency,
   onSelect,
-  placeholder = "Поиск по тикеру или названию (напр. SBER, Сбер)…"
+  placeholder
 }: {
   currency: string;
   onSelect: (security: MarketSecurity) => void;
   placeholder?: string;
 }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MarketSecurity[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,7 +58,7 @@ export function SecuritySearch({
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t("inv.searchPlaceholder")}
           className="pl-9"
           autoFocus
         />
@@ -64,9 +66,13 @@ export function SecuritySearch({
       {query.trim().length >= 1 ? (
         <div className="max-h-64 overflow-y-auto rounded-md border">
           {loading && results.length === 0 ? (
-            <p className="px-3 py-4 text-center text-sm text-muted-foreground">Поиск…</p>
+            <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+              {t("inv.searching")}
+            </p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-4 text-center text-sm text-muted-foreground">Ничего не найдено</p>
+            <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+              {t("cmd.nothingFound")}
+            </p>
           ) : (
             results.map((security) => (
               <button

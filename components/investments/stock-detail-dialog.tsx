@@ -8,6 +8,7 @@ import type { StockPricePoint } from "@/components/charts/stock-price-chart";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 
 export type StockDetailSeed = {
   ticker: string;
@@ -18,12 +19,12 @@ export type StockDetailSeed = {
   sector?: string;
 };
 
-const RANGES: { id: string; label: string }[] = [
-  { id: "1m", label: "1М" },
-  { id: "3m", label: "3М" },
-  { id: "6m", label: "6М" },
-  { id: "1y", label: "1Г" },
-  { id: "5y", label: "5Л" }
+const RANGES: { id: string; labelKey: string }[] = [
+  { id: "1m", labelKey: "inv.range.1m" },
+  { id: "3m", labelKey: "inv.range.3m" },
+  { id: "6m", labelKey: "inv.range.6m" },
+  { id: "1y", labelKey: "inv.range.1y" },
+  { id: "5y", labelKey: "inv.range.5y" }
 ];
 
 function ChangeBadge({ value, suffix }: { value: number; suffix: string }) {
@@ -47,6 +48,7 @@ export function StockDetailDialog({
   currency: string;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [range, setRange] = useState("6m");
   const [points, setPoints] = useState<StockPricePoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -100,9 +102,11 @@ export function StockDetailDialog({
                 </span>
               ) : null}
               {seed.changeDay !== undefined ? (
-                <ChangeBadge value={seed.changeDay} suffix="день" />
+                <ChangeBadge value={seed.changeDay} suffix={t("inv.day")} />
               ) : null}
-              {seed.change30d ? <ChangeBadge value={seed.change30d} suffix="30 дней" /> : null}
+              {seed.change30d ? (
+                <ChangeBadge value={seed.change30d} suffix={t("inv.30days")} />
+              ) : null}
               {seed.sector ? (
                 <span className="text-xs text-muted-foreground">· {seed.sector}</span>
               ) : null}
@@ -118,27 +122,24 @@ export function StockDetailDialog({
                   className="min-w-11"
                   onClick={() => setRange(r.id)}
                 >
-                  {r.label}
+                  {t(r.labelKey)}
                 </Button>
               ))}
             </div>
 
             {loading && points.length === 0 ? (
               <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-                Загрузка котировок…
+                {t("inv.loadingQuotes")}
               </div>
             ) : points.length >= 2 ? (
               <StockPriceChart data={points} up={up} />
             ) : (
               <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-                Нет данных котировок за выбранный период.
+                {t("inv.noQuotes")}
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground">
-              Котировки — Московская биржа (MOEX). Данные носят информационный характер и не
-              являются индивидуальной инвестиционной рекомендацией.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("inv.disclaimer")}</p>
           </>
         ) : null}
       </DialogContent>

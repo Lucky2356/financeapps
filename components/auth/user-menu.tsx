@@ -4,10 +4,12 @@ import { LogOut } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/context";
 
 // Small floating account control for the web app — current email + sign-out.
 // Rendered only in the web build (see Providers).
 export function UserMenu() {
+  const { t } = useI18n();
   const { data: session, status } = useSession();
   if (status !== "authenticated") return null;
 
@@ -21,7 +23,7 @@ export function UserMenu() {
         onClick={() => void signOut({ callbackUrl: "/login" })}
       >
         <LogOut className="size-3.5" />
-        Выйти
+        {t("menu.logout")}
       </Button>
     </div>
   );
