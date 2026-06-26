@@ -18,17 +18,14 @@ import {
 import type { AnalyticsData } from "@/lib/data";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-function axisCurrency(value: number) {
-  if (Math.abs(value) >= 1000) {
-    return `${Math.round(value / 1000)} тыс.`;
-  }
-  return `${value}`;
-}
-
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
+  const { t } = useI18n();
+  const axisCurrency = (value: number) =>
+    Math.abs(value) >= 1000 ? `${Math.round(value / 1000)} ${t("an.thousand")}` : `${value}`;
   const TrendIcon =
     data.savingsRateTrend === "up"
       ? TrendingUp
@@ -37,10 +34,10 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
         : Info;
   const trendLabel =
     data.savingsRateTrend === "up"
-      ? "Растет"
+      ? t("an.trend.up")
       : data.savingsRateTrend === "down"
-        ? "Снижается"
-        : "Стабильно";
+        ? t("an.trend.down")
+        : t("an.trend.stable");
 
   return (
     <div className="space-y-6">
@@ -48,29 +45,29 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden">
           <Printer className="size-4" />
-          Печать / PDF
+          {t("an.print")}
         </Button>
       </div>
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
-          label="Ср. доходы/мес."
+          label={t("an.avgIncome")}
           value={formatCurrency(data.avgMonthlyIncome, data.currency)}
           colorClass="text-green-700 dark:text-green-400"
         />
         <SummaryCard
-          label="Ср. расходы/мес."
+          label={t("an.avgExpense")}
           value={formatCurrency(data.avgMonthlyExpense, data.currency)}
           colorClass="text-orange-700 dark:text-orange-400"
         />
         <SummaryCard
-          label="Ср. норма сбережений"
+          label={t("an.avgSavings")}
           value={`${data.avgSavingsRate.toFixed(1)}%`}
           colorClass="text-blue-700 dark:text-blue-400"
         />
         <SummaryCard
-          label="Лучший месяц"
+          label={t("an.bestMonth")}
           value={data.bestMonth}
           colorClass="text-purple-700 dark:text-purple-400"
         />
@@ -79,18 +76,18 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Тренд месяца</CardTitle>
+            <CardTitle>{t("an.monthTrend")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3 rounded-lg border bg-muted/20 p-4">
               <TrendIcon className="size-5 text-primary" />
               <div>
-                <p className="text-sm text-muted-foreground">Норма сбережений</p>
+                <p className="text-sm text-muted-foreground">{t("an.savingsRate")}</p>
                 <p className="text-xl font-semibold">{trendLabel}</p>
               </div>
             </div>
             <div className="rounded-lg border p-4">
-              <p className="text-sm text-muted-foreground">Изменение расходов к прошлому месяцу</p>
+              <p className="text-sm text-muted-foreground">{t("an.expenseChange")}</p>
               <p
                 className={
                   data.expenseChangePct > 0
@@ -107,7 +104,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Инсайты</CardTitle>
+            <CardTitle>{t("an.insights")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             {data.insights.map((insight) => {
@@ -136,7 +133,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       {/* Cashflow chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Денежные потоки за 6 месяцев</CardTitle>
+          <CardTitle>{t("an.cashflow6m")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-72 w-full sm:h-80">
@@ -157,9 +154,9 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                   {...chartTooltipProps}
                   formatter={(value, name) => {
                     const labels: Record<string, string> = {
-                      income: "Доходы",
-                      expense: "Расходы",
-                      savings: "Сбережения"
+                      income: t("an.income"),
+                      expense: t("an.expense"),
+                      savings: t("an.savings")
                     };
                     return [
                       formatCurrency(Number(value), data.currency),
@@ -190,7 +187,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Топ категорий расходов</CardTitle>
+            <CardTitle>{t("an.topCategories")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -199,7 +196,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                   key={cat.category}
                   href={`/transactions?categoryId=${encodeURIComponent(cat.categoryId)}&type=EXPENSE`}
                   className="block rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
-                  title={`Показать операции: ${cat.category}`}
+                  title={t("acc.showTransactions", { name: cat.category })}
                 >
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
@@ -228,9 +225,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                 </Link>
               ))}
               {data.topExpenseCategories.length === 0 && (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Нет данных за последние 6 месяцев
-                </p>
+                <p className="py-8 text-center text-sm text-muted-foreground">{t("an.noData6m")}</p>
               )}
             </div>
           </CardContent>
@@ -238,7 +233,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Структура расходов</CardTitle>
+            <CardTitle>{t("an.structure")}</CardTitle>
           </CardHeader>
           <CardContent>
             {data.topExpenseCategories.length > 0 ? (
@@ -262,7 +257,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                       </Pie>
                       <Tooltip
                         {...chartTooltipProps}
-                        formatter={(value) => [`${Number(value).toFixed(1)}%`, "Доля"]}
+                        formatter={(value) => [`${Number(value).toFixed(1)}%`, t("an.share")]}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -283,7 +278,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                 </div>
               </div>
             ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">Нет данных</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{t("an.noData")}</p>
             )}
           </CardContent>
         </Card>
