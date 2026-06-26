@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import {
   EMPTY_FORECAST_FILTER,
   filterForecastEvents,
@@ -21,6 +22,7 @@ export function ForecastEventsCard({
   events: ForecastEvent[];
   currency: string;
 }) {
+  const { t } = useI18n();
   const [filter, setFilter] = useState(EMPTY_FORECAST_FILTER);
   const { accounts, categories } = useMemo(() => forecastFilterOptions(events), [events]);
   const filtered = useMemo(() => filterForecastEvents(events, filter), [events, filter]);
@@ -28,15 +30,15 @@ export function ForecastEventsCard({
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle>Плановые события</CardTitle>
+        <CardTitle>{t("fc.events")}</CardTitle>
         <div className="flex flex-wrap gap-2">
           <select
-            aria-label="Фильтр по счёту"
+            aria-label={t("fc.filterAccount")}
             value={filter.account}
             onChange={(event) => setFilter((prev) => ({ ...prev, account: event.target.value }))}
             className="h-9 rounded-md border bg-background px-3 text-sm"
           >
-            <option value="">Все счета</option>
+            <option value="">{t("tx.allAccounts")}</option>
             {accounts.map((account) => (
               <option key={account} value={account}>
                 {account}
@@ -44,12 +46,12 @@ export function ForecastEventsCard({
             ))}
           </select>
           <select
-            aria-label="Фильтр по категории"
+            aria-label={t("fc.filterCategory")}
             value={filter.category}
             onChange={(event) => setFilter((prev) => ({ ...prev, category: event.target.value }))}
             className="h-9 rounded-md border bg-background px-3 text-sm"
           >
-            <option value="">Все категории</option>
+            <option value="">{t("tx.allCategories")}</option>
             {categories.map((category) => (
               <option key={category} value={category}>
                 {category}
@@ -60,7 +62,7 @@ export function ForecastEventsCard({
       </CardHeader>
       <CardContent>
         {filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Нет событий по выбранным фильтрам.</p>
+          <p className="text-sm text-muted-foreground">{t("fc.noEvents")}</p>
         ) : (
           <div className="space-y-3">
             {filtered.map((event) => (

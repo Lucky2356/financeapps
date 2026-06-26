@@ -1,3 +1,5 @@
+"use client";
+
 import { AlertTriangle, CalendarClock, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import Link from "next/link";
 
@@ -7,31 +9,33 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import type { ForecastData, ForecastWarning } from "@/types/finance";
 
 export function ForecastView({ data }: { data: ForecastData }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-5">
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Доступно сейчас"
+          label={t("fc.availableNow")}
           value={formatCurrency(data.startingBalance, data.currency)}
           icon={WalletCards}
         />
         <Metric
-          label="Прогноз через 30 дней"
+          label={t("fc.forecast30")}
           value={formatCurrency(data.forecast30dBalance, data.currency)}
           icon={data.forecast30dBalance >= data.startingBalance ? TrendingUp : TrendingDown}
           tone={data.forecast30dBalance >= 0 ? "default" : "danger"}
         />
         <Metric
-          label="Поток за 30 дней"
+          label={t("fc.flow30")}
           value={formatCurrency(data.plannedIncome30d - data.plannedExpense30d, data.currency)}
           icon={CalendarClock}
           tone={data.plannedIncome30d >= data.plannedExpense30d ? "success" : "warning"}
         />
         <Metric
-          label="Прогноз через 90 дней"
+          label={t("fc.forecast90")}
           value={formatCurrency(data.forecast90dBalance, data.currency)}
           icon={data.forecast90dBalance >= data.startingBalance ? TrendingUp : TrendingDown}
           tone={data.forecast90dBalance >= 0 ? "default" : "danger"}
@@ -41,11 +45,11 @@ export function ForecastView({ data }: { data: ForecastData }) {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Прогноз остатка</CardTitle>
+            <CardTitle>{t("fc.balanceForecast")}</CardTitle>
             <Button asChild variant="outline" size="sm">
               <Link href="/recurring">
                 <CalendarClock className="size-4" />
-                Плановые платежи
+                {t("page.recurring.title")}
               </Link>
             </Button>
           </CardHeader>
@@ -56,7 +60,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Предупреждения</CardTitle>
+            <CardTitle>{t("fc.warnings")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {data.warnings.map((warning) => (
@@ -69,29 +73,29 @@ export function ForecastView({ data }: { data: ForecastData }) {
       <section className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Плановые суммы</CardTitle>
+            <CardTitle>{t("fc.plannedAmounts")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <FlowBox
-              label="Доходы 30 дней"
+              label={t("fc.income30")}
               value={data.plannedIncome30d}
               currency={data.currency}
               tone="success"
             />
             <FlowBox
-              label="Расходы 30 дней"
+              label={t("fc.expense30")}
               value={data.plannedExpense30d}
               currency={data.currency}
               tone="danger"
             />
             <FlowBox
-              label="Доходы 90 дней"
+              label={t("fc.income90")}
               value={data.plannedIncome90d}
               currency={data.currency}
               tone="success"
             />
             <FlowBox
-              label="Расходы 90 дней"
+              label={t("fc.expense90")}
               value={data.plannedExpense90d}
               currency={data.currency}
               tone="danger"
@@ -140,6 +144,7 @@ function Metric({
 }
 
 function WarningCard({ warning }: { warning: ForecastWarning }) {
+  const { t } = useI18n();
   const variant =
     warning.severity === "CRITICAL"
       ? "destructive"
@@ -151,13 +156,7 @@ function WarningCard({ warning }: { warning: ForecastWarning }) {
     <article className="rounded-lg border bg-muted/20 p-4">
       <div className="flex items-start justify-between gap-3">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-primary" />
-        <Badge variant={variant}>
-          {warning.severity === "CRITICAL"
-            ? "Срочно"
-            : warning.severity === "WARNING"
-              ? "Важно"
-              : "Инфо"}
-        </Badge>
+        <Badge variant={variant}>{t(`notifSev.${warning.severity}`)}</Badge>
       </div>
       <h3 className="mt-3 text-sm font-semibold">{warning.title}</h3>
       <p className="mt-2 text-sm text-muted-foreground">{warning.description}</p>
