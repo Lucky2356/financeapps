@@ -15,10 +15,7 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Аналитика"
-        description="Денежные потоки, динамика сбережений и структура расходов за 6 месяцев."
-      />
+      <PageHeader titleKey="page.analytics.title" descriptionKey="page.analytics.desc" />
       <AnalyticsClient initialData={data} />
     </div>
   );

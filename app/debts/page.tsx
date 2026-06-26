@@ -10,10 +10,7 @@ export default async function DebtsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Долги"
-        description="Кредиты, рассрочки и другие обязательства. Уменьшают чистый капитал; помогаем спланировать погашение."
-      />
+      <PageHeader titleKey="page.debts.title" descriptionKey="page.debts.desc" />
       <SourceBanner source={data.source} />
       <DebtManager data={data} />
     </div>

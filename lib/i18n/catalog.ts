@@ -64,7 +64,57 @@ const ru: Messages = {
   "cmd.importExport": "Импорт и экспорт",
   "cmd.account": "Счёт",
   "cmd.incomeCategory": "Категория дохода",
-  "cmd.expenseCategory": "Категория расхода"
+  "cmd.expenseCategory": "Категория расхода",
+  // Page headers
+  "page.home.title": "Главная",
+  "page.home.desc": "Финансовая картина месяца и динамика расходов.",
+  "page.transactions.title": "Операции",
+  "page.transactions.desc":
+    "Ручной ввод, редактирование, удаление и фильтрация доходов и расходов.",
+  "page.accounts.title": "Счета",
+  "page.accounts.desc":
+    "Наличные, карта, накопительный и брокерский счет с расчетом общего баланса.",
+  "page.debts.title": "Долги",
+  "page.debts.desc":
+    "Кредиты, рассрочки и другие обязательства. Уменьшают чистый капитал; помогаем спланировать погашение.",
+  "page.categories.title": "Категории",
+  "page.categories.desc":
+    "Настройте категории доходов и расходов для точной классификации операций.",
+  "page.budgets.title": "Бюджеты",
+  "page.budgets.desc": "Лимиты по категориям, прогресс и предупреждения при превышении.",
+  "page.budgets.optimization": "Оптимизация расходов",
+  "page.goals.title": "Цели",
+  "page.goals.desc": "Накопительные цели, прогресс и расчет нужного ежемесячного взноса.",
+  "page.recurring.title": "Плановые платежи",
+  "page.recurring.desc":
+    "Повторяющиеся доходы и расходы, ближайшие обязательства и создание операций по расписанию.",
+  "page.subscriptions.title": "Подписки",
+  "page.subscriptions.desc":
+    "Регулярные платежи в пересчёте на месяц и год — чтобы видеть, во что обходятся подписки.",
+  "page.forecast.title": "Прогноз",
+  "page.forecast.desc":
+    "Плановый денежный поток на 30 и 90 дней, ближайшие обязательства и предупреждения о кассовых разрывах.",
+  "page.analytics.title": "Аналитика",
+  "page.analytics.desc": "Денежные потоки, динамика сбережений и структура расходов за 6 месяцев.",
+  "page.investments.title": "Инвестиции",
+  "page.investments.desc":
+    "Watchlist, портфель с реальными ценами Московской биржи, структура, риски и образовательные подсказки без индивидуальных инвестиционных рекомендаций.",
+  "page.reports.title": "Отчёты",
+  "page.reports.desc": "Сводный финансовый отчёт — можно распечатать или сохранить в PDF.",
+  "page.import.title": "Импорт и экспорт",
+  "page.import.desc":
+    "Загрузка CSV с предпросмотром, маппингом колонок и экспорт операций в CSV/JSON.",
+  "page.settings.title": "Настройки",
+  "page.settings.desc": "Валюта, внешний вид, автоматизация, аккаунт и управление данными.",
+  // Generic loading fallbacks
+  "loading.generic": "Загрузка…",
+  "loading.transactions": "Загружаем операции...",
+  "loading.analytics": "Загружаем аналитику...",
+  // Common
+  "common.empty": "Пусто",
+  "reco.empty": "Рекомендаций пока нет. Добавьте больше данных, чтобы анализ стал точнее.",
+  "inv.portfolioRisks": "Риски портфеля",
+  "inv.educationTips": "Образовательные подсказки"
 };
 
 const en: Messages = {
@@ -101,8 +151,7 @@ const en: Messages = {
   "error.retry": "Try again",
   // Settings: language
   "settings.language.title": "Interface language",
-  "settings.language.hint":
-    "Part of the interface is translated; the rest is migrated gradually.",
+  "settings.language.hint": "Part of the interface is translated; the rest is migrated gradually.",
   "settings.language.ru": "Русский",
   "settings.language.en": "English",
   // Command palette
@@ -119,7 +168,54 @@ const en: Messages = {
   "cmd.importExport": "Import & export",
   "cmd.account": "Account",
   "cmd.incomeCategory": "Income category",
-  "cmd.expenseCategory": "Expense category"
+  "cmd.expenseCategory": "Expense category",
+  // Page headers
+  "page.home.title": "Home",
+  "page.home.desc": "This month's financial picture and spending trend.",
+  "page.transactions.title": "Transactions",
+  "page.transactions.desc": "Manually add, edit, delete and filter income and expenses.",
+  "page.accounts.title": "Accounts",
+  "page.accounts.desc": "Cash, card, savings and brokerage accounts with a combined balance.",
+  "page.debts.title": "Debts",
+  "page.debts.desc":
+    "Loans, installments and other liabilities. They reduce net worth; we help you plan payoff.",
+  "page.categories.title": "Categories",
+  "page.categories.desc": "Set up income and expense categories for accurate classification.",
+  "page.budgets.title": "Budgets",
+  "page.budgets.desc": "Per-category limits, progress and over-limit warnings.",
+  "page.budgets.optimization": "Spending optimization",
+  "page.goals.title": "Goals",
+  "page.goals.desc": "Savings goals, progress and the required monthly contribution.",
+  "page.recurring.title": "Scheduled payments",
+  "page.recurring.desc":
+    "Recurring income and expenses, upcoming obligations and creating transactions on a schedule.",
+  "page.subscriptions.title": "Subscriptions",
+  "page.subscriptions.desc":
+    "Recurring payments converted to monthly and yearly cost — so you can see what subscriptions cost.",
+  "page.forecast.title": "Forecast",
+  "page.forecast.desc":
+    "Projected cash flow for 30 and 90 days, upcoming obligations and cash-gap warnings.",
+  "page.analytics.title": "Analytics",
+  "page.analytics.desc": "Cash flows, savings trend and spending structure over 6 months.",
+  "page.investments.title": "Investments",
+  "page.investments.desc":
+    "Watchlist, a portfolio with real Moscow Exchange prices, structure, risks and educational tips with no individual investment advice.",
+  "page.reports.title": "Reports",
+  "page.reports.desc": "A consolidated financial report — print it or save as PDF.",
+  "page.import.title": "Import & export",
+  "page.import.desc":
+    "Upload CSV with preview and column mapping, and export transactions to CSV/JSON.",
+  "page.settings.title": "Settings",
+  "page.settings.desc": "Currency, appearance, automation, account and data management.",
+  // Generic loading fallbacks
+  "loading.generic": "Loading…",
+  "loading.transactions": "Loading transactions...",
+  "loading.analytics": "Loading analytics...",
+  // Common
+  "common.empty": "Empty",
+  "reco.empty": "No recommendations yet. Add more data so the analysis becomes more accurate.",
+  "inv.portfolioRisks": "Portfolio risks",
+  "inv.educationTips": "Educational tips"
 };
 
 export const CATALOGS: Record<Locale, Messages> = { ru, en };

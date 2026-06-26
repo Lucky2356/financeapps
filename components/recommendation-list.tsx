@@ -1,8 +1,11 @@
+"use client";
+
 import { AlertCircle, CheckCircle2, Info, TriangleAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
+import { useI18n } from "@/lib/i18n/context";
 import type { RecommendationView } from "@/types/finance";
 
 const iconBySeverity = {
@@ -21,21 +24,28 @@ const badgeBySeverity = {
 
 export function RecommendationList({
   title,
+  titleKey,
   items,
-  empty = "Рекомендаций пока нет. Добавьте больше данных, чтобы анализ стал точнее."
+  empty
 }: {
-  title: string;
+  title?: string;
+  titleKey?: string;
   items: RecommendationView[];
   empty?: string;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle>{titleKey ? t(titleKey) : title}</CardTitle>
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
-          <EmptyState icon={Info} title="Пусто" description={empty} />
+          <EmptyState
+            icon={Info}
+            title={t("common.empty")}
+            description={empty ?? t("reco.empty")}
+          />
         ) : (
           <div className="space-y-3">
             {items.map((item) => {

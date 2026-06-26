@@ -6,11 +6,14 @@ import { ensureFreshServerData } from "@/lib/rendering";
 
 export default async function ImportPage() {
   await ensureFreshServerData();
-  const [data, transactions] = await Promise.all([getImportPageData(), getTransactionsPageData({})]);
+  const [data, transactions] = await Promise.all([
+    getImportPageData(),
+    getTransactionsPageData({})
+  ]);
 
   return (
     <div className="page-grid">
-      <PageHeader title="Импорт и экспорт" description="Загрузка CSV с предпросмотром, маппингом колонок и экспорт операций в CSV/JSON." />
+      <PageHeader titleKey="page.import.title" descriptionKey="page.import.desc" />
       <SourceBanner source={data.source} />
       <ImportExportPanel data={data} transactions={transactions.transactions} />
     </div>

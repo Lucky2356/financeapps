@@ -717,8 +717,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">
-        <RecommendationList title="Риски портфеля" items={data.risks} />
-        <RecommendationList title="Образовательные подсказки" items={data.education} />
+        <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />
+        <RecommendationList titleKey="inv.educationTips" items={data.education} />
       </section>
 
       {/* Single controlled dialog for editing any portfolio position */}
