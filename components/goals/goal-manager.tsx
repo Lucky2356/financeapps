@@ -10,6 +10,7 @@ import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, GoalsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { describeGoalPace } from "@/lib/goal-pace";
+import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { EmptyState } from "@/components/empty-state";
@@ -30,6 +31,7 @@ import { Progress } from "@/components/ui/progress";
 
 export function GoalManager({ data }: { data: GoalsPageData }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: pageData, reload } = useApiPageData(data, "/goals");
   const { run } = useApiMutation();
   const confirm = useConfirm();
@@ -49,8 +51,8 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
       () =>
         method === "POST" ? apiClient.post("/goals", payload) : apiClient.put("/goals", payload),
       {
-        success: method === "POST" ? "Цель добавлена" : "Цель обновлена",
-        error: "Не удалось сохранить цель",
+        success: method === "POST" ? t("goal.toast.added") : t("goal.toast.updated"),
+        error: t("goal.toast.saveError"),
         onSuccess: async () => {
           if (method === "POST") setAddOpen(false);
           else setEditingGoal(null);
@@ -62,15 +64,15 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
 
   async function removeGoal(id: string, title: string) {
     const confirmed = await confirm({
-      title: "Удалить цель?",
-      description: `Цель «${title}» будет удалена.`,
-      confirmLabel: "Удалить",
+      title: t("goal.delete.title"),
+      description: t("goal.delete.desc", { title }),
+      confirmLabel: t("common.delete"),
       destructive: true
     });
     if (!confirmed) return;
     await run(() => apiClient.delete(`/goals?id=${encodeURIComponent(id)}`), {
-      success: "Цель удалена",
-      error: "Не удалось удалить цель",
+      success: t("goal.toast.deleted"),
+      error: t("goal.toast.deleteError"),
       onSuccess: refresh
     });
   }
@@ -82,22 +84,22 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
           <DialogTrigger asChild>
             <Button>
               <Plus className="size-4" />
-              Добавить цель
+              {t("goal.add")}
             </Button>
           </DialogTrigger>
-          <GoalDialog title="Новая цель" onSubmit={(event) => submitGoal(event, "POST")} />
+          <GoalDialog title={t("goal.new")} onSubmit={(event) => submitGoal(event, "POST")} />
         </Dialog>
       </div>
 
       {pageData.goals.length === 0 ? (
         <EmptyState
           icon={Flag}
-          title="Пока нет целей"
-          description="Создайте накопительную цель (например, «Подушка» или «Отпуск») и пополняйте её со счёта — прогресс будет считаться автоматически."
+          title={t("goal.empty.title")}
+          description={t("goal.empty.desc")}
           action={
             <Button onClick={() => setAddOpen(true)}>
               <Plus className="size-4" />
-              Создать цель
+              {t("goal.empty.cta")}
             </Button>
           }
         />
@@ -112,7 +114,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                     <div>
                       <CardTitle>{goal.title}</CardTitle>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Дедлайн: {formatDate(goal.deadline)}
+                        {t("goal.deadline", { date: formatDate(goal.deadline) })}
                       </p>
                     </div>
                     <div className="flex gap-1">
@@ -127,8 +129,8 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        title="Редактировать"
-                        aria-label="Редактировать цель"
+                        title={t("common.editAria")}
+                        aria-label={t("goal.edit")}
                         onClick={() => setEditingGoal(goal)}
                       >
                         <Edit2 className="size-4" />
@@ -143,8 +145,8 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                           type="submit"
                           variant="ghost"
                           size="icon"
-                          title="Удалить"
-                          aria-label="Удалить цель"
+                          title={t("common.delete")}
+                          aria-label={t("goal.deleteAria")}
                         >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
@@ -156,19 +158,19 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                   <Progress value={goal.progress} />
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <div>
-                      <p className="text-xs text-muted-foreground">Накоплено</p>
+                      <p className="text-xs text-muted-foreground">{t("goal.saved")}</p>
                       <p className="text-sm font-semibold">
                         {formatCurrency(goal.currentAmount, pageData.currency)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Цель</p>
+                      <p className="text-xs text-muted-foreground">{t("goal.target")}</p>
                       <p className="text-sm font-semibold">
                         {formatCurrency(goal.targetAmount, pageData.currency)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">В месяц</p>
+                      <p className="text-xs text-muted-foreground">{t("goal.perMonth")}</p>
                       <p className="text-sm font-semibold">
                         {pace.isComplete
                           ? "—"
@@ -203,7 +205,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
       >
         {editingGoal && (
           <GoalDialog
-            title="Редактировать цель"
+            title={t("goal.edit")}
             goal={editingGoal}
             onSubmit={(event) => submitGoal(event, "PUT")}
           />
@@ -222,6 +224,7 @@ function DepositDialog({
   currency: string;
   onSuccess: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
@@ -253,11 +256,11 @@ function DepositDialog({
     event.preventDefault();
     const depositAmount = Number(amount);
     if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
-      toast.error("Введите сумму больше нуля");
+      toast.error(t("goal.deposit.enterAmount"));
       return;
     }
     if (!accountId) {
-      toast.error("Выберите счёт для пополнения");
+      toast.error(t("goal.deposit.selectAccount"));
       return;
     }
     setLoading(true);
@@ -268,12 +271,12 @@ function DepositDialog({
         amount: String(depositAmount),
         accountId
       });
-      toast.success("Пополнение списано со счёта");
+      toast.success(t("goal.deposit.success"));
       setOpen(false);
       setAmount("");
       await onSuccess();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить пополнение");
+      toast.error(error instanceof Error ? error.message : t("goal.deposit.error"));
     } finally {
       setLoading(false);
     }
@@ -282,21 +285,28 @@ function DepositDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" title="Пополнить" aria-label="Пополнить цель">
+        <Button
+          variant="ghost"
+          size="icon"
+          title={t("goal.deposit.tooltip")}
+          aria-label={t("goal.deposit.aria")}
+        >
           <PiggyBank className="size-4" />
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Пополнить: {goal.title}</DialogTitle>
+          <DialogTitle>{t("goal.deposit.title", { title: goal.title })}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Накоплено {formatCurrency(goal.currentAmount, currency)} из{" "}
-          {formatCurrency(goal.targetAmount, currency)}
+          {t("goal.deposit.progress", {
+            current: formatCurrency(goal.currentAmount, currency),
+            target: formatCurrency(goal.targetAmount, currency)
+          })}
         </p>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="space-y-2">
-            <Label>Сумма пополнения</Label>
+            <Label>{t("goal.deposit.amount")}</Label>
             <Input
               type="number"
               min="1"
@@ -304,12 +314,12 @@ function DepositDialog({
               step="100"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="Например, 5000"
+              placeholder={t("goal.deposit.placeholder")}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label>Списать со счёта</Label>
+            <Label>{t("goal.deposit.fromAccount")}</Label>
             {accounts.length > 0 ? (
               <select
                 value={accountId}
@@ -323,17 +333,13 @@ function DepositDialog({
                 ))}
               </select>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Нет счетов. Сначала добавьте счёт, чтобы откладывать деньги на цель.
-              </p>
+              <p className="text-xs text-muted-foreground">{t("goal.deposit.noAccounts")}</p>
             )}
-            <p className="text-xs text-muted-foreground">
-              Деньги перемещаются со счёта в цель. Это не трата — норма накоплений не снижается.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("goal.deposit.note")}</p>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading || accounts.length === 0}>
-              Пополнить
+              {t("goal.deposit.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -351,6 +357,7 @@ function GoalDialog({
   goal?: GoalsPageData["goals"][number];
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useI18n();
   return (
     <DialogContent>
       <DialogHeader>
@@ -359,12 +366,12 @@ function GoalDialog({
       <form onSubmit={onSubmit} className="grid gap-4">
         {goal ? <input type="hidden" name="id" value={goal.id} /> : null}
         <div className="space-y-2">
-          <Label>Название</Label>
+          <Label>{t("common.name")}</Label>
           <Input name="title" defaultValue={goal?.title ?? ""} required />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Целевая сумма</Label>
+            <Label>{t("goal.dialog.target")}</Label>
             <Input
               name="targetAmount"
               type="number"
@@ -376,7 +383,7 @@ function GoalDialog({
           </div>
           {goal ? (
             <div className="space-y-2">
-              <Label>Накоплено</Label>
+              <Label>{t("goal.saved")}</Label>
               <Input
                 name="currentAmount"
                 type="number"
@@ -394,7 +401,7 @@ function GoalDialog({
           )}
         </div>
         <div className="space-y-2">
-          <Label>Дедлайн</Label>
+          <Label>{t("goal.dialog.deadline")}</Label>
           <Input
             name="deadline"
             type="date"
@@ -403,7 +410,7 @@ function GoalDialog({
           />
         </div>
         <DialogFooter>
-          <Button type="submit">Сохранить</Button>
+          <Button type="submit">{t("common.save")}</Button>
         </DialogFooter>
       </form>
     </DialogContent>
