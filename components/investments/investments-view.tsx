@@ -8,20 +8,43 @@ import { toast } from "sonner";
 
 import { PortfolioStructureChart } from "@/components/charts/lazy";
 import { RecommendationList } from "@/components/recommendation-list";
+import {
+  StockDetailDialog,
+  type StockDetailSeed
+} from "@/components/investments/stock-detail-dialog";
+import { SecuritySearch } from "@/components/investments/security-search";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { INVESTMENT_DISCLAIMER, RISK_LABELS } from "@/lib/constants";
 import { formatCurrency, formatPercent } from "@/lib/format";
-import { InvestmentSuggestionService, type InvestmentSuggestion } from "@/services/InvestmentSuggestionService";
+import {
+  InvestmentSuggestionService,
+  type InvestmentSuggestion
+} from "@/services/InvestmentSuggestionService";
 import type { InvestmentData } from "@/types/finance";
 
 const REFRESH_INTERVAL_MS = 45_000;
@@ -43,12 +66,15 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   const { run } = useApiMutation();
   const [watchlistOpen, setWatchlistOpen] = useState(false);
   const [addPositionOpen, setAddPositionOpen] = useState(false);
-  const [editingPosition, setEditingPosition] = useState<InvestmentData["portfolio"][number] | null>(null);
+  const [editingPosition, setEditingPosition] = useState<
+    InvestmentData["portfolio"][number] | null
+  >(null);
   // Suggestion engine inputs
   const [budget, setBudget] = useState("");
   const [riskCode, setRiskCode] = useState<(typeof RISK_CODES)[number]["value"]>("MODERATE");
   const [suggestions, setSuggestions] = useState<InvestmentSuggestion[]>([]);
   const [suggested, setSuggested] = useState(false);
+  const [detailSeed, setDetailSeed] = useState<StockDetailSeed | null>(null);
 
   const hasMarketData = data.watchlist.length > 0 || data.portfolio.length > 0;
 
@@ -137,12 +163,9 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     });
   }
 
-  async function addWatchlistItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
-
-    await run(() => apiClient.post("/investments", { ...payload, action: "addWatchlist" }), {
-      success: "Бумага добавлена в watchlist",
+  async function addWatchlistTicker(ticker: string) {
+    await run(() => apiClient.post("/investments", { action: "addWatchlist", ticker }), {
+      success: `${ticker} добавлена в watchlist`,
       error: "Не удалось добавить бумагу",
       onSuccess: async () => {
         setWatchlistOpen(false);
@@ -161,9 +184,13 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
   async function refreshMarketPrices(silent = false) {
     try {
-      const result = await apiClient.post<{ updated: number; source: string }>("/investments", { action: "refreshMarket" });
+      const result = await apiClient.post<{ updated: number; source: string }>("/investments", {
+        action: "refreshMarket"
+      });
       if (!silent) {
-        toast.success(`Рыночные данные обновлены: ${result.updated} бумаг, источник ${result.source}`);
+        toast.success(
+          `Рыночные данные обновлены: ${result.updated} бумаг, источник ${result.source}`
+        );
       }
       await reload();
       router.refresh();
@@ -173,9 +200,6 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       }
     }
   }
-
-  const watchlistTickers = new Set(data.watchlist.map((security) => security.ticker));
-  const availableForWatchlist = data.securities.filter((security) => !watchlistTickers.has(security.ticker));
 
   return (
     <div className="space-y-5">
@@ -191,44 +215,73 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Укажите сумму на инвестиции в этом месяце и допустимый риск — подберём бумаги, которые сделают портфель более
-            диверсифицированным и устойчивым с учётом уже имеющихся позиций.
+            Укажите сумму на инвестиции в этом месяце и допустимый риск — подберём бумаги, которые
+            сделают портфель более диверсифицированным и устойчивым с учётом уже имеющихся позиций.
           </p>
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <div className="space-y-2">
               <Label htmlFor="invest-budget">Бюджет на инвестиции, ₽</Label>
-              <Input id="invest-budget" type="number" min="0" step="1000" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Например, 50000" />
+              <Input
+                id="invest-budget"
+                type="number"
+                min="0"
+                step="1000"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                placeholder="Например, 50000"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="invest-risk">Допустимый риск</Label>
-              <select id="invest-risk" value={riskCode} onChange={(e) => setRiskCode(e.target.value as typeof riskCode)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <select
+                id="invest-risk"
+                value={riskCode}
+                onChange={(e) => setRiskCode(e.target.value as typeof riskCode)}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
                 {RISK_CODES.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
               </select>
             </div>
-            <Button type="button" onClick={computeSuggestions}>Подобрать</Button>
+            <Button type="button" onClick={computeSuggestions}>
+              Подобрать
+            </Button>
           </div>
 
           {suggested && suggestions.length > 0 ? (
             <div className="space-y-2">
               {suggestions.map((suggestion) => (
-                <div key={suggestion.ticker} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  key={suggestion.ticker}
+                  className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">
                       {suggestion.ticker} · {suggestion.name}
-                      <Badge variant={riskVariant[suggestion.risk]} className="ml-2 align-middle text-[11px]">{RISK_LABELS[suggestion.risk]}</Badge>
+                      <Badge
+                        variant={riskVariant[suggestion.risk]}
+                        className="ml-2 align-middle text-[11px]"
+                      >
+                        {RISK_LABELS[suggestion.risk]}
+                      </Badge>
                     </p>
                     <p className="text-xs text-muted-foreground">{suggestion.rationale}</p>
                   </div>
                   <div className="flex items-center gap-3 sm:shrink-0">
                     <div className="text-right">
-                      <p className="text-sm font-medium">{suggestion.suggestedQuantity} шт. · {formatCurrency(suggestion.suggestedAmount, data.currency)}</p>
-                      <p className="text-xs text-muted-foreground">по {formatCurrency(suggestion.price, data.currency)}</p>
+                      <p className="text-sm font-medium">
+                        {suggestion.suggestedQuantity} шт. ·{" "}
+                        {formatCurrency(suggestion.suggestedAmount, data.currency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        по {formatCurrency(suggestion.price, data.currency)}
+                      </p>
                     </div>
                     <Button type="button" size="sm" onClick={() => void addSuggestion(suggestion)}>
-                      <Plus className="size-4" />
-                      В портфель
+                      <Plus className="size-4" />В портфель
                     </Button>
                   </div>
                 </div>
@@ -236,7 +289,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             </div>
           ) : suggested ? (
             <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              Подходящих бумаг не нашлось. Попробуйте увеличить бюджет или выбрать более высокий допустимый риск.
+              Подходящих бумаг не нашлось. Попробуйте увеличить бюджет или выбрать более высокий
+              допустимый риск.
             </p>
           ) : null}
         </CardContent>
@@ -246,7 +300,11 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>
             Watchlist российских акций
-            {hasMarketData ? <span className="ml-2 text-xs font-normal text-muted-foreground">· цены обновляются автоматически</span> : null}
+            {hasMarketData ? (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                · цены обновляются автоматически
+              </span>
+            ) : null}
           </CardTitle>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
@@ -260,7 +318,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                   Добавить в watchlist
                 </Button>
               </DialogTrigger>
-              <WatchlistDialog securities={availableForWatchlist} onSubmit={addWatchlistItem} />
+              <WatchlistDialog currency={data.currency} onAddTicker={addWatchlistTicker} />
             </Dialog>
           </div>
         </CardHeader>
@@ -278,99 +336,152 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               }
             />
           ) : (
-          <>
-          <div className="hidden md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ticker</TableHead>
-                  <TableHead>Название</TableHead>
-                  <TableHead>Сектор</TableHead>
-                  <TableHead className="text-right">Цена</TableHead>
-                  <TableHead className="text-right">День</TableHead>
-                  <TableHead className="text-right">30 дней</TableHead>
-                  <TableHead>Риск</TableHead>
-                  <TableHead>Комментарий</TableHead>
-                  <TableHead className="w-16 text-right"> </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.watchlist.map((security) => (
-                  <TableRow key={security.ticker}>
-                    <TableCell className="font-semibold">{security.ticker}</TableCell>
-                    <TableCell>{security.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{security.sector}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(security.price, data.currency)}</TableCell>
-                    <TableCell className={security.changeDay >= 0 ? "text-right text-success-foreground" : "text-right text-destructive"}>
-                      {security.changeDay.toFixed(2)}%
-                    </TableCell>
-                    <TableCell className={security.change30d >= 0 ? "text-right text-success-foreground" : "text-right text-destructive"}>
-                      {security.change30d.toFixed(2)}%
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={riskVariant[security.risk]}>{RISK_LABELS[security.risk]}</Badge>
-                    </TableCell>
-                    <TableCell className="max-w-96 text-muted-foreground">{security.comment}</TableCell>
-                    <TableCell className="text-right">
-                      <form
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void removeWatchlistItem(security.ticker);
-                        }}
-                      >
-                        <Button type="submit" variant="ghost" size="icon" title="Удалить из watchlist" aria-label="Удалить из watchlist">
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                      </form>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="grid gap-3 md:hidden">
-            {data.watchlist.map((security) => (
-              <div key={security.ticker} className="rounded-lg border p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{security.ticker}</p>
-                    <p className="text-sm text-muted-foreground">{security.name}</p>
-                    <p className="text-xs text-muted-foreground">{security.sector}</p>
-                  </div>
-                  <Badge variant={riskVariant[security.risk]}>{RISK_LABELS[security.risk]}</Badge>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Цена</p>
-                    <p className="font-semibold">{formatCurrency(security.price, data.currency)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">День</p>
-                    <p className={security.changeDay >= 0 ? "font-semibold text-success-foreground" : "font-semibold text-destructive"}>{security.changeDay.toFixed(2)}%</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">30 дней</p>
-                    <p className={security.change30d >= 0 ? "font-semibold text-success-foreground" : "font-semibold text-destructive"}>{security.change30d.toFixed(2)}%</p>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm text-muted-foreground">{security.comment}</p>
-                <form
-                  className="mt-3"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void removeWatchlistItem(security.ticker);
-                  }}
-                >
-                  <Button type="submit" variant="outline" size="sm">
-                    <Trash2 className="size-4 text-destructive" />
-                    Удалить
-                  </Button>
-                </form>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ticker</TableHead>
+                      <TableHead>Название</TableHead>
+                      <TableHead>Сектор</TableHead>
+                      <TableHead className="text-right">Цена</TableHead>
+                      <TableHead className="text-right">День</TableHead>
+                      <TableHead className="text-right">30 дней</TableHead>
+                      <TableHead>Риск</TableHead>
+                      <TableHead>Комментарий</TableHead>
+                      <TableHead className="w-16 text-right"> </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.watchlist.map((security) => (
+                      <TableRow key={security.ticker}>
+                        <TableCell className="font-semibold">
+                          <button
+                            type="button"
+                            className="hover:text-primary hover:underline"
+                            title="Открыть график"
+                            onClick={() => setDetailSeed(security)}
+                          >
+                            {security.ticker}
+                          </button>
+                        </TableCell>
+                        <TableCell>{security.name}</TableCell>
+                        <TableCell className="text-muted-foreground">{security.sector}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(security.price, data.currency)}
+                        </TableCell>
+                        <TableCell
+                          className={
+                            security.changeDay >= 0
+                              ? "text-right text-success-foreground"
+                              : "text-right text-destructive"
+                          }
+                        >
+                          {security.changeDay.toFixed(2)}%
+                        </TableCell>
+                        <TableCell
+                          className={
+                            security.change30d >= 0
+                              ? "text-right text-success-foreground"
+                              : "text-right text-destructive"
+                          }
+                        >
+                          {security.change30d.toFixed(2)}%
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={riskVariant[security.risk]}>
+                            {RISK_LABELS[security.risk]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-96 text-muted-foreground">
+                          {security.comment}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <form
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void removeWatchlistItem(security.ticker);
+                            }}
+                          >
+                            <Button
+                              type="submit"
+                              variant="ghost"
+                              size="icon"
+                              title="Удалить из watchlist"
+                              aria-label="Удалить из watchlist"
+                            >
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          </form>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            ))}
-          </div>
-          </>
+
+              <div className="grid gap-3 md:hidden">
+                {data.watchlist.map((security) => (
+                  <div key={security.ticker} className="rounded-lg border p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{security.ticker}</p>
+                        <p className="text-sm text-muted-foreground">{security.name}</p>
+                        <p className="text-xs text-muted-foreground">{security.sector}</p>
+                      </div>
+                      <Badge variant={riskVariant[security.risk]}>
+                        {RISK_LABELS[security.risk]}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Цена</p>
+                        <p className="font-semibold">
+                          {formatCurrency(security.price, data.currency)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">День</p>
+                        <p
+                          className={
+                            security.changeDay >= 0
+                              ? "font-semibold text-success-foreground"
+                              : "font-semibold text-destructive"
+                          }
+                        >
+                          {security.changeDay.toFixed(2)}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">30 дней</p>
+                        <p
+                          className={
+                            security.change30d >= 0
+                              ? "font-semibold text-success-foreground"
+                              : "font-semibold text-destructive"
+                          }
+                        >
+                          {security.change30d.toFixed(2)}%
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">{security.comment}</p>
+                    <form
+                      className="mt-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void removeWatchlistItem(security.ticker);
+                      }}
+                    >
+                      <Button type="submit" variant="outline" size="sm">
+                        <Trash2 className="size-4 text-destructive" />
+                        Удалить
+                      </Button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -388,8 +499,9 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               </DialogTrigger>
               <PositionDialog
                 title="Добавить позицию"
-                description="Укажите бумагу, количество и среднюю цену покупки. Это учетная запись портфеля, не инвестиционный совет."
+                description="Найдите бумагу, укажите количество и среднюю цену покупки. Это учетная запись портфеля, не инвестиционный совет."
                 data={data}
+                currency={data.currency}
                 onSubmit={submitPosition}
               />
             </Dialog>
@@ -408,110 +520,175 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                 }
               />
             ) : (
-            <>
-            <PortfolioSummary portfolio={data.portfolio} currency={data.currency} />
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Тикер</TableHead>
-                    <TableHead>Сектор</TableHead>
-                    <TableHead className="text-right">Кол-во</TableHead>
-                    <TableHead className="text-right">Средняя</TableHead>
-                    <TableHead className="text-right">Текущая</TableHead>
-                    <TableHead className="text-right">Стоимость</TableHead>
-                    <TableHead className="text-right">P/L</TableHead>
-                    <TableHead className="text-right">Доходность</TableHead>
-                    <TableHead className="text-right">Доля</TableHead>
-                    <TableHead className="w-28 text-right">Действия</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.portfolio.map((position) => {
-                    const cost = position.quantity * position.averageBuyPrice;
-                    const returnPct = cost > 0 ? (position.pnl / cost) * 100 : 0;
-                    return (
-                    <TableRow key={position.ticker}>
-                      <TableCell className="font-semibold">{position.ticker}</TableCell>
-                      <TableCell className="text-muted-foreground">{position.sector}</TableCell>
-                      <TableCell className="text-right">{position.quantity.toLocaleString("ru-RU")}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(position.averageBuyPrice, data.currency)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(position.currentPrice, data.currency)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(position.currentValue, data.currency)}</TableCell>
-                      <TableCell className={position.pnl >= 0 ? "text-right text-success-foreground" : "text-right text-destructive"}>
-                        {formatCurrency(position.pnl, data.currency)}
-                      </TableCell>
-                      <TableCell className={returnPct >= 0 ? "text-right text-success-foreground" : "text-right text-destructive"}>
-                        {returnPct >= 0 ? "+" : ""}{returnPct.toFixed(1)}%
-                      </TableCell>
-                      <TableCell className="text-right">{formatPercent(position.share)}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" title="Редактировать позицию" aria-label="Редактировать позицию" onClick={() => setEditingPosition(position)}>
-                            <Edit2 className="size-4" />
-                          </Button>
-                          <form
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void removePosition(position.ticker);
-                            }}
-                          >
-                            <Button type="submit" variant="ghost" size="icon" title="Удалить позицию" aria-label="Удалить позицию">
-                              <Trash2 className="size-4 text-destructive" />
-                            </Button>
-                          </form>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="grid gap-3 md:hidden">
-              {data.portfolio.map((position) => (
-                <div key={position.ticker} className="rounded-lg border p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold">{position.ticker}</p>
-                      <p className="text-sm text-muted-foreground">{position.name}</p>
-                    </div>
-                    <p className="font-semibold">{formatPercent(position.share)}</p>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Стоимость</p>
-                      <p className="font-semibold">{formatCurrency(position.currentValue, data.currency)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">P/L</p>
-                      <p className={position.pnl >= 0 ? "font-semibold text-success-foreground" : "font-semibold text-destructive"}>
-                        {formatCurrency(position.pnl, data.currency)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setEditingPosition(position)}>
-                      <Edit2 className="size-4" />
-                      Изменить
-                    </Button>
-                    <form
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void removePosition(position.ticker);
-                      }}
-                    >
-                      <Button type="submit" variant="outline" size="sm">
-                        <Trash2 className="size-4 text-destructive" />
-                        Удалить
-                      </Button>
-                    </form>
-                  </div>
+              <>
+                <PortfolioSummary portfolio={data.portfolio} currency={data.currency} />
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Тикер</TableHead>
+                        <TableHead>Сектор</TableHead>
+                        <TableHead className="text-right">Кол-во</TableHead>
+                        <TableHead className="text-right">Средняя</TableHead>
+                        <TableHead className="text-right">Текущая</TableHead>
+                        <TableHead className="text-right">Стоимость</TableHead>
+                        <TableHead className="text-right">P/L</TableHead>
+                        <TableHead className="text-right">Доходность</TableHead>
+                        <TableHead className="text-right">Доля</TableHead>
+                        <TableHead className="w-28 text-right">Действия</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.portfolio.map((position) => {
+                        const cost = position.quantity * position.averageBuyPrice;
+                        const returnPct = cost > 0 ? (position.pnl / cost) * 100 : 0;
+                        return (
+                          <TableRow key={position.ticker}>
+                            <TableCell className="font-semibold">
+                              <button
+                                type="button"
+                                className="hover:text-primary hover:underline"
+                                title="Открыть график"
+                                onClick={() =>
+                                  setDetailSeed({
+                                    ticker: position.ticker,
+                                    name: position.name,
+                                    price: position.currentPrice,
+                                    sector: position.sector
+                                  })
+                                }
+                              >
+                                {position.ticker}
+                              </button>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {position.sector}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {position.quantity.toLocaleString("ru-RU")}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(position.averageBuyPrice, data.currency)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(position.currentPrice, data.currency)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(position.currentValue, data.currency)}
+                            </TableCell>
+                            <TableCell
+                              className={
+                                position.pnl >= 0
+                                  ? "text-right text-success-foreground"
+                                  : "text-right text-destructive"
+                              }
+                            >
+                              {formatCurrency(position.pnl, data.currency)}
+                            </TableCell>
+                            <TableCell
+                              className={
+                                returnPct >= 0
+                                  ? "text-right text-success-foreground"
+                                  : "text-right text-destructive"
+                              }
+                            >
+                              {returnPct >= 0 ? "+" : ""}
+                              {returnPct.toFixed(1)}%
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatPercent(position.share)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Редактировать позицию"
+                                  aria-label="Редактировать позицию"
+                                  onClick={() => setEditingPosition(position)}
+                                >
+                                  <Edit2 className="size-4" />
+                                </Button>
+                                <form
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void removePosition(position.ticker);
+                                  }}
+                                >
+                                  <Button
+                                    type="submit"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Удалить позицию"
+                                    aria-label="Удалить позицию"
+                                  >
+                                    <Trash2 className="size-4 text-destructive" />
+                                  </Button>
+                                </form>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
-              ))}
-            </div>
-            </>
+
+                <div className="grid gap-3 md:hidden">
+                  {data.portfolio.map((position) => (
+                    <div key={position.ticker} className="rounded-lg border p-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold">{position.ticker}</p>
+                          <p className="text-sm text-muted-foreground">{position.name}</p>
+                        </div>
+                        <p className="font-semibold">{formatPercent(position.share)}</p>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Стоимость</p>
+                          <p className="font-semibold">
+                            {formatCurrency(position.currentValue, data.currency)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">P/L</p>
+                          <p
+                            className={
+                              position.pnl >= 0
+                                ? "font-semibold text-success-foreground"
+                                : "font-semibold text-destructive"
+                            }
+                          >
+                            {formatCurrency(position.pnl, data.currency)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingPosition(position)}
+                        >
+                          <Edit2 className="size-4" />
+                          Изменить
+                        </Button>
+                        <form
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void removePosition(position.ticker);
+                          }}
+                        >
+                          <Button type="submit" variant="outline" size="sm">
+                            <Trash2 className="size-4 text-destructive" />
+                            Удалить
+                          </Button>
+                        </form>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -532,7 +709,9 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           </CardHeader>
           <CardContent>
             <PortfolioStructureChart data={data.sectorStructure} />
-            <p className="mt-2 text-sm text-muted-foreground">Показывает долю отраслей в текущей стоимости портфеля.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Показывает долю отраслей в текущей стоимости портфеля.
+            </p>
           </CardContent>
         </Card>
       </section>
@@ -543,57 +722,50 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       </section>
 
       {/* Single controlled dialog for editing any portfolio position */}
-      <Dialog open={editingPosition !== null} onOpenChange={(open) => { if (!open) setEditingPosition(null); }}>
+      <Dialog
+        open={editingPosition !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingPosition(null);
+        }}
+      >
         {editingPosition && (
           <PositionDialog
             title={`Редактировать ${editingPosition.ticker}`}
             description="Можно обновить количество и среднюю цену покупки."
             data={data}
+            currency={data.currency}
             position={editingPosition}
             onSubmit={submitPosition}
           />
         )}
       </Dialog>
+
+      <StockDetailDialog
+        seed={detailSeed}
+        currency={data.currency}
+        onClose={() => setDetailSeed(null)}
+      />
     </div>
   );
 }
 
 function WatchlistDialog({
-  securities,
-  onSubmit
+  currency,
+  onAddTicker
 }: {
-  securities: InvestmentData["securities"];
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  currency: string;
+  onAddTicker: (ticker: string) => void;
 }) {
   return (
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Добавить в watchlist</DialogTitle>
         <DialogDescription>
-          Выберите бумагу из справочника рынка. Это список наблюдения, а не индивидуальная инвестиционная рекомендация.
+          Найдите любую бумагу Московской биржи по тикеру или названию. Это список наблюдения, а не
+          индивидуальная инвестиционная рекомендация.
         </DialogDescription>
       </DialogHeader>
-      {securities.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-          Все бумаги из справочника уже добавлены в watchlist.
-        </div>
-      ) : (
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <div className="space-y-2">
-            <Label>Бумага</Label>
-            <select name="ticker" defaultValue={securities[0]?.ticker} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              {securities.map((security) => (
-                <option key={security.ticker} value={security.ticker}>
-                  {security.ticker} · {security.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <DialogFooter>
-            <Button type="submit">Добавить</Button>
-          </DialogFooter>
-        </form>
-      )}
+      <SecuritySearch currency={currency} onSelect={(s) => onAddTicker(s.ticker)} />
     </DialogContent>
   );
 }
@@ -601,16 +773,22 @@ function WatchlistDialog({
 function PositionDialog({
   title,
   description,
-  data,
   position,
+  currency,
   onSubmit
 }: {
   title: string;
   description: string;
   data: InvestmentData;
   position?: InvestmentData["portfolio"][number];
+  currency: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  // For a new position the user can pick ANY security listed on MOEX via live
+  // search; when editing, the ticker is fixed.
+  const [chosen, setChosen] = useState<{ ticker: string; name: string } | null>(null);
+  const ticker = position?.ticker ?? chosen?.ticker;
+
   return (
     <DialogContent>
       <DialogHeader>
@@ -620,32 +798,55 @@ function PositionDialog({
       <form onSubmit={onSubmit} className="grid gap-4">
         <div className="space-y-2">
           <Label>Бумага</Label>
-          {position ? <input type="hidden" name="ticker" value={position.ticker} /> : null}
-          <select
-            name="ticker"
-            defaultValue={position?.ticker ?? data.securities[0]?.ticker}
-            disabled={Boolean(position)}
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-70"
-          >
-            {data.securities.map((security) => (
-              <option key={security.ticker} value={security.ticker}>
-                {security.ticker} · {security.name}
-              </option>
-            ))}
-          </select>
+          {ticker ? <input type="hidden" name="ticker" value={ticker} /> : null}
+          {position ? (
+            <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm">
+              {position.ticker}
+            </div>
+          ) : chosen ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+              <span className="min-w-0 truncate">
+                <span className="font-semibold">{chosen.ticker}</span>{" "}
+                <span className="text-muted-foreground">{chosen.name}</span>
+              </span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setChosen(null)}>
+                Изменить
+              </Button>
+            </div>
+          ) : (
+            <SecuritySearch
+              currency={currency}
+              onSelect={(s) => setChosen({ ticker: s.ticker, name: s.name })}
+            />
+          )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Количество</Label>
-            <Input name="quantity" type="number" min="0" step="0.000001" defaultValue={position?.quantity ?? ""} required />
+            <Input
+              name="quantity"
+              type="number"
+              min="0"
+              step="0.000001"
+              defaultValue={position?.quantity ?? ""}
+              required
+            />
           </div>
           <div className="space-y-2">
             <Label>Средняя цена покупки</Label>
-            <Input name="averageBuyPrice" type="number" min="0" step="0.0001" defaultValue={position?.averageBuyPrice ?? ""} required />
+            <Input
+              name="averageBuyPrice"
+              type="number"
+              min="0"
+              step="0.0001"
+              defaultValue={position?.averageBuyPrice ?? ""}
+              required
+            />
           </div>
         </div>
         <div className="rounded-lg border border-info/30 bg-info/12 p-3 text-sm text-muted-foreground">
-          Данные используются только для учета и анализа рисков портфеля. Информация не является индивидуальной инвестиционной рекомендацией.
+          Данные используются только для учета и анализа рисков портфеля. Информация не является
+          индивидуальной инвестиционной рекомендацией.
         </div>
         <DialogFooter>
           <Button type="submit">Сохранить позицию</Button>

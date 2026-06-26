@@ -30,6 +30,12 @@ export const ForecastBalanceChart = dynamic(
 );
 
 export const PortfolioStructureChart = dynamic(
-  () => import("@/components/charts/portfolio-structure-chart").then((m) => m.PortfolioStructureChart),
+  () =>
+    import("@/components/charts/portfolio-structure-chart").then((m) => m.PortfolioStructureChart),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);
+
+export const StockPriceChart = dynamic(
+  () => import("@/components/charts/stock-price-chart").then((m) => m.StockPriceChart),
   { ssr: false, loading: () => <ChartSkeleton /> }
 );
