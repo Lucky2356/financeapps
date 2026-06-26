@@ -156,7 +156,7 @@ function emptyInvestmentData(): InvestmentData {
   return {
     source: "demo-fallback",
     currency,
-    riskProfile: RISK_PROFILE_LABELS.MODERATE,
+    riskProfile: translate(getClientLocale(), "riskProfile.MODERATE"),
     securities: [],
     watchlist: [],
     portfolio: [],
@@ -1453,7 +1453,7 @@ export class LocalApiClient implements ApiClient {
     return {
       source: "database",
       currency: state.currency,
-      riskProfile: RISK_PROFILE_LABELS[state.riskProfileCode],
+      riskProfile: translate(getClientLocale(), `riskProfile.${state.riskProfileCode}`),
       securities,
       watchlist,
       portfolio,
