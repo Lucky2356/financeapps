@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import type { ImportPageData, TransactionsPageData } from "@/lib/data";
+import { useI18n } from "@/lib/i18n/context";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { runtimeConfig } from "@/lib/platform/env";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -79,7 +80,7 @@ function summarizeBackupPayload(payload: unknown): BackupPreview {
   ) as Record<string, unknown>;
 
   return {
-    schemaVersion: String(data.schemaVersion ?? "неизвестно"),
+    schemaVersion: String(data.schemaVersion ?? "—"),
     exportedAt:
       typeof data.exportedAt === "string"
         ? data.exportedAt
@@ -104,6 +105,7 @@ export function ImportExportPanel({
   data: ImportPageData;
   transactions: TransactionsPageData["transactions"];
 }) {
+  const { t, locale } = useI18n();
   const { data: pageData, reload: reloadReferences } = useApiPageData(data, "/import");
   const { data: transactionData, reload: reloadTransactions } =
     useApiPageData<TransactionsPageData>(
@@ -189,9 +191,9 @@ export function ImportExportPanel({
     const content =
       "﻿" +
       [
-        "Дата,Сумма,Описание,Категория,Счет",
-        `${fmt(yesterday)},-1200,Кофе,Рестораны,Дебетовая карта`,
-        `${fmt(today)},150000,Зарплата,Зарплата,Дебетовая карта`
+        t("imp.template.header"),
+        t("imp.template.row1", { date: fmt(yesterday) }),
+        t("imp.template.row2", { date: fmt(today) })
       ].join("\n");
     await fileSystem.saveTextFile(
       "transactions-import-template.csv",
@@ -209,10 +211,10 @@ export function ImportExportPanel({
         JSON.stringify(backup, null, 2),
         "application/json;charset=utf-8"
       );
-      toast.success("Резервная копия сохранена");
+      toast.success(t("imp.toast.backupSaved"));
       await reloadReferences();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось создать резервную копию");
+      toast.error(error instanceof Error ? error.message : t("imp.toast.backupError"));
     }
   }
 
@@ -225,29 +227,27 @@ export function ImportExportPanel({
       setRestorePayload(backup);
       setRestorePreview(summarizeBackupPayload(backup));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось прочитать backup-файл");
+      toast.error(error instanceof Error ? error.message : t("imp.toast.readError"));
     }
   }
 
   async function confirmRestoreBackup() {
     if (!restorePayload) {
-      toast.error("Сначала выберите backup-файл");
+      toast.error(t("imp.toast.selectFirst"));
       return;
     }
 
     try {
       setRestorePending(true);
       await apiClient.post("/backup", { backup: restorePayload });
-      toast.success("Резервная копия восстановлена");
+      toast.success(t("imp.toast.restored"));
       setRestoreDialogOpen(false);
       setRestorePayload(null);
       setRestorePreview(null);
       await Promise.all([reloadReferences(), reloadTransactions()]);
       router.refresh();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Не удалось восстановить резервную копию"
-      );
+      toast.error(error instanceof Error ? error.message : t("imp.toast.restoreError"));
     } finally {
       setRestorePending(false);
     }
@@ -269,7 +269,9 @@ export function ImportExportPanel({
         "/import",
         payload
       );
-      toast.success(`CSV импортирован: ${result.imported} строк, пропущено: ${result.skipped}`);
+      toast.success(
+        t("imp.toast.imported", { imported: result.imported, skipped: result.skipped })
+      );
       setImportStep(1);
       setFields([]);
       setRows([]);
@@ -277,7 +279,7 @@ export function ImportExportPanel({
       await Promise.all([reloadReferences(), reloadTransactions()]);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось импортировать CSV");
+      toast.error(error instanceof Error ? error.message : t("imp.toast.importError"));
     }
   }
 
@@ -288,26 +290,26 @@ export function ImportExportPanel({
       setUndoPending(true);
       const result = await apiClient.post<{ removed: number }>("/import/undo", {});
       if (result.removed > 0) {
-        toast.success(`Последний импорт отменен: удалено операций ${result.removed}`);
+        toast.success(t("imp.toast.undone", { removed: result.removed }));
       } else {
-        toast.info("Нет импорта, который можно отменить");
+        toast.info(t("imp.toast.nothingUndo"));
       }
       await Promise.all([reloadReferences(), reloadTransactions()]);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось отменить последний импорт");
+      toast.error(error instanceof Error ? error.message : t("imp.toast.undoError"));
     } finally {
       setUndoPending(false);
     }
   }
 
-  const stepLabels = ["Загрузка", "Маппинг", "Импорт"] as const;
+  const stepLabels = [t("imp.step.upload"), t("imp.step.mapping"), t("imp.step.import")] as const;
   const lastBackupLabel = pageData.lastBackupAt
-    ? new Date(pageData.lastBackupAt).toLocaleString("ru-RU", {
+    ? new Date(pageData.lastBackupAt).toLocaleString(locale === "en" ? "en-US" : "ru-RU", {
         dateStyle: "medium",
         timeStyle: "short"
       })
-    : "Пока не создавалась";
+    : t("imp.neverBackup");
 
   return (
     <div className="space-y-5">
@@ -315,7 +317,7 @@ export function ImportExportPanel({
       <Card>
         <CardHeader className="border-b bg-muted/20">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Импорт CSV</CardTitle>
+            <CardTitle>{t("imp.csvTitle")}</CardTitle>
             {/* Step indicator */}
             <div className="flex items-center gap-1">
               {stepLabels.map((label, i) => {
@@ -358,10 +360,7 @@ export function ImportExportPanel({
           {/* ── Step 1: Source ── */}
           {importStep === 1 && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Загрузите файл CSV с вашими транзакциями. Поддерживаются выгрузки большинства
-                банков.
-              </p>
+              <p className="text-sm text-muted-foreground">{t("imp.intro")}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
@@ -370,10 +369,8 @@ export function ImportExportPanel({
                 >
                   <Upload className="size-8 text-primary" />
                   <div>
-                    <p className="font-semibold">Загрузить CSV</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Нажмите, чтобы выбрать файл
-                    </p>
+                    <p className="font-semibold">{t("imp.uploadCsv")}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{t("imp.uploadHint")}</p>
                   </div>
                 </button>
                 <button
@@ -383,10 +380,8 @@ export function ImportExportPanel({
                 >
                   <Download className="size-8 text-muted-foreground" />
                   <div>
-                    <p className="font-semibold">Скачать шаблон</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Пример правильного формата
-                    </p>
+                    <p className="font-semibold">{t("imp.downloadTemplate")}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{t("imp.templateHint")}</p>
                   </div>
                 </button>
               </div>
@@ -398,24 +393,14 @@ export function ImportExportPanel({
               )}
 
               <div className="rounded-lg border bg-muted/20 p-4">
-                <p className="text-sm font-medium">Как работает импорт:</p>
+                <p className="text-sm font-medium">{t("imp.howTitle")}</p>
                 <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                    Файл CSV читается локально, данные не передаются на сервер
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                    Колонки даты и суммы обязательны, остальные опциональны
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                    Положительные суммы → доходы, отрицательные → расходы
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                    Дубликаты автоматически пропускаются
-                  </li>
+                  {["imp.how1", "imp.how2", "imp.how3", "imp.how4"].map((key) => (
+                    <li key={key} className="flex items-start gap-2">
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+                      {t(key)}
+                    </li>
+                  ))}
                 </ul>
               </div>
 
@@ -428,7 +413,7 @@ export function ImportExportPanel({
                   disabled={undoPending}
                 >
                   <RotateCcw className="size-4" />
-                  {undoPending ? "Отмена..." : "Отменить последний импорт"}
+                  {undoPending ? t("imp.undoing") : t("imp.undo")}
                 </Button>
               )}
             </div>
@@ -438,11 +423,21 @@ export function ImportExportPanel({
           {importStep === 2 && fields.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Укажите, какая колонка CSV соответствует каждому полю. Поля, отмеченные{" "}
-                <span className="font-semibold text-destructive">*</span>, обязательны.
+                {t("imp.mapIntro", { star: "*" })
+                  .split("*")
+                  .flatMap((part, i) =>
+                    i === 0
+                      ? [part]
+                      : [
+                          <span key={i} className="font-semibold text-destructive">
+                            *
+                          </span>,
+                          part
+                        ]
+                  )}
               </p>
               <div className="rounded-lg border bg-muted/20 p-3">
-                <p className="text-sm font-medium">Быстрые пресеты банков</p>
+                <p className="text-sm font-medium">{t("imp.presets")}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {importPresets.map((preset) => (
                     <Button
@@ -461,7 +456,7 @@ export function ImportExportPanel({
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1">
-                    <Label>Дата</Label>
+                    <Label>{t("common.date")}</Label>
                     <span className="text-xs font-semibold text-destructive">*</span>
                   </div>
                   <ColumnSelect
@@ -473,13 +468,13 @@ export function ImportExportPanel({
                   />
                   {mapping.dateColumn && rows[0] && (
                     <p className="truncate text-xs text-muted-foreground">
-                      Пример: {String(rows[0][mapping.dateColumn] ?? "—")}
+                      {t("imp.example", { value: String(rows[0][mapping.dateColumn] ?? "—") })}
                     </p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1">
-                    <Label>Сумма</Label>
+                    <Label>{t("common.amount")}</Label>
                     <span className="text-xs font-semibold text-destructive">*</span>
                   </div>
                   <ColumnSelect
@@ -491,13 +486,14 @@ export function ImportExportPanel({
                   />
                   {mapping.amountColumn && rows[0] && (
                     <p className="truncate text-xs text-muted-foreground">
-                      Пример: {String(rows[0][mapping.amountColumn] ?? "—")}
+                      {t("imp.example", { value: String(rows[0][mapping.amountColumn] ?? "—") })}
                     </p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>
-                    Описание <span className="text-xs text-muted-foreground">(необязательно)</span>
+                    {t("tx.col.description")}{" "}
+                    <span className="text-xs text-muted-foreground">{t("imp.optional")}</span>
                   </Label>
                   <ColumnSelect
                     name="descriptionColumn"
@@ -508,7 +504,8 @@ export function ImportExportPanel({
                 </div>
                 <div className="space-y-1.5">
                   <Label>
-                    Категория <span className="text-xs text-muted-foreground">(необязательно)</span>
+                    {t("common.category")}{" "}
+                    <span className="text-xs text-muted-foreground">{t("imp.optional")}</span>
                   </Label>
                   <ColumnSelect
                     name="categoryColumn"
@@ -519,7 +516,8 @@ export function ImportExportPanel({
                 </div>
                 <div className="space-y-1.5">
                   <Label>
-                    Счет <span className="text-xs text-muted-foreground">(необязательно)</span>
+                    {t("common.account")}{" "}
+                    <span className="text-xs text-muted-foreground">{t("imp.optional")}</span>
                   </Label>
                   <ColumnSelect
                     name="accountColumn"
@@ -531,14 +529,14 @@ export function ImportExportPanel({
               </div>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setImportStep(1)}>
-                  Назад
+                  {t("ob.back")}
                 </Button>
                 <Button
                   type="button"
                   onClick={() => setImportStep(3)}
                   disabled={!mapping.dateColumn || !mapping.amountColumn}
                 >
-                  Далее
+                  {t("ob.next")}
                   <ChevronRight className="size-4" />
                 </Button>
               </div>
@@ -567,13 +565,15 @@ export function ImportExportPanel({
                   <div>
                     <p className="font-semibold">
                       {validation.validRows > 0
-                        ? `Готово к импорту: ${validation.validRows} из ${rows.length} строк`
-                        : "Нет строк для импорта"}
+                        ? t("imp.readyToImport", {
+                            valid: validation.validRows,
+                            total: rows.length
+                          })
+                        : t("imp.noRows")}
                     </p>
                     {rows.length - validation.validRows > 0 && (
                       <p className="text-sm text-muted-foreground">
-                        Пропущено: {rows.length - validation.validRows} строк (дубликаты или ошибки
-                        формата)
+                        {t("imp.skippedRows", { n: rows.length - validation.validRows })}
                       </p>
                     )}
                   </div>
@@ -597,10 +597,7 @@ export function ImportExportPanel({
                     onChange={(event) => setSkipDuplicates(event.target.checked)}
                     className="size-4"
                   />
-                  <span>
-                    Найдено возможных дублей: <strong>{duplicateIndices.size}</strong>. Пропустить
-                    их при импорте (совпадение по дате, сумме и описанию).
-                  </span>
+                  <span>{t("imp.dupFound", { count: duplicateIndices.size })}</span>
                 </label>
               )}
 
@@ -629,22 +626,22 @@ export function ImportExportPanel({
                 </Table>
                 {rows.length > 6 && (
                   <p className="py-2 text-center text-xs text-muted-foreground">
-                    и ещё {rows.length - 6} строк...
+                    {t("imp.moreRows", { n: rows.length - 6 })}
                   </p>
                 )}
               </div>
 
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setImportStep(2)}>
-                  Назад
+                  {t("ob.back")}
                 </Button>
                 <Button type="submit" disabled={validation.validRows === 0}>
                   <Upload className="size-4" />
-                  Импортировать{" "}
-                  {skipDuplicates
-                    ? Math.max(validation.validRows - duplicateIndices.size, 0)
-                    : validation.validRows}{" "}
-                  строк
+                  {t("imp.importBtn", {
+                    n: skipDuplicates
+                      ? Math.max(validation.validRows - duplicateIndices.size, 0)
+                      : validation.validRows
+                  })}
                 </Button>
               </div>
             </form>
@@ -656,7 +653,7 @@ export function ImportExportPanel({
       <section className="grid gap-5 xl:grid-cols-2">
         <Card>
           <CardHeader className="border-b bg-muted/20">
-            <CardTitle>Экспорт операций</CardTitle>
+            <CardTitle>{t("imp.exportTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2 pt-5">
             <Button type="button" variant="outline" onClick={exportCsv}>
@@ -667,15 +664,13 @@ export function ImportExportPanel({
               <FileJson className="size-4" />
               JSON
             </Button>
-            <p className="self-center text-xs text-muted-foreground">
-              Все операции в текущем фильтре
-            </p>
+            <p className="self-center text-xs text-muted-foreground">{t("imp.exportHint")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="border-b bg-muted/20">
-            <CardTitle>Резервная копия</CardTitle>
+            <CardTitle>{t("imp.backupTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 pt-5">
             <div
@@ -694,18 +689,18 @@ export function ImportExportPanel({
                 )}
                 <div>
                   <p className="font-medium">
-                    {pageData.backupReminderDue
-                      ? "Пора обновить резервную копию"
-                      : "Резервная копия свежая"}
+                    {pageData.backupReminderDue ? t("imp.backupDue") : t("imp.backupFresh")}
                   </p>
-                  <p className="mt-1 text-muted-foreground">Последний backup: {lastBackupLabel}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {t("imp.lastBackup", { label: lastBackupLabel })}
+                  </p>
                 </div>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" onClick={exportBackup}>
                 <Download className="size-4" />
-                Скачать backup
+                {t("imp.downloadBackup")}
               </Button>
               <Dialog
                 open={restoreDialogOpen}
@@ -720,41 +715,44 @@ export function ImportExportPanel({
                 <DialogTrigger asChild>
                   <Button type="button" variant="outline" disabled={restorePending}>
                     <RotateCcw className="size-4" />
-                    Восстановить backup
+                    {t("imp.restoreBackup")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Восстановить резервную копию?</DialogTitle>
-                    <DialogDescription>
-                      Текущие данные будут заменены данными из выбранного backup-файла.
-                    </DialogDescription>
+                    <DialogTitle>{t("imp.restoreTitle")}</DialogTitle>
+                    <DialogDescription>{t("imp.restoreDesc")}</DialogDescription>
                   </DialogHeader>
                   <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
                     <div className="flex items-start gap-3">
                       <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                      <p>Сначала скачайте резервную копию текущих данных.</p>
+                      <p>{t("imp.restoreWarn")}</p>
                     </div>
                   </div>
                   {restorePreview ? (
                     <div className="rounded-lg border bg-muted/20 p-4 text-sm">
-                      <p className="font-medium">Выбранный backup</p>
+                      <p className="font-medium">{t("imp.selectedBackup")}</p>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-muted-foreground">
-                        <span>Версия: {restorePreview.schemaVersion}</span>
+                        <span>{t("imp.bVersion", { v: restorePreview.schemaVersion })}</span>
                         <span>
-                          Дата:{" "}
-                          {restorePreview.exportedAt
-                            ? new Date(restorePreview.exportedAt).toLocaleString("ru-RU")
-                            : "не указана"}
+                          {t("imp.bDate", {
+                            d: restorePreview.exportedAt
+                              ? new Date(restorePreview.exportedAt).toLocaleString(
+                                  locale === "en" ? "en-US" : "ru-RU"
+                                )
+                              : t("imp.dateNone")
+                          })}
                         </span>
-                        <span>Счета: {restorePreview.accounts}</span>
-                        <span>Категории: {restorePreview.categories}</span>
-                        <span>Операции: {restorePreview.transactions}</span>
-                        <span>Бюджеты: {restorePreview.budgets}</span>
-                        <span>Цели: {restorePreview.goals}</span>
-                        <span>Плановые: {restorePreview.recurringTransactions}</span>
-                        <span>Портфель: {restorePreview.portfolioItems}</span>
-                        <span>Watchlist: {restorePreview.watchlistItems}</span>
+                        <span>{t("imp.bAccounts", { n: restorePreview.accounts })}</span>
+                        <span>{t("imp.bCategories", { n: restorePreview.categories })}</span>
+                        <span>{t("imp.bTransactions", { n: restorePreview.transactions })}</span>
+                        <span>{t("imp.bBudgets", { n: restorePreview.budgets })}</span>
+                        <span>{t("imp.bGoals", { n: restorePreview.goals })}</span>
+                        <span>
+                          {t("imp.bRecurring", { n: restorePreview.recurringTransactions })}
+                        </span>
+                        <span>{t("imp.bPortfolio", { n: restorePreview.portfolioItems })}</span>
+                        <span>{t("imp.bWatchlist", { n: restorePreview.watchlistItems })}</span>
                       </div>
                     </div>
                   ) : null}
@@ -765,7 +763,7 @@ export function ImportExportPanel({
                       onClick={pickBackupForRestore}
                       disabled={restorePending}
                     >
-                      Выбрать и проверить файл
+                      {t("imp.pickFile")}
                     </Button>
                     <Button
                       type="button"
@@ -773,15 +771,13 @@ export function ImportExportPanel({
                       onClick={confirmRestoreBackup}
                       disabled={restorePending || !restorePayload}
                     >
-                      {restorePending ? "Восстановление..." : "Восстановить выбранный backup"}
+                      {restorePending ? t("imp.restoring") : t("imp.restoreConfirm")}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Включает настройки, счета, категории, операции, бюджеты, цели, портфель и watchlist.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("imp.backupIncludes")}</p>
           </CardContent>
         </Card>
       </section>
@@ -789,11 +785,11 @@ export function ImportExportPanel({
       {/* ── Reference table ──────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>Доступные счета и категории</CardTitle>
+          <CardTitle>{t("imp.refTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Счета</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("imp.refAccounts")}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {pageData.accounts.map((a) => (
                 <span key={a.id} className="rounded-md border bg-muted/30 px-2 py-0.5 text-xs">
@@ -803,7 +799,7 @@ export function ImportExportPanel({
             </div>
           </div>
           <div>
-            <p className="text-sm font-medium text-muted-foreground">Категории расходов</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("imp.refExpenseCats")}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {pageData.categories
                 .filter((c) => c.kind === "EXPENSE")
@@ -834,6 +830,7 @@ function ColumnSelect({
   onChange: (value: string) => void;
   required?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <select
       name={name}
@@ -842,7 +839,7 @@ function ColumnSelect({
       required={required}
       className="h-10 w-full rounded-md border bg-background px-3 text-sm"
     >
-      <option value="">Не выбрано</option>
+      <option value="">{t("imp.notSelected")}</option>
       {fields.map((field) => (
         <option key={field} value={field}>
           {field}
