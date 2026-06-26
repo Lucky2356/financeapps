@@ -10,10 +10,7 @@ export default async function SubscriptionsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Подписки"
-        description="Регулярные платежи в пересчёте на месяц и год — чтобы видеть, во что обходятся подписки."
-      />
+      <PageHeader titleKey="page.subscriptions.title" descriptionKey="page.subscriptions.desc" />
       <SourceBanner source={data.source} />
       <SubscriptionsView data={data} />
     </div>

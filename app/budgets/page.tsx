@@ -11,10 +11,10 @@ export default async function BudgetsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader title="Бюджеты" description="Лимиты по категориям, прогресс и предупреждения при превышении." />
+      <PageHeader titleKey="page.budgets.title" descriptionKey="page.budgets.desc" />
       <SourceBanner source={data.source} />
       <BudgetManager data={data} />
-      <RecommendationList title="Оптимизация расходов" items={data.recommendations} />
+      <RecommendationList titleKey="page.budgets.optimization" items={data.recommendations} />
     </div>
   );
 }

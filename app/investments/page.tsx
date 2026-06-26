@@ -10,10 +10,7 @@ export default async function InvestmentsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Инвестиции"
-        description="Watchlist, демо-портфель, структура, риски и образовательные подсказки без индивидуальных инвестиционных рекомендаций."
-      />
+      <PageHeader titleKey="page.investments.title" descriptionKey="page.investments.desc" />
       <SourceBanner source={data.source} />
       <InvestmentsView data={data} />
     </div>

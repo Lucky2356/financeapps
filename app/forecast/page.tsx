@@ -9,10 +9,7 @@ export default async function ForecastPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Прогноз"
-        description="Плановый денежный поток на 30 и 90 дней, ближайшие обязательства и предупреждения о кассовых разрывах."
-      />
+      <PageHeader titleKey="page.forecast.title" descriptionKey="page.forecast.desc" />
       <ForecastClient initialData={data} />
     </div>
   );

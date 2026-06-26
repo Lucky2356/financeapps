@@ -10,10 +10,7 @@ export default async function RecurringPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Плановые платежи"
-        description="Повторяющиеся доходы и расходы, ближайшие обязательства и создание операций по расписанию."
-      />
+      <PageHeader titleKey="page.recurring.title" descriptionKey="page.recurring.desc" />
       <SourceBanner source={data.source} />
       <RecurringManager data={data} />
     </div>

@@ -10,10 +10,7 @@ export default async function ReportsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Отчёты"
-        description="Сводный финансовый отчёт — можно распечатать или сохранить в PDF."
-      />
+      <PageHeader titleKey="page.reports.title" descriptionKey="page.reports.desc" />
       <SourceBanner source={analytics.source} />
       <ReportView analytics={analytics} netWorth={dashboard.netWorth} />
     </div>

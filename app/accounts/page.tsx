@@ -10,7 +10,7 @@ export default async function AccountsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader title="Счета" description="Наличные, карта, накопительный и брокерский счет с расчетом общего баланса." />
+      <PageHeader titleKey="page.accounts.title" descriptionKey="page.accounts.desc" />
       <SourceBanner source={data.source} />
       <AccountManager data={data} />
     </div>

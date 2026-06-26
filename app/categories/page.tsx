@@ -17,10 +17,7 @@ export default async function CategoriesPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Категории"
-        description="Настройте категории доходов и расходов для точной классификации операций."
-      />
+      <PageHeader titleKey="page.categories.title" descriptionKey="page.categories.desc" />
       <SourceBanner source={data.source} />
       <CategoryManager data={data} />
       <RulesManager />

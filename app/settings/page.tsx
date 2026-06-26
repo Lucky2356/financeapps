@@ -10,10 +10,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Настройки"
-        description="Валюта, внешний вид, автоматизация, аккаунт и управление данными."
-      />
+      <PageHeader titleKey="page.settings.title" descriptionKey="page.settings.desc" />
       <SourceBanner source={data.source} />
       <SettingsForm data={data} />
     </div>

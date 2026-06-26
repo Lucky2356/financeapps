@@ -10,7 +10,7 @@ export default async function GoalsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader title="Цели" description="Накопительные цели, прогресс и расчет нужного ежемесячного взноса." />
+      <PageHeader titleKey="page.goals.title" descriptionKey="page.goals.desc" />
       <SourceBanner source={data.source} />
       <GoalManager data={data} />
     </div>

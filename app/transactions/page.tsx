@@ -13,10 +13,7 @@ export default async function TransactionsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        title="Операции"
-        description="Ручной ввод, редактирование, удаление и фильтрация доходов и расходов."
-      />
+      <PageHeader titleKey="page.transactions.title" descriptionKey="page.transactions.desc" />
       <SourceBanner source={data.source} />
       <AiQuickAdd />
       <Suspense
