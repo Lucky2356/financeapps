@@ -32,6 +32,8 @@ import {
 } from "@/lib/storage/migrations/runLocalStateMigrations";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { clamp, percent, roundMoney } from "@/lib/utils";
+import { translate } from "@/lib/i18n/catalog";
+import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
@@ -1237,7 +1239,7 @@ export class LocalApiClient implements ApiClient {
       budgets,
       categories: state.categories,
       recommendations: new FinanceRecommendationService()
-        .build(finance)
+        .build(finance, getClientLocale())
         .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
       currency: state.currency,
       selectedMonth
@@ -1571,31 +1573,37 @@ export class LocalApiClient implements ApiClient {
       targetMonths: state.emergencyFundMonthsTarget
     });
     const recommendationService = new FinanceRecommendationService();
+    const locale = getClientLocale();
+    const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
     return {
       source: "database",
       currency: state.currency,
       metrics: [
         {
-          title: "Общий баланс",
+          key: "totalBalance",
+          title: t("svc.metric.totalBalance"),
           value: formatCurrency(totalBalance, currency),
-          detail: "Все активные счета"
+          detail: t("svc.metric.totalBalance.detail")
         },
         {
-          title: "Доходы за месяц",
+          key: "monthIncome",
+          title: t("svc.metric.monthIncome"),
           value: formatCurrency(finance.currentMonthIncome, currency),
-          detail: "Текущий календарный месяц",
+          detail: t("svc.metric.month.detail"),
           tone: "success"
         },
         {
-          title: "Расходы за месяц",
+          key: "monthExpense",
+          title: t("svc.metric.monthExpense"),
           value: formatCurrency(finance.currentMonthExpense, currency),
-          detail: "Текущий календарный месяц",
+          detail: t("svc.metric.month.detail"),
           tone: "warning"
         },
         {
-          title: "Свободный остаток",
+          key: "freeCash",
+          title: t("svc.metric.freeCash"),
           value: formatCurrency(finance.freeCashflow, currency),
-          detail: "Доходы минус расходы",
+          detail: t("svc.metric.freeCash.detail"),
           tone: finance.freeCashflow >= 0 ? "success" : "danger"
         }
       ],
@@ -1603,8 +1611,8 @@ export class LocalApiClient implements ApiClient {
         .filter((budget) => budget.spent > 0)
         .map((budget) => ({ name: budget.category, value: budget.spent, fill: budget.color })),
       monthlyCashflow: finance.monthlyCashflow,
-      recommendations: recommendationService.build(finance),
-      health: recommendationService.healthScore(finance),
+      recommendations: recommendationService.build(finance, locale),
+      health: recommendationService.healthScore(finance, locale),
       netWorth,
       liabilitiesTotal,
       netWorthBreakdown: buildNetWorthBreakdown({
