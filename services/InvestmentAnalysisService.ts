@@ -1,10 +1,14 @@
 import type { RiskProfileCode } from "@prisma/client";
 
 import type { PortfolioRow, RecommendationView } from "@/types/finance";
+import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 
 type HistoricalSeries = Record<string, number[]>;
 
-const profileLimits: Record<RiskProfileCode, { highRiskShare: number; singlePositionShare: number }> = {
+const profileLimits: Record<
+  RiskProfileCode,
+  { highRiskShare: number; singlePositionShare: number }
+> = {
   CONSERVATIVE: { highRiskShare: 15, singlePositionShare: 25 },
   MODERATE: { highRiskShare: 30, singlePositionShare: 35 },
   AGGRESSIVE: { highRiskShare: 45, singlePositionShare: 45 }
@@ -14,10 +18,15 @@ export class InvestmentAnalysisService {
   analyze(
     portfolio: PortfolioRow[],
     riskProfile: RiskProfileCode,
-    historicalPrices: HistoricalSeries = {}
+    historicalPrices: HistoricalSeries = {},
+    locale: Locale = DEFAULT_LOCALE
   ): { risks: RecommendationView[]; education: RecommendationView[] } {
+    const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
     const total = portfolio.reduce((sum, row) => sum + row.currentValue, 0);
-    const largest = portfolio.reduce<PortfolioRow | null>((max, row) => (!max || row.share > max.share ? row : max), null);
+    const largest = portfolio.reduce<PortfolioRow | null>(
+      (max, row) => (!max || row.share > max.share ? row : max),
+      null
+    );
     const highRiskShare = portfolio
       .filter((row) => row.risk === "HIGH")
       .reduce((sum, row) => sum + row.share, 0);
@@ -29,20 +38,23 @@ export class InvestmentAnalysisService {
         risks: [
           {
             id: "portfolio-empty",
-            title: "Портфель пуст",
-            description: "Добавьте позиции, чтобы увидеть анализ структуры и рисков.",
+            title: t("svc.inv.empty.title"),
+            description: t("svc.inv.empty.desc"),
             severity: "INFO"
           }
         ],
-        education: this.education()
+        education: this.education(locale)
       };
     }
 
     if (largest && largest.share > limits.singlePositionShare) {
       risks.push({
         id: "single-position-concentration",
-        title: "Высокая доля одной бумаги",
-        description: `${largest.ticker} занимает ${largest.share.toFixed(1)}% портфеля. Такая концентрация повышает зависимость результата от одного эмитента.`,
+        title: t("svc.inv.singlePos.title"),
+        description: t("svc.inv.singlePos.desc", {
+          ticker: largest.ticker,
+          share: largest.share.toFixed(1)
+        }),
         severity: largest.share > 50 ? "CRITICAL" : "WARNING"
       });
     }
@@ -50,8 +62,8 @@ export class InvestmentAnalysisService {
     if (highRiskShare > limits.highRiskShare) {
       risks.push({
         id: "high-risk-share",
-        title: "Доля высокорисковых бумаг выше профиля",
-        description: `Высокорисковые инструменты занимают ${highRiskShare.toFixed(1)}% портфеля. Для выбранного профиля это может быть рискованным.`,
+        title: t("svc.inv.highRisk.title"),
+        description: t("svc.inv.highRisk.desc", { share: highRiskShare.toFixed(1) }),
         severity: "WARNING"
       });
     }
@@ -59,8 +71,8 @@ export class InvestmentAnalysisService {
     if (portfolio.length < 5) {
       risks.push({
         id: "diversification",
-        title: "Диверсификация ограничена",
-        description: "В портфеле меньше пяти бумаг. Результат сильнее зависит от отдельных компаний и секторов.",
+        title: t("svc.inv.diversification.title"),
+        description: t("svc.inv.diversification.desc"),
         severity: "INFO"
       });
     }
@@ -70,8 +82,11 @@ export class InvestmentAnalysisService {
     if (largestSector && largestSector.share > 55) {
       risks.push({
         id: "sector-concentration",
-        title: "Высокая концентрация в одном секторе",
-        description: `${largestSector.sector} занимает ${largestSector.share.toFixed(1)}% портфеля. Такая структура повышает чувствительность к отраслевым событиям и регулированию.`,
+        title: t("svc.inv.sector.title"),
+        description: t("svc.inv.sector.desc", {
+          sector: largestSector.sector,
+          share: largestSector.share.toFixed(1)
+        }),
         severity: largestSector.share > 70 ? "CRITICAL" : "WARNING"
       });
     }
@@ -83,8 +98,8 @@ export class InvestmentAnalysisService {
     for (const item of volatileTickers.slice(0, 2)) {
       risks.push({
         id: `volatility-${item.row.ticker}`,
-        title: `${item.row.ticker}: повышенная волатильность`,
-        description: `Исторические колебания за период составляют около ${item.volatility.toFixed(1)}% в день. Можно рассмотреть дополнительное изучение факторов риска.`,
+        title: t("svc.inv.volatility.title", { ticker: item.row.ticker }),
+        description: t("svc.inv.volatility.desc", { pct: item.volatility.toFixed(1) }),
         severity: "INFO"
       });
     }
@@ -93,8 +108,8 @@ export class InvestmentAnalysisService {
     if (drawdown < -12) {
       risks.push({
         id: "drawdown",
-        title: "Заметная просадка по историческим данным",
-        description: `Максимальная просадка по доступному ряду около ${drawdown.toFixed(1)}%. Это полезно учитывать при оценке устойчивости портфеля.`,
+        title: t("svc.inv.drawdown.title"),
+        description: t("svc.inv.drawdown.desc", { pct: drawdown.toFixed(1) }),
         severity: "WARNING"
       });
     }
@@ -102,42 +117,43 @@ export class InvestmentAnalysisService {
     if (risks.length === 0) {
       risks.push({
         id: "risk-balanced",
-        title: "Критичных концентраций не найдено",
-        description: "По текущим демо-данным структура портфеля выглядит сбалансированной относительно выбранного риск-профиля.",
+        title: t("svc.inv.balanced.title"),
+        description: t("svc.inv.balanced.desc"),
         severity: "SUCCESS"
       });
     }
 
     return {
       risks,
-      education: this.education()
+      education: this.education(locale)
     };
   }
 
-  private education(): RecommendationView[] {
+  private education(locale: Locale = DEFAULT_LOCALE): RecommendationView[] {
+    const t = (key: string) => translate(locale, key);
     return [
       {
         id: "education-risk",
-        title: "Риск связан не только с просадкой цены",
-        description: "Учитывайте ликвидность, сектор, долговую нагрузку, валютную чувствительность и новостной фон эмитента.",
+        title: t("svc.inv.edu.risk.title"),
+        description: t("svc.inv.edu.risk.desc"),
         severity: "INFO"
       },
       {
         id: "education-diversification",
-        title: "Диверсификация снижает зависимость от одного сценария",
-        description: "Разные отрасли и инструменты могут по-разному реагировать на ставки, инфляцию и корпоративные события.",
+        title: t("svc.inv.edu.div.title"),
+        description: t("svc.inv.edu.div.desc"),
         severity: "INFO"
       },
       {
         id: "education-sector",
-        title: "Секторная структура важна не меньше тикеров",
-        description: "Даже несколько бумаг могут вести себя похоже, если они зависят от одних сырьевых цен, ставок или регуляторных факторов.",
+        title: t("svc.inv.edu.sector.title"),
+        description: t("svc.inv.edu.sector.desc"),
         severity: "INFO"
       },
       {
         id: "education-profile",
-        title: "Риск-профиль помогает задать рамки",
-        description: "Для консервативного профиля инструмент с высокой волатильностью может быть рискованным даже при привлекательных показателях роста.",
+        title: t("svc.inv.edu.profile.title"),
+        description: t("svc.inv.edu.profile.desc"),
         severity: "INFO"
       }
     ];
@@ -146,9 +162,12 @@ export class InvestmentAnalysisService {
   private volatility(values: number[]) {
     if (values.length < 2) return 0;
 
-    const returns = values.slice(1).map((value, index) => ((value - values[index]) / values[index]) * 100);
+    const returns = values
+      .slice(1)
+      .map((value, index) => ((value - values[index]) / values[index]) * 100);
     const average = returns.reduce((sum, value) => sum + value, 0) / returns.length;
-    const variance = returns.reduce((sum, value) => sum + (value - average) ** 2, 0) / returns.length;
+    const variance =
+      returns.reduce((sum, value) => sum + (value - average) ** 2, 0) / returns.length;
 
     return Math.sqrt(variance);
   }

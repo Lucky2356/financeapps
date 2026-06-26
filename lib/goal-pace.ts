@@ -1,5 +1,7 @@
 import { differenceInCalendarMonths } from "date-fns";
 
+import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
+
 export type GoalPace = {
   /** Whole calendar months left until the deadline (can be negative if overdue). */
   monthsLeft: number;
@@ -19,7 +21,12 @@ type GoalLike = {
 // can be reused by the goal card UI and covered by unit tests. The monthly
 // contribution itself is computed server-side (ceil(remaining / monthsLeft));
 // this only adds the surrounding context (months left / reached / overdue).
-export function describeGoalPace(goal: GoalLike, now: Date = new Date()): GoalPace {
+export function describeGoalPace(
+  goal: GoalLike,
+  now: Date = new Date(),
+  locale: Locale = DEFAULT_LOCALE
+): GoalPace {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
   const isComplete = remaining <= 0;
   const monthsLeft = differenceInCalendarMonths(new Date(goal.deadline), now);
@@ -27,13 +34,13 @@ export function describeGoalPace(goal: GoalLike, now: Date = new Date()): GoalPa
 
   let hint: string;
   if (isComplete) {
-    hint = "Цель достигнута";
+    hint = t("svc.goal.reached");
   } else if (isOverdue) {
-    hint = "Срок прошёл";
+    hint = t("svc.goal.overdue");
   } else if (monthsLeft <= 0) {
-    hint = "в этом месяце";
+    hint = t("svc.goal.thisMonth");
   } else {
-    hint = `осталось ${monthsLeft} мес.`;
+    hint = t("svc.goal.monthsLeft", { n: monthsLeft });
   }
 
   return { monthsLeft, isComplete, isOverdue, hint };

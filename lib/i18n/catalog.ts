@@ -758,6 +758,82 @@ const ru: Messages = {
   "svc.rec.slowGoal.title": "Цель «{title}» требует внимания",
   "svc.rec.slowGoal.desc":
     "Расчетный ежемесячный взнос выше текущего свободного остатка. Можно пересмотреть срок или темп пополнений.",
+  // Forecast warnings
+  "svc.fc.negBalance.title": "Возможен кассовый разрыв",
+  "svc.fc.negBalance.desc":
+    "По плановым операциям остаток может уйти ниже нуля к {date}. Проверьте даты и суммы обязательных платежей.",
+  "svc.fc.low30.title": "Остаток через 30 дней станет низким",
+  "svc.fc.low30.desc":
+    "Прогноз показывает заметное снижение доступного остатка. Полезно заранее проверить крупные платежи ближайшего месяца.",
+  "svc.fc.goalPressure.title": "Цели требуют больше свободного потока",
+  "svc.fc.goalPressure.desc":
+    "Суммарный плановый взнос по целям выше прогнозного свободного потока на 30 дней. Можно пересмотреть сроки или размеры взносов.",
+  "svc.fc.neg90.title": "Плановые расходы выше доходов",
+  "svc.fc.neg90.desc":
+    "На горизонте 90 дней регулярные расходы превышают регулярные доходы. Это сигнал проверить подписки, обязательства и даты поступлений.",
+  "svc.fc.stable.title": "Кассовый прогноз выглядит устойчиво",
+  "svc.fc.stable.desc":
+    "На основе текущих шаблонов плановых платежей критических разрывов не видно. Поддерживайте актуальность расписания.",
+  // Analytics insights
+  "svc.an.empty.title": "Нужно больше данных",
+  "svc.an.empty.desc":
+    "Добавьте операции или импортируйте CSV, чтобы увидеть персональные выводы по расходам.",
+  "svc.an.negative.title": "Месяц закрывается в минус",
+  "svc.an.negative.desc":
+    "Расходы выше доходов на {amount}. Проверьте крупные списания и обязательные платежи.",
+  "svc.an.healthy.title": "Хороший запас для накоплений",
+  "svc.an.healthy.desc":
+    "Текущая норма сбережений {rate}%. Часть свободного остатка можно направить на цель или подушку.",
+  "svc.an.growth.title": "Расходы заметно выросли",
+  "svc.an.growth.desc":
+    "По сравнению с прошлым месяцем расходы выше на {pct}%. Посмотрите топ категорий ниже.",
+  "svc.an.concentration.title": "Одна категория забирает большую долю",
+  "svc.an.concentration.desc":
+    "«{category}» занимает {share}% расходов за период. Стоит проверить, нет ли разовых трат.",
+  "svc.an.stable.title": "Финансовый ритм выглядит стабильным",
+  "svc.an.stable.desc":
+    "Резких скачков расходов и отрицательного cashflow за текущий месяц не видно.",
+  // Investment analysis (risks + education)
+  "svc.inv.empty.title": "Портфель пуст",
+  "svc.inv.empty.desc": "Добавьте позиции, чтобы увидеть анализ структуры и рисков.",
+  "svc.inv.singlePos.title": "Высокая доля одной бумаги",
+  "svc.inv.singlePos.desc":
+    "{ticker} занимает {share}% портфеля. Такая концентрация повышает зависимость результата от одного эмитента.",
+  "svc.inv.highRisk.title": "Доля высокорисковых бумаг выше профиля",
+  "svc.inv.highRisk.desc":
+    "Высокорисковые инструменты занимают {share}% портфеля. Для выбранного профиля это может быть рискованным.",
+  "svc.inv.diversification.title": "Диверсификация ограничена",
+  "svc.inv.diversification.desc":
+    "В портфеле меньше пяти бумаг. Результат сильнее зависит от отдельных компаний и секторов.",
+  "svc.inv.sector.title": "Высокая концентрация в одном секторе",
+  "svc.inv.sector.desc":
+    "{sector} занимает {share}% портфеля. Такая структура повышает чувствительность к отраслевым событиям и регулированию.",
+  "svc.inv.volatility.title": "{ticker}: повышенная волатильность",
+  "svc.inv.volatility.desc":
+    "Исторические колебания за период составляют около {pct}% в день. Можно рассмотреть дополнительное изучение факторов риска.",
+  "svc.inv.drawdown.title": "Заметная просадка по историческим данным",
+  "svc.inv.drawdown.desc":
+    "Максимальная просадка по доступному ряду около {pct}%. Это полезно учитывать при оценке устойчивости портфеля.",
+  "svc.inv.balanced.title": "Критичных концентраций не найдено",
+  "svc.inv.balanced.desc":
+    "По текущим демо-данным структура портфеля выглядит сбалансированной относительно выбранного риск-профиля.",
+  "svc.inv.edu.risk.title": "Риск связан не только с просадкой цены",
+  "svc.inv.edu.risk.desc":
+    "Учитывайте ликвидность, сектор, долговую нагрузку, валютную чувствительность и новостной фон эмитента.",
+  "svc.inv.edu.div.title": "Диверсификация снижает зависимость от одного сценария",
+  "svc.inv.edu.div.desc":
+    "Разные отрасли и инструменты могут по-разному реагировать на ставки, инфляцию и корпоративные события.",
+  "svc.inv.edu.sector.title": "Секторная структура важна не меньше тикеров",
+  "svc.inv.edu.sector.desc":
+    "Даже несколько бумаг могут вести себя похоже, если они зависят от одних сырьевых цен, ставок или регуляторных факторов.",
+  "svc.inv.edu.profile.title": "Риск-профиль помогает задать рамки",
+  "svc.inv.edu.profile.desc":
+    "Для консервативного профиля инструмент с высокой волатильностью может быть рискованным даже при привлекательных показателях роста.",
+  // Goal pace
+  "svc.goal.reached": "Цель достигнута",
+  "svc.goal.overdue": "Срок прошёл",
+  "svc.goal.thisMonth": "в этом месяце",
+  "svc.goal.monthsLeft": "осталось {n} мес.",
   // Auth marketing panel
   "auth.tagline": "Личные финансы — на десктопе и в вебе",
   "auth.heading": "Держите личные финансы под контролем — без таблиц и хаоса.",
@@ -1641,6 +1717,81 @@ const en: Messages = {
   "svc.rec.slowGoal.title": "Goal “{title}” needs attention",
   "svc.rec.slowGoal.desc":
     "The estimated monthly contribution is higher than your current free balance. You can revise the deadline or the funding pace.",
+  // Forecast warnings
+  "svc.fc.negBalance.title": "Possible cash gap",
+  "svc.fc.negBalance.desc":
+    "Based on planned transactions, the balance may drop below zero by {date}. Check the dates and amounts of mandatory payments.",
+  "svc.fc.low30.title": "Balance will be low in 30 days",
+  "svc.fc.low30.desc":
+    "The forecast shows a notable drop in available balance. It's worth checking large payments in the coming month in advance.",
+  "svc.fc.goalPressure.title": "Goals need more free flow",
+  "svc.fc.goalPressure.desc":
+    "Total planned goal contributions exceed the forecast free flow over 30 days. You can revise the timelines or contribution sizes.",
+  "svc.fc.neg90.title": "Planned expenses exceed income",
+  "svc.fc.neg90.desc":
+    "Over a 90-day horizon, recurring expenses exceed recurring income. That's a signal to check subscriptions, obligations and income dates.",
+  "svc.fc.stable.title": "The cash forecast looks stable",
+  "svc.fc.stable.desc":
+    "Based on current scheduled-payment templates, no critical gaps are visible. Keep your schedule up to date.",
+  // Analytics insights
+  "svc.an.empty.title": "More data needed",
+  "svc.an.empty.desc":
+    "Add transactions or import a CSV to see personal insights about your spending.",
+  "svc.an.negative.title": "The month is closing in the red",
+  "svc.an.negative.desc":
+    "Expenses exceed income by {amount}. Check large charges and mandatory payments.",
+  "svc.an.healthy.title": "A good cushion for savings",
+  "svc.an.healthy.desc":
+    "The current savings rate is {rate}%. Part of the free balance can go toward a goal or the cushion.",
+  "svc.an.growth.title": "Expenses grew noticeably",
+  "svc.an.growth.desc":
+    "Compared with last month, expenses are {pct}% higher. Check the top categories below.",
+  "svc.an.concentration.title": "One category takes a large share",
+  "svc.an.concentration.desc":
+    "“{category}” accounts for {share}% of expenses over the period. It's worth checking for one-off spending.",
+  "svc.an.stable.title": "Your financial rhythm looks stable",
+  "svc.an.stable.desc": "No sharp expense spikes or negative cash flow for the current month.",
+  // Investment analysis (risks + education)
+  "svc.inv.empty.title": "Portfolio is empty",
+  "svc.inv.empty.desc": "Add positions to see structure and risk analysis.",
+  "svc.inv.singlePos.title": "High share of a single security",
+  "svc.inv.singlePos.desc":
+    "{ticker} accounts for {share}% of the portfolio. Such concentration increases dependence on one issuer.",
+  "svc.inv.highRisk.title": "Share of high-risk securities above the profile",
+  "svc.inv.highRisk.desc":
+    "High-risk instruments make up {share}% of the portfolio. For the chosen profile this may be risky.",
+  "svc.inv.diversification.title": "Diversification is limited",
+  "svc.inv.diversification.desc":
+    "The portfolio has fewer than five securities. The outcome depends more on individual companies and sectors.",
+  "svc.inv.sector.title": "High concentration in one sector",
+  "svc.inv.sector.desc":
+    "{sector} makes up {share}% of the portfolio. This structure increases sensitivity to industry events and regulation.",
+  "svc.inv.volatility.title": "{ticker}: elevated volatility",
+  "svc.inv.volatility.desc":
+    "Historical swings over the period are around {pct}% per day. Consider studying the risk factors more closely.",
+  "svc.inv.drawdown.title": "Notable drawdown in historical data",
+  "svc.inv.drawdown.desc":
+    "The maximum drawdown over the available series is about {pct}%. Worth keeping in mind when assessing portfolio resilience.",
+  "svc.inv.balanced.title": "No critical concentrations found",
+  "svc.inv.balanced.desc":
+    "On the current demo data, the portfolio structure looks balanced relative to the chosen risk profile.",
+  "svc.inv.edu.risk.title": "Risk isn't only about price drawdown",
+  "svc.inv.edu.risk.desc":
+    "Consider liquidity, sector, debt load, currency sensitivity and the issuer's news background.",
+  "svc.inv.edu.div.title": "Diversification reduces dependence on one scenario",
+  "svc.inv.edu.div.desc":
+    "Different industries and instruments can react differently to rates, inflation and corporate events.",
+  "svc.inv.edu.sector.title": "Sector structure matters as much as tickers",
+  "svc.inv.edu.sector.desc":
+    "Even a few securities can behave similarly if they depend on the same commodity prices, rates or regulatory factors.",
+  "svc.inv.edu.profile.title": "A risk profile helps set boundaries",
+  "svc.inv.edu.profile.desc":
+    "For a conservative profile, a highly volatile instrument can be risky even with attractive growth metrics.",
+  // Goal pace
+  "svc.goal.reached": "Goal reached",
+  "svc.goal.overdue": "Deadline passed",
+  "svc.goal.thisMonth": "this month",
+  "svc.goal.monthsLeft": "{n} months left",
   // Auth marketing panel
   "auth.tagline": "Personal finance — on desktop and on the web",
   "auth.heading": "Keep your personal finances under control — without spreadsheets and chaos.",

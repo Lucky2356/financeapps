@@ -31,7 +31,7 @@ import { Progress } from "@/components/ui/progress";
 
 export function GoalManager({ data }: { data: GoalsPageData }) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data: pageData, reload } = useApiPageData(data, "/goals");
   const { run } = useApiMutation();
   const confirm = useConfirm();
@@ -106,7 +106,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {pageData.goals.map((goal) => {
-            const pace = describeGoalPace(goal);
+            const pace = describeGoalPace(goal, new Date(), locale);
             return (
               <Card key={goal.id}>
                 <CardHeader>
