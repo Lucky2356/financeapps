@@ -712,11 +712,11 @@ function emptyAnalytics(locale: Locale = DEFAULT_LOCALE): AnalyticsData {
   return buildAnalyticsFromTransactions([], "RUB", "database", locale);
 }
 
-function emptyInvestments(): InvestmentData {
+function emptyInvestments(locale: Locale = DEFAULT_LOCALE): InvestmentData {
   return {
     source: "database",
     currency: "RUB",
-    riskProfile: RISK_PROFILE_LABELS.MODERATE,
+    riskProfile: translate(locale, "riskProfile.MODERATE"),
     securities: [],
     watchlist: [],
     portfolio: [],
@@ -1695,7 +1695,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
       return {
         source: "database",
         currency: user.currency,
-        riskProfile: RISK_PROFILE_LABELS[riskCode],
+        riskProfile: translate(locale, `riskProfile.${riskCode}`),
         securities: securityRows,
         watchlist,
         portfolio: portfolioRows,
@@ -1705,7 +1705,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
         education: analysis.education
       };
     },
-    emptyInvestments
+    () => emptyInvestments(locale)
   );
 }
 
@@ -1758,7 +1758,7 @@ async function buildDemoInvestmentData(locale: Locale = DEFAULT_LOCALE): Promise
   return {
     source: "demo-fallback",
     currency: "RUB",
-    riskProfile: RISK_PROFILE_LABELS.MODERATE,
+    riskProfile: translate(locale, "riskProfile.MODERATE"),
     securities,
     watchlist: securities,
     portfolio: portfolioRows,

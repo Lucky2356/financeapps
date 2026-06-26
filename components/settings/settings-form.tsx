@@ -35,7 +35,7 @@ import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { AI_MODELS } from "@/lib/ai/models";
-import { APP_VERSION, RISK_PROFILE_LABELS } from "@/lib/constants";
+import { APP_VERSION } from "@/lib/constants";
 import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
@@ -499,7 +499,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             >
               {pageData.riskProfiles.map((profile) => (
                 <option key={profile.id} value={profile.code}>
-                  {RISK_PROFILE_LABELS[profile.code]} — {profile.description}
+                  {t(`riskProfile.${profile.code}`)} — {t(`riskProfile.${profile.code}.desc`)}
                 </option>
               ))}
             </select>

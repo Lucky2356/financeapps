@@ -39,8 +39,8 @@ import {
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
-import { INVESTMENT_DISCLAIMER, RISK_LABELS } from "@/lib/constants";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import {
   InvestmentSuggestionService,
   type InvestmentSuggestion
@@ -49,9 +49,9 @@ import type { InvestmentData } from "@/types/finance";
 
 const REFRESH_INTERVAL_MS = 45_000;
 const RISK_CODES = [
-  { value: "CONSERVATIVE", label: "Консервативный" },
-  { value: "MODERATE", label: "Умеренный" },
-  { value: "AGGRESSIVE", label: "Агрессивный" }
+  { value: "CONSERVATIVE" },
+  { value: "MODERATE" },
+  { value: "AGGRESSIVE" }
 ] as const;
 
 const riskVariant = {
@@ -62,6 +62,7 @@ const riskVariant = {
 
 export function InvestmentsView({ data: initialData }: { data: InvestmentData }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { data, reload } = useApiPageData(initialData, "/investments");
   const { run } = useApiMutation();
   const [watchlistOpen, setWatchlistOpen] = useState(false);
@@ -100,7 +101,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   function computeSuggestions() {
     const value = Number(budget);
     if (!Number.isFinite(value) || value <= 0) {
-      toast.error("Введите сумму бюджета на инвестиции");
+      toast.error(t("inv.toast.enterBudget"));
       return;
     }
     const result = new InvestmentSuggestionService().suggest({
@@ -112,7 +113,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     setSuggestions(result);
     setSuggested(true);
     if (result.length === 0) {
-      toast.info("Не удалось подобрать бумаги — увеличьте бюджет или смягчите ограничение риска.");
+      toast.info(t("inv.toast.noMatch"));
     }
   }
 
@@ -130,8 +131,11 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           averageBuyPrice: String(suggestion.price)
         }),
       {
-        success: `${suggestion.ticker}: добавлено ${suggestion.suggestedQuantity} шт. в портфель`,
-        error: "Не удалось добавить позицию",
+        success: t("inv.toast.added", {
+          ticker: suggestion.ticker,
+          n: suggestion.suggestedQuantity
+        }),
+        error: t("inv.toast.addError"),
         onSuccess: async () => {
           setSuggestions((prev) => prev.filter((item) => item.ticker !== suggestion.ticker));
           await refresh();
@@ -145,8 +149,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
     await run(() => apiClient.post("/investments", payload), {
-      success: "Позиция портфеля сохранена",
-      error: "Не удалось сохранить позицию",
+      success: t("inv.toast.positionSaved"),
+      error: t("inv.toast.positionSaveError"),
       onSuccess: async () => {
         setAddPositionOpen(false);
         setEditingPosition(null);
@@ -157,16 +161,16 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
   async function removePosition(ticker: string) {
     await run(() => apiClient.post("/investments", { action: "delete", ticker }), {
-      success: "Позиция удалена из портфеля",
-      error: "Не удалось удалить позицию",
+      success: t("inv.toast.positionRemoved"),
+      error: t("inv.toast.positionRemoveError"),
       onSuccess: refresh
     });
   }
 
   async function addWatchlistTicker(ticker: string) {
     await run(() => apiClient.post("/investments", { action: "addWatchlist", ticker }), {
-      success: `${ticker} добавлена в watchlist`,
-      error: "Не удалось добавить бумагу",
+      success: t("inv.toast.watchlistAdded", { ticker }),
+      error: t("inv.toast.watchlistAddError"),
       onSuccess: async () => {
         setWatchlistOpen(false);
         await refresh();
@@ -176,8 +180,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
   async function removeWatchlistItem(ticker: string) {
     await run(() => apiClient.post("/investments", { action: "removeWatchlist", ticker }), {
-      success: "Бумага удалена из watchlist",
-      error: "Не удалось удалить бумагу",
+      success: t("inv.toast.watchlistRemoved"),
+      error: t("inv.toast.watchlistRemoveError"),
       onSuccess: refresh
     });
   }
@@ -188,15 +192,13 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         action: "refreshMarket"
       });
       if (!silent) {
-        toast.success(
-          `Рыночные данные обновлены: ${result.updated} бумаг, источник ${result.source}`
-        );
+        toast.success(t("inv.toast.marketRefreshed", { n: result.updated, source: result.source }));
       }
       await reload();
       router.refresh();
     } catch (error) {
       if (!silent) {
-        toast.error(error instanceof Error ? error.message : "Не удалось обновить рыночные данные");
+        toast.error(error instanceof Error ? error.message : t("inv.toast.marketRefreshError"));
       }
     }
   }
@@ -205,22 +207,19 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-lg border border-info/30 bg-info/12 p-4 text-sm">
         <ShieldAlert className="mt-0.5 size-4 shrink-0 text-info-foreground" />
-        <p className="text-muted-foreground">{INVESTMENT_DISCLAIMER}</p>
+        <p className="text-muted-foreground">{t("inv.pageDisclaimer")}</p>
       </div>
 
       {/* Suggestion engine: budget + risk → securities to strengthen the portfolio */}
       <Card>
         <CardHeader>
-          <CardTitle>Подбор бумаг для портфеля</CardTitle>
+          <CardTitle>{t("inv.suggestTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Укажите сумму на инвестиции в этом месяце и допустимый риск — подберём бумаги, которые
-            сделают портфель более диверсифицированным и устойчивым с учётом уже имеющихся позиций.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("inv.suggestIntro")}</p>
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <div className="space-y-2">
-              <Label htmlFor="invest-budget">Бюджет на инвестиции, ₽</Label>
+              <Label htmlFor="invest-budget">{t("inv.budgetLabel")}</Label>
               <Input
                 id="invest-budget"
                 type="number"
@@ -228,11 +227,11 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                 step="1000"
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
-                placeholder="Например, 50000"
+                placeholder={t("inv.budgetPlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="invest-risk">Допустимый риск</Label>
+              <Label htmlFor="invest-risk">{t("inv.riskAllowed")}</Label>
               <select
                 id="invest-risk"
                 value={riskCode}
@@ -241,13 +240,13 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               >
                 {RISK_CODES.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(`riskProfile.${option.value}`)}
                   </option>
                 ))}
               </select>
             </div>
             <Button type="button" onClick={computeSuggestions}>
-              Подобрать
+              {t("inv.suggestBtn")}
             </Button>
           </div>
 
@@ -265,7 +264,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                         variant={riskVariant[suggestion.risk]}
                         className="ml-2 align-middle text-[11px]"
                       >
-                        {RISK_LABELS[suggestion.risk]}
+                        {t(`riskLevel.${suggestion.risk}`)}
                       </Badge>
                     </p>
                     <p className="text-xs text-muted-foreground">{suggestion.rationale}</p>
@@ -273,15 +272,18 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                   <div className="flex items-center gap-3 sm:shrink-0">
                     <div className="text-right">
                       <p className="text-sm font-medium">
-                        {suggestion.suggestedQuantity} шт. ·{" "}
+                        {t("inv.pieces", { n: suggestion.suggestedQuantity })} ·{" "}
                         {formatCurrency(suggestion.suggestedAmount, data.currency)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        по {formatCurrency(suggestion.price, data.currency)}
+                        {t("inv.atPrice", {
+                          price: formatCurrency(suggestion.price, data.currency)
+                        })}
                       </p>
                     </div>
                     <Button type="button" size="sm" onClick={() => void addSuggestion(suggestion)}>
-                      <Plus className="size-4" />В портфель
+                      <Plus className="size-4" />
+                      {t("inv.toPortfolio")}
                     </Button>
                   </div>
                 </div>
@@ -289,8 +291,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             </div>
           ) : suggested ? (
             <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              Подходящих бумаг не нашлось. Попробуйте увеличить бюджет или выбрать более высокий
-              допустимый риск.
+              {t("inv.noSuggestions")}
             </p>
           ) : null}
         </CardContent>
@@ -299,23 +300,23 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>
-            Watchlist российских акций
+            {t("inv.watchlistTitle")}
             {hasMarketData ? (
               <span className="ml-2 text-xs font-normal text-muted-foreground">
-                · цены обновляются автоматически
+                {t("inv.pricesAuto")}
               </span>
             ) : null}
           </CardTitle>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
               <RefreshCw className="size-4" />
-              Обновить рынок
+              {t("inv.refreshMarket")}
             </Button>
             <Dialog open={watchlistOpen} onOpenChange={setWatchlistOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <Plus className="size-4" />
-                  Добавить в watchlist
+                  {t("inv.addWatchlist")}
                 </Button>
               </DialogTrigger>
               <WatchlistDialog currency={data.currency} onAddTicker={addWatchlistTicker} />
@@ -326,12 +327,12 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           {data.watchlist.length === 0 ? (
             <EmptyState
               icon={Star}
-              title="Watchlist пуст"
-              description="Добавьте интересные бумаги в список наблюдения, чтобы следить за ценой и динамикой. Это не инвестиционная рекомендация."
+              title={t("inv.watchlistEmpty.title")}
+              description={t("inv.watchlistEmpty.desc")}
               action={
                 <Button variant="outline" onClick={() => setWatchlistOpen(true)}>
                   <Plus className="size-4" />
-                  Добавить в watchlist
+                  {t("inv.addWatchlist")}
                 </Button>
               }
             />
@@ -341,14 +342,14 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Ticker</TableHead>
-                      <TableHead>Название</TableHead>
-                      <TableHead>Сектор</TableHead>
-                      <TableHead className="text-right">Цена</TableHead>
-                      <TableHead className="text-right">День</TableHead>
-                      <TableHead className="text-right">30 дней</TableHead>
-                      <TableHead>Риск</TableHead>
-                      <TableHead>Комментарий</TableHead>
+                      <TableHead>{t("inv.col.ticker")}</TableHead>
+                      <TableHead>{t("inv.col.name")}</TableHead>
+                      <TableHead>{t("inv.col.sector")}</TableHead>
+                      <TableHead className="text-right">{t("inv.col.price")}</TableHead>
+                      <TableHead className="text-right">{t("inv.col.day")}</TableHead>
+                      <TableHead className="text-right">{t("inv.col.30d")}</TableHead>
+                      <TableHead>{t("inv.col.risk")}</TableHead>
+                      <TableHead>{t("inv.col.comment")}</TableHead>
                       <TableHead className="w-16 text-right"> </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -359,7 +360,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                           <button
                             type="button"
                             className="hover:text-primary hover:underline"
-                            title="Открыть график"
+                            title={t("inv.openChart")}
                             onClick={() => setDetailSeed(security)}
                           >
                             {security.ticker}
@@ -390,7 +391,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                         </TableCell>
                         <TableCell>
                           <Badge variant={riskVariant[security.risk]}>
-                            {RISK_LABELS[security.risk]}
+                            {t(`riskLevel.${security.risk}`)}
                           </Badge>
                         </TableCell>
                         <TableCell className="max-w-96 text-muted-foreground">
@@ -407,8 +408,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                               type="submit"
                               variant="ghost"
                               size="icon"
-                              title="Удалить из watchlist"
-                              aria-label="Удалить из watchlist"
+                              title={t("inv.removeWatchlist")}
+                              aria-label={t("inv.removeWatchlist")}
                             >
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
@@ -430,18 +431,18 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                         <p className="text-xs text-muted-foreground">{security.sector}</p>
                       </div>
                       <Badge variant={riskVariant[security.risk]}>
-                        {RISK_LABELS[security.risk]}
+                        {t(`riskLevel.${security.risk}`)}
                       </Badge>
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
                       <div>
-                        <p className="text-xs text-muted-foreground">Цена</p>
+                        <p className="text-xs text-muted-foreground">{t("inv.col.price")}</p>
                         <p className="font-semibold">
                           {formatCurrency(security.price, data.currency)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">День</p>
+                        <p className="text-xs text-muted-foreground">{t("inv.col.day")}</p>
                         <p
                           className={
                             security.changeDay >= 0
@@ -453,7 +454,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">30 дней</p>
+                        <p className="text-xs text-muted-foreground">{t("inv.col.30d")}</p>
                         <p
                           className={
                             security.change30d >= 0
@@ -475,7 +476,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                     >
                       <Button type="submit" variant="outline" size="sm">
                         <Trash2 className="size-4 text-destructive" />
-                        Удалить
+                        {t("common.delete")}
                       </Button>
                     </form>
                   </div>
@@ -489,17 +490,17 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>Портфель пользователя</CardTitle>
+            <CardTitle>{t("inv.portfolioTitle")}</CardTitle>
             <Dialog open={addPositionOpen} onOpenChange={setAddPositionOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="size-4" />
-                  Добавить позицию
+                  {t("inv.addPosition")}
                 </Button>
               </DialogTrigger>
               <PositionDialog
-                title="Добавить позицию"
-                description="Найдите бумагу, укажите количество и среднюю цену покупки. Это учетная запись портфеля, не инвестиционный совет."
+                title={t("inv.addPosition")}
+                description={t("inv.addPosition.desc")}
                 data={data}
                 currency={data.currency}
                 onSubmit={submitPosition}
@@ -510,12 +511,12 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             {data.portfolio.length === 0 ? (
               <EmptyState
                 icon={LineChart}
-                title="Портфель пуст"
-                description="Подберите бумаги по бюджету и риску в блоке выше или добавьте позицию вручную — стоимость и P/L будут обновляться автоматически."
+                title={t("inv.portfolioEmpty.title")}
+                description={t("inv.portfolioEmpty.desc")}
                 action={
                   <Button onClick={() => setAddPositionOpen(true)}>
                     <Plus className="size-4" />
-                    Добавить позицию
+                    {t("inv.addPosition")}
                   </Button>
                 }
               />
@@ -526,16 +527,16 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Тикер</TableHead>
-                        <TableHead>Сектор</TableHead>
-                        <TableHead className="text-right">Кол-во</TableHead>
-                        <TableHead className="text-right">Средняя</TableHead>
-                        <TableHead className="text-right">Текущая</TableHead>
-                        <TableHead className="text-right">Стоимость</TableHead>
-                        <TableHead className="text-right">P/L</TableHead>
-                        <TableHead className="text-right">Доходность</TableHead>
-                        <TableHead className="text-right">Доля</TableHead>
-                        <TableHead className="w-28 text-right">Действия</TableHead>
+                        <TableHead>{t("inv.col.ticker")}</TableHead>
+                        <TableHead>{t("inv.col.sector")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.qty")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.avg")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.current")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.value")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.pnl")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.return")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.share")}</TableHead>
+                        <TableHead className="w-28 text-right">{t("common.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -548,7 +549,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                               <button
                                 type="button"
                                 className="hover:text-primary hover:underline"
-                                title="Открыть график"
+                                title={t("inv.openChart")}
                                 onClick={() =>
                                   setDetailSeed({
                                     ticker: position.ticker,
@@ -565,7 +566,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                               {position.sector}
                             </TableCell>
                             <TableCell className="text-right">
-                              {position.quantity.toLocaleString("ru-RU")}
+                              {position.quantity.toLocaleString()}
                             </TableCell>
                             <TableCell className="text-right">
                               {formatCurrency(position.averageBuyPrice, data.currency)}
@@ -603,8 +604,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  title="Редактировать позицию"
-                                  aria-label="Редактировать позицию"
+                                  title={t("inv.editPosition")}
+                                  aria-label={t("inv.editPosition")}
                                   onClick={() => setEditingPosition(position)}
                                 >
                                   <Edit2 className="size-4" />
@@ -619,8 +620,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                                     type="submit"
                                     variant="ghost"
                                     size="icon"
-                                    title="Удалить позицию"
-                                    aria-label="Удалить позицию"
+                                    title={t("inv.removePosition")}
+                                    aria-label={t("inv.removePosition")}
                                   >
                                     <Trash2 className="size-4 text-destructive" />
                                   </Button>
@@ -646,13 +647,13 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                         <div>
-                          <p className="text-xs text-muted-foreground">Стоимость</p>
+                          <p className="text-xs text-muted-foreground">{t("inv.col.value")}</p>
                           <p className="font-semibold">
                             {formatCurrency(position.currentValue, data.currency)}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">P/L</p>
+                          <p className="text-xs text-muted-foreground">{t("inv.col.pnl")}</p>
                           <p
                             className={
                               position.pnl >= 0
@@ -671,7 +672,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                           onClick={() => setEditingPosition(position)}
                         >
                           <Edit2 className="size-4" />
-                          Изменить
+                          {t("common.edit")}
                         </Button>
                         <form
                           onSubmit={(event) => {
@@ -681,7 +682,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                         >
                           <Button type="submit" variant="outline" size="sm">
                             <Trash2 className="size-4 text-destructive" />
-                            Удалить
+                            {t("common.delete")}
                           </Button>
                         </form>
                       </div>
@@ -695,23 +696,23 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
         <Card>
           <CardHeader>
-            <CardTitle>Структура портфеля</CardTitle>
+            <CardTitle>{t("inv.structureTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
             <PortfolioStructureChart data={data.structure} />
-            <p className="mt-2 text-sm text-muted-foreground">Риск-профиль: {data.riskProfile}</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {t("inv.riskProfileLabel")} {data.riskProfile}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Секторная структура</CardTitle>
+            <CardTitle>{t("inv.sectorTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
             <PortfolioStructureChart data={data.sectorStructure} />
-            <p className="mt-2 text-sm text-muted-foreground">
-              Показывает долю отраслей в текущей стоимости портфеля.
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">{t("inv.sectorDesc")}</p>
           </CardContent>
         </Card>
       </section>
@@ -730,8 +731,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       >
         {editingPosition && (
           <PositionDialog
-            title={`Редактировать ${editingPosition.ticker}`}
-            description="Можно обновить количество и среднюю цену покупки."
+            title={t("inv.editTitle", { ticker: editingPosition.ticker })}
+            description={t("inv.editDesc")}
             data={data}
             currency={data.currency}
             position={editingPosition}
@@ -756,14 +757,12 @@ function WatchlistDialog({
   currency: string;
   onAddTicker: (ticker: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>Добавить в watchlist</DialogTitle>
-        <DialogDescription>
-          Найдите любую бумагу Московской биржи по тикеру или названию. Это список наблюдения, а не
-          индивидуальная инвестиционная рекомендация.
-        </DialogDescription>
+        <DialogTitle>{t("inv.addWatchlist")}</DialogTitle>
+        <DialogDescription>{t("inv.watchlistDialog.desc")}</DialogDescription>
       </DialogHeader>
       <SecuritySearch currency={currency} onSelect={(s) => onAddTicker(s.ticker)} />
     </DialogContent>
@@ -784,6 +783,7 @@ function PositionDialog({
   currency: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useI18n();
   // For a new position the user can pick ANY security listed on MOEX via live
   // search; when editing, the ticker is fixed.
   const [chosen, setChosen] = useState<{ ticker: string; name: string } | null>(null);
@@ -797,7 +797,7 @@ function PositionDialog({
       </DialogHeader>
       <form onSubmit={onSubmit} className="grid gap-4">
         <div className="space-y-2">
-          <Label>Бумага</Label>
+          <Label>{t("inv.security")}</Label>
           {ticker ? <input type="hidden" name="ticker" value={ticker} /> : null}
           {position ? (
             <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm">
@@ -810,7 +810,7 @@ function PositionDialog({
                 <span className="text-muted-foreground">{chosen.name}</span>
               </span>
               <Button type="button" variant="ghost" size="sm" onClick={() => setChosen(null)}>
-                Изменить
+                {t("common.edit")}
               </Button>
             </div>
           ) : (
@@ -822,7 +822,7 @@ function PositionDialog({
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Количество</Label>
+            <Label>{t("inv.quantity")}</Label>
             <Input
               name="quantity"
               type="number"
@@ -833,7 +833,7 @@ function PositionDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Средняя цена покупки</Label>
+            <Label>{t("inv.avgPrice")}</Label>
             <Input
               name="averageBuyPrice"
               type="number"
@@ -845,11 +845,10 @@ function PositionDialog({
           </div>
         </div>
         <div className="rounded-lg border border-info/30 bg-info/12 p-3 text-sm text-muted-foreground">
-          Данные используются только для учета и анализа рисков портфеля. Информация не является
-          индивидуальной инвестиционной рекомендацией.
+          {t("inv.positionNote")}
         </div>
         <DialogFooter>
-          <Button type="submit">Сохранить позицию</Button>
+          <Button type="submit">{t("inv.savePosition")}</Button>
         </DialogFooter>
       </form>
     </DialogContent>
@@ -865,6 +864,7 @@ function PortfolioSummary({
   portfolio: InvestmentData["portfolio"];
   currency: string;
 }) {
+  const { t } = useI18n();
   const cost = portfolio.reduce((sum, p) => sum + p.quantity * p.averageBuyPrice, 0);
   const value = portfolio.reduce((sum, p) => sum + p.currentValue, 0);
   const pnl = value - cost;
@@ -872,15 +872,15 @@ function PortfolioSummary({
   const positive = pnl >= 0;
 
   const items = [
-    { label: "Вложено", value: formatCurrency(cost, currency), tone: "" },
-    { label: "Текущая стоимость", value: formatCurrency(value, currency), tone: "" },
+    { label: t("inv.invested"), value: formatCurrency(cost, currency), tone: "" },
+    { label: t("inv.currentValue"), value: formatCurrency(value, currency), tone: "" },
     {
-      label: "Прибыль/убыток",
+      label: t("inv.pnlLabel"),
       value: `${positive ? "+" : ""}${formatCurrency(pnl, currency)}`,
       tone: positive ? "text-success-foreground" : "text-destructive"
     },
     {
-      label: "Доходность",
+      label: t("inv.returnLabel"),
       value: `${positive ? "+" : ""}${returnPct.toFixed(1)}%`,
       tone: positive ? "text-success-foreground" : "text-destructive"
     }
