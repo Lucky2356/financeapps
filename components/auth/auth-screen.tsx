@@ -1,17 +1,21 @@
+"use client";
+
 import { CircleDollarSign, Gauge, LineChart, ShieldCheck, Wallet } from "lucide-react";
 
 import { APP_NAME } from "@/lib/constants";
+import { useI18n } from "@/lib/i18n/context";
 
 const features = [
-  { icon: Wallet, text: "Счета, операции, переводы и импорт выписок из банков" },
-  { icon: Gauge, text: "Бюджеты, цели, долги и плановые платежи" },
-  { icon: LineChart, text: "Прогноз денежного потока, капитал и аналитика" },
-  { icon: ShieldCheck, text: "Данные изолированы по аккаунту; на десктопе — полностью офлайн" }
+  { icon: Wallet, key: "auth.feature.accounts" },
+  { icon: Gauge, key: "auth.feature.budgets" },
+  { icon: LineChart, key: "auth.feature.forecast" },
+  { icon: ShieldCheck, key: "auth.feature.privacy" }
 ];
 
 // Marketing shell for the auth pages (login / register): a value-prop panel
 // beside the form on large screens, just the form on small ones. Web-only.
 export function AuthScreen({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   return (
     <div className="mx-auto grid min-h-[80vh] w-full max-w-5xl items-center gap-10 py-8 lg:grid-cols-2">
       <section className="hidden flex-col gap-6 lg:flex">
@@ -21,24 +25,19 @@ export function AuthScreen({ children }: { children: React.ReactNode }) {
           </span>
           <div>
             <p className="text-lg font-semibold">{APP_NAME}</p>
-            <p className="text-sm text-muted-foreground">Личные финансы — на десктопе и в вебе</p>
+            <p className="text-sm text-muted-foreground">{t("auth.tagline")}</p>
           </div>
         </div>
-        <h1 className="text-2xl font-bold leading-snug">
-          Держите личные финансы под контролем — без таблиц и хаоса.
-        </h1>
+        <h1 className="text-2xl font-bold leading-snug">{t("auth.heading")}</h1>
         <ul className="space-y-3">
           {features.map((feature) => (
-            <li key={feature.text} className="flex items-start gap-3 text-sm">
+            <li key={feature.key} className="flex items-start gap-3 text-sm">
               <feature.icon className="mt-0.5 size-5 shrink-0 text-primary" />
-              <span>{feature.text}</span>
+              <span>{t(feature.key)}</span>
             </li>
           ))}
         </ul>
-        <p className="text-xs text-muted-foreground">
-          Бесплатно и без рекламы. Инвестиционный раздел носит образовательный характер и не является
-          индивидуальной инвестиционной рекомендацией.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("auth.disclaimer")}</p>
       </section>
       <div className="w-full max-w-sm justify-self-center lg:justify-self-end">{children}</div>
     </div>
