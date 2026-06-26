@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 
 // Account self-service for web users: change password and delete account.
@@ -28,6 +29,7 @@ export function AccountSection() {
 }
 
 function AccountSectionInner() {
+  const { t } = useI18n();
   const [changing, setChanging] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -40,7 +42,7 @@ function AccountSectionInner() {
     const newPassword = String(form.get("newPassword") ?? "");
     const confirmPassword = String(form.get("confirmPassword") ?? "");
     if (newPassword !== confirmPassword) {
-      toast.error("Новый пароль и подтверждение не совпадают");
+      toast.error(t("set.account.mismatch"));
       return;
     }
     setChanging(true);
@@ -52,12 +54,12 @@ function AccountSectionInner() {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Не удалось изменить пароль");
+        throw new Error(data?.error ?? t("set.account.changeFail"));
       }
-      toast.success("Пароль изменён");
+      toast.success(t("set.account.changed"));
       event.currentTarget.reset();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось изменить пароль");
+      toast.error(error instanceof Error ? error.message : t("set.account.changeFail"));
     } finally {
       setChanging(false);
     }
@@ -65,7 +67,7 @@ function AccountSectionInner() {
 
   async function deleteAccount() {
     if (!deletePassword) {
-      toast.error("Введите пароль для подтверждения");
+      toast.error(t("set.account.needPassword"));
       return;
     }
     setDeleting(true);
@@ -77,12 +79,12 @@ function AccountSectionInner() {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Не удалось удалить аккаунт");
+        throw new Error(data?.error ?? t("set.account.deleteFail"));
       }
-      toast.success("Аккаунт удалён");
+      toast.success(t("set.account.deleted"));
       await signOut({ callbackUrl: "/login" });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить аккаунт");
+      toast.error(error instanceof Error ? error.message : t("set.account.deleteFail"));
       setDeleting(false);
     }
   }
@@ -92,15 +94,15 @@ function AccountSectionInner() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <KeyRound className="size-4" />
-          Аккаунт и безопасность
+          {t("set.account.title")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Change password */}
         <form onSubmit={changePassword} className="space-y-3">
-          <p className="text-sm font-medium">Смена пароля</p>
+          <p className="text-sm font-medium">{t("set.account.changePassword")}</p>
           <div className="space-y-2">
-            <Label htmlFor="currentPassword">Текущий пароль</Label>
+            <Label htmlFor="currentPassword">{t("set.account.current")}</Label>
             <Input
               id="currentPassword"
               name="currentPassword"
@@ -111,7 +113,7 @@ function AccountSectionInner() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="newPassword">Новый пароль (мин. 8)</Label>
+              <Label htmlFor="newPassword">{t("set.account.new")}</Label>
               <Input
                 id="newPassword"
                 name="newPassword"
@@ -122,7 +124,7 @@ function AccountSectionInner() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Подтвердите пароль</Label>
+              <Label htmlFor="confirmPassword">{t("set.account.confirm")}</Label>
               <Input
                 id="confirmPassword"
                 name="confirmPassword"
@@ -134,17 +136,14 @@ function AccountSectionInner() {
             </div>
           </div>
           <Button type="submit" disabled={changing}>
-            {changing ? "Сохранение…" : "Изменить пароль"}
+            {changing ? t("set.saving") : t("set.account.changeBtn")}
           </Button>
         </form>
 
         {/* Delete account */}
         <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-          <p className="text-sm font-medium text-destructive">Удаление аккаунта</p>
-          <p className="text-sm text-muted-foreground">
-            Аккаунт и все ваши данные (счета, операции, бюджеты, цели и т.д.) будут удалены
-            безвозвратно. Перед удалением рекомендуем скачать резервную копию на странице «Импорт».
-          </p>
+          <p className="text-sm font-medium text-destructive">{t("set.account.deleteSection")}</p>
+          <p className="text-sm text-muted-foreground">{t("set.account.deleteDesc")}</p>
           <Dialog
             open={deleteOpen}
             onOpenChange={(open) => {
@@ -155,19 +154,16 @@ function AccountSectionInner() {
             <DialogTrigger asChild>
               <Button variant="destructive">
                 <Trash2 className="size-4" />
-                Удалить аккаунт
+                {t("set.account.deleteBtn")}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Удалить аккаунт навсегда?</DialogTitle>
-                <DialogDescription>
-                  Это действие необратимо. Введите пароль, чтобы подтвердить удаление аккаунта и всех
-                  данных.
-                </DialogDescription>
+                <DialogTitle>{t("set.account.deleteConfirmTitle")}</DialogTitle>
+                <DialogDescription>{t("set.account.deleteConfirmDesc")}</DialogDescription>
               </DialogHeader>
               <div className="space-y-2">
-                <Label htmlFor="deletePassword">Пароль</Label>
+                <Label htmlFor="deletePassword">{t("set.account.password")}</Label>
                 <Input
                   id="deletePassword"
                   type="password"
@@ -178,10 +174,14 @@ function AccountSectionInner() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>
-                  Отмена
+                  {t("common.cancel")}
                 </Button>
-                <Button variant="destructive" onClick={() => void deleteAccount()} disabled={deleting}>
-                  {deleting ? "Удаление…" : "Удалить навсегда"}
+                <Button
+                  variant="destructive"
+                  onClick={() => void deleteAccount()}
+                  disabled={deleting}
+                >
+                  {deleting ? t("set.account.deleting") : t("set.account.deleteForever")}
                 </Button>
               </DialogFooter>
             </DialogContent>

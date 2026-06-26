@@ -1,10 +1,14 @@
+"use client";
+
 import { Skeleton } from "@/components/ui/skeleton";
+import { useI18n } from "@/lib/i18n/context";
 
 // Generic page skeleton: a heading block plus a few card placeholders. Mirrors
 // the common page-grid layout so there is no layout shift when content arrives.
 export default function Loading() {
+  const { t } = useI18n();
   return (
-    <div className="page-grid" role="status" aria-label="Загрузка">
+    <div className="page-grid" role="status" aria-label={t("loading.generic")}>
       <div className="space-y-2">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-72" />

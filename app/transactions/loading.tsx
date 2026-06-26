@@ -1,9 +1,13 @@
+"use client";
+
 import { Skeleton } from "@/components/ui/skeleton";
+import { useI18n } from "@/lib/i18n/context";
 
 // Transactions list skeleton: heading, filter bar, and a stack of table rows.
 export default function Loading() {
+  const { t } = useI18n();
   return (
-    <div className="page-grid" role="status" aria-label="Загрузка операций">
+    <div className="page-grid" role="status" aria-label={t("loading.transactions")}>
       <div className="space-y-2">
         <Skeleton className="h-7 w-40" />
         <Skeleton className="h-4 w-64" />

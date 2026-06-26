@@ -13,16 +13,15 @@ import {
 
 import { formatCurrency } from "@/lib/format";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { useI18n } from "@/lib/i18n/context";
 import type { ForecastPoint } from "@/types/finance";
 
-function axisCurrency(value: number) {
-  if (Math.abs(value) >= 1000) return `${Math.round(value / 1000)} тыс. ₽`;
-  return `${value} ₽`;
-}
-
 export function ForecastBalanceChart({ data }: { data: ForecastPoint[] }) {
+  const { t } = useI18n();
+  const axisCurrency = (value: number) =>
+    Math.abs(value) >= 1000 ? `${Math.round(value / 1000)} ${t("chart.thousand")}` : `${value} ₽`;
   return (
-    <div className="h-72 w-full sm:h-80" role="img" aria-label="График прогноза баланса на ближайшие дни">
+    <div className="h-72 w-full sm:h-80" role="img" aria-label={t("chart.aria.forecast")}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
           <defs>
@@ -44,7 +43,7 @@ export function ForecastBalanceChart({ data }: { data: ForecastPoint[] }) {
           <Area
             type="monotone"
             dataKey="balance"
-            name="Прогноз остатка"
+            name={t("chart.series.forecast")}
             stroke="#149365"
             strokeWidth={2}
             fill="url(#forecastBalance)"
