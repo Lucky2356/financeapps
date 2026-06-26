@@ -87,9 +87,10 @@ export async function PUT(request: NextRequest) {
     );
     if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    await db.recurringTransaction.findFirstOrThrow({ where: { id: input.id, userId: user.id } });
-    const updated = await db.recurringTransaction.update({
-      where: { id: input.id },
+    // updateMany with a userId-scoped where is the isolation boundary: a row owned
+    // by another user matches zero records and is left untouched (count === 0).
+    const result = await db.recurringTransaction.updateMany({
+      where: { id: input.id, userId: user.id },
       data: {
         accountId: input.accountId,
         categoryId: input.categoryId,
@@ -101,7 +102,10 @@ export async function PUT(request: NextRequest) {
         isActive: input.isActive
       }
     });
+    if (result.count === 0)
+      return NextResponse.json({ error: "Запись не найдена." }, { status: 404 });
 
+    const updated = await db.recurringTransaction.findUnique({ where: { id: input.id } });
     return NextResponse.json(updated);
   } catch (error) {
     return apiErrorResponse(error, "Не удалось обновить плановый платеж.");

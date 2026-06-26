@@ -45,25 +45,28 @@ describe("apiErrorResponse", () => {
     expect(body.error).toBe("Такая запись уже существует.");
   });
 
-  it("falls back to 400 with the Error message for a generic Error", async () => {
+  it("hides a generic Error message behind the fallback with status 500", async () => {
+    // Security: the raw error.message must never reach the client (it can leak
+    // internals like "ECONNREFUSED ...:5432"). Only the generic fallback is returned.
     const response = apiErrorResponse(new Error("Boom"));
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(500);
     const body = await readBody(response);
-    expect(body.error).toBe("Boom");
+    expect(body.error).toBe("Request failed");
+    expect(body.error).not.toContain("Boom");
   });
 
   it("uses the provided fallback message for non-Error values", async () => {
     const response = apiErrorResponse("nope", "Custom fallback");
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(500);
     const body = await readBody(response);
     expect(body.error).toBe("Custom fallback");
   });
 
-  it("treats an unknown Prisma code as a generic 400", async () => {
+  it("treats an unknown Prisma code as a generic 500", async () => {
     const response = apiErrorResponse({ code: "P9999", message: "weird" });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(500);
     const body = await readBody(response);
-    // Prisma-like object is not an Error instance, so the default fallback applies.
+    // Unknown code falls through to the generic handler; raw message is not leaked.
     expect(body.error).toBe("Request failed");
   });
 

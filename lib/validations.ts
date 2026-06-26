@@ -135,8 +135,14 @@ export const watchlistItemSchema = z.object({
     .transform((value) => value.toUpperCase())
 });
 
+// Hard ceiling on the imported payload. `rows` is a JSON-stringified array; the
+// length cap (~8 MB) bounds memory before JSON.parse, and the route additionally
+// caps the parsed row count (MAX_IMPORT_ROWS) to prevent DoS via huge imports.
+export const MAX_IMPORT_ROWS = 20_000;
+const MAX_IMPORT_PAYLOAD_CHARS = 8_000_000;
+
 export const csvImportSchema = z.object({
-  rows: z.string().min(2),
+  rows: z.string().min(2).max(MAX_IMPORT_PAYLOAD_CHARS, "Файл слишком большой для импорта."),
   dateColumn: z.string().min(1),
   amountColumn: z.string().min(1),
   descriptionColumn: z.string().optional(),

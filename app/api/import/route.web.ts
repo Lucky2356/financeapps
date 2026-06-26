@@ -6,7 +6,7 @@ import { apiErrorResponse } from "@/lib/api/route-errors";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { requirePrisma } from "@/lib/prisma";
 import { findCurrentUser } from "@/lib/auth/current-user";
-import { csvImportSchema } from "@/lib/validations";
+import { MAX_IMPORT_ROWS, csvImportSchema } from "@/lib/validations";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 
 export const dynamic = "force-dynamic";
@@ -51,12 +51,19 @@ export async function POST(request: NextRequest) {
   try {
     const db = requirePrisma();
     const user = await findCurrentUser();
-    if (!user)
-      return NextResponse.json({ error: "Demo user not found. Run seed first." }, { status: 404 });
+    if (!user) return NextResponse.json({ error: "Требуется вход." }, { status: 401 });
+
+    if (!(request.headers.get("content-type") ?? "").includes("application/json"))
+      return NextResponse.json({ error: "Ожидается application/json." }, { status: 415 });
 
     const input = csvImportSchema.parse(await request.json());
     const parsedRows = JSON.parse(input.rows) as unknown;
     const rows = Array.isArray(parsedRows) ? (parsedRows as Array<Record<string, unknown>>) : [];
+    if (rows.length > MAX_IMPORT_ROWS)
+      return NextResponse.json(
+        { error: `Слишком много строк (макс. ${MAX_IMPORT_ROWS}).` },
+        { status: 400 }
+      );
     const accounts = await db.account.findMany({ where: { userId: user.id, isArchived: false } });
     const fallbackAccount = accounts[0];
     if (!fallbackAccount)
