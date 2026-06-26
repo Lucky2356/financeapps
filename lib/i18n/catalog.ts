@@ -437,6 +437,40 @@ const ru: Messages = {
   "ai.err.loadRefs": "Не удалось загрузить категории и счета",
   "ai.err.noKey": "Укажите API-ключ Anthropic в настройках",
   "ai.err.recognise": "Не удалось распознать операцию",
+  // Onboarding tour
+  "ob.skip": "Пропустить обучение",
+  "ob.fromScratch": "Начать с нуля",
+  "ob.loadSample": "Загрузить пример",
+  "ob.back": "Назад",
+  "ob.start": "Начать",
+  "ob.next": "Далее",
+  "ob.sampleError": "Не удалось загрузить пример",
+  "ob.step0.title": "Добро пожаловать в Финансовый помощник",
+  "ob.step0.descDesktop":
+    "Все данные хранятся локально на вашем устройстве — без облака. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках.",
+  "ob.step0.descWeb":
+    "Ваши данные привязаны к аккаунту и защищены — доступны после входа с любого устройства. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках.",
+  "ob.step1.title": "1. Добавьте счета",
+  "ob.step1.desc":
+    "На вкладке «Счета» создайте свои счета (наличные, карта, накопительный, брокерский) и укажите текущий баланс. С них будут учитываться операции.",
+  "ob.step2.title": "2. Записывайте операции",
+  "ob.step2.desc":
+    "Нажмите «Операция» на главной или клавиши Alt+N, чтобы быстро добавить доход или расход. Прямо в окне можно создать новый счёт и новую категорию. Категория подбирается по описанию автоматически.",
+  "ob.step3.title": "3. Бюджеты и аналитика",
+  "ob.step3.desc":
+    "Задайте лимиты по категориям на вкладке «Бюджеты» (можно нажать «Предложить лимиты» — посчитаем по вашим средним тратам). На «Аналитике» смотрите динамику и структуру расходов.",
+  "ob.step4.title": "4. Цели и подушка",
+  "ob.step4.desc":
+    "Создавайте накопительные цели и пополняйте их со счёта. На главной видно прогресс финансовой подушки и свободный остаток, который можно сразу отложить на цель.",
+  "ob.step5.title": "5. Импорт и backup",
+  "ob.step5.desc":
+    "На вкладке «Импорт» можно загрузить CSV из банка, выбрать пресет колонок и скачать резервную копию. Перед восстановлением мы покажем preview, чтобы случайно не заменить данные не тем файлом.",
+  "ob.forecast.title": "6. Прогноз и инвестиции",
+  "ob.forecast.desc":
+    "Добавляйте плановые платежи — «Прогноз» построит денежный поток и календарь на 90 дней. На «Инвестициях» можно подобрать бумаги под бюджет и риск-профиль.",
+  "ob.step6.title": "Подсказка: быстрый поиск",
+  "ob.step6.desc":
+    "Нажмите Ctrl+K в любой момент, чтобы открыть командную палитру — быстрый переход по разделам и поиск счетов и категорий. Готово, можно начинать!",
   "reco.empty": "Рекомендаций пока нет. Добавьте больше данных, чтобы анализ стал точнее.",
   "inv.portfolioRisks": "Риски портфеля",
   "inv.educationTips": "Образовательные подсказки",
@@ -1004,6 +1038,40 @@ const en: Messages = {
   "ai.err.loadRefs": "Failed to load categories and accounts",
   "ai.err.noKey": "Enter your Anthropic API key in settings",
   "ai.err.recognise": "Failed to recognize the transaction",
+  // Onboarding tour
+  "ob.skip": "Skip tutorial",
+  "ob.fromScratch": "Start from scratch",
+  "ob.loadSample": "Load example",
+  "ob.back": "Back",
+  "ob.start": "Get started",
+  "ob.next": "Next",
+  "ob.sampleError": "Failed to load the example",
+  "ob.step0.title": "Welcome to Financial Assistant",
+  "ob.step0.descDesktop":
+    "All data is stored locally on your device — no cloud. Want to explore the app with a ready-made example or start with a clean slate? “Load example” can be cleared anytime in Settings.",
+  "ob.step0.descWeb":
+    "Your data is tied to your account and protected — available after signing in from any device. Want to explore the app with a ready-made example or start with a clean slate? “Load example” can be cleared anytime in Settings.",
+  "ob.step1.title": "1. Add accounts",
+  "ob.step1.desc":
+    "On the Accounts tab create your accounts (cash, card, savings, brokerage) and set the current balance. Transactions will be tracked from them.",
+  "ob.step2.title": "2. Record transactions",
+  "ob.step2.desc":
+    "Click “Transaction” on the home page or press Alt+N to quickly add income or an expense. You can create a new account and category right in the dialog. The category is picked from the description automatically.",
+  "ob.step3.title": "3. Budgets and analytics",
+  "ob.step3.desc":
+    "Set per-category limits on the Budgets tab (you can click “Suggest limits” — we'll calculate from your average spend). On Analytics, view trends and spending structure.",
+  "ob.step4.title": "4. Goals and cushion",
+  "ob.step4.desc":
+    "Create savings goals and fund them from an account. The home page shows your emergency-fund progress and the free balance you can set aside toward a goal right away.",
+  "ob.step5.title": "5. Import and backup",
+  "ob.step5.desc":
+    "On the Import tab you can upload a bank CSV, choose a column preset and download a backup. Before restoring we show a preview, so you don't accidentally replace data with the wrong file.",
+  "ob.forecast.title": "6. Forecast and investments",
+  "ob.forecast.desc":
+    "Add scheduled payments — Forecast will build a cash flow and a 90-day calendar. On Investments you can pick securities to match your budget and risk profile.",
+  "ob.step6.title": "Tip: quick search",
+  "ob.step6.desc":
+    "Press Ctrl+K anytime to open the command palette — quick navigation across sections and search for accounts and categories. That's it, you're ready to go!",
   "reco.empty": "No recommendations yet. Add more data so the analysis becomes more accurate.",
   "inv.portfolioRisks": "Portfolio risks",
   "inv.educationTips": "Educational tips",
