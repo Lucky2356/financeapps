@@ -11,6 +11,8 @@ import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { SourceBanner } from "@/components/source-banner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import type { DashboardData, ForecastData } from "@/types/finance";
 
 // Client wrapper: re-fetches dashboard + forecast from the active API client
@@ -23,6 +25,7 @@ export function DashboardClient({
   initialData: DashboardData;
   initialForecast: ForecastData;
 }) {
+  const { t } = useI18n();
   const { data } = useApiPageData(initialData, "/dashboard");
   const { data: forecast } = useApiPageData(initialForecast, "/forecast");
 
@@ -34,14 +37,16 @@ export function DashboardClient({
       <SourceBanner source={data.source} />
       <SetupChecklist />
       <DashboardOverview data={data} />
-      {showDistribute && freeCash ? <DistributeCashflow freeCashflowLabel={freeCash.value} /> : null}
+      {showDistribute && freeCash ? (
+        <DistributeCashflow freeCashflowLabel={freeCash.value} />
+      ) : null}
       <DashboardForecastStrip forecast={forecast} />
       <EmergencyFundCard fund={data.emergencyFund} currency={data.currency} />
 
       {data.netWorthTrend.length >= 2 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Динамика чистого капитала</CardTitle>
+            <CardTitle>{t("dash.netWorthTrend")}</CardTitle>
           </CardHeader>
           <CardContent>
             <NetWorthChart data={data.netWorthTrend} />
@@ -59,7 +64,7 @@ export function DashboardClient({
       <section className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Расходы по категориям</CardTitle>
+            <CardTitle>{t("dash.categoryExpenses")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ExpenseCategoryChart data={data.categoryExpenses} />
@@ -67,10 +72,13 @@ export function DashboardClient({
               {data.categoryExpenses.slice(0, 6).map((item) => (
                 <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.fill }} />
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.fill }}
+                    />
                     <span className="truncate">{item.name}</span>
                   </span>
-                  <span className="font-medium">{Math.round(item.value).toLocaleString("ru-RU")} ₽</span>
+                  <span className="font-medium">{formatCurrency(item.value, data.currency)}</span>
                 </div>
               ))}
             </div>
@@ -79,7 +87,7 @@ export function DashboardClient({
 
         <Card>
           <CardHeader>
-            <CardTitle>Доходы и расходы по месяцам</CardTitle>
+            <CardTitle>{t("dash.incomeExpenseByMonth")}</CardTitle>
           </CardHeader>
           <CardContent>
             <CashflowChart data={data.monthlyCashflow} />

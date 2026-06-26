@@ -1,23 +1,32 @@
+"use client";
+
 import { Activity, PiggyBank, ShieldCheck, WalletCards } from "lucide-react";
 
 import { Progress } from "@/components/ui/progress";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { DashboardData } from "@/types/finance";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 export function DashboardOverview({ data }: { data: DashboardData }) {
+  const { t } = useI18n();
   const balance = data.metrics.find((metric) => metric.title === "Общий баланс") ?? data.metrics[0];
   const freeCash = data.metrics.find((metric) => metric.title === "Свободный остаток");
   const savingsRate = data.metrics.find((metric) => metric.title === "Процент накоплений");
   const cushion = data.metrics.find((metric) => metric.title === "Финансовая подушка");
-  const healthTone = data.health.score >= 75 ? "good" : data.health.score >= 50 ? "warning" : "critical";
+  const healthTone =
+    data.health.score >= 75 ? "good" : data.health.score >= 50 ? "warning" : "critical";
   // Net worth (accounts + investments) is the headline; the plain account
   // balance and the other signals sit beneath it.
   const signals = [
     balance ? { ...balance, icon: WalletCards } : null,
     freeCash ? { ...freeCash, icon: PiggyBank } : null,
-    savingsRate ? { ...savingsRate, icon: Activity } : cushion ? { ...cushion, icon: ShieldCheck } : null
+    savingsRate
+      ? { ...savingsRate, icon: Activity }
+      : cushion
+        ? { ...cushion, icon: ShieldCheck }
+        : null
   ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
@@ -26,15 +35,23 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         <div className="border-b bg-gradient-to-br from-primary/6 via-card to-card p-5 sm:p-6 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <WalletCards className="size-4 text-primary" />
-            Чистый капитал
+            {t("dash.netWorth")}
             <InfoHint text={FINANCE_TERM_HINTS["Чистый капитал"]} />
           </div>
-          <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">{formatCurrency(data.netWorth, data.currency)}</p>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">Счета, инвестиции и накопления по целям.</p>
+          <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
+            {formatCurrency(data.netWorth, data.currency)}
+          </p>
+          <p className="mt-2 max-w-xl text-sm text-muted-foreground">{t("dash.netWorthDesc")}</p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {signals.slice(0, 3).map((signal) => (
-              <Signal key={signal.title} label={signal.title} value={signal.value} icon={signal.icon} tone={signal.tone} />
+              <Signal
+                key={signal.title}
+                label={signal.title}
+                value={signal.value}
+                icon={signal.icon}
+                tone={signal.tone}
+              />
             ))}
           </div>
         </div>
@@ -42,7 +59,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         <div className="p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Финансовое здоровье</p>
+              <p className="text-sm font-medium text-muted-foreground">{t("dash.health")}</p>
               <p className="mt-2 text-3xl font-semibold">{data.health.score}/100</p>
             </div>
             <span
@@ -53,7 +70,11 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
                 healthTone === "critical" && "bg-destructive/12 text-destructive"
               )}
             >
-              {healthTone === "good" ? "Устойчиво" : healthTone === "warning" ? "Нужен контроль" : "Высокий риск"}
+              {healthTone === "good"
+                ? t("dash.health.good")
+                : healthTone === "warning"
+                  ? t("dash.health.warning")
+                  : t("dash.health.critical")}
             </span>
           </div>
           <Progress value={data.health.score} className="mt-4" />
