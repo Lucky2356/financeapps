@@ -21,21 +21,33 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { RECURRENCE_FREQUENCY_LABELS } from "@/lib/constants";
 import { apiClient } from "@/lib/api/client";
 import type { RecurringTransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 
+const FREQUENCY_VALUES = ["WEEKLY", "MONTHLY", "YEARLY"] as const;
+
 export function RecurringManager({ data }: { data: RecurringTransactionsPageData }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: pageData, reload } = useApiPageData(data, "/recurring");
   const { run } = useApiMutation();
   const [addOpen, setAddOpen] = useState(false);
-  const [editingRecurring, setEditingRecurring] = useState<RecurringTransactionsPageData["recurringTransactions"][number] | null>(null);
+  const [editingRecurring, setEditingRecurring] = useState<
+    RecurringTransactionsPageData["recurringTransactions"][number] | null
+  >(null);
 
   async function refresh() {
     await reload();
@@ -46,61 +58,92 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    await run(() => (method === "POST" ? apiClient.post("/recurring", payload) : apiClient.put("/recurring", payload)), {
-      success: method === "POST" ? "Плановый платеж создан" : "Плановый платеж обновлен",
-      error: "Не удалось сохранить шаблон",
-      onSuccess: async () => {
-        if (method === "POST") setAddOpen(false);
-        else setEditingRecurring(null);
-        await refresh();
+    await run(
+      () =>
+        method === "POST"
+          ? apiClient.post("/recurring", payload)
+          : apiClient.put("/recurring", payload),
+      {
+        success: method === "POST" ? t("rec.toast.created") : t("rec.toast.updated"),
+        error: t("rec.toast.saveError"),
+        onSuccess: async () => {
+          if (method === "POST") setAddOpen(false);
+          else setEditingRecurring(null);
+          await refresh();
+        }
       }
-    });
+    );
   }
 
   async function removeTemplate(id: string) {
     await run(() => apiClient.delete(`/recurring?id=${encodeURIComponent(id)}`), {
-      success: "Шаблон удален",
-      error: "Не удалось удалить шаблон",
+      success: t("rec.toast.deleted"),
+      error: t("rec.toast.deleteError"),
       onSuccess: refresh
     });
   }
 
   async function materializeTemplate(id: string) {
-    await run(() => apiClient.post<{ created: number; nextDate: string }, { id: string }>("/recurring/materialize", { id }), {
-      error: "Не удалось создать операции",
-      onSuccess: async (result) => {
-        toast.success(result.created > 0 ? `Создано операций: ${result.created}` : "Нет наступивших платежей");
-        await refresh();
+    await run(
+      () =>
+        apiClient.post<{ created: number; nextDate: string }, { id: string }>(
+          "/recurring/materialize",
+          { id }
+        ),
+      {
+        error: t("rec.toast.materializeError"),
+        onSuccess: async (result) => {
+          toast.success(
+            result.created > 0
+              ? t("rec.toast.materialized", { count: result.created })
+              : t("rec.toast.noneDue")
+          );
+          await refresh();
+        }
       }
-    });
+    );
   }
 
   return (
     <div className="space-y-5">
       <section className="grid gap-3 md:grid-cols-4">
-        <SummaryTile label="Активные шаблоны" value={String(pageData.summary.activeCount)} />
-        <SummaryTile label="К созданию сегодня" value={String(pageData.summary.dueCount)} tone={pageData.summary.dueCount > 0 ? "warning" : "default"} />
-        <SummaryTile label="Ближайшие 7 дней" value={formatCurrency(pageData.summary.nextSevenDaysAmount, pageData.currency)} />
+        <SummaryTile label={t("rec.summary.active")} value={String(pageData.summary.activeCount)} />
         <SummaryTile
-          label="Плановый поток / мес."
-          value={formatCurrency(pageData.summary.monthlyPlannedIncome - pageData.summary.monthlyPlannedExpense, pageData.currency)}
-          tone={pageData.summary.monthlyPlannedIncome >= pageData.summary.monthlyPlannedExpense ? "success" : "danger"}
+          label={t("rec.summary.dueToday")}
+          value={String(pageData.summary.dueCount)}
+          tone={pageData.summary.dueCount > 0 ? "warning" : "default"}
+        />
+        <SummaryTile
+          label={t("rec.summary.next7")}
+          value={formatCurrency(pageData.summary.nextSevenDaysAmount, pageData.currency)}
+        />
+        <SummaryTile
+          label={t("rec.summary.monthlyFlow")}
+          value={formatCurrency(
+            pageData.summary.monthlyPlannedIncome - pageData.summary.monthlyPlannedExpense,
+            pageData.currency
+          )}
+          tone={
+            pageData.summary.monthlyPlannedIncome >= pageData.summary.monthlyPlannedExpense
+              ? "success"
+              : "danger"
+          }
         />
       </section>
 
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Плановые операции</CardTitle>
+          <CardTitle>{t("rec.title")}</CardTitle>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="size-4" />
-                Добавить шаблон
+                {t("rec.add")}
               </Button>
             </DialogTrigger>
             <RecurringDialog
-              title="Новый шаблон"
-              description="Для зарплаты, аренды, подписок, ЖКХ и других повторяющихся операций. Операция создастся сразу."
+              title={t("rec.new")}
+              description={t("rec.new.desc")}
               data={pageData}
               onSubmit={(event) => submitTemplate(event, "POST")}
             />
@@ -110,8 +153,8 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
           {pageData.recurringTransactions.length === 0 ? (
             <EmptyState
               icon={CalendarClock}
-              title="Плановых операций пока нет"
-              description="Добавьте повторяющиеся доходы и расходы, чтобы видеть будущую нагрузку заранее."
+              title={t("rec.empty.title")}
+              description={t("rec.empty.desc")}
             />
           ) : (
             <>
@@ -119,13 +162,13 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                 <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Следующая дата</TableHead>
-                      <TableHead>Шаблон</TableHead>
-                      <TableHead>Период</TableHead>
-                      <TableHead>Счет</TableHead>
-                      <TableHead>Статус</TableHead>
-                      <TableHead className="text-right">Сумма</TableHead>
-                      <TableHead className="w-36 text-right">Действия</TableHead>
+                      <TableHead>{t("rec.col.nextDate")}</TableHead>
+                      <TableHead>{t("rec.col.template")}</TableHead>
+                      <TableHead>{t("rec.col.period")}</TableHead>
+                      <TableHead>{t("common.account")}</TableHead>
+                      <TableHead>{t("rec.col.status")}</TableHead>
+                      <TableHead className="text-right">{t("common.amount")}</TableHead>
+                      <TableHead className="w-36 text-right">{t("common.actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -134,19 +177,30 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                         <TableCell>{formatDate(item.nextDate)}</TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-2">
-                            <span className="size-2.5 rounded-full" style={{ backgroundColor: item.category.color }} />
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{ backgroundColor: item.category.color }}
+                            />
                             <span>
                               <span className="block font-medium">{item.category.label}</span>
-                              <span className="block max-w-60 truncate text-xs text-muted-foreground">{item.description ?? "Без описания"}</span>
+                              <span className="block max-w-60 truncate text-xs text-muted-foreground">
+                                {item.description ?? t("tx.noDescription")}
+                              </span>
                             </span>
                           </span>
                         </TableCell>
-                        <TableCell>{RECURRENCE_FREQUENCY_LABELS[item.frequency]}</TableCell>
+                        <TableCell>{t(`recFreq.${item.frequency}`)}</TableCell>
                         <TableCell>{item.account.label}</TableCell>
                         <TableCell>
                           <StatusBadge item={item} />
                         </TableCell>
-                        <TableCell className={item.type === "INCOME" ? "text-right font-semibold text-success-foreground" : "text-right font-semibold"}>
+                        <TableCell
+                          className={
+                            item.type === "INCOME"
+                              ? "text-right font-semibold text-success-foreground"
+                              : "text-right font-semibold"
+                          }
+                        >
                           {item.type === "INCOME" ? "+" : "-"}
                           {formatCurrency(item.amount, pageData.currency)}
                         </TableCell>
@@ -156,17 +210,30 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                               type="button"
                               variant="ghost"
                               size="icon"
-                              title="Создать наступившие операции"
-                              aria-label="Создать наступившие операции"
+                              title={t("rec.materializeAria")}
+                              aria-label={t("rec.materializeAria")}
                               disabled={!item.isDue}
                               onClick={() => materializeTemplate(item.id)}
                             >
                               <CheckCircle2 className="size-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать шаблон" onClick={() => setEditingRecurring(item)}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={t("common.editAria")}
+                              aria-label={t("rec.editAria")}
+                              onClick={() => setEditingRecurring(item)}
+                            >
                               <Edit2 className="size-4" />
                             </Button>
-                            <Button type="button" variant="ghost" size="icon" title="Удалить" aria-label="Удалить шаблон" onClick={() => removeTemplate(item.id)}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title={t("common.delete")}
+                              aria-label={t("rec.deleteAria")}
+                              onClick={() => removeTemplate(item.id)}
+                            >
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
                           </div>
@@ -184,11 +251,20 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                       <div className="min-w-0">
                         <p className="font-semibold">{item.category.label}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {formatDate(item.nextDate)} · {RECURRENCE_FREQUENCY_LABELS[item.frequency]} · {item.account.label}
+                          {formatDate(item.nextDate)} · {t(`recFreq.${item.frequency}`)} ·{" "}
+                          {item.account.label}
                         </p>
-                        <p className="mt-2 text-sm text-muted-foreground">{item.description ?? "Без описания"}</p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {item.description ?? t("tx.noDescription")}
+                        </p>
                       </div>
-                      <p className={item.type === "INCOME" ? "shrink-0 font-semibold text-success-foreground" : "shrink-0 font-semibold"}>
+                      <p
+                        className={
+                          item.type === "INCOME"
+                            ? "shrink-0 font-semibold text-success-foreground"
+                            : "shrink-0 font-semibold"
+                        }
+                      >
                         {item.type === "INCOME" ? "+" : "-"}
                         {formatCurrency(item.amount, pageData.currency)}
                       </p>
@@ -196,13 +272,28 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <StatusBadge item={item} />
                       <div className="flex gap-2">
-                        <Button type="button" variant="outline" size="sm" disabled={!item.isDue} onClick={() => materializeTemplate(item.id)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!item.isDue}
+                          onClick={() => materializeTemplate(item.id)}
+                        >
                           <CheckCircle2 className="size-4" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setEditingRecurring(item)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingRecurring(item)}
+                        >
                           <Edit2 className="size-4" />
                         </Button>
-                        <Button type="button" variant="outline" size="sm" onClick={() => removeTemplate(item.id)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeTemplate(item.id)}
+                        >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
                       </div>
@@ -216,11 +307,16 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
       </Card>
 
       {/* Single controlled dialog for editing any template */}
-      <Dialog open={editingRecurring !== null} onOpenChange={(open) => { if (!open) setEditingRecurring(null); }}>
+      <Dialog
+        open={editingRecurring !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingRecurring(null);
+        }}
+      >
         {editingRecurring && (
           <RecurringDialog
-            title="Редактировать шаблон"
-            description="Изменения суммы сразу применятся к созданной операции."
+            title={t("rec.edit")}
+            description={t("rec.edit.desc")}
             data={pageData}
             recurring={editingRecurring}
             onSubmit={(event) => submitTemplate(event, "PUT")}
@@ -230,16 +326,20 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
 
       <Card>
         <CardHeader>
-          <CardTitle>Плановая нагрузка</CardTitle>
+          <CardTitle>{t("rec.load.title")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="rounded-lg border bg-muted/20 p-4">
-            <p className="font-medium">Плановые доходы в месяц</p>
-            <p className="mt-2 text-2xl font-semibold text-success-foreground">{formatCurrency(pageData.summary.monthlyPlannedIncome, pageData.currency)}</p>
+            <p className="font-medium">{t("rec.load.income")}</p>
+            <p className="mt-2 text-2xl font-semibold text-success-foreground">
+              {formatCurrency(pageData.summary.monthlyPlannedIncome, pageData.currency)}
+            </p>
           </div>
           <div className="rounded-lg border bg-muted/20 p-4">
-            <p className="font-medium">Плановые расходы в месяц</p>
-            <p className="mt-2 text-2xl font-semibold text-destructive">{formatCurrency(pageData.summary.monthlyPlannedExpense, pageData.currency)}</p>
+            <p className="font-medium">{t("rec.load.expense")}</p>
+            <p className="mt-2 text-2xl font-semibold text-destructive">
+              {formatCurrency(pageData.summary.monthlyPlannedExpense, pageData.currency)}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -247,7 +347,15 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
   );
 }
 
-function SummaryTile({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "success" | "warning" | "danger" }) {
+function SummaryTile({
+  label,
+  value,
+  tone = "default"
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "success" | "warning" | "danger";
+}) {
   const color =
     tone === "success"
       ? "text-success-foreground"
@@ -265,25 +373,38 @@ function SummaryTile({ label, value, tone = "default" }: { label: string; value:
   );
 }
 
-function StatusBadge({ item }: { item: RecurringTransactionsPageData["recurringTransactions"][number] }) {
+function StatusBadge({
+  item
+}: {
+  item: RecurringTransactionsPageData["recurringTransactions"][number];
+}) {
+  const { t } = useI18n();
   if (!item.isActive) {
     return (
       <Badge variant="outline" className="gap-1">
         <Power className="size-3" />
-        Отключен
+        {t("rec.status.off")}
       </Badge>
     );
   }
 
   if (item.isDue) {
-    return <Badge className="border-warning/30 bg-warning/15 text-warning-foreground">Нужно создать</Badge>;
+    return (
+      <Badge className="border-warning/30 bg-warning/15 text-warning-foreground">
+        {t("rec.status.due")}
+      </Badge>
+    );
   }
 
   if (item.daysUntilNext <= 7) {
-    return <Badge className="border-info/30 bg-info/12 text-info-foreground">Скоро</Badge>;
+    return (
+      <Badge className="border-info/30 bg-info/12 text-info-foreground">
+        {t("rec.status.soon")}
+      </Badge>
+    );
   }
 
-  return <Badge variant="outline">Запланирован</Badge>;
+  return <Badge variant="outline">{t("rec.status.scheduled")}</Badge>;
 }
 
 function RecurringDialog({
@@ -299,11 +420,19 @@ function RecurringDialog({
   recurring?: RecurringTransactionsPageData["recurringTransactions"][number];
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useI18n();
   const initialType = recurring?.type ?? "EXPENSE";
   const [selectedType, setSelectedType] = useState(initialType);
-  const matchingCategories = useMemo(() => data.categories.filter((category) => category.kind === selectedType), [data.categories, selectedType]);
-  const [categoryId, setCategoryId] = useState(recurring?.category.id ?? matchingCategories[0]?.id ?? "");
-  const effectiveCategoryId = matchingCategories.some((category) => category.id === categoryId) ? categoryId : matchingCategories[0]?.id ?? "";
+  const matchingCategories = useMemo(
+    () => data.categories.filter((category) => category.kind === selectedType),
+    [data.categories, selectedType]
+  );
+  const [categoryId, setCategoryId] = useState(
+    recurring?.category.id ?? matchingCategories[0]?.id ?? ""
+  );
+  const effectiveCategoryId = matchingCategories.some((category) => category.id === categoryId)
+    ? categoryId
+    : (matchingCategories[0]?.id ?? "");
 
   function changeType(value: "INCOME" | "EXPENSE") {
     const nextCategories = data.categories.filter((category) => category.kind === value);
@@ -322,19 +451,36 @@ function RecurringDialog({
         <input type="hidden" name="isActive" value="false" />
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Сумма</Label>
-            <Input name="amount" type="number" min="0" step="0.01" defaultValue={recurring?.amount ?? ""} required />
+            <Label>{t("common.amount")}</Label>
+            <Input
+              name="amount"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={recurring?.amount ?? ""}
+              required
+            />
           </div>
           <div className="space-y-2">
-            <Label>Тип</Label>
-            <select name="type" value={selectedType} onChange={(event) => changeType(event.target.value as "INCOME" | "EXPENSE")} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              <option value="EXPENSE">Расход</option>
-              <option value="INCOME">Доход</option>
+            <Label>{t("tx.type")}</Label>
+            <select
+              name="type"
+              value={selectedType}
+              onChange={(event) => changeType(event.target.value as "INCOME" | "EXPENSE")}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="EXPENSE">{t("tx.type.expense")}</option>
+              <option value="INCOME">{t("tx.type.income")}</option>
             </select>
           </div>
           <div className="space-y-2">
-            <Label>Категория</Label>
-            <select name="categoryId" value={effectiveCategoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <Label>{t("common.category")}</Label>
+            <select
+              name="categoryId"
+              value={effectiveCategoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
               {matchingCategories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.label}
@@ -343,8 +489,12 @@ function RecurringDialog({
             </select>
           </div>
           <div className="space-y-2">
-            <Label>Счет</Label>
-            <select name="accountId" defaultValue={recurring?.account.id ?? data.accounts[0]?.id} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+            <Label>{t("common.account")}</Label>
+            <select
+              name="accountId"
+              defaultValue={recurring?.account.id ?? data.accounts[0]?.id}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
               {data.accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.name}
@@ -353,30 +503,47 @@ function RecurringDialog({
             </select>
           </div>
           <div className="space-y-2">
-            <Label>Период</Label>
-            <select name="frequency" defaultValue={recurring?.frequency ?? "MONTHLY"} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
-              {Object.entries(RECURRENCE_FREQUENCY_LABELS).map(([value, label]) => (
+            <Label>{t("rec.dialog.period")}</Label>
+            <select
+              name="frequency"
+              defaultValue={recurring?.frequency ?? "MONTHLY"}
+              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            >
+              {FREQUENCY_VALUES.map((value) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(`recFreq.${value}`)}
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-2">
-            <Label>Следующая дата</Label>
-            <Input name="nextDate" type="date" defaultValue={recurring ? formatInputDate(recurring.nextDate) : formatInputDate(new Date())} required />
+            <Label>{t("rec.dialog.nextDate")}</Label>
+            <Input
+              name="nextDate"
+              type="date"
+              defaultValue={
+                recurring ? formatInputDate(recurring.nextDate) : formatInputDate(new Date())
+              }
+              required
+            />
           </div>
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm sm:col-span-2">
-            <input name="isActive" type="checkbox" defaultChecked={recurring?.isActive ?? true} value="true" className="size-4" />
-            Активный шаблон
+            <input
+              name="isActive"
+              type="checkbox"
+              defaultChecked={recurring?.isActive ?? true}
+              value="true"
+              className="size-4"
+            />
+            {t("rec.dialog.active")}
           </label>
           <div className="space-y-2 sm:col-span-2">
-            <Label>Описание</Label>
+            <Label>{t("tx.col.description")}</Label>
             <Textarea name="description" defaultValue={recurring?.description ?? ""} />
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit">{recurring ? "Сохранить" : "Добавить"}</Button>
+          <Button type="submit">{recurring ? t("common.save") : t("common.add")}</Button>
         </DialogFooter>
       </form>
     </DialogContent>
