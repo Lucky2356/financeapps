@@ -55,11 +55,11 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const shortcuts = [
-  { keys: "Alt+N", label: "Быстро добавить операцию" },
-  { keys: "Alt+T", label: "Перейти к операциям" },
-  { keys: "Alt+D", label: "Перейти на главную" },
-  { keys: "Alt+A", label: "Перейти к аналитике" },
-  { keys: "?", label: "Показать эту справку" }
+  { keys: "Alt+N", labelKey: "set.shortcut.add" },
+  { keys: "Alt+T", labelKey: "set.shortcut.transactions" },
+  { keys: "Alt+D", labelKey: "set.shortcut.home" },
+  { keys: "Alt+A", labelKey: "set.shortcut.analytics" },
+  { keys: "?", labelKey: "set.shortcut.help" }
 ];
 
 type EditableSettings = {
@@ -96,7 +96,13 @@ function toEditable(data: SettingsPageData): EditableSettings {
 
 const RELEASES_URL = "https://github.com/Lucky2356/financeapps/releases/latest";
 
-type Section = { id: string; label: string; icon: LucideIcon; keywords: string; node: React.ReactNode };
+type Section = {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  keywords: string;
+  node: React.ReactNode;
+};
 
 export function SettingsForm({ data }: { data: SettingsPageData }) {
   const { setTheme } = useTheme();
@@ -147,7 +153,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       setTimeout(() => setStatus("idle"), 1500);
     } catch (error) {
       setStatus("idle");
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить настройки");
+      toast.error(error instanceof Error ? error.message : t("set.saveError"));
     }
   }
 
@@ -158,11 +164,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     try {
       setLoadingSample(true);
       await apiClient.post("/sample", {});
-      toast.success("Демо-данные загружены.");
+      toast.success(t("set.toast.sampleLoaded"));
       await new Promise((r) => setTimeout(r, 400));
       window.location.reload();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось загрузить демо-данные");
+      toast.error(error instanceof Error ? error.message : t("set.toast.sampleError"));
       setLoadingSample(false);
     }
   }
@@ -171,11 +177,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     try {
       setClearing(true);
       await apiClient.delete("/storage/clear");
-      toast.success("Данные очищены.");
+      toast.success(t("set.toast.cleared"));
       await new Promise((r) => setTimeout(r, 600));
       window.location.reload();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось очистить данные");
+      toast.error(error instanceof Error ? error.message : t("set.toast.clearError"));
       setClearing(false);
     }
   }
@@ -193,23 +199,23 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       const { check } = await import("@tauri-apps/plugin-updater");
       const update = await check();
       if (!update) {
-        toast.success("У вас актуальная версия.");
+        toast.success(t("set.update.current"));
         return;
       }
       const confirmed = await confirm({
-        title: `Доступно обновление ${update.version}`,
+        title: t("set.update.available", { version: update.version }),
         description: update.body
-          ? `${update.body}\n\nСкачать и установить сейчас? Приложение перезапустится.`
-          : "Скачать и установить сейчас? Приложение перезапустится.",
-        confirmLabel: "Обновить"
+          ? `${update.body}\n\n${t("set.update.downloadConfirm")}`
+          : t("set.update.downloadConfirm"),
+        confirmLabel: t("set.update.confirmLabel")
       });
       if (!confirmed) return;
-      toast.info("Загрузка обновления…");
+      toast.info(t("set.update.downloading"));
       await update.downloadAndInstall();
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch {
-      toast.message("Автообновление недоступно — открываю страницу релизов.");
+      toast.message(t("set.update.unavailable"));
       window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
     } finally {
       setCheckingUpdate(false);
@@ -220,9 +226,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     try {
       localStorage.removeItem(ONBOARDING_STORAGE_KEY);
       window.dispatchEvent(new Event(ONBOARDING_REPLAY_EVENT));
-      toast.success("Обучение открыто.");
+      toast.success(t("set.toast.onboardingOpened"));
     } catch {
-      toast.error("Не удалось открыть обучение");
+      toast.error(t("set.toast.onboardingError"));
     }
   }
 
@@ -232,13 +238,14 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
     list.push({
       id: "general",
-      label: "Основные",
+      label: t("set.section.general"),
       icon: SlidersHorizontal,
-      keywords: "валюта currency демо тип операции по умолчанию доход расход",
+      keywords:
+        "основные general валюта currency демо demo тип type операции transaction доход income расход expense по умолчанию default",
       node: (
-        <SectionCard title="Основные настройки" fields>
+        <SectionCard title={t("set.general.title")} fields>
           <div className="space-y-2">
-            <Label>Валюта</Label>
+            <Label>{t("set.currency")}</Label>
             <select
               name="currency"
               value={settings.currency}
@@ -251,19 +258,16 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">
-              Валюта отображения для всего приложения. Суммы не пересчитываются — меняется только
-              обозначение валюты.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("set.currency.hint")}</p>
           </div>
           <ToggleRow
-            title="Режим демо-данных"
-            description="Показывает встроенный пример, когда у вас ещё нет своих данных."
+            title={t("set.demo.title")}
+            description={t("set.demo.desc")}
             checked={settings.demoMode}
             onChange={(v) => void persist({ demoMode: v })}
           />
           <div className="space-y-2">
-            <Label>Тип операции по умолчанию</Label>
+            <Label>{t("set.defaultType")}</Label>
             <select
               name="defaultTransactionType"
               value={settings.defaultTransactionType}
@@ -275,12 +279,10 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               }
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
-              <option value="EXPENSE">Расход</option>
-              <option value="INCOME">Доход</option>
+              <option value="EXPENSE">{t("set.type.expense")}</option>
+              <option value="INCOME">{t("set.type.income")}</option>
             </select>
-            <p className="text-xs text-muted-foreground">
-              Выбран при открытии формы быстрого добавления.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("set.defaultType.hint")}</p>
           </div>
         </SectionCard>
       )
@@ -288,20 +290,21 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
     list.push({
       id: "automation",
-      label: "Автоматизация",
+      label: t("set.section.automation"),
       icon: Repeat,
-      keywords: "авто-проведение регулярные напоминания платежи уведомления",
+      keywords:
+        "автоматизация automation авто-проведение регулярные recurring напоминания reminders платежи payments уведомления notifications",
       node: (
-        <SectionCard title="Автоматизация" fields>
+        <SectionCard title={t("set.automation.title")} fields>
           <ToggleRow
-            title="Авто-проведение регулярных"
-            description="При запуске автоматически создавать просроченные плановые платежи."
+            title={t("set.autoMaterialize.title")}
+            description={t("set.autoMaterialize.desc")}
             checked={settings.autoMaterializeRecurring}
             onChange={(v) => void persist({ autoMaterializeRecurring: v })}
           />
           <ToggleRow
-            title="Напоминания о платежах"
-            description="Системные уведомления о платежах, которые нужно провести сегодня."
+            title={t("set.reminders.title")}
+            description={t("set.reminders.desc")}
             checked={settings.paymentReminders}
             onChange={(v) => void persist({ paymentReminders: v })}
           />
@@ -311,26 +314,28 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
     list.push({
       id: "appearance",
-      label: "Внешний вид",
+      label: t("set.section.appearance"),
       icon: Palette,
-      keywords: "тема оформление светлая тёмная системная плотность язык language русский english",
+      keywords:
+        "внешний вид appearance тема theme оформление светлая light тёмная dark системная system плотность density язык language русский english",
       node: (
-        <SectionCard title="Внешний вид" fields>
+        <SectionCard title={t("set.appearance.title")} fields>
           <div className="space-y-2">
-            <Label>Тема оформления</Label>
+            <Label>{t("set.theme")}</Label>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
-                  { value: "light", label: "Светлая", icon: Sun },
-                  { value: "system", label: "Системная", icon: Monitor },
-                  { value: "dark", label: "Тёмная", icon: Moon }
+                  { value: "light", label: t("set.theme.light"), icon: Sun },
+                  { value: "system", label: t("set.theme.system"), icon: Monitor },
+                  { value: "dark", label: t("set.theme.dark"), icon: Moon }
                 ] as const
               ).map(({ value, label, icon: Icon }) => (
                 <label
                   key={value}
                   className={cn(
                     "flex min-h-11 cursor-pointer flex-col items-center gap-2 rounded-lg border p-3 text-center text-sm transition-colors hover:bg-muted/40",
-                    selectedTheme === value && "border-primary bg-primary/8 font-medium text-primary"
+                    selectedTheme === value &&
+                      "border-primary bg-primary/8 font-medium text-primary"
                   )}
                 >
                   <input
@@ -348,12 +353,12 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Плотность интерфейса</Label>
+            <Label>{t("set.density")}</Label>
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
-                  { value: "comfortable", label: "Комфортная" },
-                  { value: "compact", label: "Компактная" }
+                  { value: "comfortable", label: t("set.density.comfortable") },
+                  { value: "compact", label: t("set.density.compact") }
                 ] as const
               ).map(({ value, label }) => (
                 <label
@@ -413,14 +418,14 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
     list.push({
       id: "ai",
-      label: "ИИ-ассистент",
+      label: t("set.section.ai"),
       icon: Sparkles,
-      keywords: "ии ai claude ассистент ключ api модель",
+      keywords: "ии ai claude ассистент assistant ключ key api модель model",
       node: (
-        <SectionCard title="ИИ-ассистент" icon={Sparkles}>
+        <SectionCard title={t("set.ai.title")} icon={Sparkles}>
           <ToggleRow
-            title="Включить ИИ-ассистент"
-            description="Ввод операций текстом на странице «Операции» через Claude."
+            title={t("set.ai.enable.title")}
+            description={t("set.ai.enable.desc")}
             checked={settings.aiEnabled}
             onChange={(v) => void persist({ aiEnabled: v })}
           />
@@ -429,7 +434,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               {isLocalDesktopMode && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="ai-key">API-ключ Anthropic</Label>
+                    <Label htmlFor="ai-key">{t("set.ai.key")}</Label>
                     <Input
                       id="ai-key"
                       type="password"
@@ -439,38 +444,30 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                       onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
                       placeholder="sk-ant-..."
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Ключ хранится только на вашем устройстве и используется для запросов к
-                      Anthropic.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t("set.ai.key.hint")}</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="ai-model">Модель</Label>
+                    <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
                     <select
                       id="ai-model"
                       value={settings.aiModel}
                       onChange={(e) => void persist({ aiModel: e.target.value })}
                       className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                     >
-                      <option value="">По умолчанию (Opus 4.8)</option>
+                      <option value="">{t("set.ai.model.default")}</option>
                       {AI_MODELS.map((model) => (
                         <option key={model.id} value={model.id}>
                           {model.label}
                         </option>
                       ))}
                     </select>
-                    <p className="text-xs text-muted-foreground">
-                      Более мощные модели точнее, но дороже и медленнее. Для коротких фраз достаточно
-                      Haiku или Sonnet.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
                   </div>
                 </>
               )}
               <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
-                Текст, который вы вводите, отправляется во внешний сервис Anthropic. Не указывайте
-                конфиденциальные данные. Функцию можно отключить в любой момент.
-                {!isLocalDesktopMode &&
-                  " На сайте используется серверный ключ — если ИИ не настроен на сервере, запрос вернёт ошибку."}
+                {t("set.ai.warning")}
+                {!isLocalDesktopMode && t("set.ai.warning.web")}
               </div>
             </>
           )}
@@ -480,14 +477,15 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
     list.push({
       id: "risk",
-      label: "Риск и подушка",
+      label: t("set.section.risk"),
       icon: ShieldCheck,
-      keywords: "риск профиль подушка резерв emergency fund инвестиции",
+      keywords:
+        "риск risk профиль profile подушка cushion резерв reserve emergency fund инвестиции investments",
       node: (
-        <SectionCard title="Риск и финансовая подушка" fields>
+        <SectionCard title={t("set.risk.title")} fields>
           <div className="space-y-2">
             <Label className="inline-flex items-center gap-1">
-              Риск-профиль <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
+              {t("set.risk.profile")} <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
             </Label>
             <select
               name="riskProfileCode"
@@ -505,13 +503,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">
-              Используется для анализа концентрации и риска в инвестиционном портфеле.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("set.risk.profile.hint")}</p>
           </div>
           <div className="space-y-2">
             <Label className="inline-flex items-center gap-1">
-              Цель финансовой подушки <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
+              {t("set.risk.fund")} <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
             </Label>
             <select
               name="emergencyFundMonthsTarget"
@@ -519,13 +515,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               onChange={(e) => void persist({ emergencyFundMonthsTarget: Number(e.target.value) })}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
-              <option value="3">3 месяца расходов</option>
-              <option value="6">6 месяцев расходов</option>
-              <option value="12">12 месяцев расходов</option>
+              <option value="3">{t("set.risk.fund.months", { n: 3 })}</option>
+              <option value="6">{t("set.risk.fund.months12", { n: 6 })}</option>
+              <option value="12">{t("set.risk.fund.months12", { n: 12 })}</option>
             </select>
-            <p className="text-xs text-muted-foreground">
-              Рекомендуется минимум 3 месяца. 6–12 — для большей уверенности.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("set.risk.fund.hint")}</p>
           </div>
         </SectionCard>
       )
@@ -535,29 +529,27 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     if (!isLocalDesktopMode) {
       list.push({
         id: "account",
-        label: "Аккаунт",
+        label: t("set.section.account"),
         icon: KeyRound,
-        keywords: "аккаунт пароль сменить удалить безопасность выход",
+        keywords:
+          "аккаунт account пароль password сменить change удалить delete безопасность security выход logout",
         node: <AccountSection />
       });
     }
 
     list.push({
       id: "data",
-      label: "Данные",
+      label: t("set.section.data"),
       icon: Database,
-      keywords: "демо данные очистить backup резервная копия снимок local",
+      keywords: "данные data демо demo очистить clear backup резервная копия снимок snapshot local",
       node: (
         <>
           <Card className="border-destructive/30">
             <CardHeader>
-              <CardTitle className="text-destructive">Управление данными</CardTitle>
+              <CardTitle className="text-destructive">{t("set.data.title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы
-                посмотреть, как всё работает. Текущие данные при этом будут заменены.
-              </p>
+              <p className="text-sm text-muted-foreground">{t("set.data.sampleHint")}</p>
               <Button
                 variant="outline"
                 type="button"
@@ -566,33 +558,27 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 disabled={loadingSample}
               >
                 <Sparkles className="size-4" />
-                {loadingSample ? "Загрузка…" : "Загрузить демо-данные"}
+                {loadingSample ? t("set.data.loading") : t("set.data.loadSample")}
               </Button>
-              <p className="pt-1 text-sm text-muted-foreground">
-                Очистка удалит все счета, операции, цели, бюджеты и настройки. Это действие
-                необратимо.
-              </p>
+              <p className="pt-1 text-sm text-muted-foreground">{t("set.data.clearHint")}</p>
               <Dialog>
                 <DialogTrigger asChild>
                   <Button variant="destructive" type="button" className="w-full">
                     <Trash2 className="size-4" />
-                    Очистить все данные
+                    {t("set.data.clear")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Очистить все данные?</DialogTitle>
-                    <DialogDescription>
-                      Все ваши операции, счета, цели, бюджеты, плановые платежи, портфель и настройки
-                      будут безвозвратно удалены. Резервную копию можно сохранить на странице Импорт.
-                    </DialogDescription>
+                    <DialogTitle>{t("set.data.clearConfirm")}</DialogTitle>
+                    <DialogDescription>{t("set.data.clearConfirmDesc")}</DialogDescription>
                   </DialogHeader>
                   <div className="rounded-lg border border-destructive/30 bg-destructive/8 p-3 text-sm text-destructive">
-                    Это действие нельзя отменить. Сначала сделайте резервную копию.
+                    {t("set.data.clearWarning")}
                   </div>
                   <DialogFooter>
                     <Button variant="destructive" onClick={clearAllData} disabled={clearing}>
-                      {clearing ? "Очистка..." : "Да, удалить всё"}
+                      {clearing ? t("set.data.clearing") : t("set.data.clearYes")}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -607,26 +593,32 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
     list.push({
       id: "about",
-      label: "О приложении",
+      label: t("set.section.about"),
       icon: Info,
-      keywords: "версия обновления горячие клавиши обучение безопасность интеграции банк",
+      keywords:
+        "о приложении about версия version обновления updates горячие клавиши shortcuts обучение onboarding безопасность security интеграции integrations банк bank",
       node: (
         <div className="space-y-4">
-          <SectionCard title="Горячие клавиши" icon={Keyboard}>
+          <SectionCard title={t("set.about.shortcuts")} icon={Keyboard}>
             <div className="grid gap-2">
               {shortcuts.map((s) => (
                 <div
                   key={s.keys}
                   className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2"
                 >
-                  <span className="text-sm text-muted-foreground">{s.label}</span>
+                  <span className="text-sm text-muted-foreground">{t(s.labelKey)}</span>
                   <kbd className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{s.keys}</kbd>
                 </div>
               ))}
             </div>
-            <Button variant="outline" type="button" className="mt-4 w-full" onClick={replayOnboarding}>
+            <Button
+              variant="outline"
+              type="button"
+              className="mt-4 w-full"
+              onClick={replayOnboarding}
+            >
               <GraduationCap className="size-4" />
-              Показать обучение снова
+              {t("set.about.replayOnboarding")}
             </Button>
             <Button
               variant="outline"
@@ -636,20 +628,15 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               disabled={checkingUpdate}
             >
               <Download className="size-4" />
-              {checkingUpdate ? "Проверка…" : "Проверить обновления"}
+              {checkingUpdate ? t("set.about.checking") : t("set.about.checkUpdates")}
             </Button>
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              Финансовый помощник&nbsp;·&nbsp;версия {APP_VERSION}
+              {t("set.about.version", { version: APP_VERSION })}
             </p>
           </SectionCard>
-          <SectionCard title="Безопасность и интеграции" icon={ShieldCheck}>
-            <p className="text-sm text-muted-foreground">
-              Приложение не хранит банковские логины и пароли и не выполняет screen scraping банков.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Будущие банковские интеграции должны использовать официальные API, явное согласие
-              пользователя и encrypted/secure storage для токенов.
-            </p>
+          <SectionCard title={t("set.about.security")} icon={ShieldCheck}>
+            <p className="text-sm text-muted-foreground">{t("set.about.securityText1")}</p>
+            <p className="text-sm text-muted-foreground">{t("set.about.securityText2")}</p>
           </SectionCard>
         </div>
       )
@@ -677,15 +664,15 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           {status === "saving" ? (
             <>
               <Loader2 className="size-3.5 animate-spin" />
-              Сохранение…
+              {t("set.saving")}
             </>
           ) : status === "saved" ? (
             <>
               <Check className="size-3.5 text-primary" />
-              <span className="text-primary">Сохранено</span>
+              <span className="text-primary">{t("set.saved")}</span>
             </>
           ) : (
-            "Изменения применяются и сохраняются автоматически."
+            t("set.autosaveHint")
           )}
         </div>
         <div className="relative w-full sm:max-w-xs">
@@ -694,9 +681,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск по настройкам…"
+            placeholder={t("set.search")}
             className="pl-9"
-            aria-label="Поиск по настройкам"
+            aria-label={t("set.search")}
           />
         </div>
       </div>
@@ -704,7 +691,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* Section nav: vertical on desktop, horizontal scroll on mobile. */}
         <nav
-          aria-label="Разделы настроек"
+          aria-label={t("set.sections")}
           className={cn(
             "flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0",
             trimmedQuery && "pointer-events-none opacity-50"
@@ -739,7 +726,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         <div className="min-w-0 space-y-4">
           {visible.length === 0 ? (
             <p className="rounded-lg border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-              Ничего не найдено по запросу «{query}».
+              {t("set.nothingFound", { query })}
             </p>
           ) : (
             visible.map((s) => <div key={s.id}>{s.node}</div>)
@@ -772,9 +759,7 @@ function SectionCard({
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent
-        className={fields ? "grid items-start gap-4 lg:grid-cols-2" : "space-y-4"}
-      >
+      <CardContent className={fields ? "grid items-start gap-4 lg:grid-cols-2" : "space-y-4"}>
         {children}
       </CardContent>
     </Card>
