@@ -5,24 +5,24 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { createPortal } from "react-dom";
 
 import { clamp, cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/context";
 
-// Plain-language explanations for finance terms used across the app.
+// Plain-language explanations for finance terms used across the app. Keys are the
+// Russian metric titles (also used to look up by `metric.title`); values are
+// catalog keys so the hint text follows the user's locale.
 export const FINANCE_TERM_HINTS: Record<string, string> = {
-  "Чистый капитал":
-    "Всё, чем вы владеете: деньги на счетах + текущая стоимость инвестиций + накопления по целям.",
-  "Общий баланс": "Сумма средств на всех активных счетах (без инвестиций и целей).",
-  "Свободный остаток":
-    "Доходы минус расходы за текущий месяц — сколько можно отложить или инвестировать.",
-  "Норма накоплений": "Доля доходов, которую вы сберегаете. Ориентир — от 15%.",
-  "Финансовая подушка":
-    "Резерв на накопительных счетах в месяцах ваших средних расходов. Цель — 3–6 месяцев на случай форс-мажора.",
-  "Риск-профиль":
-    "Ваша готовность к колебаниям стоимости инвестиций. Влияет на анализ рисков и подбор бумаг."
+  "Чистый капитал": "hint.netWorth",
+  "Общий баланс": "hint.totalBalance",
+  "Свободный остаток": "hint.freeCash",
+  "Норма накоплений": "hint.savingsRate",
+  "Финансовая подушка": "hint.cushion",
+  "Риск-профиль": "hint.riskProfile"
 };
 
 // Lightweight "?" hint with a click-to-open popover. No external popover/tooltip
 // dependency — closes on outside click or Escape. Used to explain finance terms.
 export function InfoHint({ text, className }: { text: string; className?: string }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({
     left: 0,
@@ -111,7 +111,7 @@ export function InfoHint({ text, className }: { text: string; className?: string
         type="button"
         onClick={toggleHint}
         className="text-muted-foreground transition-colors hover:text-foreground"
-        aria-label="Пояснение"
+        aria-label={t("hint.aria")}
         aria-describedby={open ? tooltipId : undefined}
         aria-expanded={open}
       >
@@ -132,7 +132,7 @@ export function InfoHint({ text, className }: { text: string; className?: string
                 width: position.width
               }}
             >
-              {text}
+              {t(text)}
             </span>,
             document.body
           )
