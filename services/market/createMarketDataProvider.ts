@@ -3,11 +3,14 @@ import { MockMarketDataProvider } from "./MockMarketDataProvider";
 import { MoexMarketDataProvider } from "./MoexMarketDataProvider";
 
 export function createMarketDataProvider(): MarketDataService {
-  // Real-time MOEX ISS data when enabled (web + desktop builds set
-  // NEXT_PUBLIC_MARKET_DATA=moex); the mock provider is used in tests and as an
-  // offline fallback inside MoexMarketDataProvider itself.
-  if (process.env.NEXT_PUBLIC_MARKET_DATA === "moex") {
-    return new MoexMarketDataProvider();
+  // Default to REAL MOEX ISS data (live prices, day/30-day change, historical
+  // candles). The deterministic mock is used only in tests or when explicitly
+  // opted out via NEXT_PUBLIC_MARKET_DATA=mock. On the web the provider runs
+  // server-side (no CORS); the desktop webview falls back to the mock if a
+  // direct MOEX request is blocked (handled inside MoexMarketDataProvider).
+  const mode = process.env.NEXT_PUBLIC_MARKET_DATA;
+  if (mode === "mock" || process.env.VITEST || process.env.NODE_ENV === "test") {
+    return new MockMarketDataProvider();
   }
-  return new MockMarketDataProvider();
+  return new MoexMarketDataProvider();
 }

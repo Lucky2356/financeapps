@@ -39,6 +39,7 @@ import { RecurringTransactionService } from "@/services/RecurringTransactionServ
 import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
+import { historyRangeStart } from "@/lib/market/history-range";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
@@ -284,6 +285,29 @@ export class LocalApiClient implements ApiClient {
       state.lastBackupAt = new Date().toISOString();
       await this.save(state);
       return (await this.backup(state)) as T;
+    }
+    if (pathname === "/investments/search") {
+      const results = await createMarketDataProvider().searchSecurities(
+        searchParams.get("q") ?? "",
+        25
+      );
+      return { results } as T;
+    }
+    if (pathname === "/investments/history") {
+      const ticker = (searchParams.get("ticker") ?? "").toUpperCase();
+      const range = searchParams.get("range") ?? "6m";
+      const prices = ticker
+        ? await createMarketDataProvider().getHistoricalPrices(
+            ticker,
+            historyRangeStart(range),
+            new Date()
+          )
+        : [];
+      return {
+        ticker,
+        range,
+        points: prices.map((p) => ({ date: p.date.toISOString(), price: p.price }))
+      } as T;
     }
     if (pathname === "/investments") {
       const invData = await this.investments(state);
