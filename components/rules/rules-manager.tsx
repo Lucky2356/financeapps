@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import type { RulesPageData } from "@/lib/data";
+import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import { Label } from "@/components/ui/label";
 // Categorization rules live in the local profile state (desktop) or the Rule
 // table (web) — both behind the /rules endpoint, so the UI is identical.
 export function RulesManager() {
+  const { t } = useI18n();
   const [data, setData] = useState<RulesPageData | null>(null);
   const [match, setMatch] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -46,17 +48,17 @@ export function RulesManager() {
 
   async function addRule() {
     if (!match.trim() || !categoryId) {
-      toast.error("Укажите текст и категорию");
+      toast.error(t("rule.err.required"));
       return;
     }
     setSaving(true);
     try {
       await apiClient.post("/rules", { match: match.trim(), categoryId });
       setMatch("");
-      toast.success("Правило добавлено");
+      toast.success(t("rule.toast.added"));
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось добавить правило");
+      toast.error(error instanceof Error ? error.message : t("rule.err.add"));
     } finally {
       setSaving(false);
     }
@@ -67,7 +69,7 @@ export function RulesManager() {
       await apiClient.delete(`/rules?id=${encodeURIComponent(id)}`);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось удалить правило");
+      toast.error(error instanceof Error ? error.message : t("rule.err.remove"));
     }
   }
 
@@ -80,25 +82,22 @@ export function RulesManager() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Wand2 className="size-4" />
-          Правила авто-категоризации
+          {t("rule.title")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Если описание операции содержит текст — назначить категорию автоматически (при импорте и
-          вводе). Правила приоритетнее подсказок по истории.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("rule.intro")}</p>
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <div className="space-y-2">
-            <Label>Содержит текст</Label>
+            <Label>{t("rule.containsText")}</Label>
             <Input
               value={match}
               onChange={(event) => setMatch(event.target.value)}
-              placeholder="напр. Пятёрочка"
+              placeholder={t("rule.placeholder")}
             />
           </div>
           <div className="space-y-2">
-            <Label>Категория</Label>
+            <Label>{t("common.category")}</Label>
             <select
               value={categoryId}
               onChange={(event) => setCategoryId(event.target.value)}
@@ -112,7 +111,7 @@ export function RulesManager() {
             </select>
           </div>
           <Button type="button" onClick={() => void addRule()} disabled={saving}>
-            Добавить
+            {t("common.add")}
           </Button>
         </div>
 
@@ -131,7 +130,7 @@ export function RulesManager() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label="Удалить правило"
+                  aria-label={t("rule.deleteAria")}
                   onClick={() => void removeRule(rule.id)}
                 >
                   <Trash2 className="size-4 text-destructive" />
@@ -140,7 +139,7 @@ export function RulesManager() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Правил пока нет.</p>
+          <p className="text-sm text-muted-foreground">{t("rule.empty")}</p>
         )}
       </CardContent>
     </Card>

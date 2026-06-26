@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AnalyticsData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -25,6 +26,7 @@ export function ReportView({
   analytics: AnalyticsData;
   netWorth: number;
 }) {
+  const { t, locale } = useI18n();
   const currency = analytics.currency;
   const last = analytics.monthlyCashflow[analytics.monthlyCashflow.length - 1];
 
@@ -32,46 +34,48 @@ export function ReportView({
     <div className="space-y-4">
       <div className="no-print flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Сформирован {new Date().toLocaleDateString("ru-RU")}
+          {t("rep.generated", {
+            date: new Date().toLocaleDateString(locale === "en" ? "en-US" : "ru-RU")
+          })}
         </p>
         <Button type="button" onClick={() => window.print()}>
           <Printer className="size-4" />
-          Печать / PDF
+          {t("an.print")}
         </Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Капитал (net worth)" value={formatCurrency(netWorth, currency)} />
+        <Stat label={t("rep.netWorth")} value={formatCurrency(netWorth, currency)} />
         <Stat
-          label="Средний доход / мес"
+          label={t("rep.avgIncome")}
           value={formatCurrency(analytics.avgMonthlyIncome, currency)}
         />
         <Stat
-          label="Средний расход / мес"
+          label={t("rep.avgExpense")}
           value={formatCurrency(analytics.avgMonthlyExpense, currency)}
         />
-        <Stat label="Норма сбережений" value={`${Math.round(analytics.avgSavingsRate)}%`} />
+        <Stat label={t("rep.savingsRate")} value={`${Math.round(analytics.avgSavingsRate)}%`} />
       </div>
 
       {last && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Последний месяц: {last.month}</CardTitle>
+            <CardTitle className="text-base">{t("rep.lastMonth", { month: last.month })}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3">
             <div>
-              <p className="text-xs text-muted-foreground">Доходы</p>
+              <p className="text-xs text-muted-foreground">{t("rep.income")}</p>
               <p className="font-medium text-success">{formatCurrency(last.income, currency)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Расходы</p>
+              <p className="text-xs text-muted-foreground">{t("rep.expense")}</p>
               <p className="font-medium text-destructive">
                 {formatCurrency(last.expense, currency)}
               </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">
-                Сбережения ({Math.round(last.savingsRate)}%)
+                {t("rep.savingsPct", { pct: Math.round(last.savingsRate) })}
               </p>
               <p className="font-medium">{formatCurrency(last.savings, currency)}</p>
             </div>
@@ -81,18 +85,18 @@ export function ReportView({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Структура расходов</CardTitle>
+          <CardTitle className="text-base">{t("rep.structure")}</CardTitle>
         </CardHeader>
         <CardContent>
           {analytics.topExpenseCategories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Нет данных о расходах.</p>
+            <p className="text-sm text-muted-foreground">{t("rep.noExpenses")}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-2">Категория</th>
-                  <th className="py-2 text-right">Сумма</th>
-                  <th className="py-2 text-right">Доля</th>
+                  <th className="py-2">{t("rep.col.category")}</th>
+                  <th className="py-2 text-right">{t("rep.col.amount")}</th>
+                  <th className="py-2 text-right">{t("rep.col.share")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,16 +123,16 @@ export function ReportView({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Денежный поток по месяцам</CardTitle>
+          <CardTitle className="text-base">{t("rep.cashflowByMonth")}</CardTitle>
         </CardHeader>
         <CardContent>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="py-2">Месяц</th>
-                <th className="py-2 text-right">Доходы</th>
-                <th className="py-2 text-right">Расходы</th>
-                <th className="py-2 text-right">Сбережения</th>
+                <th className="py-2">{t("rep.col.month")}</th>
+                <th className="py-2 text-right">{t("rep.income")}</th>
+                <th className="py-2 text-right">{t("rep.expense")}</th>
+                <th className="py-2 text-right">{t("rep.savings")}</th>
               </tr>
             </thead>
             <tbody>
