@@ -20,7 +20,7 @@ export async function PUT(request: NextRequest) {
 
     const input = settingsSchema.parse(await request.json());
     const riskProfile = await db.riskProfile.findUnique({ where: { code: input.riskProfileCode } });
-    const updated = await db.user.update({
+    await db.user.update({
       where: { id: user.id },
       data: {
         currency: input.currency,
@@ -39,7 +39,9 @@ export async function PUT(request: NextRequest) {
       }
     });
 
-    return NextResponse.json(updated);
+    // Return only an acknowledgement — never the User row, which carries
+    // passwordHash and aiApiKey. The client reloads settings via GET afterwards.
+    return NextResponse.json({ ok: true });
   } catch (error) {
     return apiErrorResponse(error, "Не удалось сохранить настройки.");
   }

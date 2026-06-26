@@ -47,8 +47,11 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    ports:
-      - "${WEB_PORT:-3000}:3000"
+    # Internal-only: reachable on the compose network (Caddy proxies to web:3000),
+    # NOT published to the host. This forces all external traffic through Caddy's
+    # TLS on :443. To debug locally, temporarily add: ports: ["127.0.0.1:3000:3000"].
+    expose:
+      - "3000"
     environment:
       # connection_limit keeps Prisma's pool modest on a small single instance.
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}?connection_limit=10
@@ -62,8 +65,7 @@ services:
       NODE_ENV: production
 
   # HTTPS termination (self-signed, no domain). Access via https://<server-ip>.
-  # The plain http://<ip>:3000 mapping above still works during transition —
-  # remove it once HTTPS is confirmed for real security.
+  # This is the ONLY public entry point — the web container is not host-published.
   caddy:
     image: caddy:2-alpine
     container_name: financial-assistant-caddy

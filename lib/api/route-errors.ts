@@ -32,10 +32,10 @@ export function apiErrorResponse(error: unknown, fallback = "Request failed") {
     }
   }
 
-  // Unexpected error (not a validation/known-DB case) — log + report to Sentry.
+  // Unexpected error (not a validation/known-DB case) — log + report to Sentry,
+  // but return only the generic fallback to the client. The raw error.message can
+  // leak internals (stack hints, "ECONNREFUSED ...:5432", table/column names), so
+  // it must never reach the browser.
   reportError(error);
-  return NextResponse.json(
-    { error: error instanceof Error ? error.message : fallback },
-    { status: 400 }
-  );
+  return NextResponse.json({ error: fallback }, { status: 500 });
 }

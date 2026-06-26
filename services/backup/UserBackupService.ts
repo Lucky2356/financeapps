@@ -84,7 +84,9 @@ export const userBackupSchema = z.object({
   budgets: z.array(backupBudgetSchema),
   savingGoals: z.array(backupGoalSchema),
   portfolios: z.array(backupPortfolioSchema),
-  watchlist: z.array(z.object({ ticker: z.string().min(1), notes: z.string().nullable().optional() }))
+  watchlist: z.array(
+    z.object({ ticker: z.string().min(1), notes: z.string().nullable().optional() })
+  )
 });
 
 export type UserBackup = z.infer<typeof userBackupSchema>;
@@ -104,9 +106,9 @@ function accountKey(name: string) {
 export class UserBackupService {
   constructor(private readonly db: PrismaClient) {}
 
-  async exportFirstUser(): Promise<UserBackup> {
-    const user = await this.db.user.findFirst({
-      orderBy: { createdAt: "asc" },
+  async exportForUser(userId: string): Promise<UserBackup> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
       include: {
         riskProfile: true,
         accounts: { orderBy: { createdAt: "asc" } },
@@ -142,7 +144,7 @@ export class UserBackupService {
     });
 
     if (!user) {
-      throw new Error("Demo user not found. Run seed first.");
+      throw new Error("User not found.");
     }
 
     return {
@@ -219,12 +221,12 @@ export class UserBackupService {
     };
   }
 
-  async restoreFirstUser(input: unknown) {
+  async restoreForUser(userId: string, input: unknown) {
     const backup = userBackupSchema.parse(input);
-    const existingUser = await this.db.user.findFirst({ orderBy: { createdAt: "asc" } });
+    const existingUser = await this.db.user.findUnique({ where: { id: userId } });
 
     if (!existingUser) {
-      throw new Error("Demo user not found. Run seed first.");
+      throw new Error("User not found.");
     }
 
     await this.db.$transaction(async (tx) => {
@@ -298,7 +300,9 @@ export class UserBackupService {
       }
 
       for (const budget of backup.budgets) {
-        const categoryId = categoryByName.get(categoryKey(budget.categoryKind, budget.categoryName));
+        const categoryId = categoryByName.get(
+          categoryKey(budget.categoryKind, budget.categoryName)
+        );
         if (!categoryId) continue;
 
         await tx.budget.create({
@@ -313,7 +317,9 @@ export class UserBackupService {
 
       for (const transaction of backup.transactions) {
         const accountId = accountByName.get(accountKey(transaction.accountName));
-        const categoryId = categoryByName.get(categoryKey(transaction.categoryKind, transaction.categoryName));
+        const categoryId = categoryByName.get(
+          categoryKey(transaction.categoryKind, transaction.categoryName)
+        );
         if (!accountId || !categoryId) continue;
 
         await tx.transaction.create({
@@ -331,7 +337,9 @@ export class UserBackupService {
 
       for (const transaction of backup.recurringTransactions) {
         const accountId = accountByName.get(accountKey(transaction.accountName));
-        const categoryId = categoryByName.get(categoryKey(transaction.categoryKind, transaction.categoryName));
+        const categoryId = categoryByName.get(
+          categoryKey(transaction.categoryKind, transaction.categoryName)
+        );
         if (!accountId || !categoryId) continue;
 
         await tx.recurringTransaction.create({
@@ -350,7 +358,9 @@ export class UserBackupService {
       }
 
       for (const portfolio of backup.portfolios) {
-        const accountId = portfolio.accountName ? accountByName.get(accountKey(portfolio.accountName)) ?? null : null;
+        const accountId = portfolio.accountName
+          ? (accountByName.get(accountKey(portfolio.accountName)) ?? null)
+          : null;
         const createdPortfolio = await tx.portfolio.create({
           data: {
             userId: existingUser.id,
@@ -360,7 +370,9 @@ export class UserBackupService {
         });
 
         for (const position of portfolio.positions) {
-          const security = await tx.security.findUnique({ where: { ticker: position.ticker.toUpperCase() } });
+          const security = await tx.security.findUnique({
+            where: { ticker: position.ticker.toUpperCase() }
+          });
           if (!security) continue;
 
           await tx.portfolioPosition.create({
@@ -375,7 +387,9 @@ export class UserBackupService {
       }
 
       for (const item of backup.watchlist) {
-        const security = await tx.security.findUnique({ where: { ticker: item.ticker.toUpperCase() } });
+        const security = await tx.security.findUnique({
+          where: { ticker: item.ticker.toUpperCase() }
+        });
         if (!security) continue;
 
         await tx.watchlistItem.create({
