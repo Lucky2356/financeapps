@@ -1,6 +1,9 @@
+"use client";
+
 import { Banknote, Landmark, LineChart, PiggyBank } from "lucide-react";
 
 import { formatCurrency } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import type { NetWorthBreakdown } from "@/types/finance";
 
 // Compact breakdown of net worth into its parts (assets minus debts). Helps the
@@ -12,17 +15,30 @@ export function NetWorthBreakdownCard({
   breakdown: NetWorthBreakdown;
   currency: string;
 }) {
+  const { t } = useI18n();
   const items = [
-    { key: "liquid", label: "Счета", value: breakdown.liquid, icon: Banknote, negative: false },
+    {
+      key: "liquid",
+      label: t("nav.accounts"),
+      value: breakdown.liquid,
+      icon: Banknote,
+      negative: false
+    },
     {
       key: "portfolio",
-      label: "Инвестиции",
+      label: t("nav.investments"),
       value: breakdown.portfolio,
       icon: LineChart,
       negative: false
     },
-    { key: "goals", label: "Цели", value: breakdown.goals, icon: PiggyBank, negative: false },
-    { key: "debts", label: "Долги", value: breakdown.debts, icon: Landmark, negative: true }
+    {
+      key: "goals",
+      label: t("nav.goals"),
+      value: breakdown.goals,
+      icon: PiggyBank,
+      negative: false
+    },
+    { key: "debts", label: t("nav.debts"), value: breakdown.debts, icon: Landmark, negative: true }
   ].filter((item) => item.value !== 0);
 
   if (items.length === 0) return null;

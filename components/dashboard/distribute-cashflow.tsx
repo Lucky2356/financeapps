@@ -7,9 +7,17 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, GoalsPageData } from "@/lib/data";
+import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -18,6 +26,7 @@ import { Label } from "@/components/ui/label";
 // endpoint, so it behaves the same on web and desktop).
 export function DistributeCashflow({ freeCashflowLabel }: { freeCashflowLabel: string }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [goals, setGoals] = useState<GoalsPageData["goals"]>([]);
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
@@ -52,18 +61,23 @@ export function DistributeCashflow({ freeCashflowLabel }: { freeCashflowLabel: s
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = Number(amount);
-    if (!Number.isFinite(value) || value <= 0) return toast.error("Введите сумму больше нуля");
-    if (!goalId) return toast.error("Выберите цель");
-    if (!accountId) return toast.error("Выберите счёт");
+    if (!Number.isFinite(value) || value <= 0) return toast.error(t("goal.deposit.enterAmount"));
+    if (!goalId) return toast.error(t("dc.err.goal"));
+    if (!accountId) return toast.error(t("goal.deposit.selectAccount"));
     setLoading(true);
     try {
-      await apiClient.post("/goals", { action: "deposit", goalId, amount: String(value), accountId });
-      toast.success("Свободные средства отложены на цель");
+      await apiClient.post("/goals", {
+        action: "deposit",
+        goalId,
+        amount: String(value),
+        accountId
+      });
+      toast.success(t("dc.success"));
       setOpen(false);
       setAmount("");
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось распределить средства");
+      toast.error(error instanceof Error ? error.message : t("dc.error"));
     } finally {
       setLoading(false);
     }
@@ -77,47 +91,69 @@ export function DistributeCashflow({ freeCashflowLabel }: { freeCashflowLabel: s
             <PiggyBank className="size-5" />
           </span>
           <div>
-            <p className="text-sm font-medium">Свободный остаток: {freeCashflowLabel}</p>
-            <p className="text-xs text-muted-foreground">Отложите часть на цель, пока деньги не разошлись.</p>
+            <p className="text-sm font-medium">{t("dc.free", { label: freeCashflowLabel })}</p>
+            <p className="text-xs text-muted-foreground">{t("dc.hint")}</p>
           </div>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
               <ArrowRightLeft className="size-4" />
-              Распределить
+              {t("dc.distribute")}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Отложить на цель</DialogTitle>
+              <DialogTitle>{t("dc.title")}</DialogTitle>
             </DialogHeader>
             {goals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Сначала создайте цель на странице «Цели».</p>
+              <p className="text-sm text-muted-foreground">{t("dc.createGoalFirst")}</p>
             ) : (
               <form onSubmit={handleSubmit} className="grid gap-4">
                 <div className="space-y-2">
-                  <Label>Цель</Label>
-                  <select value={goalId} onChange={(e) => setGoalId(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                  <Label>{t("dc.goal")}</Label>
+                  <select
+                    value={goalId}
+                    onChange={(e) => setGoalId(e.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
                     {goals.map((goal) => (
-                      <option key={goal.id} value={goal.id}>{goal.title}</option>
+                      <option key={goal.id} value={goal.id}>
+                        {goal.title}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Со счёта</Label>
-                  <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                  <Label>{t("dc.fromAccount")}</Label>
+                  <select
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
                     {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>{account.name}</option>
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Сумма</Label>
-                  <Input type="number" min="1" step="100" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Например, 5000" required />
+                  <Label>{t("common.amount")}</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="100"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder={t("goal.deposit.placeholder")}
+                    required
+                  />
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={loading || accounts.length === 0}>Отложить</Button>
+                  <Button type="submit" disabled={loading || accounts.length === 0}>
+                    {t("dc.submit")}
+                  </Button>
                 </DialogFooter>
               </form>
             )}
