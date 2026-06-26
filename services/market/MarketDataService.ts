@@ -22,4 +22,6 @@ export interface MarketDataService {
   getSecurityByTicker(ticker: string): Promise<MarketSecurity | null>;
   getHistoricalPrices(ticker: string, from: Date, to: Date): Promise<HistoricalPrice[]>;
   updateMarketPrices(): Promise<void>;
+  // Search the full exchange universe by ticker or name (for adding any stock).
+  searchSecurities(query: string, limit?: number): Promise<MarketSecurity[]>;
 }

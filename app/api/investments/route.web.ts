@@ -23,6 +23,46 @@ async function defaultUser() {
   return user;
 }
 
+// Finds an existing security or creates one from live MOEX data, so users can
+// add ANY exchange-listed ticker (not just the curated list).
+async function ensureSecurity(ticker: string) {
+  const db = requirePrisma();
+  const t = ticker.toUpperCase();
+  const existing = await db.security.findUnique({ where: { ticker: t } });
+  if (existing) return existing;
+
+  const market = await createMarketDataProvider().getSecurityByTicker(t);
+  if (!market) return null;
+
+  const security = await db.security.create({
+    data: {
+      ticker: market.ticker,
+      name: market.name,
+      sector: market.sector,
+      risk: market.risk,
+      comment: market.comment
+    }
+  });
+  await db.marketPrice.upsert({
+    where: { securityId_date: { securityId: security.id, date: startOfDay(new Date()) } },
+    update: {
+      price: market.price,
+      changeDay: market.changeDay,
+      change30d: market.change30d,
+      source: "MOEX"
+    },
+    create: {
+      securityId: security.id,
+      date: startOfDay(new Date()),
+      price: market.price,
+      changeDay: market.changeDay,
+      change30d: market.change30d,
+      source: "MOEX"
+    }
+  });
+  return security;
+}
+
 async function findOrCreatePortfolio(userId: string) {
   const db = requirePrisma();
   const existing = await db.portfolio.findFirst({
@@ -76,15 +116,26 @@ export async function POST(request: NextRequest) {
       const marketRows = await provider.getSecurities();
       const priceDate = startOfDay(new Date());
 
+      const upsertPrice = async (securityId: string, row: { price: number; changeDay: number; change30d: number }) => {
+        await db.marketPrice.upsert({
+          where: { securityId_date: { securityId, date: priceDate } },
+          update: { price: row.price, changeDay: row.changeDay, change30d: row.change30d, source: "MOEX" },
+          create: {
+            securityId,
+            date: priceDate,
+            price: row.price,
+            changeDay: row.changeDay,
+            change30d: row.change30d,
+            source: "MOEX"
+          }
+        });
+      };
+
+      const refreshed = new Set<string>();
       for (const row of marketRows) {
         const security = await db.security.upsert({
           where: { ticker: row.ticker },
-          update: {
-            name: row.name,
-            sector: row.sector,
-            risk: row.risk,
-            comment: row.comment
-          },
+          update: { name: row.name, sector: row.sector, risk: row.risk, comment: row.comment },
           create: {
             ticker: row.ticker,
             name: row.name,
@@ -93,40 +144,33 @@ export async function POST(request: NextRequest) {
             comment: row.comment
           }
         });
-
-        await db.marketPrice.upsert({
-          where: {
-            securityId_date: {
-              securityId: security.id,
-              date: priceDate
-            }
-          },
-          update: {
-            price: row.price,
-            changeDay: row.changeDay,
-            change30d: row.change30d,
-            source: "MOCK"
-          },
-          create: {
-            securityId: security.id,
-            date: priceDate,
-            price: row.price,
-            changeDay: row.changeDay,
-            change30d: row.change30d,
-            source: "MOCK"
-          }
-        });
+        await upsertPrice(security.id, row);
+        refreshed.add(row.ticker);
       }
 
-      return NextResponse.json({ updated: marketRows.length, source: "MOCK" });
+      // Also refresh live prices for any securities the user already holds or
+      // watches that are outside the curated list (e.g. added via search).
+      const others = await db.security.findMany({
+        where: { ticker: { notIn: [...refreshed] } },
+        select: { id: true, ticker: true }
+      });
+      for (const sec of others) {
+        const market = await provider.getSecurityByTicker(sec.ticker);
+        if (market && market.price > 0) {
+          await upsertPrice(sec.id, market);
+          refreshed.add(sec.ticker);
+        }
+      }
+
+      return NextResponse.json({ updated: refreshed.size, source: "MOEX" });
     }
 
     if (action === "addWatchlist") {
       const input = watchlistItemSchema.parse(payload);
-      const security = await db.security.findUnique({ where: { ticker: input.ticker } });
+      const security = await ensureSecurity(input.ticker);
       if (!security) {
         return NextResponse.json(
-          { error: "Security not found in the market directory." },
+          { error: `Бумага ${input.ticker} не найдена на Московской бирже.` },
           { status: 404 }
         );
       }
@@ -176,11 +220,11 @@ export async function POST(request: NextRequest) {
     }
 
     const input = portfolioPositionSchema.parse(payload);
-    const security = await db.security.findUnique({ where: { ticker: input.ticker } });
+    const security = await ensureSecurity(input.ticker);
 
     if (!security) {
       return NextResponse.json(
-        { error: "Security not found in the market directory." },
+        { error: `Бумага ${input.ticker} не найдена на Московской бирже.` },
         { status: 404 }
       );
     }

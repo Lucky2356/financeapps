@@ -236,4 +236,13 @@ export class MockMarketDataProvider implements MarketDataService {
   async updateMarketPrices(): Promise<void> {
     await this.getHistoricalPrices("SBER", subDays(new Date(), 1), new Date());
   }
+
+  async searchSecurities(query: string, limit = 20): Promise<MarketSecurity[]> {
+    const q = query.trim().toUpperCase();
+    if (!q) return [];
+    const all = await this.getSecurities();
+    return all
+      .filter((s) => s.ticker.includes(q) || s.name.toUpperCase().includes(q))
+      .slice(0, limit);
+  }
 }

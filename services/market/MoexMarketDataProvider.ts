@@ -199,9 +199,13 @@ export class MoexMarketDataProvider implements MarketDataService {
   }
 
   async getSecurityByTicker(ticker: string): Promise<MarketSecurity | null> {
+    const t = ticker.toUpperCase();
     try {
-      const all = await this.getSecurities();
-      return all.find((security) => security.ticker === ticker.toUpperCase()) ?? null;
+      // Curated first (has sector/risk/comment), then the full board.
+      const curated = (await this.getSecurities()).find((security) => security.ticker === t);
+      if (curated) return curated;
+      const matches = await this.searchSecurities(t, 1);
+      return matches.find((security) => security.ticker === t) ?? null;
     } catch {
       return this.fallback.getSecurityByTicker(ticker);
     }
@@ -244,24 +248,58 @@ export class MoexMarketDataProvider implements MarketDataService {
     const secMap = parseMoexRows(json.securities);
     const mdMap = parseMoexRows(json.marketdata);
 
+    // Build rows for the WHOLE board (not just the curated tickers) so the same
+    // fetch backs both the curated list and full-universe search.
     const rows = new Map<string, SnapshotRow>();
-    for (const ticker of TICKERS) {
-      const md = mdMap.get(ticker);
-      const sec = secMap.get(ticker);
-      if (!md) continue;
+    for (const [secid, md] of mdMap) {
       const last = md["LAST"];
       const market = md["MARKETPRICE"];
       const price =
         typeof last === "number" && last > 0 ? last : typeof market === "number" ? market : 0;
+      if (price <= 0) continue;
       const pct = md["LASTTOPREVPRICE"]; // day change in %
-      rows.set(ticker, {
+      rows.set(secid, {
         price,
         changeDay: typeof pct === "number" ? Number(pct.toFixed(2)) : 0,
-        name: String(sec?.["SHORTNAME"] ?? "")
+        name: String(secMap.get(secid)?.["SHORTNAME"] ?? "")
       });
     }
     snapshotCache = { ts: Date.now(), rows };
     return rows;
+  }
+
+  async searchSecurities(query: string, limit = 20): Promise<MarketSecurity[]> {
+    const q = query.trim().toUpperCase();
+    if (!q) return [];
+    try {
+      const snapshot = await this.getSnapshot();
+      const matches: MarketSecurity[] = [];
+      for (const [secid, row] of snapshot) {
+        if (!secid.includes(q) && !row.name.toUpperCase().includes(q)) continue;
+        const meta = STATIC_META[secid as Ticker];
+        matches.push({
+          ticker: secid,
+          name: row.name || meta?.name || secid,
+          sector: meta?.sector ?? "Прочее",
+          risk: meta?.risk ?? "MEDIUM",
+          comment:
+            meta?.comment ?? "Цены и изменение — с Московской биржи (MOEX). Не инвестиционный совет.",
+          price: row.price,
+          changeDay: row.changeDay,
+          change30d: 0
+        });
+        if (matches.length >= limit) break;
+      }
+      // Exact-ticker matches first, then alphabetical.
+      matches.sort((a, b) => {
+        if (a.ticker === q) return -1;
+        if (b.ticker === q) return 1;
+        return a.ticker.localeCompare(b.ticker);
+      });
+      return matches.length > 0 ? matches : this.fallback.searchSecurities(query, limit);
+    } catch {
+      return this.fallback.searchSecurities(query, limit);
+    }
   }
 
   // 30-day % change per ticker, derived from history (parallel), cached for an
