@@ -41,15 +41,51 @@ type Command = {
 
 const navCommands: Command[] = [
   { id: "nav-home", labelKey: "nav.home", href: "/", group: "nav", icon: LayoutDashboard },
-  { id: "nav-tx", labelKey: "nav.transactions", href: "/transactions", group: "nav", icon: ReceiptText },
+  {
+    id: "nav-tx",
+    labelKey: "nav.transactions",
+    href: "/transactions",
+    group: "nav",
+    icon: ReceiptText
+  },
   { id: "nav-accounts", labelKey: "nav.accounts", href: "/accounts", group: "nav", icon: Wallet },
   { id: "nav-budgets", labelKey: "nav.budgets", href: "/budgets", group: "nav", icon: CreditCard },
   { id: "nav-goals", labelKey: "nav.goals", href: "/goals", group: "nav", icon: PiggyBank },
-  { id: "nav-recurring", labelKey: "cmd.recurring", href: "/recurring", group: "nav", icon: CalendarClock },
-  { id: "nav-forecast", labelKey: "nav.forecast", href: "/forecast", group: "nav", icon: TrendingUp },
-  { id: "nav-analytics", labelKey: "nav.analytics", href: "/analytics", group: "nav", icon: BarChart3 },
-  { id: "nav-investments", labelKey: "nav.investments", href: "/investments", group: "nav", icon: LineChart },
-  { id: "nav-categories", labelKey: "nav.categories", href: "/categories", group: "nav", icon: Tags },
+  {
+    id: "nav-recurring",
+    labelKey: "cmd.recurring",
+    href: "/recurring",
+    group: "nav",
+    icon: CalendarClock
+  },
+  {
+    id: "nav-forecast",
+    labelKey: "nav.forecast",
+    href: "/forecast",
+    group: "nav",
+    icon: TrendingUp
+  },
+  {
+    id: "nav-analytics",
+    labelKey: "nav.analytics",
+    href: "/analytics",
+    group: "nav",
+    icon: BarChart3
+  },
+  {
+    id: "nav-investments",
+    labelKey: "nav.investments",
+    href: "/investments",
+    group: "nav",
+    icon: LineChart
+  },
+  {
+    id: "nav-categories",
+    labelKey: "nav.categories",
+    href: "/categories",
+    group: "nav",
+    icon: Tags
+  },
   { id: "nav-import", labelKey: "cmd.importExport", href: "/import", group: "nav", icon: Download },
   { id: "nav-settings", labelKey: "nav.settings", href: "/settings", group: "nav", icon: Settings }
 ];
@@ -216,7 +252,7 @@ export function CommandPalette() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="top-[15%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-lg">
-        <DialogTitle className="sr-only">Командная палитра</DialogTitle>
+        <DialogTitle className="sr-only">{t("cmd.title")}</DialogTitle>
         <div className="flex items-center gap-2 border-b px-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
@@ -230,7 +266,9 @@ export function CommandPalette() {
         </div>
         <div className="max-h-80 overflow-y-auto p-1.5">
           {filtered.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">{t("cmd.nothingFound")}</p>
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+              {t("cmd.nothingFound")}
+            </p>
           ) : (
             filtered.map((command, index) => {
               const Icon = command.icon;
@@ -247,7 +285,9 @@ export function CommandPalette() {
                 >
                   <Icon className="size-4 shrink-0 opacity-80" />
                   <span className="flex-1 truncate">{labelOf(command)}</span>
-                  {command.hint ? <span className="shrink-0 text-xs text-muted-foreground">{command.hint}</span> : null}
+                  {command.hint ? (
+                    <span className="shrink-0 text-xs text-muted-foreground">{command.hint}</span>
+                  ) : null}
                 </button>
               );
             })
@@ -256,7 +296,7 @@ export function CommandPalette() {
         <div className="flex items-center justify-between border-t px-3 py-2 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <CircleDollarSign className="size-3" />
-            Финансовый помощник
+            {t("cmd.appName")}
           </span>
           <span>{t("cmd.footer")}</span>
         </div>
