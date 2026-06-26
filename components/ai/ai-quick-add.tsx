@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { formatInputDate } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/context";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import type { AiParseContext, AiTransactionDraft } from "@/lib/ai/parse-transaction";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import { Label } from "@/components/ui/label";
 // transaction the user reviews and confirms before anything is saved.
 export function AiQuickAdd() {
   const router = useRouter();
+  const { t } = useI18n();
   const [settings, setSettings] = useState<SettingsPageData | null>(null);
   const [refs, setRefs] = useState<ImportPageData | null>(null);
   const [text, setText] = useState("");
@@ -67,9 +69,9 @@ export function AiQuickAdd() {
   }
 
   async function recognise() {
-    if (!text.trim()) return toast.error("Введите описание операции");
+    if (!text.trim()) return toast.error(t("ai.err.enterText"));
     const data = await loadRefs();
-    if (!data) return toast.error("Не удалось загрузить категории и счета");
+    if (!data) return toast.error(t("ai.err.loadRefs"));
     const context = buildContext(data, settings?.currency ?? "RUB");
 
     try {
@@ -78,7 +80,7 @@ export function AiQuickAdd() {
       if (isLocalDesktopMode) {
         const apiKey = settings?.aiApiKey ?? "";
         if (!apiKey) {
-          toast.error("Укажите API-ключ Anthropic в настройках");
+          toast.error(t("ai.err.noKey"));
           return;
         }
         const { requestTransactionDraft } = await import("@/services/ai/AiAssistantService");
@@ -93,7 +95,7 @@ export function AiQuickAdd() {
       }
       setDraft(result);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось распознать операцию");
+      toast.error(error instanceof Error ? error.message : t("ai.err.recognise"));
     } finally {
       setParsing(false);
     }
@@ -101,8 +103,8 @@ export function AiQuickAdd() {
 
   async function save() {
     if (!draft) return;
-    if (!draft.accountId) return toast.error("Выберите счёт");
-    if (!draft.categoryId) return toast.error("Выберите категорию");
+    if (!draft.accountId) return toast.error(t("ai.selectAccount"));
+    if (!draft.categoryId) return toast.error(t("ai.selectCategory"));
     try {
       setSaving(true);
       await apiClient.post("/transactions", {
@@ -113,12 +115,12 @@ export function AiQuickAdd() {
         date: draft.date,
         description: draft.description ?? ""
       });
-      toast.success("Операция добавлена");
+      toast.success(t("tx.toast.added"));
       setDraft(null);
       setText("");
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось сохранить операцию");
+      toast.error(error instanceof Error ? error.message : t("tx.toast.saveError"));
     } finally {
       setSaving(false);
     }
@@ -134,7 +136,7 @@ export function AiQuickAdd() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="size-4 text-primary" />
-          Добавить операцию текстом
+          {t("ai.title")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -142,7 +144,7 @@ export function AiQuickAdd() {
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Например: потратил 1200 на кофе картой"
+            placeholder={t("ai.placeholder")}
             onKeyDown={(e) => {
               if (e.key === "Enter") void recognise();
             }}
@@ -153,14 +155,14 @@ export function AiQuickAdd() {
             ) : (
               <Sparkles className="size-4" />
             )}
-            Распознать
+            {t("ai.recognise")}
           </Button>
         </div>
 
         {draft && (
           <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label className="text-xs">Тип</Label>
+              <Label className="text-xs">{t("tx.type")}</Label>
               <select
                 value={draft.type}
                 onChange={(e) =>
@@ -172,12 +174,12 @@ export function AiQuickAdd() {
                 }
                 className="h-9 w-full rounded-md border bg-background px-2 text-sm"
               >
-                <option value="EXPENSE">Расход</option>
-                <option value="INCOME">Доход</option>
+                <option value="EXPENSE">{t("tx.type.expense")}</option>
+                <option value="INCOME">{t("tx.type.income")}</option>
               </select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Сумма</Label>
+              <Label className="text-xs">{t("common.amount")}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -188,13 +190,13 @@ export function AiQuickAdd() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Категория</Label>
+              <Label className="text-xs">{t("common.category")}</Label>
               <select
                 value={draft.categoryId ?? ""}
                 onChange={(e) => setDraft({ ...draft, categoryId: e.target.value || null })}
                 className="h-9 w-full rounded-md border bg-background px-2 text-sm"
               >
-                <option value="">Выберите категорию</option>
+                <option value="">{t("ai.selectCategory")}</option>
                 {categoriesForType.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -203,13 +205,13 @@ export function AiQuickAdd() {
               </select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Счёт</Label>
+              <Label className="text-xs">{t("common.account")}</Label>
               <select
                 value={draft.accountId ?? ""}
                 onChange={(e) => setDraft({ ...draft, accountId: e.target.value || null })}
                 className="h-9 w-full rounded-md border bg-background px-2 text-sm"
               >
-                <option value="">Выберите счёт</option>
+                <option value="">{t("ai.selectAccount")}</option>
                 {activeAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
@@ -218,7 +220,7 @@ export function AiQuickAdd() {
               </select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Дата</Label>
+              <Label className="text-xs">{t("common.date")}</Label>
               <Input
                 type="date"
                 value={draft.date}
@@ -227,7 +229,7 @@ export function AiQuickAdd() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Описание</Label>
+              <Label className="text-xs">{t("tx.col.description")}</Label>
               <Input
                 value={draft.description ?? ""}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value || null })}
@@ -237,19 +239,16 @@ export function AiQuickAdd() {
             </div>
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button type="button" variant="outline" onClick={() => setDraft(null)}>
-                Отмена
+                {t("tx.dialog.cancel")}
               </Button>
               <Button type="button" onClick={() => void save()} disabled={saving}>
-                {saving ? "Сохранение…" : "Сохранить"}
+                {saving ? t("tx.dialog.saving") : t("common.save")}
               </Button>
             </div>
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          Описание отправляется во внешний сервис Anthropic для распознавания. Перед сохранением
-          проверьте поля.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("ai.footer")}</p>
       </CardContent>
     </Card>
   );
