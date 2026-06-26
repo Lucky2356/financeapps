@@ -6,16 +6,31 @@ import { useState, type FormEvent } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import type { CategoriesPageData } from "@/lib/data";
+import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import type { CategoryRow } from "@/types/finance";
 
 const PRESET_COLORS = [
@@ -35,6 +50,7 @@ const PRESET_COLORS = [
 
 export function CategoryManager({ data }: { data: CategoriesPageData }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { data: pageData, reload } = useApiPageData(data, "/categories");
   const { run } = useApiMutation();
   // Which "add" dialog is open (by kind), and which category is being edited
@@ -53,21 +69,27 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
-    await run(() => (method === "POST" ? apiClient.post("/categories", payload) : apiClient.put("/categories", payload)), {
-      success: method === "POST" ? "Категория добавлена" : "Категория обновлена",
-      error: "Не удалось сохранить категорию",
-      onSuccess: async () => {
-        if (method === "POST") setAddKind(null);
-        else setEditingCategory(null);
-        await refresh();
+    await run(
+      () =>
+        method === "POST"
+          ? apiClient.post("/categories", payload)
+          : apiClient.put("/categories", payload),
+      {
+        success: method === "POST" ? t("cat.toast.added") : t("cat.toast.updated"),
+        error: t("cat.toast.saveError"),
+        onSuccess: async () => {
+          if (method === "POST") setAddKind(null);
+          else setEditingCategory(null);
+          await refresh();
+        }
       }
-    });
+    );
   }
 
   async function handleDelete(id: string) {
     await run(() => apiClient.delete(`/categories?id=${encodeURIComponent(id)}`), {
-      success: "Категория удалена",
-      error: "Не удалось удалить категорию",
+      success: t("cat.toast.deleted"),
+      error: t("cat.toast.deleteError"),
       onSuccess: refresh
     });
   }
@@ -75,7 +97,7 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
   return (
     <div className="grid gap-5 md:grid-cols-2">
       <CategoryColumn
-        title="Доходы"
+        title={t("cat.income")}
         kind="INCOME"
         headerClass="text-green-700 dark:text-green-400"
         categories={incomeCategories}
@@ -86,7 +108,7 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
         onDelete={handleDelete}
       />
       <CategoryColumn
-        title="Расходы"
+        title={t("cat.expense")}
         kind="EXPENSE"
         headerClass="text-orange-700 dark:text-orange-400"
         categories={expenseCategories}
@@ -98,10 +120,15 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
       />
 
       {/* Single controlled dialog for editing any category */}
-      <Dialog open={editingCategory !== null} onOpenChange={(open) => { if (!open) setEditingCategory(null); }}>
+      <Dialog
+        open={editingCategory !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingCategory(null);
+        }}
+      >
         {editingCategory && (
           <CategoryDialog
-            title="Редактировать категорию"
+            title={t("cat.edit")}
             category={editingCategory}
             defaultKind={editingCategory.kind}
             onSubmit={(event) => handleSubmit(event, "PUT")}
@@ -133,6 +160,7 @@ function CategoryColumn({
   onSubmit: (event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -141,11 +169,11 @@ function CategoryColumn({
           <DialogTrigger asChild>
             <Button size="sm">
               <Plus className="size-4" />
-              Добавить
+              {t("common.add")}
             </Button>
           </DialogTrigger>
           <CategoryDialog
-            title={`Новая категория — ${title}`}
+            title={t("cat.new", { title })}
             defaultKind={kind}
             onSubmit={(event) => onSubmit(event, "POST")}
           />
@@ -153,7 +181,7 @@ function CategoryColumn({
       </CardHeader>
       <CardContent>
         {categories.length === 0 ? (
-          <EmptyState icon={Tag} title="Нет категорий" description="Добавьте первую категорию." />
+          <EmptyState icon={Tag} title={t("cat.empty.title")} description={t("cat.empty.desc")} />
         ) : (
           <>
             {/* Desktop table */}
@@ -161,10 +189,10 @@ function CategoryColumn({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Категория</TableHead>
-                    <TableHead>Метки</TableHead>
-                    <TableHead className="text-right">Операции</TableHead>
-                    <TableHead className="w-20 text-right">Действия</TableHead>
+                    <TableHead>{t("common.category")}</TableHead>
+                    <TableHead>{t("cat.tags")}</TableHead>
+                    <TableHead className="text-right">{t("common.transactions")}</TableHead>
+                    <TableHead className="w-20 text-right">{t("common.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -207,6 +235,7 @@ function CategoryTableRow({
   onEdit: (category: CategoryRow) => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const canDelete = category.transactionCount === 0;
 
   return (
@@ -224,12 +253,12 @@ function CategoryTableRow({
         <div className="flex flex-wrap gap-1">
           {category.isEssential && (
             <Badge variant="secondary" className="text-xs">
-              Обязательная
+              {t("cat.essential")}
             </Badge>
           )}
           {category.isSubscription && (
             <Badge variant="secondary" className="text-xs">
-              Подписка
+              {t("cat.subscription")}
             </Badge>
           )}
         </div>
@@ -239,15 +268,25 @@ function CategoryTableRow({
       </TableCell>
       <TableCell>
         <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="icon" title="Редактировать" aria-label="Редактировать категорию" onClick={() => onEdit(category)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title={t("common.editAria")}
+            aria-label={t("cat.edit")}
+            onClick={() => onEdit(category)}
+          >
             <Edit2 className="size-4" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
             disabled={!canDelete}
-            title={canDelete ? "Удалить" : `Нельзя удалить: ${category.transactionCount} операций`}
-            aria-label="Удалить категорию"
+            title={
+              canDelete
+                ? t("common.delete")
+                : t("cat.cantDelete", { count: category.transactionCount })
+            }
+            aria-label={t("cat.deleteAria")}
             onClick={() => canDelete && onDelete(category.id)}
           >
             <Trash2 className="size-4 text-destructive" />
@@ -267,6 +306,7 @@ function CategoryCard({
   onEdit: (category: CategoryRow) => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const canDelete = category.transactionCount === 0;
 
   return (
@@ -279,28 +319,42 @@ function CategoryCard({
           />
           <p className="font-semibold">{category.name}</p>
         </div>
-        <span className="text-sm text-muted-foreground">{category.transactionCount} опер.</span>
+        <span className="text-sm text-muted-foreground">
+          {t("cat.count", { count: category.transactionCount })}
+        </span>
       </div>
       {(category.isEssential || category.isSubscription) && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {category.isEssential && <Badge variant="secondary" className="text-xs">Обязательная</Badge>}
-          {category.isSubscription && <Badge variant="secondary" className="text-xs">Подписка</Badge>}
+          {category.isEssential && (
+            <Badge variant="secondary" className="text-xs">
+              {t("cat.essential")}
+            </Badge>
+          )}
+          {category.isSubscription && (
+            <Badge variant="secondary" className="text-xs">
+              {t("cat.subscription")}
+            </Badge>
+          )}
         </div>
       )}
       <div className="mt-3 flex gap-2">
         <Button variant="outline" size="sm" onClick={() => onEdit(category)}>
           <Edit2 className="size-4" />
-          Изменить
+          {t("common.edit")}
         </Button>
         <Button
           variant="outline"
           size="sm"
           disabled={!canDelete}
-          title={canDelete ? "Удалить" : `Нельзя удалить: ${category.transactionCount} операций`}
+          title={
+            canDelete
+              ? t("common.delete")
+              : t("cat.cantDelete", { count: category.transactionCount })
+          }
           onClick={() => canDelete && onDelete(category.id)}
         >
           <Trash2 className="size-4 text-destructive" />
-          Удалить
+          {t("common.delete")}
         </Button>
       </div>
     </div>
@@ -318,6 +372,7 @@ function CategoryDialog({
   defaultKind: "INCOME" | "EXPENSE";
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useI18n();
   const [selectedColor, setSelectedColor] = useState(category?.color ?? PRESET_COLORS[0]);
   const [isEssential, setIsEssential] = useState(category?.isEssential ?? false);
   const [isSubscription, setIsSubscription] = useState(category?.isSubscription ?? false);
@@ -335,12 +390,18 @@ function CategoryDialog({
         <input type="hidden" name="isSubscription" value={String(isSubscription)} />
 
         <div className="space-y-2">
-          <Label>Название</Label>
-          <Input name="name" defaultValue={category?.name ?? ""} minLength={2} maxLength={80} required />
+          <Label>{t("common.name")}</Label>
+          <Input
+            name="name"
+            defaultValue={category?.name ?? ""}
+            minLength={2}
+            maxLength={80}
+            required
+          />
         </div>
 
         <div className="space-y-2">
-          <Label>Цвет</Label>
+          <Label>{t("cat.color")}</Label>
           <div className="flex flex-wrap gap-2">
             {PRESET_COLORS.map((color) => (
               <button
@@ -352,7 +413,7 @@ function CategoryDialog({
                   borderColor: selectedColor === color ? "hsl(var(--foreground))" : "transparent"
                 }}
                 onClick={() => setSelectedColor(color)}
-                aria-label={`Цвет ${color}`}
+                aria-label={t("cat.colorAria", { color })}
               />
             ))}
           </div>
@@ -373,7 +434,7 @@ function CategoryDialog({
               checked={isEssential}
               onChange={(e) => setIsEssential(e.target.checked)}
             />
-            <span>Обязательная (критически необходимые расходы)</span>
+            <span>{t("cat.essentialFull")}</span>
           </label>
         )}
 
@@ -385,12 +446,12 @@ function CategoryDialog({
               checked={isSubscription}
               onChange={(e) => setIsSubscription(e.target.checked)}
             />
-            <span>Подписка (регулярные сервисные платежи)</span>
+            <span>{t("cat.subscriptionFull")}</span>
           </label>
         )}
 
         <DialogFooter>
-          <Button type="submit">Сохранить</Button>
+          <Button type="submit">{t("common.save")}</Button>
         </DialogFooter>
       </form>
     </DialogContent>
