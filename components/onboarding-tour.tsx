@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { isPublicPath } from "@/lib/public-paths";
+import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,60 +30,18 @@ import {
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 
 const STEPS = [
-  {
-    icon: CircleDollarSign,
-    title: "Добро пожаловать в Финансовый помощник",
-    description:
-      (isLocalDesktopMode
-        ? "Все данные хранятся локально на вашем устройстве — без облака. "
-        : "Ваши данные привязаны к аккаунту и защищены — доступны после входа с любого устройства. ") +
-      "Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках."
-  },
-  {
-    icon: Wallet,
-    title: "1. Добавьте счета",
-    description:
-      "На вкладке «Счета» создайте свои счета (наличные, карта, накопительный, брокерский) и укажите текущий баланс. С них будут учитываться операции."
-  },
-  {
-    icon: CircleDollarSign,
-    title: "2. Записывайте операции",
-    description:
-      "Нажмите «Операция» на главной или клавиши Alt+N, чтобы быстро добавить доход или расход. Прямо в окне можно создать новый счёт и новую категорию. Категория подбирается по описанию автоматически."
-  },
-  {
-    icon: BarChart3,
-    title: "3. Бюджеты и аналитика",
-    description:
-      "Задайте лимиты по категориям на вкладке «Бюджеты» (можно нажать «Предложить лимиты» — посчитаем по вашим средним тратам). На «Аналитике» смотрите динамику и структуру расходов."
-  },
-  {
-    icon: PiggyBank,
-    title: "4. Цели и подушка",
-    description:
-      "Создавайте накопительные цели и пополняйте их со счёта. На главной видно прогресс финансовой подушки и свободный остаток, который можно сразу отложить на цель."
-  },
-  {
-    icon: Download,
-    title: "5. Импорт и backup",
-    description:
-      "На вкладке «Импорт» можно загрузить CSV из банка, выбрать пресет колонок и скачать резервную копию. Перед восстановлением мы покажем preview, чтобы случайно не заменить данные не тем файлом."
-  },
-  {
-    icon: CalendarClock,
-    title: "6. Прогноз и инвестиции",
-    description:
-      "Добавляйте плановые платежи — «Прогноз» построит денежный поток и календарь на 90 дней. На «Инвестициях» можно подобрать бумаги под бюджет и риск-профиль."
-  },
-  {
-    icon: Command,
-    title: "Подсказка: быстрый поиск",
-    description:
-      "Нажмите Ctrl+K в любой момент, чтобы открыть командную палитру — быстрый переход по разделам и поиск счетов и категорий. Готово, можно начинать!"
-  }
+  { icon: CircleDollarSign, titleKey: "ob.step0.title", descKey: "ob.step0.descWeb" },
+  { icon: Wallet, titleKey: "ob.step1.title", descKey: "ob.step1.desc" },
+  { icon: CircleDollarSign, titleKey: "ob.step2.title", descKey: "ob.step2.desc" },
+  { icon: BarChart3, titleKey: "ob.step3.title", descKey: "ob.step3.desc" },
+  { icon: PiggyBank, titleKey: "ob.step4.title", descKey: "ob.step4.desc" },
+  { icon: Download, titleKey: "ob.step5.title", descKey: "ob.step5.desc" },
+  { icon: CalendarClock, titleKey: "ob.forecast.title", descKey: "ob.forecast.desc" },
+  { icon: Command, titleKey: "ob.step6.title", descKey: "ob.step6.desc" }
 ];
 
 export function OnboardingTour() {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -96,7 +55,7 @@ export function OnboardingTour() {
       window.location.reload();
     } catch (error) {
       setLoadingSample(false);
-      toast.error(error instanceof Error ? error.message : "Не удалось загрузить пример");
+      toast.error(error instanceof Error ? error.message : t("ob.sampleError"));
     }
   }
 
@@ -140,6 +99,11 @@ export function OnboardingTour() {
   const current = STEPS[step];
   const Icon = current.icon;
   const isLast = step === STEPS.length - 1;
+  // Step 0 has device-specific copy (local-only vs account-backed).
+  const description =
+    step === 0
+      ? t(isLocalDesktopMode ? "ob.step0.descDesktop" : "ob.step0.descWeb")
+      : t(current.descKey);
 
   return (
     <Dialog
@@ -153,8 +117,8 @@ export function OnboardingTour() {
           <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
             <Icon className="size-6" />
           </span>
-          <DialogTitle className="mt-3">{current.title}</DialogTitle>
-          <DialogDescription className="leading-relaxed">{current.description}</DialogDescription>
+          <DialogTitle className="mt-3">{t(current.titleKey)}</DialogTitle>
+          <DialogDescription className="leading-relaxed">{description}</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-center gap-1.5 py-2">
@@ -176,7 +140,7 @@ export function OnboardingTour() {
             variant="ghost"
             onClick={finish}
           >
-            Пропустить обучение
+            {t("ob.skip")}
           </Button>
           <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:w-auto">
             {step === 0 ? (
@@ -187,7 +151,7 @@ export function OnboardingTour() {
                   onClick={() => setStep(1)}
                   disabled={loadingSample}
                 >
-                  Начать с нуля
+                  {t("ob.fromScratch")}
                 </Button>
                 <Button
                   className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
@@ -195,7 +159,7 @@ export function OnboardingTour() {
                   disabled={loadingSample}
                 >
                   <Sparkles className="size-4" />
-                  {loadingSample ? "Загрузка…" : "Загрузить пример"}
+                  {loadingSample ? t("set.data.loading") : t("ob.loadSample")}
                 </Button>
               </>
             ) : (
@@ -205,21 +169,21 @@ export function OnboardingTour() {
                   variant="outline"
                   onClick={() => setStep((s) => s - 1)}
                 >
-                  Назад
+                  {t("ob.back")}
                 </Button>
                 {isLast ? (
                   <Button
                     className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
                     onClick={finish}
                   >
-                    Начать
+                    {t("ob.start")}
                   </Button>
                 ) : (
                   <Button
                     className="h-auto min-h-10 w-full whitespace-normal px-3 text-center sm:w-auto"
                     onClick={() => setStep((s) => s + 1)}
                   >
-                    Далее
+                    {t("ob.next")}
                   </Button>
                 )}
               </>
