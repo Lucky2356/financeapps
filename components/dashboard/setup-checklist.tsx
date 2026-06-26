@@ -15,6 +15,7 @@ import type {
   TransactionsPageData
 } from "@/lib/data";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "setup-checklist-dismissed-v1";
@@ -31,6 +32,7 @@ type Counts = {
 // Auto-hides once every step is done (or when dismissed).
 export function SetupChecklist() {
   const router = useRouter();
+  const { t } = useI18n();
   const [counts, setCounts] = useState<Counts | null>(null);
   const [loadingSample, setLoadingSample] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
@@ -69,11 +71,11 @@ export function SetupChecklist() {
     setLoadingSample(true);
     try {
       await apiClient.post("/sample");
-      toast.success("Демо-данные загружены");
+      toast.success(t("set.toast.sampleLoaded"));
       await loadCounts();
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось загрузить демо-данные");
+      toast.error(error instanceof Error ? error.message : t("set.toast.sampleError"));
     } finally {
       setLoadingSample(false);
     }
@@ -84,36 +86,36 @@ export function SetupChecklist() {
   const steps = [
     {
       done: counts.accounts > 0,
-      title: "Добавьте счёт",
-      desc: "Наличные, карта или накопительный",
-      cta: "Открыть счета",
+      title: t("sc.s1.title"),
+      desc: t("sc.s1.desc"),
+      cta: t("sc.s1.cta"),
       href: "/accounts" as const
     },
     {
       done: counts.transactions > 0,
-      title: "Запишите операцию",
-      desc: "Доход или расход — или импортируйте CSV",
+      title: t("sc.s2.title"),
+      desc: t("sc.s2.desc"),
       action: "quick-add" as const
     },
     {
       done: counts.budgets > 0,
-      title: "Задайте бюджет",
-      desc: "Лимиты по категориям расходов",
-      cta: "К бюджетам",
+      title: t("sc.s3.title"),
+      desc: t("sc.s3.desc"),
+      cta: t("sc.s3.cta"),
       href: "/budgets" as const
     },
     {
       done: counts.goals > 0,
-      title: "Создайте цель",
-      desc: "Накопления на крупную покупку",
-      cta: "К целям",
+      title: t("sc.s4.title"),
+      desc: t("sc.s4.desc"),
+      cta: t("sc.s4.cta"),
       href: "/goals" as const
     },
     {
       done: counts.backupFresh,
-      title: "Сохраните backup",
-      desc: "Резервная копия ваших данных",
-      cta: "К импорту",
+      title: t("sc.s5.title"),
+      desc: t("sc.s5.desc"),
+      cta: t("sc.s5.cta"),
       href: "/import" as const
     }
   ];
@@ -133,9 +135,9 @@ export function SetupChecklist() {
     <div className="rounded-lg border border-primary/30 bg-primary/[0.06] p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">Быстрый старт</h3>
+          <h3 className="font-semibold">{t("sc.title")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Выполнено {doneCount} из {steps.length} — пройдите шаги, чтобы получить максимум.
+            {t("sc.progress", { done: doneCount, total: steps.length })}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -147,10 +149,10 @@ export function SetupChecklist() {
               disabled={loadingSample}
             >
               <Sparkles className="size-3.5" />
-              {loadingSample ? "Загрузка…" : "Загрузить демо-данные"}
+              {loadingSample ? t("set.data.loading") : t("set.data.loadSample")}
             </Button>
           ) : null}
-          <Button variant="ghost" size="icon" onClick={dismiss} aria-label="Скрыть быстрый старт">
+          <Button variant="ghost" size="icon" onClick={dismiss} aria-label={t("sc.dismiss")}>
             <X className="size-4" />
           </Button>
         </div>
@@ -186,7 +188,7 @@ export function SetupChecklist() {
                   onClick={() => window.dispatchEvent(new Event("quick-add-open"))}
                 >
                   <Plus className="size-3.5" />
-                  Добавить
+                  {t("common.add")}
                 </Button>
               ) : (
                 <Button asChild size="sm" variant="outline">
