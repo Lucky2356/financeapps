@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # npm dependencies — weekly, grouped to keep PR noise low. Security updates are
+  # always raised immediately regardless of schedule.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      production-deps:
+        dependency-type: "production"
+      dev-deps:
+        dependency-type: "development"
+
+  # Keep GitHub Actions (CI/release workflows) up to date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+
+  # Rust crates for the Tauri desktop shell.
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
