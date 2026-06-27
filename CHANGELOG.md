@@ -4,6 +4,43 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-06-27
+
+🌍 **The app is now fully bilingual (RU/EN)** and the investments screen works on
+real market data. This release also closes a round of security hardening ahead of
+a public deployment.
+
+### Added
+- **Full English localization.** The entire product — navigation, every screen,
+  forms, errors, and *generated* content (recommendations, insights, forecast
+  warnings, investment analysis, goal pacing, health summary) — now switches
+  between Russian and English. Toggle the language in Settings.
+- **Investments on real data.** Live MOEX quotes, search for any Russian security,
+  click a holding to open its historical price chart, and a portfolio summary with
+  per-position profit/loss.
+- **Budget rollover.** An unspent budget can carry its remainder into the next month.
+- **Inline create** of an account or category directly from the transaction form —
+  no need to leave the screen.
+
+### Changed
+- **Responsive width.** Content now stretches to fill the screen on large displays,
+  with a tidier field grid in Settings (better use of 24″+ monitors).
+
+### Security
+- **Backup endpoint locked down.** `/api/backup` now requires authentication and is
+  scoped to the signed-in user (previously it exposed/overwrote the first user's
+  full data with no auth).
+- **HTTPS-only by default.** The web container is no longer published on the host —
+  all traffic goes through the TLS reverse proxy. `POSTGRES_PASSWORD` is now required.
+- **Content-Security-Policy** added for the web app; Sentry now scrubs PII before
+  sending; API errors no longer leak internal messages to clients.
+- CSV import is size/row-bounded (DoS protection); CSV export escapes spreadsheet
+  formulas; login is throttled per account; nightly DB backups can be encrypted at
+  rest. The AI key is no longer persisted server-side on the web.
+
+### Fixed
+- Budget calculation corrections from a full finance/accounting audit of the math.
+
 ## [1.0.4] — 2026-06-25
 
 ### Changed
