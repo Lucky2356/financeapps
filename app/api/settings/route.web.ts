@@ -33,9 +33,12 @@ export async function PUT(request: NextRequest) {
         defaultTransactionType: input.defaultTransactionType,
         autoMaterializeRecurring: input.autoMaterializeRecurring,
         paymentReminders: input.paymentReminders,
-        aiEnabled: input.aiEnabled,
-        aiApiKey: input.aiApiKey,
-        aiModel: input.aiModel
+        aiEnabled: input.aiEnabled
+        // SECURITY: do NOT persist aiApiKey/aiModel here. On the web, AI runs via
+        // the server's ANTHROPIC_API_KEY (app/api/ai/parse) and user.aiApiKey is
+        // never read — storing a user-supplied key would be a plaintext secret at
+        // rest for no benefit. The AI-key field is desktop-only (LocalApiClient /
+        // IndexedDB), which never goes through this route.
       }
     });
 

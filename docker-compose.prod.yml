@@ -83,6 +83,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-financial_assistant}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      # Optional: encrypt each dump at rest (AES-256). Leave empty for plaintext.
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
     volumes:
       - ./scripts/db-backup.sh:/db-backup.sh:ro
       - db-backups:/backups
