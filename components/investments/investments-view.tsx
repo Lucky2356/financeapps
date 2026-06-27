@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { PortfolioStructureChart } from "@/components/charts/lazy";
 import { RecommendationList } from "@/components/recommendation-list";
 import { InlineStockChart } from "@/components/investments/inline-stock-chart";
+import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
 import { SecuritySearch } from "@/components/investments/security-search";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -785,6 +786,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       {/* ── Analytics ─────────────────────────────────────────────────────── */}
       {activeTab === "analytics" ? (
         <div className="space-y-5">
+          <PortfolioValueChart portfolio={data.portfolio} />
           <section className="grid gap-5 xl:grid-cols-2">
             <Card>
               <CardHeader>
