@@ -214,9 +214,18 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       await update.downloadAndInstall();
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
-    } catch {
+    } catch (error) {
+      // Log the real reason (visible in desktop devtools) instead of swallowing
+      // it, then open the releases page via the opener plugin — window.open is
+      // blocked by the desktop webview CSP, so it silently did nothing before.
+      console.error("[updater]", error);
       toast.message(t("set.update.unavailable"));
-      window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
+      try {
+        const { openUrl } = await import("@tauri-apps/plugin-opener");
+        await openUrl(RELEASES_URL);
+      } catch {
+        /* opener unavailable (e.g. plain local build) — nothing more to do */
+      }
     } finally {
       setCheckingUpdate(false);
     }

@@ -118,6 +118,28 @@ jobs:
           exe="$(ls src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)"
           node scripts/verify-updater-signature.mjs "$exe" "$exe.sig"
 
+      # The NSIS installer is named from productName ("Финансовый помощник"), which
+      # is Cyrillic. GitHub STRIPS non-ASCII characters from uploaded release asset
+      # names, so the asset ends up as "_<ver>_x64-setup.exe" while latest.json
+      # (built from the local name) points at the encoded Cyrillic name → 404 →
+      # auto-update fails (exactly the 1.0.5 bug). Rename to a stable ASCII base so
+      # the uploaded asset name and the manifest URL always match. The .sig signs
+      # the file BYTES, not the name, so it stays valid after the rename.
+      - name: Normalize installer filename to ASCII
+        if: env.HAS_SIGNING_KEY == 'true'
+        shell: bash
+        run: |
+          ver="${{ steps.rel.outputs.tag }}"; ver="${ver#v}"
+          cd src-tauri/target/release/bundle/nsis
+          exe="$(ls *-setup.exe | head -1)"
+          newbase="financial-assistant_${ver}_x64-setup.exe"
+          if [ "$exe" != "$newbase" ]; then
+            mv -f "$exe" "$newbase"
+            mv -f "$exe.sig" "$newbase.sig"
+            echo "Renamed installer: '$exe' -> '$newbase'"
+          fi
+          ls -la
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
