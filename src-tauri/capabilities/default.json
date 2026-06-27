@@ -13,6 +13,7 @@
     "window-state:allow-save-window-state",
     "updater:default",
     "process:allow-restart",
+    "opener:allow-open-url",
     {
       "identifier": "fs:scope",
       "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**"]

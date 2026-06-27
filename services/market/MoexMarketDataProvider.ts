@@ -125,7 +125,13 @@ const SECURITIES_URL =
   "https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities.json" +
   "?iss.meta=off&iss.only=securities,marketdata" +
   "&securities.columns=SECID,SHORTNAME" +
-  "&marketdata.columns=SECID,LAST,LASTTOPREVPRICE,MARKETPRICE" +
+  // LAST = last trade (live during the session). LCURRENTPRICE = current price
+  // (populated intraday). MARKETPRICE = weighted average — only a last resort,
+  // because it is NOT the per-share price a user trades at (when the market is
+  // closed MOEX zeroes LAST/LCURRENTPRICE and only MARKETPRICE remains, which is
+  // why holdings used to show a wrong, lower number). TRADINGSTATUS tells us
+  // whether the live fields are trustworthy.
+  "&marketdata.columns=SECID,LAST,LCURRENTPRICE,LASTTOPREVPRICE,MARKETPRICE,TRADINGSTATUS" +
   "&lang=ru";
 
 function historyUrl(ticker: string, from: string, till: string): string {
@@ -135,14 +141,20 @@ function historyUrl(ticker: string, from: string, till: string): string {
   );
 }
 
-type SnapshotRow = { price: number; changeDay: number; name: string };
+// `live` is the trustworthy intraday price (LAST/LCURRENTPRICE), 0 when the market
+// is closed; `marketPrice` is the weighted-average last-resort. Callers prefer
+// live → last historical close → marketPrice.
+type SnapshotRow = { live: number; marketPrice: number; changeDay: number; name: string };
+// Per-ticker daily stats from history: the official last close (what brokers show
+// out of hours) and the close-over-close day change.
+type HistoryStats = { lastClose: number; change30d: number; changeDay: number };
 
 // Module-level caches shared across provider instances (a new instance is
 // created per request) to keep MOEX load low while staying near-real-time.
 const SNAPSHOT_TTL_MS = 30_000;
-const CHANGE30D_TTL_MS = 60 * 60 * 1000;
+const HISTORY_STATS_TTL_MS = 60 * 60 * 1000;
 let snapshotCache: { ts: number; rows: Map<string, SnapshotRow> } | null = null;
-let change30dCache: { ts: number; map: Map<string, number> } | null = null;
+let historyStatsCache: { ts: number; map: Map<string, HistoryStats> } | null = null;
 
 function parseMoexRows(table: { columns: string[]; data: (string | number | null)[][] }) {
   const map = new Map<string, Record<string, string | number | null>>();
@@ -155,6 +167,15 @@ function parseMoexRows(table: { columns: string[]; data: (string | number | null
     if (secid) map.set(secid, obj);
   }
   return map;
+}
+
+// Price priority: trustworthy live price → official last close (out of hours) →
+// weighted-average market price as a final fallback.
+function resolvePrice(row: SnapshotRow | undefined, stat: HistoryStats | undefined): number {
+  if (row && row.live > 0) return row.live;
+  if (stat && stat.lastClose > 0) return stat.lastClose;
+  if (row && row.marketPrice > 0) return row.marketPrice;
+  return 0;
 }
 
 async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
@@ -172,22 +193,26 @@ export class MoexMarketDataProvider implements MarketDataService {
 
   async getSecurities(): Promise<MarketSecurity[]> {
     try {
-      const [snapshot, change30d] = await Promise.all([this.getSnapshot(), this.getChange30dMap()]);
+      const [snapshot, stats] = await Promise.all([this.getSnapshot(), this.getHistoryStatsMap()]);
 
       const results: MarketSecurity[] = [];
       for (const ticker of TICKERS) {
         const row = snapshot.get(ticker);
-        if (!row || row.price <= 0) continue;
+        const stat = stats.get(ticker);
+        const price = resolvePrice(row, stat);
+        if (price <= 0) continue;
         const meta = STATIC_META[ticker];
         results.push({
           ticker,
-          name: row.name || meta.name,
+          name: row?.name || meta.name,
           sector: meta.sector,
           risk: meta.risk,
           comment: meta.comment,
-          price: row.price,
-          changeDay: row.changeDay,
-          change30d: change30d.get(ticker) ?? 0
+          price,
+          // Use the live intraday change while trading; otherwise the official
+          // close-over-close change from history (LASTTOPREVPRICE is 0 off-hours).
+          changeDay: row && row.live > 0 ? row.changeDay : (stat?.changeDay ?? row?.changeDay ?? 0),
+          change30d: stat?.change30d ?? 0
         });
       }
 
@@ -253,13 +278,23 @@ export class MoexMarketDataProvider implements MarketDataService {
     const rows = new Map<string, SnapshotRow>();
     for (const [secid, md] of mdMap) {
       const last = md["LAST"];
+      const current = md["LCURRENTPRICE"];
       const market = md["MARKETPRICE"];
-      const price =
-        typeof last === "number" && last > 0 ? last : typeof market === "number" ? market : 0;
-      if (price <= 0) continue;
-      const pct = md["LASTTOPREVPRICE"]; // day change in %
+      const live =
+        typeof last === "number" && last > 0
+          ? last
+          : typeof current === "number" && current > 0
+            ? current
+            : 0;
+      const marketPrice = typeof market === "number" && market > 0 ? market : 0;
+      // Keep the row if EITHER a live price or a market price exists — a closed
+      // market has only marketPrice, and curated tickers will substitute the
+      // historical close on top of it.
+      if (live <= 0 && marketPrice <= 0) continue;
+      const pct = md["LASTTOPREVPRICE"]; // intraday day change in %
       rows.set(secid, {
-        price,
+        live,
+        marketPrice,
         changeDay: typeof pct === "number" ? Number(pct.toFixed(2)) : 0,
         name: String(secMap.get(secid)?.["SHORTNAME"] ?? "")
       });
@@ -277,14 +312,19 @@ export class MoexMarketDataProvider implements MarketDataService {
       for (const [secid, row] of snapshot) {
         if (!secid.includes(q) && !row.name.toUpperCase().includes(q)) continue;
         const meta = STATIC_META[secid as Ticker];
+        // Search spans the whole board, so we don't fetch per-ticker history here:
+        // use the live price, falling back to the weighted-average market price.
+        const price = row.live > 0 ? row.live : row.marketPrice;
+        if (price <= 0) continue;
         matches.push({
           ticker: secid,
           name: row.name || meta?.name || secid,
           sector: meta?.sector ?? "Прочее",
           risk: meta?.risk ?? "MEDIUM",
           comment:
-            meta?.comment ?? "Цены и изменение — с Московской биржи (MOEX). Не инвестиционный совет.",
-          price: row.price,
+            meta?.comment ??
+            "Цены и изменение — с Московской биржи (MOEX). Не инвестиционный совет.",
+          price,
           changeDay: row.changeDay,
           change30d: 0
         });
@@ -302,33 +342,38 @@ export class MoexMarketDataProvider implements MarketDataService {
     }
   }
 
-  // 30-day % change per ticker, derived from history (parallel), cached for an
-  // hour because it barely moves intraday.
-  private async getChange30dMap(): Promise<Map<string, number>> {
-    if (change30dCache && Date.now() - change30dCache.ts < CHANGE30D_TTL_MS)
-      return change30dCache.map;
+  // Per-ticker daily stats derived from history (parallel), cached for an hour
+  // because they barely move out of hours: the official last close (shown when
+  // the market is closed), the close-over-close day change, and the 30-day change.
+  private async getHistoryStatsMap(): Promise<Map<string, HistoryStats>> {
+    if (historyStatsCache && Date.now() - historyStatsCache.ts < HISTORY_STATS_TTL_MS)
+      return historyStatsCache.map;
 
     const from = format(subDays(new Date(), 35), "yyyy-MM-dd");
     const till = format(new Date(), "yyyy-MM-dd");
-    const map = new Map<string, number>();
+    const map = new Map<string, HistoryStats>();
 
     await Promise.all(
       TICKERS.map(async (ticker) => {
         try {
           const history = await this.fetchHistory(ticker, from, till);
-          if (history.length >= 2) {
-            const oldest = history[0].price;
-            const latest = history[history.length - 1].price;
-            if (oldest > 0)
-              map.set(ticker, Number((((latest - oldest) / oldest) * 100).toFixed(2)));
-          }
+          if (history.length === 0) return;
+          const oldest = history[0].price;
+          const lastClose = history[history.length - 1].price;
+          const prevClose = history.length >= 2 ? history[history.length - 2].price : 0;
+          map.set(ticker, {
+            lastClose,
+            change30d: oldest > 0 ? Number((((lastClose - oldest) / oldest) * 100).toFixed(2)) : 0,
+            changeDay:
+              prevClose > 0 ? Number((((lastClose - prevClose) / prevClose) * 100).toFixed(2)) : 0
+          });
         } catch {
-          /* leave this ticker without a 30d value */
+          /* leave this ticker without history stats */
         }
       })
     );
 
-    change30dCache = { ts: Date.now(), map };
+    historyStatsCache = { ts: Date.now(), map };
     return map;
   }
 

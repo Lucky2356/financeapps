@@ -10,6 +10,10 @@ pub fn run() {
     // releases page.
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
+    // Opens the GitHub releases page in the system browser when auto-update
+    // can't proceed (the webview CSP blocks navigating to external URLs, so
+    // window.open does nothing on desktop).
+    .plugin(tauri_plugin_opener::init())
     .setup(|_app| {
       // Future secure tokens must use OS keychain / secure storage, never plain files.
       Ok(())

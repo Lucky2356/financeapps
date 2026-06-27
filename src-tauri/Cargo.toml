@@ -1,6 +1,6 @@
 [package]
 name = "financial-assistant"
-version = "1.0.5"
+version = "1.0.6"
 description = "Financial Assistant MVP desktop shell"
 authors = ["Financial Assistant"]
 edition = "2021"
@@ -19,6 +19,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
