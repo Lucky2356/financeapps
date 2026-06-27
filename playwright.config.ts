@@ -15,7 +15,10 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry"
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Pin the browser language so the client i18n layer resolves to Russian
+  // deterministically. Without this the app honors navigator.language (English on
+  // CI), switching the UI to EN and breaking the RU text assertions in the specs.
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], locale: "ru-RU" } }],
   webServer: {
     command: `npx serve out -l ${PORT}`,
     url: `http://localhost:${PORT}`,
