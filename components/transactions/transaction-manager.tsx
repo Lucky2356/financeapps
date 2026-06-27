@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
@@ -747,8 +748,21 @@ function TransactionDialog({
   }
 
   function onDescriptionChange(value: string) {
+    // A user-defined rule is an explicit mapping ("Пятёрочка" → Продукты), so it
+    // wins even after the user manually picked a (wrong) category.
+    const ruled = data.rules.length > 0 ? matchRule(value, data.rules) : null;
+    if (ruled && matchingCategories.some((category) => category.id === ruled)) {
+      setCategoryId(ruled);
+      setAutoSuggested(true);
+      return;
+    }
+    // History heuristic is a softer guess — it only fills in while the user has
+    // not chosen a category by hand.
     if (manualCategory) return;
-    const suggestion = suggestCategoryId(value, data.transactions, { type: selectedType });
+    const suggestion = suggestCategoryId(value, data.transactions, {
+      type: selectedType,
+      rules: data.rules
+    });
     if (suggestion && matchingCategories.some((category) => category.id === suggestion)) {
       setCategoryId(suggestion);
       setAutoSuggested(true);

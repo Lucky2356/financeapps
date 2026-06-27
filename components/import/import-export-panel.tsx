@@ -122,6 +122,7 @@ export function ImportExportPanel({
         transactions,
         accounts: data.accounts,
         categories: data.categories,
+        rules: [],
         filters: {},
         pagination: {
           page: 1,

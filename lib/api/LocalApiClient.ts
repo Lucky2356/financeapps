@@ -1111,7 +1111,11 @@ export class LocalApiClient implements ApiClient {
 
     if (action === "addWatchlist") {
       if (!ticker) throw new Error("Ticker is required.");
-      const security = securities.find((item) => item.ticker === ticker);
+      // The search spans the whole MOEX board, so a picked ticker may be outside
+      // the curated list — resolve it live before giving up.
+      const security =
+        securities.find((item) => item.ticker === ticker) ??
+        (await provider.getSecurityByTicker(ticker));
       if (!security) throw new Error("Security not found in the market directory.");
       const exists = state.investments.watchlist.some((item) => item.ticker === ticker);
       state.investments.watchlist = exists
@@ -1140,7 +1144,9 @@ export class LocalApiClient implements ApiClient {
     }
 
     if (!ticker) throw new Error("Ticker is required.");
-    const security = securities.find((item) => item.ticker === ticker);
+    const security =
+      securities.find((item) => item.ticker === ticker) ??
+      (await provider.getSecurityByTicker(ticker));
     if (!security) throw new Error("Security not found in the market directory.");
 
     const quantity = Number(input.quantity);
@@ -1218,6 +1224,7 @@ export class LocalApiClient implements ApiClient {
       transactions: filtered.slice(start, start + limit),
       accounts: this.accounts(state).accounts,
       categories: state.categories,
+      rules: state.rules,
       filters,
       pagination: {
         page,
