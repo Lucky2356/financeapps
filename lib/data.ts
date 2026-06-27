@@ -1715,27 +1715,32 @@ async function buildDemoInvestmentData(locale: Locale = DEFAULT_LOCALE): Promise
   const positionConfig = [
     ["SBER", 350, 287],
     ["LKOH", 18, 6950],
-    ["YNDX", 22, 3780],
+    ["YDEX", 22, 3780],
     ["MOEX", 520, 214],
     ["T", 28, 2860],
     ["GAZP", 480, 154]
   ] as const;
-  const rowsWithoutShare = positionConfig.map(([ticker, quantity, averageBuyPrice]) => {
-    const security = securities.find((item) => item.ticker === ticker)!;
+  // Skip any demo ticker the market provider doesn't currently list (e.g. after a
+  // delisting/rename) rather than crashing the whole investments page on a `.find`.
+  const rowsWithoutShare = positionConfig.flatMap(([ticker, quantity, averageBuyPrice]) => {
+    const security = securities.find((item) => item.ticker === ticker);
+    if (!security) return [];
     const currentValue = roundMoney(security.price * quantity);
 
-    return {
-      ticker,
-      name: security.name,
-      sector: security.sector,
-      quantity,
-      averageBuyPrice,
-      currentPrice: security.price,
-      currentValue,
-      pnl: roundMoney((security.price - averageBuyPrice) * quantity),
-      share: 0,
-      risk: security.risk
-    };
+    return [
+      {
+        ticker,
+        name: security.name,
+        sector: security.sector,
+        quantity,
+        averageBuyPrice,
+        currentPrice: security.price,
+        currentValue,
+        pnl: roundMoney((security.price - averageBuyPrice) * quantity),
+        share: 0,
+        risk: security.risk
+      }
+    ];
   });
   const total = rowsWithoutShare.reduce((sum, row) => sum + row.currentValue, 0);
   const portfolioRows = rowsWithoutShare.map((row) => ({

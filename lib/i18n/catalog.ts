@@ -422,6 +422,12 @@ const ru: Messages = {
     "Резерв на накопительных счетах в месяцах ваших средних расходов. Цель — 3–6 месяцев на случай форс-мажора.",
   "hint.riskProfile":
     "Ваша готовность к колебаниям стоимости инвестиций. Влияет на анализ рисков и подбор бумаг.",
+  "hint.dayChange": "Сколько ваш портфель заработал или потерял за сегодняшнюю торговую сессию.",
+  "hint.pnl":
+    "Разница между текущей стоимостью бумаг и суммой, которую вы за них заплатили, — «бумажная» прибыль или убыток, пока бумаги не проданы.",
+  "hint.return": "Прибыль или убыток в процентах от вложенной суммы.",
+  "hint.allocation":
+    "Как ваши деньги распределены между бумагами. Чем разнообразнее портфель, тем меньше он зависит от одной бумаги.",
   "ks.footer": "Горячие клавиши не работают, когда фокус находится в поле ввода.",
   // Notifications
   "notif.title": "Уведомления",
@@ -680,6 +686,8 @@ const ru: Messages = {
   "reco.empty": "Рекомендаций пока нет. Добавьте больше данных, чтобы анализ стал точнее.",
   "inv.portfolioRisks": "Риски портфеля",
   "inv.educationTips": "Образовательные подсказки",
+  "inv.tab.overview": "Обзор",
+  "inv.tab.market": "Рынок",
   "inv.tab.portfolio": "Портфель",
   "inv.tab.watchlist": "Список наблюдения",
   "inv.tab.analytics": "Аналитика",
@@ -941,6 +949,17 @@ const ru: Messages = {
   "inv.currentValue": "Текущая стоимость",
   "inv.pnlLabel": "Прибыль/убыток",
   "inv.returnLabel": "Доходность",
+  "inv.hero.value": "Стоимость портфеля",
+  "inv.hero.today": "сегодня",
+  "inv.hero.allocationTitle": "Где ваши деньги",
+  "inv.hero.allocationOther": "Прочее",
+  "inv.holdingsTitle": "Ваши бумаги",
+  "inv.addSecurity": "Добавить бумагу",
+  "inv.overviewEmpty.title": "Начните инвестировать",
+  "inv.overviewEmpty.desc":
+    "Добавьте первую бумагу — стоимость, доходность и прибыль/убыток будут считаться и обновляться автоматически. Не знаете, с чего начать? Откройте «Рынок» и подберите бумаги под ваш бюджет.",
+  "inv.overviewEmpty.cta": "Добавить первую бумагу",
+  "inv.overviewEmpty.toMarket": "Подобрать по бюджету",
   "inv.toast.enterBudget": "Введите сумму бюджета на инвестиции",
   "inv.toast.noMatch":
     "Не удалось подобрать бумаги — увеличьте бюджет или смягчите ограничение риска.",
@@ -1585,6 +1604,12 @@ const en: Messages = {
     "A reserve in savings accounts measured in months of your average expenses. Target: 3–6 months for emergencies.",
   "hint.riskProfile":
     "Your tolerance for swings in investment value. Affects risk analysis and security selection.",
+  "hint.dayChange": "How much your portfolio gained or lost during today's trading session.",
+  "hint.pnl":
+    "The gap between your securities' current value and what you paid for them — an unrealized (paper) gain or loss until you sell.",
+  "hint.return": "Your gain or loss as a percentage of the amount you invested.",
+  "hint.allocation":
+    "How your money is split across securities. The more diversified, the less the portfolio depends on any single holding.",
   "ks.footer": "Keyboard shortcuts don't fire while the focus is in an input field.",
   // Notifications
   "notif.title": "Notifications",
@@ -1841,6 +1866,8 @@ const en: Messages = {
   "reco.empty": "No recommendations yet. Add more data so the analysis becomes more accurate.",
   "inv.portfolioRisks": "Portfolio risks",
   "inv.educationTips": "Educational tips",
+  "inv.tab.overview": "Overview",
+  "inv.tab.market": "Market",
   "inv.tab.portfolio": "Portfolio",
   "inv.tab.watchlist": "Watchlist",
   "inv.tab.analytics": "Analytics",
@@ -2101,6 +2128,17 @@ const en: Messages = {
   "inv.currentValue": "Current value",
   "inv.pnlLabel": "Profit/loss",
   "inv.returnLabel": "Return",
+  "inv.hero.value": "Portfolio value",
+  "inv.hero.today": "today",
+  "inv.hero.allocationTitle": "Where your money is",
+  "inv.hero.allocationOther": "Other",
+  "inv.holdingsTitle": "Your securities",
+  "inv.addSecurity": "Add security",
+  "inv.overviewEmpty.title": "Start investing",
+  "inv.overviewEmpty.desc":
+    "Add your first security — value, return and profit/loss are calculated and refreshed automatically. Not sure where to start? Open Market and pick securities for your budget.",
+  "inv.overviewEmpty.cta": "Add your first security",
+  "inv.overviewEmpty.toMarket": "Pick by budget",
   "inv.toast.enterBudget": "Enter an investment budget amount",
   "inv.toast.noMatch":
     "Couldn't pick securities — increase the budget or relax the risk constraint.",

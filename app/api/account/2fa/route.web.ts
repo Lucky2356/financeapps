@@ -34,44 +34,55 @@ export async function POST(request: NextRequest) {
     if (!limit.ok) return tooManyRequests(limit.retryAfter);
 
     const db = requirePrisma();
-    const body = (await request.json()) as { action?: string };
 
-    if (body.action === "setup") {
-      const secret = generateTotpSecret();
-      await db.user.update({
-        where: { id: user.id },
-        data: { twoFactorSecret: secret, twoFactorEnabled: false }
-      });
-      const otpauth = totpKeyUri(user.email, secret);
-      const qr = await QRCode.toDataURL(otpauth);
-      return NextResponse.json({ secret, otpauth, qr });
+    // Validate the request against a fixed schema so the branch taken is driven
+    // by an allow-listed action — never by a raw user-controlled string — and
+    // each action carries exactly the fields it needs.
+    const parsed = z
+      .discriminatedUnion("action", [
+        z.object({ action: z.literal("setup") }),
+        z.object({ action: z.literal("enable"), code: z.string().trim().min(6) }),
+        z.object({ action: z.literal("disable"), password: z.string().min(1) })
+      ])
+      .safeParse(await request.json());
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Неизвестное действие." }, { status: 400 });
     }
+    const data = parsed.data;
 
-    if (body.action === "enable") {
-      const { code } = z.object({ code: z.string().trim().min(6) }).parse(body);
-      if (!user.twoFactorSecret) {
-        return NextResponse.json({ error: "Сначала начните настройку 2FA." }, { status: 400 });
+    switch (data.action) {
+      case "setup": {
+        const secret = generateTotpSecret();
+        await db.user.update({
+          where: { id: user.id },
+          data: { twoFactorSecret: secret, twoFactorEnabled: false }
+        });
+        const otpauth = totpKeyUri(user.email, secret);
+        const qr = await QRCode.toDataURL(otpauth);
+        return NextResponse.json({ secret, otpauth, qr });
       }
-      if (!verifyTotp(code, user.twoFactorSecret)) {
-        return NextResponse.json({ error: "Неверный код. Попробуйте ещё раз." }, { status: 400 });
+      case "enable": {
+        if (!user.twoFactorSecret) {
+          return NextResponse.json({ error: "Сначала начните настройку 2FA." }, { status: 400 });
+        }
+        if (!verifyTotp(data.code, user.twoFactorSecret)) {
+          return NextResponse.json({ error: "Неверный код. Попробуйте ещё раз." }, { status: 400 });
+        }
+        await db.user.update({ where: { id: user.id }, data: { twoFactorEnabled: true } });
+        return NextResponse.json({ enabled: true });
       }
-      await db.user.update({ where: { id: user.id }, data: { twoFactorEnabled: true } });
-      return NextResponse.json({ enabled: true });
+      case "disable": {
+        if (!user.passwordHash || !(await verifyPassword(data.password, user.passwordHash))) {
+          return NextResponse.json({ error: "Пароль неверен." }, { status: 400 });
+        }
+        await db.user.update({
+          where: { id: user.id },
+          data: { twoFactorEnabled: false, twoFactorSecret: null }
+        });
+        return NextResponse.json({ enabled: false });
+      }
     }
-
-    if (body.action === "disable") {
-      const { password } = z.object({ password: z.string().min(1) }).parse(body);
-      if (!user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
-        return NextResponse.json({ error: "Пароль неверен." }, { status: 400 });
-      }
-      await db.user.update({
-        where: { id: user.id },
-        data: { twoFactorEnabled: false, twoFactorSecret: null }
-      });
-      return NextResponse.json({ enabled: false });
-    }
-
-    return NextResponse.json({ error: "Неизвестное действие." }, { status: 400 });
   } catch (error) {
     return apiErrorResponse(error, "Не удалось обновить настройки 2FA.");
   }
