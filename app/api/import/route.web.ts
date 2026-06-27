@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getImportPageData } from "@/lib/data";
 import { apiErrorResponse } from "@/lib/api/route-errors";
+import { assertSameOrigin } from "@/lib/api/csrf";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { requirePrisma } from "@/lib/prisma";
 import { findCurrentUser } from "@/lib/auth/current-user";
@@ -49,6 +50,9 @@ async function findOrCreateImportCategory(
 
 export async function POST(request: NextRequest) {
   try {
+    const crossOrigin = assertSameOrigin(request);
+    if (crossOrigin) return crossOrigin;
+
     const db = requirePrisma();
     const user = await findCurrentUser();
     if (!user) return NextResponse.json({ error: "Требуется вход." }, { status: 401 });

@@ -4,6 +4,24 @@ import { readFileSync } from "node:fs";
 // public env var so the UI never drifts from the real release version.
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
+const isDev = process.env.NODE_ENV !== "production";
+// Content-Security-Policy: main XSS defense. Next.js injects inline bootstrap
+// scripts/styles without a nonce, so 'unsafe-inline' is required; 'unsafe-eval'
+// + ws: are dev-only (HMR/React Refresh). All external data (MOEX quotes,
+// Anthropic) is fetched server-side, so the browser only needs connect-src 'self'.
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "style-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  `connect-src 'self'${isDev ? " ws:" : ""}`
+].join("; ");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
@@ -31,7 +49,7 @@ const nextConfig = {
       {
         source: "/(.*)",
         headers: [
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // HSTS: enforce HTTPS once served over TLS. Honored only over HTTPS and
@@ -42,7 +60,8 @@ const nextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()"
           },
-          { key: "X-XSS-Protection", value: "1; mode=block" }
+          { key: "X-XSS-Protection", value: "1; mode=block" },
+          { key: "Content-Security-Policy", value: contentSecurityPolicy }
         ]
       }
     ]

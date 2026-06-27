@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { findCurrentUser } from "@/lib/auth/current-user";
 import { apiErrorResponse } from "@/lib/api/route-errors";
+import { assertSameOrigin } from "@/lib/api/csrf";
 import { clientIp, rateLimit, tooManyRequests } from "@/lib/api/rate-limit";
 import { requirePrisma } from "@/lib/prisma";
 import { UserBackupService } from "@/services/backup/UserBackupService";
@@ -28,6 +29,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const crossOrigin = assertSameOrigin(request);
+    if (crossOrigin) return crossOrigin;
+
     const user = await findCurrentUser();
     if (!user) return NextResponse.json({ error: "Требуется вход." }, { status: 401 });
 
