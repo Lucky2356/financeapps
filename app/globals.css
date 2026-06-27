@@ -4,6 +4,10 @@
 
 @layer base {
   :root {
+    /* Make native controls (the <select> dropdown popup, its arrow, date
+       pickers, scrollbars) follow the app theme. Without this they render in the
+       OS light scheme — a jarring white list inside the dark app. */
+    color-scheme: light;
     --background: 210 30% 97%;
     --foreground: 224 28% 14%;
     --card: 0 0% 100%;
@@ -39,6 +43,7 @@
   }
 
   .dark {
+    color-scheme: dark;
     --background: 222 28% 9%;
     --foreground: 210 24% 93%;
     --card: 220 24% 13%;
