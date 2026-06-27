@@ -8,6 +8,25 @@ export async function register() {
   if (!dsn) return;
   if (process.env.NEXT_RUNTIME === "nodejs" || process.env.NEXT_RUNTIME === "edge") {
     const Sentry = await import("@sentry/nextjs");
-    Sentry.init({ dsn, tracesSampleRate: 0.1 });
+    Sentry.init({
+      dsn,
+      tracesSampleRate: 0.1,
+      // This app handles financial data (152-ФЗ). Never ship PII/request bodies
+      // to the Sentry SaaS: strip request payloads, sensitive headers, cookies,
+      // and the user email before the event leaves the server.
+      sendDefaultPii: false,
+      beforeSend(event) {
+        if (event.request) {
+          delete event.request.data;
+          delete event.request.cookies;
+          if (event.request.headers) {
+            delete event.request.headers.cookie;
+            delete event.request.headers.authorization;
+          }
+        }
+        if (event.user?.email) event.user.email = "[redacted]";
+        return event;
+      }
+    });
   }
 }

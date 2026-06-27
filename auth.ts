@@ -28,11 +28,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       authorize: async (raw, request) => {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
-        // Throttle login attempts per IP to blunt brute-force / credential
-        // stuffing. Over the limit fails like a wrong password (no info leak).
-        const ip = request ? clientIp(request) : "unknown";
-        if (!rateLimit(`login:${ip}`, 10, 60_000).ok) return null;
         const email = parsed.data.email.toLowerCase();
+        // Throttle login attempts on two axes to blunt brute-force / credential
+        // stuffing: per IP (one host hammering many accounts) and per email (a
+        // distributed botnet targeting one account from many IPs). Over either
+        // limit fails like a wrong password — no info leak / enumeration.
+        const ip = request ? clientIp(request) : "unknown";
+        if (!rateLimit(`login:ip:${ip}`, 10, 60_000).ok) return null;
+        if (!rateLimit(`login:email:${email}`, 10, 60_000).ok) return null;
         const user = await requirePrisma().user.findUnique({ where: { email } });
         if (!user?.passwordHash) return null;
         const ok = await verifyPassword(parsed.data.password, user.passwordHash);

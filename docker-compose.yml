@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-financial_assistant}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}
     # No host port mapping in production — the DB is reachable only on the
     # internal compose network. (Add a mapping only if you need external access.)
     expose:
@@ -30,7 +30,7 @@ services:
     # Apply migrations, then seed reference data (risk profiles) idempotently.
     command: ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/seed-reference.ts"]
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-financial_assistant}
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,7 +54,7 @@ services:
       - "3000"
     environment:
       # connection_limit keeps Prisma's pool modest on a small single instance.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-financial_assistant}?connection_limit=10
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-financial_assistant}?connection_limit=10
       # NextAuth: required secret + trust the Host header (accessed by IP/proxy).
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
       AUTH_TRUST_HOST: "true"
@@ -89,7 +89,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-financial_assistant}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}

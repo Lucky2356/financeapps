@@ -2,6 +2,13 @@ import Papa from "papaparse";
 
 import type { TransactionRow } from "@/types/finance";
 
+// CSV formula-injection guard: a spreadsheet treats a cell starting with = + - @
+// (or a leading tab/CR) as a formula, so a description like `=cmd|'/c calc'!A1`
+// would execute on open. Prefix such values with a single quote to neutralize them.
+function escapeCsvField(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 export class ExportService {
   transactionsToCsv(transactions: TransactionRow[]) {
     const csv = Papa.unparse(
@@ -9,9 +16,9 @@ export class ExportService {
         date: transaction.date,
         amount: transaction.type === "INCOME" ? transaction.amount : -transaction.amount,
         type: transaction.type,
-        category: transaction.category.label,
-        account: transaction.account.label,
-        description: transaction.description ?? ""
+        category: escapeCsvField(transaction.category.label),
+        account: escapeCsvField(transaction.account.label),
+        description: escapeCsvField(transaction.description ?? "")
       }))
     );
     return "﻿" + csv;

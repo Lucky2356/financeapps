@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_IMPORT_ROWS,
   accountSchema,
   budgetSchema,
   categoryInputSchema,
+  csvImportSchema,
   liabilitySchema,
   portfolioPositionSchema,
   recurringTransactionSchema,
@@ -12,6 +14,26 @@ import {
   transactionSchema,
   transferSchema
 } from "@/lib/validations";
+
+describe("csvImportSchema (DoS bounds)", () => {
+  const base = { dateColumn: "date", amountColumn: "amount" };
+
+  it("accepts a small payload", () => {
+    const result = csvImportSchema.safeParse({ ...base, rows: JSON.stringify([{ a: 1 }]) });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an oversized rows payload (> ~8 MB)", () => {
+    const huge = "x".repeat(8_000_001);
+    const result = csvImportSchema.safeParse({ ...base, rows: huge });
+    expect(result.success).toBe(false);
+  });
+
+  it("exposes a sane MAX_IMPORT_ROWS ceiling", () => {
+    expect(MAX_IMPORT_ROWS).toBeGreaterThan(0);
+    expect(MAX_IMPORT_ROWS).toBeLessThanOrEqual(50_000);
+  });
+});
 
 describe("transactionSchema", () => {
   const valid = {
