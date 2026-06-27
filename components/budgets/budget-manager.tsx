@@ -21,6 +21,13 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -174,17 +181,18 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
           >
             <ChevronLeft className="size-4" />
           </Button>
-          <select
-            value={selectedMonth}
-            onChange={(event) => navigateToMonth(event.target.value)}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
-          >
-            {monthOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <Select value={selectedMonth} onValueChange={navigateToMonth}>
+            <SelectTrigger className="h-9 w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             size="icon"

@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 // Categorization rules live in the local profile state (desktop) or the Rule
 // table (web) — both behind the /rules endpoint, so the UI is identical.
@@ -98,17 +105,18 @@ export function RulesManager() {
           </div>
           <div className="space-y-2">
             <Label>{t("common.category")}</Label>
-            <select
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            >
-              {data.categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {data.categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button type="button" onClick={() => void addRule()} disabled={saving}>
             {t("common.add")}

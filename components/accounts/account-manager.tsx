@@ -26,6 +26,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -290,16 +297,17 @@ function AccountDialog({
         </div>
         <div className="space-y-2">
           <Label>{t("common.type")}</Label>
-          <select
-            name="type"
-            defaultValue={account?.type ?? "DEBIT_CARD"}
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="CASH">{t("accountType.CASH")}</option>
-            <option value="DEBIT_CARD">{t("accountType.DEBIT_CARD")}</option>
-            <option value="SAVINGS">{t("accountType.SAVINGS")}</option>
-            <option value="BROKERAGE">{t("accountType.BROKERAGE")}</option>
-          </select>
+          <Select name="type" defaultValue={account?.type ?? "DEBIT_CARD"}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="CASH">{t("accountType.CASH")}</SelectItem>
+              <SelectItem value="DEBIT_CARD">{t("accountType.DEBIT_CARD")}</SelectItem>
+              <SelectItem value="SAVINGS">{t("accountType.SAVINGS")}</SelectItem>
+              <SelectItem value="BROKERAGE">{t("accountType.BROKERAGE")}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2">
           <Label>{t("common.balance")}</Label>

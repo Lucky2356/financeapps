@@ -22,6 +22,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -463,58 +470,68 @@ function RecurringDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("tx.type")}</Label>
-            <select
+            <Select
               name="type"
               value={selectedType}
-              onChange={(event) => changeType(event.target.value as "INCOME" | "EXPENSE")}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              onValueChange={(value) => changeType(value as "INCOME" | "EXPENSE")}
             >
-              <option value="EXPENSE">{t("tx.type.expense")}</option>
-              <option value="INCOME">{t("tx.type.income")}</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
+                <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>{t("common.category")}</Label>
-            <select
+            <Select
               name="categoryId"
-              value={effectiveCategoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              value={effectiveCategoryId || undefined}
+              onValueChange={setCategoryId}
             >
-              {matchingCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {matchingCategories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>{t("common.account")}</Label>
-            <select
-              name="accountId"
-              defaultValue={recurring?.account.id ?? data.accounts[0]?.id}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            >
-              {data.accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
+            <Select name="accountId" defaultValue={recurring?.account.id ?? data.accounts[0]?.id}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {data.accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>{t("rec.dialog.period")}</Label>
-            <select
-              name="frequency"
-              defaultValue={recurring?.frequency ?? "MONTHLY"}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            >
-              {FREQUENCY_VALUES.map((value) => (
-                <option key={value} value={value}>
-                  {t(`recFreq.${value}`)}
-                </option>
-              ))}
-            </select>
+            <Select name="frequency" defaultValue={recurring?.frequency ?? "MONTHLY"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FREQUENCY_VALUES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(`recFreq.${value}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>{t("rec.dialog.nextDate")}</Label>

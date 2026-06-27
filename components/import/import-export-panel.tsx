@@ -24,6 +24,14 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  ALL_OPTION,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -832,19 +840,23 @@ function ColumnSelect({
 }) {
   const { t } = useI18n();
   return (
-    <select
+    <Select
       name={name}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
       required={required}
-      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+      value={value || ALL_OPTION}
+      onValueChange={(next) => onChange(next === ALL_OPTION ? "" : next)}
     >
-      <option value="">{t("imp.notSelected")}</option>
-      {fields.map((field) => (
-        <option key={field} value={field}>
-          {field}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL_OPTION}>{t("imp.notSelected")}</SelectItem>
+        {fields.map((field) => (
+          <SelectItem key={field} value={field}>
+            {field}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

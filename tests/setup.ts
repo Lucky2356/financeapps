@@ -17,3 +17,11 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   }
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof globalThis.ResizeObserver;
 }
+
+// jsdom lacks the pointer-capture + scroll APIs Radix Select uses when opening.
+// Stub them so dropdown interactions work in component tests.
+if (typeof Element !== "undefined") {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+}

@@ -13,6 +13,13 @@ import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import type { AiParseContext, AiTransactionDraft } from "@/lib/ai/parse-transaction";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -163,20 +170,24 @@ export function AiQuickAdd() {
           <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs">{t("tx.type")}</Label>
-              <select
+              <Select
                 value={draft.type}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDraft({
                     ...draft,
-                    type: e.target.value as AiTransactionDraft["type"],
+                    type: value as AiTransactionDraft["type"],
                     categoryId: null
                   })
                 }
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
               >
-                <option value="EXPENSE">{t("tx.type.expense")}</option>
-                <option value="INCOME">{t("tx.type.income")}</option>
-              </select>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
+                  <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t("common.amount")}</Label>
@@ -191,33 +202,39 @@ export function AiQuickAdd() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t("common.category")}</Label>
-              <select
-                value={draft.categoryId ?? ""}
-                onChange={(e) => setDraft({ ...draft, categoryId: e.target.value || null })}
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              <Select
+                value={draft.categoryId ?? undefined}
+                onValueChange={(value) => setDraft({ ...draft, categoryId: value || null })}
               >
-                <option value="">{t("ai.selectCategory")}</option>
-                {categoriesForType.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder={t("ai.selectCategory")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoriesForType.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t("common.account")}</Label>
-              <select
-                value={draft.accountId ?? ""}
-                onChange={(e) => setDraft({ ...draft, accountId: e.target.value || null })}
-                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+              <Select
+                value={draft.accountId ?? undefined}
+                onValueChange={(value) => setDraft({ ...draft, accountId: value || null })}
               >
-                <option value="">{t("ai.selectAccount")}</option>
-                {activeAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder={t("ai.selectAccount")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeAccounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t("common.date")}</Label>

@@ -6,6 +6,18 @@ import { describe, expect, it } from "vitest";
 import { ForecastEventsCard } from "@/components/forecast/forecast-events-card";
 import type { ForecastEvent } from "@/types/finance";
 
+// The filters are now themed (Radix) dropdowns, not native <select>s, so we open
+// the trigger by its aria-label and click the option (pointer checks disabled for
+// jsdom).
+async function pickOption(
+  user: ReturnType<typeof userEvent.setup>,
+  triggerLabel: string,
+  optionName: string
+) {
+  await user.click(screen.getByLabelText(triggerLabel));
+  await user.click(await screen.findByRole("option", { name: optionName }));
+}
+
 // Titles are intentionally distinct from category names so text queries don't
 // match the filter dropdown <option>s.
 const events: ForecastEvent[] = [
@@ -40,7 +52,7 @@ describe("ForecastEventsCard", () => {
     const user = userEvent.setup();
     render(<ForecastEventsCard events={events} currency="RUB" />);
 
-    await user.selectOptions(screen.getByLabelText("Фильтр по счёту"), "Наличные");
+    await pickOption(user, "Фильтр по счёту", "Наличные");
 
     expect(screen.queryByText("Аванс")).not.toBeInTheDocument();
     expect(screen.getByText("Закупка")).toBeInTheDocument();
@@ -50,8 +62,8 @@ describe("ForecastEventsCard", () => {
     const user = userEvent.setup();
     render(<ForecastEventsCard events={events} currency="RUB" />);
 
-    await user.selectOptions(screen.getByLabelText("Фильтр по счёту"), "Карта");
-    await user.selectOptions(screen.getByLabelText("Фильтр по категории"), "Еда");
+    await pickOption(user, "Фильтр по счёту", "Карта");
+    await pickOption(user, "Фильтр по категории", "Еда");
 
     expect(screen.getByText("Нет событий по выбранным фильтрам.")).toBeInTheDocument();
   });

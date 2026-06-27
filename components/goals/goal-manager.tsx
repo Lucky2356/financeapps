@@ -26,6 +26,13 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 
@@ -321,17 +328,18 @@ function DepositDialog({
           <div className="space-y-2">
             <Label>{t("goal.deposit.fromAccount")}</Label>
             {accounts.length > 0 ? (
-              <select
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name} — {formatCurrency(account.balance, currency)}
-                  </option>
-                ))}
-              </select>
+              <Select value={accountId} onValueChange={setAccountId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name} — {formatCurrency(account.balance, currency)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <p className="text-xs text-muted-foreground">{t("goal.deposit.noAccounts")}</p>
             )}
