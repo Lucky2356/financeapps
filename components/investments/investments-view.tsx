@@ -122,11 +122,35 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Real-time updates: keep prices fresh while the page is open.
+  // Real-time updates: keep prices fresh while the page is VISIBLE. Polling is
+  // paused when the tab/window is hidden (other tab, minimized desktop) to save
+  // network and battery, and resumes — with an immediate refresh — on return.
   useEffect(() => {
     if (!hasMarketData) return;
-    const id = setInterval(() => void refreshMarketPrices(true), REFRESH_INTERVAL_MS);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (id === null) id = setInterval(() => void refreshMarketPrices(true), REFRESH_INTERVAL_MS);
+    };
+    const stop = () => {
+      if (id !== null) {
+        clearInterval(id);
+        id = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refreshMarketPrices(true);
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [hasMarketData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function computeSuggestions() {
