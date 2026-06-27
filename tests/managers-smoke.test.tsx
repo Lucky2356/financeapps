@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BudgetsPageData, RecurringTransactionsPageData } from "@/lib/data";
@@ -80,8 +80,11 @@ describe("manager smoke tests", () => {
     expect(await screen.findByText("Плановых операций пока нет")).toBeInTheDocument();
   });
 
-  it("InvestmentsView renders the suggestion card", async () => {
+  it("InvestmentsView shows tabs and the picker on the Подбор tab", async () => {
     render(<InvestmentsView data={investmentData} />);
+    // Redesigned screen is tabbed; the securities picker now lives under its own
+    // tab instead of at the top of a long scroll.
+    fireEvent.click(screen.getByRole("button", { name: "Подбор" }));
     expect(await screen.findByText("Подбор бумаг для портфеля")).toBeInTheDocument();
   });
 });
