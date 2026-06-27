@@ -1,24 +1,27 @@
 "use client";
 
 import {
-  ChevronDown,
-  Edit2,
+  LayoutDashboard,
   LineChart,
+  PieChart,
   Plus,
   RefreshCw,
   ShieldAlert,
   Star,
-  Trash2
+  Store
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { PortfolioStructureChart } from "@/components/charts/lazy";
 import { RecommendationList } from "@/components/recommendation-list";
-import { InlineStockChart } from "@/components/investments/inline-stock-chart";
+import { AllocationBar } from "@/components/investments/allocation-bar";
+import { HoldingCard } from "@/components/investments/holding-card";
+import { PortfolioHero } from "@/components/investments/portfolio-hero";
 import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
 import { SecuritySearch } from "@/components/investments/security-search";
+import { WatchlistCard } from "@/components/investments/watchlist-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
@@ -41,18 +44,10 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import {
@@ -74,11 +69,12 @@ const riskVariant = {
   HIGH: "destructive"
 } as const;
 
+// Three plain tabs with icons: Overview (everything that matters at a glance),
+// Market (search + watchlist + picker) and Analytics (deeper breakdowns).
 const TABS = [
-  { id: "portfolio", labelKey: "inv.tab.portfolio" },
-  { id: "watchlist", labelKey: "inv.tab.watchlist" },
-  { id: "analytics", labelKey: "inv.tab.analytics" },
-  { id: "suggest", labelKey: "inv.tab.suggest" }
+  { id: "overview", labelKey: "inv.tab.overview", icon: LayoutDashboard },
+  { id: "market", labelKey: "inv.tab.market", icon: Store },
+  { id: "analytics", labelKey: "inv.tab.analytics", icon: PieChart }
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -98,15 +94,19 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   const [suggestions, setSuggestions] = useState<InvestmentSuggestion[]>([]);
   const [suggested, setSuggested] = useState(false);
   // Active tab + the single security whose inline price chart is expanded.
-  const [activeTab, setActiveTab] = useState<TabId>("portfolio");
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
   const toggleExpand = (ticker: string) =>
     setExpandedTicker((prev) => (prev === ticker ? null : ticker));
+  const selectTab = (id: TabId) => {
+    setActiveTab(id);
+    setExpandedTicker(null);
+  };
 
   const hasMarketData = data.watchlist.length > 0 || data.portfolio.length > 0;
 
   // Day-change% per ticker, gathered from the curated board + watchlist, so the
-  // portfolio summary can show today's move on held positions (best-effort).
+  // portfolio hero/cards can show today's move on held positions (best-effort).
   const dayChangeByTicker = new Map<string, number>();
   for (const s of [...data.securities, ...data.watchlist])
     dayChangeByTicker.set(s.ticker, s.changeDay);
@@ -261,532 +261,253 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3 rounded-lg border border-info/30 bg-info/12 p-4 text-sm">
-        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-info-foreground" />
-        <p className="text-muted-foreground">{t("inv.pageDisclaimer")}</p>
-      </div>
-
-      {/* Portfolio summary — the first thing an investor wants: value + P/L. */}
-      {data.portfolio.length > 0 ? (
-        <PortfolioSummary
-          portfolio={data.portfolio}
-          currency={data.currency}
-          dayChangeByTicker={dayChangeByTicker}
-        />
-      ) : null}
-
-      {/* Tabs cut the endless scroll: Portfolio / Watchlist / Analytics / Picker. */}
+      {/* Tabs cut the endless scroll: Overview / Market / Analytics. */}
       <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/30 p-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "flex-1 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              activeTab === tab.id
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {t(tab.labelKey)}
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => selectTab(tab.id)}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className="size-4" />
+              {t(tab.labelKey)}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Portfolio ─────────────────────────────────────────────────────── */}
-      {activeTab === "portfolio" ? (
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>{t("inv.portfolioTitle")}</CardTitle>
-            <Dialog open={addPositionOpen} onOpenChange={setAddPositionOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="size-4" />
-                  {t("inv.addPosition")}
-                </Button>
-              </DialogTrigger>
-              <PositionDialog
-                title={t("inv.addPosition")}
-                description={t("inv.addPosition.desc")}
-                data={data}
-                currency={data.currency}
-                onSubmit={submitPosition}
-              />
-            </Dialog>
-          </CardHeader>
-          <CardContent>
-            {data.portfolio.length === 0 ? (
+      {/* ── Overview — value, today's move, trend, allocation, holdings ─────── */}
+      {activeTab === "overview" ? (
+        data.portfolio.length === 0 ? (
+          <Card>
+            <CardContent className="py-10">
               <EmptyState
                 icon={LineChart}
-                title={t("inv.portfolioEmpty.title")}
-                description={t("inv.portfolioEmpty.desc")}
+                title={t("inv.overviewEmpty.title")}
+                description={t("inv.overviewEmpty.desc")}
                 action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button onClick={() => setAddPositionOpen(true)}>
+                      <Plus className="size-4" />
+                      {t("inv.overviewEmpty.cta")}
+                    </Button>
+                    <Button variant="outline" onClick={() => selectTab("market")}>
+                      {t("inv.overviewEmpty.toMarket")}
+                    </Button>
+                  </div>
+                }
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-5">
+            <PortfolioHero
+              portfolio={data.portfolio}
+              currency={data.currency}
+              dayChangeByTicker={dayChangeByTicker}
+            />
+            <PortfolioValueChart portfolio={data.portfolio} />
+            <AllocationBar data={data.structure} />
+
+            <Card>
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle>{t("inv.holdingsTitle")}</CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
+                    <RefreshCw className="size-4" />
+                    {t("inv.refreshMarket")}
+                  </Button>
                   <Button onClick={() => setAddPositionOpen(true)}>
                     <Plus className="size-4" />
-                    {t("inv.addPosition")}
+                    {t("inv.addSecurity")}
                   </Button>
-                }
-              />
-            ) : (
-              <>
-                <div className="hidden md:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("inv.col.ticker")}</TableHead>
-                        <TableHead>{t("inv.col.sector")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.qty")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.avg")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.current")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.value")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.pnl")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.return")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.share")}</TableHead>
-                        <TableHead className="w-28 text-right">{t("common.actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.portfolio.map((position) => {
-                        const cost = position.quantity * position.averageBuyPrice;
-                        const returnPct = cost > 0 ? (position.pnl / cost) * 100 : 0;
-                        const expanded = expandedTicker === position.ticker;
-                        return (
-                          <Fragment key={position.ticker}>
-                            <TableRow
-                              className="cursor-pointer"
-                              onClick={() => toggleExpand(position.ticker)}
-                              title={t("inv.expandChart")}
-                            >
-                              <TableCell className="font-semibold">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <ChevronDown
-                                    className={cn(
-                                      "size-4 shrink-0 text-muted-foreground transition-transform",
-                                      expanded && "rotate-180"
-                                    )}
-                                  />
-                                  {position.ticker}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">
-                                {position.sector}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {position.quantity.toLocaleString()}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(position.averageBuyPrice, data.currency)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(position.currentPrice, data.currency)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(position.currentValue, data.currency)}
-                              </TableCell>
-                              <TableCell
-                                className={
-                                  position.pnl >= 0
-                                    ? "text-right text-success-foreground"
-                                    : "text-right text-destructive"
-                                }
-                              >
-                                {formatCurrency(position.pnl, data.currency)}
-                              </TableCell>
-                              <TableCell
-                                className={
-                                  returnPct >= 0
-                                    ? "text-right text-success-foreground"
-                                    : "text-right text-destructive"
-                                }
-                              >
-                                {returnPct >= 0 ? "+" : ""}
-                                {returnPct.toFixed(1)}%
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatPercent(position.share)}
-                              </TableCell>
-                              <TableCell onClick={(event) => event.stopPropagation()}>
-                                <div className="flex justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    title={t("inv.editPosition")}
-                                    aria-label={t("inv.editPosition")}
-                                    onClick={() => setEditingPosition(position)}
-                                  >
-                                    <Edit2 className="size-4" />
-                                  </Button>
-                                  <form
-                                    onSubmit={(event) => {
-                                      event.preventDefault();
-                                      void removePosition(position.ticker);
-                                    }}
-                                  >
-                                    <Button
-                                      type="submit"
-                                      variant="ghost"
-                                      size="icon"
-                                      title={t("inv.removePosition")}
-                                      aria-label={t("inv.removePosition")}
-                                    >
-                                      <Trash2 className="size-4 text-destructive" />
-                                    </Button>
-                                  </form>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                            {expanded ? (
-                              <TableRow className="hover:bg-transparent">
-                                <TableCell colSpan={10} className="p-2">
-                                  <InlineStockChart
-                                    seed={{
-                                      ticker: position.ticker,
-                                      name: position.name,
-                                      price: position.currentPrice,
-                                      changeDay: dayChangeByTicker.get(position.ticker),
-                                      sector: position.sector
-                                    }}
-                                    currency={data.currency}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                            ) : null}
-                          </Fragment>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
                 </div>
-
-                <div className="grid gap-3 md:hidden">
-                  {data.portfolio.map((position) => {
-                    const expanded = expandedTicker === position.ticker;
-                    return (
-                      <div key={position.ticker} className="rounded-lg border p-4">
-                        <button
-                          type="button"
-                          className="flex w-full items-start justify-between gap-2 text-left"
-                          onClick={() => toggleExpand(position.ticker)}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <ChevronDown
-                              className={cn(
-                                "size-4 shrink-0 text-muted-foreground transition-transform",
-                                expanded && "rotate-180"
-                              )}
-                            />
-                            <div>
-                              <p className="font-semibold">{position.ticker}</p>
-                              <p className="text-sm text-muted-foreground">{position.name}</p>
-                            </div>
-                          </div>
-                          <p className="font-semibold">{formatPercent(position.share)}</p>
-                        </button>
-                        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <p className="text-xs text-muted-foreground">{t("inv.col.value")}</p>
-                            <p className="font-semibold">
-                              {formatCurrency(position.currentValue, data.currency)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">{t("inv.col.pnl")}</p>
-                            <p
-                              className={
-                                position.pnl >= 0
-                                  ? "font-semibold text-success-foreground"
-                                  : "font-semibold text-destructive"
-                              }
-                            >
-                              {formatCurrency(position.pnl, data.currency)}
-                            </p>
-                          </div>
-                        </div>
-                        {expanded ? (
-                          <div className="mt-3">
-                            <InlineStockChart
-                              seed={{
-                                ticker: position.ticker,
-                                name: position.name,
-                                price: position.currentPrice,
-                                changeDay: dayChangeByTicker.get(position.ticker),
-                                sector: position.sector
-                              }}
-                              currency={data.currency}
-                            />
-                          </div>
-                        ) : null}
-                        <div className="mt-4 flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setEditingPosition(position)}
-                          >
-                            <Edit2 className="size-4" />
-                            {t("common.edit")}
-                          </Button>
-                          <form
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void removePosition(position.ticker);
-                            }}
-                          >
-                            <Button type="submit" variant="outline" size="sm">
-                              <Trash2 className="size-4 text-destructive" />
-                              {t("common.delete")}
-                            </Button>
-                          </form>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {data.portfolio.map((position) => (
+                  <HoldingCard
+                    key={position.ticker}
+                    position={position}
+                    currency={data.currency}
+                    dayChange={dayChangeByTicker.get(position.ticker)}
+                    expanded={expandedTicker === position.ticker}
+                    onToggle={() => toggleExpand(position.ticker)}
+                    onEdit={() => setEditingPosition(position)}
+                    onRemove={() => void removePosition(position.ticker)}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        )
       ) : null}
 
-      {/* ── Watchlist ─────────────────────────────────────────────────────── */}
-      {activeTab === "watchlist" ? (
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>
-              {t("inv.watchlistTitle")}
-              {hasMarketData ? (
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  {t("inv.pricesAuto")}
-                </span>
-              ) : null}
-            </CardTitle>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
-                <RefreshCw className="size-4" />
-                {t("inv.refreshMarket")}
-              </Button>
-              <Dialog open={watchlistOpen} onOpenChange={setWatchlistOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Plus className="size-4" />
-                    {t("inv.addWatchlist")}
-                  </Button>
-                </DialogTrigger>
-                <WatchlistDialog currency={data.currency} onAddTicker={addWatchlistTicker} />
-              </Dialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {data.watchlist.length === 0 ? (
-              <EmptyState
-                icon={Star}
-                title={t("inv.watchlistEmpty.title")}
-                description={t("inv.watchlistEmpty.desc")}
-                action={
-                  <Button variant="outline" onClick={() => setWatchlistOpen(true)}>
-                    <Plus className="size-4" />
-                    {t("inv.addWatchlist")}
-                  </Button>
-                }
-              />
-            ) : (
-              <>
-                <div className="hidden md:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("inv.col.ticker")}</TableHead>
-                        <TableHead>{t("inv.col.name")}</TableHead>
-                        <TableHead>{t("inv.col.sector")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.price")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.day")}</TableHead>
-                        <TableHead className="text-right">{t("inv.col.30d")}</TableHead>
-                        <TableHead>{t("inv.col.risk")}</TableHead>
-                        <TableHead>{t("inv.col.comment")}</TableHead>
-                        <TableHead className="w-16 text-right"> </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.watchlist.map((security) => {
-                        const expanded = expandedTicker === security.ticker;
-                        return (
-                          <Fragment key={security.ticker}>
-                            <TableRow
-                              className="cursor-pointer"
-                              onClick={() => toggleExpand(security.ticker)}
-                              title={t("inv.expandChart")}
-                            >
-                              <TableCell className="font-semibold">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <ChevronDown
-                                    className={cn(
-                                      "size-4 shrink-0 text-muted-foreground transition-transform",
-                                      expanded && "rotate-180"
-                                    )}
-                                  />
-                                  {security.ticker}
-                                </span>
-                              </TableCell>
-                              <TableCell>{security.name}</TableCell>
-                              <TableCell className="text-muted-foreground">
-                                {security.sector}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(security.price, data.currency)}
-                              </TableCell>
-                              <TableCell
-                                className={
-                                  security.changeDay >= 0
-                                    ? "text-right text-success-foreground"
-                                    : "text-right text-destructive"
-                                }
-                              >
-                                {security.changeDay.toFixed(2)}%
-                              </TableCell>
-                              <TableCell
-                                className={
-                                  security.change30d >= 0
-                                    ? "text-right text-success-foreground"
-                                    : "text-right text-destructive"
-                                }
-                              >
-                                {security.change30d.toFixed(2)}%
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={riskVariant[security.risk]}>
-                                  {t(`riskLevel.${security.risk}`)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="max-w-96 text-muted-foreground">
-                                {security.comment}
-                              </TableCell>
-                              <TableCell
-                                className="text-right"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <form
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    void removeWatchlistItem(security.ticker);
-                                  }}
-                                >
-                                  <Button
-                                    type="submit"
-                                    variant="ghost"
-                                    size="icon"
-                                    title={t("inv.removeWatchlist")}
-                                    aria-label={t("inv.removeWatchlist")}
-                                  >
-                                    <Trash2 className="size-4 text-destructive" />
-                                  </Button>
-                                </form>
-                              </TableCell>
-                            </TableRow>
-                            {expanded ? (
-                              <TableRow className="hover:bg-transparent">
-                                <TableCell colSpan={9} className="p-2">
-                                  <InlineStockChart seed={security} currency={data.currency} />
-                                </TableCell>
-                              </TableRow>
-                            ) : null}
-                          </Fragment>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+      {/* ── Market — watchlist + search + picker ───────────────────────────── */}
+      {activeTab === "market" ? (
+        <div className="space-y-5">
+          <Card>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>
+                {t("inv.watchlistTitle")}
+                {hasMarketData ? (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {t("inv.pricesAuto")}
+                  </span>
+                ) : null}
+              </CardTitle>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
+                  <RefreshCw className="size-4" />
+                  {t("inv.refreshMarket")}
+                </Button>
+                <Dialog open={watchlistOpen} onOpenChange={setWatchlistOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <Plus className="size-4" />
+                      {t("inv.addWatchlist")}
+                    </Button>
+                  </DialogTrigger>
+                  <WatchlistDialog currency={data.currency} onAddTicker={addWatchlistTicker} />
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {data.watchlist.length === 0 ? (
+                <EmptyState
+                  icon={Star}
+                  title={t("inv.watchlistEmpty.title")}
+                  description={t("inv.watchlistEmpty.desc")}
+                  action={
+                    <Button variant="outline" onClick={() => setWatchlistOpen(true)}>
+                      <Plus className="size-4" />
+                      {t("inv.addWatchlist")}
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="grid gap-3">
+                  {data.watchlist.map((security) => (
+                    <WatchlistCard
+                      key={security.ticker}
+                      security={security}
+                      currency={data.currency}
+                      expanded={expandedTicker === security.ticker}
+                      onToggle={() => toggleExpand(security.ticker)}
+                      onRemove={() => void removeWatchlistItem(security.ticker)}
+                    />
+                  ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
 
-                <div className="grid gap-3 md:hidden">
-                  {data.watchlist.map((security) => {
-                    const expanded = expandedTicker === security.ticker;
-                    return (
-                      <div key={security.ticker} className="rounded-lg border p-4">
-                        <button
-                          type="button"
-                          className="flex w-full items-start justify-between gap-3 text-left"
-                          onClick={() => toggleExpand(security.ticker)}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <ChevronDown
-                              className={cn(
-                                "size-4 shrink-0 text-muted-foreground transition-transform",
-                                expanded && "rotate-180"
-                              )}
-                            />
-                            <div>
-                              <p className="font-semibold">{security.ticker}</p>
-                              <p className="text-sm text-muted-foreground">{security.name}</p>
-                              <p className="text-xs text-muted-foreground">{security.sector}</p>
-                            </div>
-                          </div>
-                          <Badge variant={riskVariant[security.risk]}>
-                            {t(`riskLevel.${security.risk}`)}
+          {/* Picker (suggestions) — a helper to build a diversified portfolio. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("inv.suggestTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">{t("inv.suggestIntro")}</p>
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="invest-budget">{t("inv.budgetLabel")}</Label>
+                  <Input
+                    id="invest-budget"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={budget}
+                    onChange={(e) => setBudget(e.target.value)}
+                    placeholder={t("inv.budgetPlaceholder")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="invest-risk">{t("inv.riskAllowed")}</Label>
+                  <Select
+                    value={riskCode}
+                    onValueChange={(value) => setRiskCode(value as typeof riskCode)}
+                  >
+                    <SelectTrigger id="invest-risk">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RISK_CODES.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {t(`riskProfile.${option.value}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="button" onClick={computeSuggestions}>
+                  {t("inv.suggestBtn")}
+                </Button>
+              </div>
+
+              {suggested && suggestions.length > 0 ? (
+                <div className="space-y-2">
+                  {suggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.ticker}
+                      className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">
+                          {suggestion.ticker} · {suggestion.name}
+                          <Badge
+                            variant={riskVariant[suggestion.risk]}
+                            className="ml-2 align-middle text-[11px]"
+                          >
+                            {t(`riskLevel.${suggestion.risk}`)}
                           </Badge>
-                        </button>
-                        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                          <div>
-                            <p className="text-xs text-muted-foreground">{t("inv.col.price")}</p>
-                            <p className="font-semibold">
-                              {formatCurrency(security.price, data.currency)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">{t("inv.col.day")}</p>
-                            <p
-                              className={
-                                security.changeDay >= 0
-                                  ? "font-semibold text-success-foreground"
-                                  : "font-semibold text-destructive"
-                              }
-                            >
-                              {security.changeDay.toFixed(2)}%
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">{t("inv.col.30d")}</p>
-                            <p
-                              className={
-                                security.change30d >= 0
-                                  ? "font-semibold text-success-foreground"
-                                  : "font-semibold text-destructive"
-                              }
-                            >
-                              {security.change30d.toFixed(2)}%
-                            </p>
-                          </div>
-                        </div>
-                        {expanded ? (
-                          <div className="mt-3">
-                            <InlineStockChart seed={security} currency={data.currency} />
-                          </div>
-                        ) : null}
-                        <p className="mt-3 text-sm text-muted-foreground">{security.comment}</p>
-                        <form
-                          className="mt-3"
-                          onSubmit={(event) => {
-                            event.preventDefault();
-                            void removeWatchlistItem(security.ticker);
-                          }}
-                        >
-                          <Button type="submit" variant="outline" size="sm">
-                            <Trash2 className="size-4 text-destructive" />
-                            {t("common.delete")}
-                          </Button>
-                        </form>
+                        </p>
+                        <p className="text-xs text-muted-foreground">{suggestion.rationale}</p>
                       </div>
-                    );
-                  })}
+                      <div className="flex items-center gap-3 sm:shrink-0">
+                        <div className="text-right">
+                          <p className="text-sm font-medium">
+                            {t("inv.pieces", { n: suggestion.suggestedQuantity })} ·{" "}
+                            {formatCurrency(suggestion.suggestedAmount, data.currency)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {t("inv.atPrice", {
+                              price: formatCurrency(suggestion.price, data.currency)
+                            })}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void addSuggestion(suggestion)}
+                        >
+                          <Plus className="size-4" />
+                          {t("inv.toPortfolio")}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              ) : suggested ? (
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  {t("inv.noSuggestions")}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
-      {/* ── Analytics ─────────────────────────────────────────────────────── */}
+      {/* ── Analytics — structure, sectors, risks & education ──────────────── */}
       {activeTab === "analytics" ? (
         <div className="space-y-5">
-          <PortfolioValueChart portfolio={data.portfolio} />
           <section className="grid gap-5 xl:grid-cols-2">
             <Card>
               <CardHeader>
@@ -818,101 +539,22 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         </div>
       ) : null}
 
-      {/* ── Picker (suggestions) ──────────────────────────────────────────── */}
-      {activeTab === "suggest" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("inv.suggestTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{t("inv.suggestIntro")}</p>
-            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-              <div className="space-y-2">
-                <Label htmlFor="invest-budget">{t("inv.budgetLabel")}</Label>
-                <Input
-                  id="invest-budget"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={budget}
-                  onChange={(e) => setBudget(e.target.value)}
-                  placeholder={t("inv.budgetPlaceholder")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invest-risk">{t("inv.riskAllowed")}</Label>
-                <Select
-                  value={riskCode}
-                  onValueChange={(value) => setRiskCode(value as typeof riskCode)}
-                >
-                  <SelectTrigger id="invest-risk">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RISK_CODES.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {t(`riskProfile.${option.value}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="button" onClick={computeSuggestions}>
-                {t("inv.suggestBtn")}
-              </Button>
-            </div>
+      {/* Disclaimer — legal boilerplate lives at the bottom, out of the way. */}
+      <div className="flex items-start gap-2 pt-1 text-xs text-muted-foreground">
+        <ShieldAlert className="mt-0.5 size-3.5 shrink-0" />
+        <p>{t("inv.pageDisclaimer")}</p>
+      </div>
 
-            {suggested && suggestions.length > 0 ? (
-              <div className="space-y-2">
-                {suggestions.map((suggestion) => (
-                  <div
-                    key={suggestion.ticker}
-                    className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold">
-                        {suggestion.ticker} · {suggestion.name}
-                        <Badge
-                          variant={riskVariant[suggestion.risk]}
-                          className="ml-2 align-middle text-[11px]"
-                        >
-                          {t(`riskLevel.${suggestion.risk}`)}
-                        </Badge>
-                      </p>
-                      <p className="text-xs text-muted-foreground">{suggestion.rationale}</p>
-                    </div>
-                    <div className="flex items-center gap-3 sm:shrink-0">
-                      <div className="text-right">
-                        <p className="text-sm font-medium">
-                          {t("inv.pieces", { n: suggestion.suggestedQuantity })} ·{" "}
-                          {formatCurrency(suggestion.suggestedAmount, data.currency)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {t("inv.atPrice", {
-                            price: formatCurrency(suggestion.price, data.currency)
-                          })}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void addSuggestion(suggestion)}
-                      >
-                        <Plus className="size-4" />
-                        {t("inv.toPortfolio")}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : suggested ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                {t("inv.noSuggestions")}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* Controlled "add position" dialog, opened from Overview (header + empty). */}
+      <Dialog open={addPositionOpen} onOpenChange={setAddPositionOpen}>
+        <PositionDialog
+          title={t("inv.addPosition")}
+          description={t("inv.addPosition.desc")}
+          data={data}
+          currency={data.currency}
+          onSubmit={submitPosition}
+        />
+      </Dialog>
 
       {/* Single controlled dialog for editing any portfolio position */}
       <Dialog
@@ -1038,73 +680,5 @@ function PositionDialog({
         </DialogFooter>
       </form>
     </DialogContent>
-  );
-}
-
-// Portfolio-level summary an investor expects at the top: current market value,
-// today's move (best-effort, from board/watchlist day-change), invested cost
-// basis, and total unrealized return in both currency and percent.
-function PortfolioSummary({
-  portfolio,
-  currency,
-  dayChangeByTicker
-}: {
-  portfolio: InvestmentData["portfolio"];
-  currency: string;
-  dayChangeByTicker: Map<string, number>;
-}) {
-  const { t } = useI18n();
-  const cost = portfolio.reduce((sum, p) => sum + p.quantity * p.averageBuyPrice, 0);
-  const value = portfolio.reduce((sum, p) => sum + p.currentValue, 0);
-  const pnl = value - cost;
-  const returnPct = cost > 0 ? (pnl / cost) * 100 : 0;
-  const positive = pnl >= 0;
-
-  // Today's absolute move = Σ position value × its day-change%; only counts
-  // positions for which a day-change is known.
-  let dayAbs = 0;
-  let dayBase = 0;
-  for (const p of portfolio) {
-    const ch = dayChangeByTicker.get(p.ticker);
-    if (ch === undefined) continue;
-    dayAbs += p.currentValue * (ch / 100);
-    dayBase += p.currentValue;
-  }
-  const dayPct = dayBase > 0 ? (dayAbs / dayBase) * 100 : 0;
-  const dayPositive = dayAbs >= 0;
-
-  const items: { label: string; value: string; tone: string }[] = [
-    { label: t("inv.currentValue"), value: formatCurrency(value, currency), tone: "" }
-  ];
-  if (dayBase > 0) {
-    items.push({
-      label: t("inv.summary.dayChange"),
-      value: `${dayPositive ? "+" : ""}${formatCurrency(dayAbs, currency)} (${dayPositive ? "+" : ""}${dayPct.toFixed(2)}%)`,
-      tone: dayPositive ? "text-success-foreground" : "text-destructive"
-    });
-  }
-  items.push(
-    { label: t("inv.invested"), value: formatCurrency(cost, currency), tone: "" },
-    {
-      label: t("inv.pnlLabel"),
-      value: `${positive ? "+" : ""}${formatCurrency(pnl, currency)}`,
-      tone: positive ? "text-success-foreground" : "text-destructive"
-    },
-    {
-      label: t("inv.returnLabel"),
-      value: `${positive ? "+" : ""}${returnPct.toFixed(1)}%`,
-      tone: positive ? "text-success-foreground" : "text-destructive"
-    }
-  );
-
-  return (
-    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      {items.map((item) => (
-        <div key={item.label} className="rounded-lg border bg-muted/20 p-3">
-          <dt className="text-xs text-muted-foreground">{item.label}</dt>
-          <dd className={`mt-1 text-sm font-semibold ${item.tone}`}>{item.value}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }

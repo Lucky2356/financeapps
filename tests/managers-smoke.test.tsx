@@ -80,11 +80,11 @@ describe("manager smoke tests", () => {
     expect(await screen.findByText("Плановых операций пока нет")).toBeInTheDocument();
   });
 
-  it("InvestmentsView shows tabs and the picker on the Подбор tab", async () => {
+  it("InvestmentsView shows tabs and the picker on the Рынок tab", async () => {
     render(<InvestmentsView data={investmentData} />);
-    // Redesigned screen is tabbed; the securities picker now lives under its own
-    // tab instead of at the top of a long scroll.
-    fireEvent.click(screen.getByRole("button", { name: "Подбор" }));
+    // Redesigned screen is tabbed; the securities picker now lives under the
+    // Market tab (alongside the watchlist) instead of at the top of a long scroll.
+    fireEvent.click(screen.getByRole("button", { name: "Рынок" }));
     expect(await screen.findByText("Подбор бумаг для портфеля")).toBeInTheDocument();
   });
 });

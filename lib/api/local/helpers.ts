@@ -1,7 +1,18 @@
 // Small pure helpers used by the desktop LocalApiClient router (plan A1).
 
 export function id(prefix: string) {
-  return `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+  return `${prefix}-${randomToken()}`;
+}
+
+// Cryptographically secure random id. Prefers randomUUID; falls back to
+// getRandomValues (never Math.random, which is predictable) on older runtimes.
+function randomToken(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // "YYYY-MM" key used to bucket transactions by calendar month (local time).

@@ -7,7 +7,11 @@ export class FetchApiClient implements ApiClient {
     return this.request<T>(path, { method: "GET", ...options });
   }
 
-  post<TResponse, TBody = unknown>(path: string, body?: TBody, options?: ApiRequestOptions): Promise<TResponse> {
+  post<TResponse, TBody = unknown>(
+    path: string,
+    body?: TBody,
+    options?: ApiRequestOptions
+  ): Promise<TResponse> {
     return this.request<TResponse>(path, {
       method: "POST",
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -15,7 +19,11 @@ export class FetchApiClient implements ApiClient {
     });
   }
 
-  put<TResponse, TBody = unknown>(path: string, body?: TBody, options?: ApiRequestOptions): Promise<TResponse> {
+  put<TResponse, TBody = unknown>(
+    path: string,
+    body?: TBody,
+    options?: ApiRequestOptions
+  ): Promise<TResponse> {
     return this.request<TResponse>(path, {
       method: "PUT",
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -38,7 +46,7 @@ export class FetchApiClient implements ApiClient {
 
     if (!response.ok) {
       const text = await response.text();
-      let message = text;
+      let message: string;
       try {
         const payload = JSON.parse(text) as { error?: string };
         message = payload.error ?? text;

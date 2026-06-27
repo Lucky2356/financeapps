@@ -4,18 +4,8 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { ChartDatum } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { CHART_PALETTE as colors } from "@/lib/charts/palette";
 import { useI18n } from "@/lib/i18n/context";
-
-const colors = [
-  "#149365",
-  "#f4b941",
-  "#2563eb",
-  "#db2777",
-  "#7c3aed",
-  "#ea580c",
-  "#0891b2",
-  "#64748b"
-];
 
 export function PortfolioStructureChart({ data }: { data: ChartDatum[] }) {
   const { t } = useI18n();
