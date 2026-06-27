@@ -1,17 +1,22 @@
 "use client";
 
-import { Edit2, LineChart, Plus, RefreshCw, ShieldAlert, Star, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  Edit2,
+  LineChart,
+  Plus,
+  RefreshCw,
+  ShieldAlert,
+  Star,
+  Trash2
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { PortfolioStructureChart } from "@/components/charts/lazy";
 import { RecommendationList } from "@/components/recommendation-list";
-import {
-  StockDetailDialog,
-  type StockDetailSeed
-} from "@/components/investments/stock-detail-dialog";
+import { InlineStockChart } from "@/components/investments/inline-stock-chart";
 import { SecuritySearch } from "@/components/investments/security-search";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +46,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { cn } from "@/lib/utils";
 import {
   InvestmentSuggestionService,
   type InvestmentSuggestion
@@ -60,6 +66,14 @@ const riskVariant = {
   HIGH: "destructive"
 } as const;
 
+const TABS = [
+  { id: "portfolio", labelKey: "inv.tab.portfolio" },
+  { id: "watchlist", labelKey: "inv.tab.watchlist" },
+  { id: "analytics", labelKey: "inv.tab.analytics" },
+  { id: "suggest", labelKey: "inv.tab.suggest" }
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
 export function InvestmentsView({ data: initialData }: { data: InvestmentData }) {
   const router = useRouter();
   const { t } = useI18n();
@@ -75,9 +89,19 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   const [riskCode, setRiskCode] = useState<(typeof RISK_CODES)[number]["value"]>("MODERATE");
   const [suggestions, setSuggestions] = useState<InvestmentSuggestion[]>([]);
   const [suggested, setSuggested] = useState(false);
-  const [detailSeed, setDetailSeed] = useState<StockDetailSeed | null>(null);
+  // Active tab + the single security whose inline price chart is expanded.
+  const [activeTab, setActiveTab] = useState<TabId>("portfolio");
+  const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
+  const toggleExpand = (ticker: string) =>
+    setExpandedTicker((prev) => (prev === ticker ? null : ticker));
 
   const hasMarketData = data.watchlist.length > 0 || data.portfolio.length > 0;
+
+  // Day-change% per ticker, gathered from the curated board + watchlist, so the
+  // portfolio summary can show today's move on held positions (best-effort).
+  const dayChangeByTicker = new Map<string, number>();
+  for (const s of [...data.securities, ...data.watchlist])
+    dayChangeByTicker.set(s.ticker, s.changeDay);
 
   // Auto-refresh only when the user has investments to update (avoids confusing
   // "updated 10 stocks" toast when user has never added any data)
@@ -210,284 +234,36 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         <p className="text-muted-foreground">{t("inv.pageDisclaimer")}</p>
       </div>
 
-      {/* Suggestion engine: budget + risk → securities to strengthen the portfolio */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("inv.suggestTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("inv.suggestIntro")}</p>
-          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <div className="space-y-2">
-              <Label htmlFor="invest-budget">{t("inv.budgetLabel")}</Label>
-              <Input
-                id="invest-budget"
-                type="number"
-                min="0"
-                step="1000"
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                placeholder={t("inv.budgetPlaceholder")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invest-risk">{t("inv.riskAllowed")}</Label>
-              <select
-                id="invest-risk"
-                value={riskCode}
-                onChange={(e) => setRiskCode(e.target.value as typeof riskCode)}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                {RISK_CODES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {t(`riskProfile.${option.value}`)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button type="button" onClick={computeSuggestions}>
-              {t("inv.suggestBtn")}
-            </Button>
-          </div>
+      {/* Portfolio summary — the first thing an investor wants: value + P/L. */}
+      {data.portfolio.length > 0 ? (
+        <PortfolioSummary
+          portfolio={data.portfolio}
+          currency={data.currency}
+          dayChangeByTicker={dayChangeByTicker}
+        />
+      ) : null}
 
-          {suggested && suggestions.length > 0 ? (
-            <div className="space-y-2">
-              {suggestions.map((suggestion) => (
-                <div
-                  key={suggestion.ticker}
-                  className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">
-                      {suggestion.ticker} · {suggestion.name}
-                      <Badge
-                        variant={riskVariant[suggestion.risk]}
-                        className="ml-2 align-middle text-[11px]"
-                      >
-                        {t(`riskLevel.${suggestion.risk}`)}
-                      </Badge>
-                    </p>
-                    <p className="text-xs text-muted-foreground">{suggestion.rationale}</p>
-                  </div>
-                  <div className="flex items-center gap-3 sm:shrink-0">
-                    <div className="text-right">
-                      <p className="text-sm font-medium">
-                        {t("inv.pieces", { n: suggestion.suggestedQuantity })} ·{" "}
-                        {formatCurrency(suggestion.suggestedAmount, data.currency)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t("inv.atPrice", {
-                          price: formatCurrency(suggestion.price, data.currency)
-                        })}
-                      </p>
-                    </div>
-                    <Button type="button" size="sm" onClick={() => void addSuggestion(suggestion)}>
-                      <Plus className="size-4" />
-                      {t("inv.toPortfolio")}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : suggested ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              {t("inv.noSuggestions")}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+      {/* Tabs cut the endless scroll: Portfolio / Watchlist / Analytics / Picker. */}
+      <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/30 p-1">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "flex-1 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              activeTab === tab.id
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t(tab.labelKey)}
+          </button>
+        ))}
+      </div>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>
-            {t("inv.watchlistTitle")}
-            {hasMarketData ? (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {t("inv.pricesAuto")}
-              </span>
-            ) : null}
-          </CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
-              <RefreshCw className="size-4" />
-              {t("inv.refreshMarket")}
-            </Button>
-            <Dialog open={watchlistOpen} onOpenChange={setWatchlistOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Plus className="size-4" />
-                  {t("inv.addWatchlist")}
-                </Button>
-              </DialogTrigger>
-              <WatchlistDialog currency={data.currency} onAddTicker={addWatchlistTicker} />
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {data.watchlist.length === 0 ? (
-            <EmptyState
-              icon={Star}
-              title={t("inv.watchlistEmpty.title")}
-              description={t("inv.watchlistEmpty.desc")}
-              action={
-                <Button variant="outline" onClick={() => setWatchlistOpen(true)}>
-                  <Plus className="size-4" />
-                  {t("inv.addWatchlist")}
-                </Button>
-              }
-            />
-          ) : (
-            <>
-              <div className="hidden md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("inv.col.ticker")}</TableHead>
-                      <TableHead>{t("inv.col.name")}</TableHead>
-                      <TableHead>{t("inv.col.sector")}</TableHead>
-                      <TableHead className="text-right">{t("inv.col.price")}</TableHead>
-                      <TableHead className="text-right">{t("inv.col.day")}</TableHead>
-                      <TableHead className="text-right">{t("inv.col.30d")}</TableHead>
-                      <TableHead>{t("inv.col.risk")}</TableHead>
-                      <TableHead>{t("inv.col.comment")}</TableHead>
-                      <TableHead className="w-16 text-right"> </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.watchlist.map((security) => (
-                      <TableRow key={security.ticker}>
-                        <TableCell className="font-semibold">
-                          <button
-                            type="button"
-                            className="hover:text-primary hover:underline"
-                            title={t("inv.openChart")}
-                            onClick={() => setDetailSeed(security)}
-                          >
-                            {security.ticker}
-                          </button>
-                        </TableCell>
-                        <TableCell>{security.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{security.sector}</TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(security.price, data.currency)}
-                        </TableCell>
-                        <TableCell
-                          className={
-                            security.changeDay >= 0
-                              ? "text-right text-success-foreground"
-                              : "text-right text-destructive"
-                          }
-                        >
-                          {security.changeDay.toFixed(2)}%
-                        </TableCell>
-                        <TableCell
-                          className={
-                            security.change30d >= 0
-                              ? "text-right text-success-foreground"
-                              : "text-right text-destructive"
-                          }
-                        >
-                          {security.change30d.toFixed(2)}%
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={riskVariant[security.risk]}>
-                            {t(`riskLevel.${security.risk}`)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-96 text-muted-foreground">
-                          {security.comment}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <form
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void removeWatchlistItem(security.ticker);
-                            }}
-                          >
-                            <Button
-                              type="submit"
-                              variant="ghost"
-                              size="icon"
-                              title={t("inv.removeWatchlist")}
-                              aria-label={t("inv.removeWatchlist")}
-                            >
-                              <Trash2 className="size-4 text-destructive" />
-                            </Button>
-                          </form>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="grid gap-3 md:hidden">
-                {data.watchlist.map((security) => (
-                  <div key={security.ticker} className="rounded-lg border p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold">{security.ticker}</p>
-                        <p className="text-sm text-muted-foreground">{security.name}</p>
-                        <p className="text-xs text-muted-foreground">{security.sector}</p>
-                      </div>
-                      <Badge variant={riskVariant[security.risk]}>
-                        {t(`riskLevel.${security.risk}`)}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <p className="text-xs text-muted-foreground">{t("inv.col.price")}</p>
-                        <p className="font-semibold">
-                          {formatCurrency(security.price, data.currency)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">{t("inv.col.day")}</p>
-                        <p
-                          className={
-                            security.changeDay >= 0
-                              ? "font-semibold text-success-foreground"
-                              : "font-semibold text-destructive"
-                          }
-                        >
-                          {security.changeDay.toFixed(2)}%
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">{t("inv.col.30d")}</p>
-                        <p
-                          className={
-                            security.change30d >= 0
-                              ? "font-semibold text-success-foreground"
-                              : "font-semibold text-destructive"
-                          }
-                        >
-                          {security.change30d.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                    <p className="mt-3 text-sm text-muted-foreground">{security.comment}</p>
-                    <form
-                      className="mt-3"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void removeWatchlistItem(security.ticker);
-                      }}
-                    >
-                      <Button type="submit" variant="outline" size="sm">
-                        <Trash2 className="size-4 text-destructive" />
-                        {t("common.delete")}
-                      </Button>
-                    </form>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+      {/* ── Portfolio ─────────────────────────────────────────────────────── */}
+      {activeTab === "portfolio" ? (
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>{t("inv.portfolioTitle")}</CardTitle>
@@ -522,7 +298,6 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               />
             ) : (
               <>
-                <PortfolioSummary portfolio={data.portfolio} currency={data.currency} />
                 <div className="hidden md:block">
                   <Table>
                     <TableHeader>
@@ -543,92 +318,109 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                       {data.portfolio.map((position) => {
                         const cost = position.quantity * position.averageBuyPrice;
                         const returnPct = cost > 0 ? (position.pnl / cost) * 100 : 0;
+                        const expanded = expandedTicker === position.ticker;
                         return (
-                          <TableRow key={position.ticker}>
-                            <TableCell className="font-semibold">
-                              <button
-                                type="button"
-                                className="hover:text-primary hover:underline"
-                                title={t("inv.openChart")}
-                                onClick={() =>
-                                  setDetailSeed({
-                                    ticker: position.ticker,
-                                    name: position.name,
-                                    price: position.currentPrice,
-                                    sector: position.sector
-                                  })
+                          <Fragment key={position.ticker}>
+                            <TableRow
+                              className="cursor-pointer"
+                              onClick={() => toggleExpand(position.ticker)}
+                              title={t("inv.expandChart")}
+                            >
+                              <TableCell className="font-semibold">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <ChevronDown
+                                    className={cn(
+                                      "size-4 shrink-0 text-muted-foreground transition-transform",
+                                      expanded && "rotate-180"
+                                    )}
+                                  />
+                                  {position.ticker}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {position.sector}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {position.quantity.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(position.averageBuyPrice, data.currency)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(position.currentPrice, data.currency)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(position.currentValue, data.currency)}
+                              </TableCell>
+                              <TableCell
+                                className={
+                                  position.pnl >= 0
+                                    ? "text-right text-success-foreground"
+                                    : "text-right text-destructive"
                                 }
                               >
-                                {position.ticker}
-                              </button>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {position.sector}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {position.quantity.toLocaleString()}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(position.averageBuyPrice, data.currency)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(position.currentPrice, data.currency)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatCurrency(position.currentValue, data.currency)}
-                            </TableCell>
-                            <TableCell
-                              className={
-                                position.pnl >= 0
-                                  ? "text-right text-success-foreground"
-                                  : "text-right text-destructive"
-                              }
-                            >
-                              {formatCurrency(position.pnl, data.currency)}
-                            </TableCell>
-                            <TableCell
-                              className={
-                                returnPct >= 0
-                                  ? "text-right text-success-foreground"
-                                  : "text-right text-destructive"
-                              }
-                            >
-                              {returnPct >= 0 ? "+" : ""}
-                              {returnPct.toFixed(1)}%
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatPercent(position.share)}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  title={t("inv.editPosition")}
-                                  aria-label={t("inv.editPosition")}
-                                  onClick={() => setEditingPosition(position)}
-                                >
-                                  <Edit2 className="size-4" />
-                                </Button>
-                                <form
-                                  onSubmit={(event) => {
-                                    event.preventDefault();
-                                    void removePosition(position.ticker);
-                                  }}
-                                >
+                                {formatCurrency(position.pnl, data.currency)}
+                              </TableCell>
+                              <TableCell
+                                className={
+                                  returnPct >= 0
+                                    ? "text-right text-success-foreground"
+                                    : "text-right text-destructive"
+                                }
+                              >
+                                {returnPct >= 0 ? "+" : ""}
+                                {returnPct.toFixed(1)}%
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatPercent(position.share)}
+                              </TableCell>
+                              <TableCell onClick={(event) => event.stopPropagation()}>
+                                <div className="flex justify-end gap-1">
                                   <Button
-                                    type="submit"
                                     variant="ghost"
                                     size="icon"
-                                    title={t("inv.removePosition")}
-                                    aria-label={t("inv.removePosition")}
+                                    title={t("inv.editPosition")}
+                                    aria-label={t("inv.editPosition")}
+                                    onClick={() => setEditingPosition(position)}
                                   >
-                                    <Trash2 className="size-4 text-destructive" />
+                                    <Edit2 className="size-4" />
                                   </Button>
-                                </form>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                                  <form
+                                    onSubmit={(event) => {
+                                      event.preventDefault();
+                                      void removePosition(position.ticker);
+                                    }}
+                                  >
+                                    <Button
+                                      type="submit"
+                                      variant="ghost"
+                                      size="icon"
+                                      title={t("inv.removePosition")}
+                                      aria-label={t("inv.removePosition")}
+                                    >
+                                      <Trash2 className="size-4 text-destructive" />
+                                    </Button>
+                                  </form>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                            {expanded ? (
+                              <TableRow className="hover:bg-transparent">
+                                <TableCell colSpan={10} className="p-2">
+                                  <InlineStockChart
+                                    seed={{
+                                      ticker: position.ticker,
+                                      name: position.name,
+                                      price: position.currentPrice,
+                                      changeDay: dayChangeByTicker.get(position.ticker),
+                                      sector: position.sector
+                                    }}
+                                    currency={data.currency}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </Fragment>
                         );
                       })}
                     </TableBody>
@@ -636,48 +428,312 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                 </div>
 
                 <div className="grid gap-3 md:hidden">
-                  {data.portfolio.map((position) => (
-                    <div key={position.ticker} className="rounded-lg border p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold">{position.ticker}</p>
-                          <p className="text-sm text-muted-foreground">{position.name}</p>
-                        </div>
-                        <p className="font-semibold">{formatPercent(position.share)}</p>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <p className="text-xs text-muted-foreground">{t("inv.col.value")}</p>
-                          <p className="font-semibold">
-                            {formatCurrency(position.currentValue, data.currency)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">{t("inv.col.pnl")}</p>
-                          <p
-                            className={
-                              position.pnl >= 0
-                                ? "font-semibold text-success-foreground"
-                                : "font-semibold text-destructive"
-                            }
-                          >
-                            {formatCurrency(position.pnl, data.currency)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingPosition(position)}
+                  {data.portfolio.map((position) => {
+                    const expanded = expandedTicker === position.ticker;
+                    return (
+                      <div key={position.ticker} className="rounded-lg border p-4">
+                        <button
+                          type="button"
+                          className="flex w-full items-start justify-between gap-2 text-left"
+                          onClick={() => toggleExpand(position.ticker)}
                         >
-                          <Edit2 className="size-4" />
-                          {t("common.edit")}
-                        </Button>
+                          <div className="flex items-center gap-1.5">
+                            <ChevronDown
+                              className={cn(
+                                "size-4 shrink-0 text-muted-foreground transition-transform",
+                                expanded && "rotate-180"
+                              )}
+                            />
+                            <div>
+                              <p className="font-semibold">{position.ticker}</p>
+                              <p className="text-sm text-muted-foreground">{position.name}</p>
+                            </div>
+                          </div>
+                          <p className="font-semibold">{formatPercent(position.share)}</p>
+                        </button>
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-xs text-muted-foreground">{t("inv.col.value")}</p>
+                            <p className="font-semibold">
+                              {formatCurrency(position.currentValue, data.currency)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">{t("inv.col.pnl")}</p>
+                            <p
+                              className={
+                                position.pnl >= 0
+                                  ? "font-semibold text-success-foreground"
+                                  : "font-semibold text-destructive"
+                              }
+                            >
+                              {formatCurrency(position.pnl, data.currency)}
+                            </p>
+                          </div>
+                        </div>
+                        {expanded ? (
+                          <div className="mt-3">
+                            <InlineStockChart
+                              seed={{
+                                ticker: position.ticker,
+                                name: position.name,
+                                price: position.currentPrice,
+                                changeDay: dayChangeByTicker.get(position.ticker),
+                                sector: position.sector
+                              }}
+                              currency={data.currency}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="mt-4 flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingPosition(position)}
+                          >
+                            <Edit2 className="size-4" />
+                            {t("common.edit")}
+                          </Button>
+                          <form
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void removePosition(position.ticker);
+                            }}
+                          >
+                            <Button type="submit" variant="outline" size="sm">
+                              <Trash2 className="size-4 text-destructive" />
+                              {t("common.delete")}
+                            </Button>
+                          </form>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ── Watchlist ─────────────────────────────────────────────────────── */}
+      {activeTab === "watchlist" ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>
+              {t("inv.watchlistTitle")}
+              {hasMarketData ? (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {t("inv.pricesAuto")}
+                </span>
+              ) : null}
+            </CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
+                <RefreshCw className="size-4" />
+                {t("inv.refreshMarket")}
+              </Button>
+              <Dialog open={watchlistOpen} onOpenChange={setWatchlistOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Plus className="size-4" />
+                    {t("inv.addWatchlist")}
+                  </Button>
+                </DialogTrigger>
+                <WatchlistDialog currency={data.currency} onAddTicker={addWatchlistTicker} />
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {data.watchlist.length === 0 ? (
+              <EmptyState
+                icon={Star}
+                title={t("inv.watchlistEmpty.title")}
+                description={t("inv.watchlistEmpty.desc")}
+                action={
+                  <Button variant="outline" onClick={() => setWatchlistOpen(true)}>
+                    <Plus className="size-4" />
+                    {t("inv.addWatchlist")}
+                  </Button>
+                }
+              />
+            ) : (
+              <>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("inv.col.ticker")}</TableHead>
+                        <TableHead>{t("inv.col.name")}</TableHead>
+                        <TableHead>{t("inv.col.sector")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.price")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.day")}</TableHead>
+                        <TableHead className="text-right">{t("inv.col.30d")}</TableHead>
+                        <TableHead>{t("inv.col.risk")}</TableHead>
+                        <TableHead>{t("inv.col.comment")}</TableHead>
+                        <TableHead className="w-16 text-right"> </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.watchlist.map((security) => {
+                        const expanded = expandedTicker === security.ticker;
+                        return (
+                          <Fragment key={security.ticker}>
+                            <TableRow
+                              className="cursor-pointer"
+                              onClick={() => toggleExpand(security.ticker)}
+                              title={t("inv.expandChart")}
+                            >
+                              <TableCell className="font-semibold">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <ChevronDown
+                                    className={cn(
+                                      "size-4 shrink-0 text-muted-foreground transition-transform",
+                                      expanded && "rotate-180"
+                                    )}
+                                  />
+                                  {security.ticker}
+                                </span>
+                              </TableCell>
+                              <TableCell>{security.name}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {security.sector}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(security.price, data.currency)}
+                              </TableCell>
+                              <TableCell
+                                className={
+                                  security.changeDay >= 0
+                                    ? "text-right text-success-foreground"
+                                    : "text-right text-destructive"
+                                }
+                              >
+                                {security.changeDay.toFixed(2)}%
+                              </TableCell>
+                              <TableCell
+                                className={
+                                  security.change30d >= 0
+                                    ? "text-right text-success-foreground"
+                                    : "text-right text-destructive"
+                                }
+                              >
+                                {security.change30d.toFixed(2)}%
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={riskVariant[security.risk]}>
+                                  {t(`riskLevel.${security.risk}`)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-96 text-muted-foreground">
+                                {security.comment}
+                              </TableCell>
+                              <TableCell
+                                className="text-right"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <form
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    void removeWatchlistItem(security.ticker);
+                                  }}
+                                >
+                                  <Button
+                                    type="submit"
+                                    variant="ghost"
+                                    size="icon"
+                                    title={t("inv.removeWatchlist")}
+                                    aria-label={t("inv.removeWatchlist")}
+                                  >
+                                    <Trash2 className="size-4 text-destructive" />
+                                  </Button>
+                                </form>
+                              </TableCell>
+                            </TableRow>
+                            {expanded ? (
+                              <TableRow className="hover:bg-transparent">
+                                <TableCell colSpan={9} className="p-2">
+                                  <InlineStockChart seed={security} currency={data.currency} />
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="grid gap-3 md:hidden">
+                  {data.watchlist.map((security) => {
+                    const expanded = expandedTicker === security.ticker;
+                    return (
+                      <div key={security.ticker} className="rounded-lg border p-4">
+                        <button
+                          type="button"
+                          className="flex w-full items-start justify-between gap-3 text-left"
+                          onClick={() => toggleExpand(security.ticker)}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <ChevronDown
+                              className={cn(
+                                "size-4 shrink-0 text-muted-foreground transition-transform",
+                                expanded && "rotate-180"
+                              )}
+                            />
+                            <div>
+                              <p className="font-semibold">{security.ticker}</p>
+                              <p className="text-sm text-muted-foreground">{security.name}</p>
+                              <p className="text-xs text-muted-foreground">{security.sector}</p>
+                            </div>
+                          </div>
+                          <Badge variant={riskVariant[security.risk]}>
+                            {t(`riskLevel.${security.risk}`)}
+                          </Badge>
+                        </button>
+                        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-muted-foreground">{t("inv.col.price")}</p>
+                            <p className="font-semibold">
+                              {formatCurrency(security.price, data.currency)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">{t("inv.col.day")}</p>
+                            <p
+                              className={
+                                security.changeDay >= 0
+                                  ? "font-semibold text-success-foreground"
+                                  : "font-semibold text-destructive"
+                              }
+                            >
+                              {security.changeDay.toFixed(2)}%
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">{t("inv.col.30d")}</p>
+                            <p
+                              className={
+                                security.change30d >= 0
+                                  ? "font-semibold text-success-foreground"
+                                  : "font-semibold text-destructive"
+                              }
+                            >
+                              {security.change30d.toFixed(2)}%
+                            </p>
+                          </div>
+                        </div>
+                        {expanded ? (
+                          <div className="mt-3">
+                            <InlineStockChart seed={security} currency={data.currency} />
+                          </div>
+                        ) : null}
+                        <p className="mt-3 text-sm text-muted-foreground">{security.comment}</p>
                         <form
+                          className="mt-3"
                           onSubmit={(event) => {
                             event.preventDefault();
-                            void removePosition(position.ticker);
+                            void removeWatchlistItem(security.ticker);
                           }}
                         >
                           <Button type="submit" variant="outline" size="sm">
@@ -686,41 +742,141 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                           </Button>
                         </form>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
           </CardContent>
         </Card>
+      ) : null}
 
+      {/* ── Analytics ─────────────────────────────────────────────────────── */}
+      {activeTab === "analytics" ? (
+        <div className="space-y-5">
+          <section className="grid gap-5 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("inv.structureTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PortfolioStructureChart data={data.structure} />
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t("inv.riskProfileLabel")} {data.riskProfile}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("inv.sectorTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PortfolioStructureChart data={data.sectorStructure} />
+                <p className="mt-2 text-sm text-muted-foreground">{t("inv.sectorDesc")}</p>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-2">
+            <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />
+            <RecommendationList titleKey="inv.educationTips" items={data.education} />
+          </section>
+        </div>
+      ) : null}
+
+      {/* ── Picker (suggestions) ──────────────────────────────────────────── */}
+      {activeTab === "suggest" ? (
         <Card>
           <CardHeader>
-            <CardTitle>{t("inv.structureTitle")}</CardTitle>
+            <CardTitle>{t("inv.suggestTitle")}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <PortfolioStructureChart data={data.structure} />
-            <p className="mt-2 text-sm text-muted-foreground">
-              {t("inv.riskProfileLabel")} {data.riskProfile}
-            </p>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t("inv.suggestIntro")}</p>
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="invest-budget">{t("inv.budgetLabel")}</Label>
+                <Input
+                  id="invest-budget"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  placeholder={t("inv.budgetPlaceholder")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invest-risk">{t("inv.riskAllowed")}</Label>
+                <select
+                  id="invest-risk"
+                  value={riskCode}
+                  onChange={(e) => setRiskCode(e.target.value as typeof riskCode)}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  {RISK_CODES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {t(`riskProfile.${option.value}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button type="button" onClick={computeSuggestions}>
+                {t("inv.suggestBtn")}
+              </Button>
+            </div>
+
+            {suggested && suggestions.length > 0 ? (
+              <div className="space-y-2">
+                {suggestions.map((suggestion) => (
+                  <div
+                    key={suggestion.ticker}
+                    className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">
+                        {suggestion.ticker} · {suggestion.name}
+                        <Badge
+                          variant={riskVariant[suggestion.risk]}
+                          className="ml-2 align-middle text-[11px]"
+                        >
+                          {t(`riskLevel.${suggestion.risk}`)}
+                        </Badge>
+                      </p>
+                      <p className="text-xs text-muted-foreground">{suggestion.rationale}</p>
+                    </div>
+                    <div className="flex items-center gap-3 sm:shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-medium">
+                          {t("inv.pieces", { n: suggestion.suggestedQuantity })} ·{" "}
+                          {formatCurrency(suggestion.suggestedAmount, data.currency)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {t("inv.atPrice", {
+                            price: formatCurrency(suggestion.price, data.currency)
+                          })}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void addSuggestion(suggestion)}
+                      >
+                        <Plus className="size-4" />
+                        {t("inv.toPortfolio")}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : suggested ? (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                {t("inv.noSuggestions")}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("inv.sectorTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PortfolioStructureChart data={data.sectorStructure} />
-            <p className="mt-2 text-sm text-muted-foreground">{t("inv.sectorDesc")}</p>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-2">
-        <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />
-        <RecommendationList titleKey="inv.educationTips" items={data.education} />
-      </section>
+      ) : null}
 
       {/* Single controlled dialog for editing any portfolio position */}
       <Dialog
@@ -740,12 +896,6 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           />
         )}
       </Dialog>
-
-      <StockDetailDialog
-        seed={detailSeed}
-        currency={data.currency}
-        onClose={() => setDetailSeed(null)}
-      />
     </div>
   );
 }
@@ -855,14 +1005,17 @@ function PositionDialog({
   );
 }
 
-// Portfolio-level summary an investor expects: invested (cost basis), current
-// market value, and total unrealized return in both currency and percent.
+// Portfolio-level summary an investor expects at the top: current market value,
+// today's move (best-effort, from board/watchlist day-change), invested cost
+// basis, and total unrealized return in both currency and percent.
 function PortfolioSummary({
   portfolio,
-  currency
+  currency,
+  dayChangeByTicker
 }: {
   portfolio: InvestmentData["portfolio"];
   currency: string;
+  dayChangeByTicker: Map<string, number>;
 }) {
   const { t } = useI18n();
   const cost = portfolio.reduce((sum, p) => sum + p.quantity * p.averageBuyPrice, 0);
@@ -871,9 +1024,31 @@ function PortfolioSummary({
   const returnPct = cost > 0 ? (pnl / cost) * 100 : 0;
   const positive = pnl >= 0;
 
-  const items = [
+  // Today's absolute move = Σ position value × its day-change%; only counts
+  // positions for which a day-change is known.
+  let dayAbs = 0;
+  let dayBase = 0;
+  for (const p of portfolio) {
+    const ch = dayChangeByTicker.get(p.ticker);
+    if (ch === undefined) continue;
+    dayAbs += p.currentValue * (ch / 100);
+    dayBase += p.currentValue;
+  }
+  const dayPct = dayBase > 0 ? (dayAbs / dayBase) * 100 : 0;
+  const dayPositive = dayAbs >= 0;
+
+  const items: { label: string; value: string; tone: string }[] = [
+    { label: t("inv.currentValue"), value: formatCurrency(value, currency), tone: "" }
+  ];
+  if (dayBase > 0) {
+    items.push({
+      label: t("inv.summary.dayChange"),
+      value: `${dayPositive ? "+" : ""}${formatCurrency(dayAbs, currency)} (${dayPositive ? "+" : ""}${dayPct.toFixed(2)}%)`,
+      tone: dayPositive ? "text-success-foreground" : "text-destructive"
+    });
+  }
+  items.push(
     { label: t("inv.invested"), value: formatCurrency(cost, currency), tone: "" },
-    { label: t("inv.currentValue"), value: formatCurrency(value, currency), tone: "" },
     {
       label: t("inv.pnlLabel"),
       value: `${positive ? "+" : ""}${formatCurrency(pnl, currency)}`,
@@ -884,10 +1059,10 @@ function PortfolioSummary({
       value: `${positive ? "+" : ""}${returnPct.toFixed(1)}%`,
       tone: positive ? "text-success-foreground" : "text-destructive"
     }
-  ];
+  );
 
   return (
-    <dl className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {items.map((item) => (
         <div key={item.label} className="rounded-lg border bg-muted/20 p-3">
           <dt className="text-xs text-muted-foreground">{item.label}</dt>
