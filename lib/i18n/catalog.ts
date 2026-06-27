@@ -686,6 +686,9 @@ const ru: Messages = {
   "inv.tab.suggest": "Подбор",
   "inv.summary.dayChange": "Изменение за день",
   "inv.expandChart": "Нажмите, чтобы открыть график",
+  "inv.valueChartTitle": "Стоимость портфеля во времени",
+  "inv.valueChartHint":
+    "Оценка текущих позиций по историческим ценам закрытия MOEX. Не учитывает прошлые изменения объёма позиций.",
   "inv.range.1m": "1М",
   "inv.range.3m": "3М",
   "inv.range.6m": "6М",
@@ -1828,6 +1831,9 @@ const en: Messages = {
   "inv.tab.suggest": "Picker",
   "inv.summary.dayChange": "Today's change",
   "inv.expandChart": "Click to open the chart",
+  "inv.valueChartTitle": "Portfolio value over time",
+  "inv.valueChartHint":
+    "Values your current holdings at historical MOEX closing prices. Does not reconstruct past position sizes.",
   "inv.range.1m": "1M",
   "inv.range.3m": "3M",
   "inv.range.6m": "6M",
