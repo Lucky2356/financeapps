@@ -26,7 +26,8 @@ export default function LoginPage() {
     const result = await signIn("credentials", {
       redirect: false,
       email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? "")
+      password: String(form.get("password") ?? ""),
+      totp: String(form.get("totp") ?? "")
     });
     setLoading(false);
     if (result?.error) {
@@ -57,6 +58,16 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="totp">{t("auth.field.totp")}</Label>
+              <Input
+                id="totp"
+                name="totp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}

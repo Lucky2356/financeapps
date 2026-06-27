@@ -74,6 +74,8 @@ model User {
   email                     String               @unique
   name                      String
   passwordHash              String?
+  twoFactorSecret           String?
+  twoFactorEnabled          Boolean              @default(false)
   currency                  String               @default("RUB")
   demoMode                  Boolean              @default(true)
   emergencyFundMonthsTarget Int                  @default(6)

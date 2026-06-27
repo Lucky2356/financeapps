@@ -1,6 +1,6 @@
 {
   "name": "financial-assistant-mvp",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "private": true,
   "engines": {
     "node": ">=24 <25",
@@ -70,7 +70,9 @@
     "next": "^16.2.6",
     "next-auth": "^5.0.0-beta.31",
     "next-themes": "^0.4.3",
+    "otplib": "^13.4.1",
     "papaparse": "^5.4.1",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.13.3",
@@ -88,6 +90,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.17.6",
     "@types/papaparse": "^5.3.14",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.7.0",
