@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 
 import { verifyPassword } from "@/lib/auth/password";
+import { verifyTotp } from "@/lib/auth/totp";
 import { clientIp, rateLimit } from "@/lib/api/rate-limit";
 import { requirePrisma } from "@/lib/prisma";
 
@@ -12,7 +13,9 @@ import { requirePrisma } from "@/lib/prisma";
 // `auth()` to read the session.
 const credentialsSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  // Optional one-time code; only required for accounts with 2FA enabled.
+  totp: z.string().optional()
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -24,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: { signIn: "/login" },
   providers: [
     Credentials({
-      credentials: { email: {}, password: {} },
+      credentials: { email: {}, password: {}, totp: {} },
       authorize: async (raw, request) => {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
@@ -40,6 +43,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user?.passwordHash) return null;
         const ok = await verifyPassword(parsed.data.password, user.passwordHash);
         if (!ok) return null;
+        // 2FA gate: accounts with it enabled must also present a valid TOTP code.
+        // Accounts without 2FA are unaffected (the field is ignored).
+        if (user.twoFactorEnabled) {
+          if (!user.twoFactorSecret || !verifyTotp(parsed.data.totp ?? "", user.twoFactorSecret)) {
+            return null;
+          }
+        }
         return { id: user.id, email: user.email, name: user.name };
       }
     })

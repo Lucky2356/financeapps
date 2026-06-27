@@ -31,6 +31,7 @@ import { isLocalDesktopMode } from "@/lib/platform/env";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AccountSection } from "@/components/settings/account-section";
 import { LocalModePanel } from "@/components/settings/local-mode-panel";
+import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
@@ -565,8 +566,13 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         label: t("set.section.account"),
         icon: KeyRound,
         keywords:
-          "аккаунт account пароль password сменить change удалить delete безопасность security выход logout",
-        node: <AccountSection />
+          "аккаунт account пароль password сменить change удалить delete безопасность security выход logout 2fa двухфакторная two-factor totp",
+        node: (
+          <div className="space-y-5">
+            <AccountSection />
+            <TwoFactorSection />
+          </div>
+        )
       });
     }
 
