@@ -57,6 +57,7 @@ export type TransactionsPageData = {
   transactions: TransactionRow[];
   accounts: AccountRow[];
   categories: CategoryOption[];
+  rules: CategorizationRule[];
   filters: {
     from?: string;
     to?: string;
@@ -1201,6 +1202,7 @@ export async function getTransactionsPageData(
         transactions,
         accounts: demoAccounts,
         categories: demoCategories,
+        rules: [],
         filters: parsed,
         pagination: {
           page: parsed.page,
@@ -1215,7 +1217,7 @@ export async function getTransactionsPageData(
       if (!prisma) throw new Error("Prisma client is not configured.");
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
-      const [transactions, total, accounts, categories] = await Promise.all([
+      const [transactions, total, accounts, categories, rules] = await Promise.all([
         getDatabaseTransactions(user.id, parsed),
         prisma.transaction.count({ where: transactionWhere(user.id, parsed) }),
         prisma.account.findMany({
@@ -1225,7 +1227,8 @@ export async function getTransactionsPageData(
         prisma.category.findMany({
           where: { userId: user.id },
           orderBy: [{ kind: "asc" }, { name: "asc" }]
-        })
+        }),
+        prisma.rule.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } })
       ]);
       const start = (parsed.page - 1) * parsed.limit;
 
@@ -1234,6 +1237,11 @@ export async function getTransactionsPageData(
         transactions,
         accounts: accounts.map(toAccountRow),
         categories: categories.map(toCategoryOption),
+        rules: rules.map((rule) => ({
+          id: rule.id,
+          match: rule.match,
+          categoryId: rule.categoryId
+        })),
         filters: parsed,
         pagination: {
           page: parsed.page,
@@ -1249,6 +1257,7 @@ export async function getTransactionsPageData(
       transactions: [],
       accounts: [],
       categories: [],
+      rules: [],
       filters: parsed,
       pagination: {
         page: parsed.page,

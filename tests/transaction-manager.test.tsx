@@ -28,8 +28,10 @@ const data: TransactionsPageData = {
   accounts: [{ id: "acc-1", name: "Карта", type: "DEBIT_CARD", balance: 5000, currency: "RUB" }],
   categories: [
     { id: "cat-food", label: "Еда", kind: "EXPENSE", color: "#ea580c" },
+    { id: "cat-fun", label: "Развлечения", kind: "EXPENSE", color: "#7c3aed" },
     { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#16a34a" }
   ],
+  rules: [{ id: "rule-1", match: "Пятёрочка", categoryId: "cat-fun" }],
   filters: {},
   pagination: { page: 1, limit: 20, total: 0, hasPreviousPage: false, hasNextPage: false }
 } as TransactionsPageData;
@@ -68,5 +70,25 @@ describe("TransactionManager", () => {
       )
     );
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  it("applies a category rule from the description, overriding the default category", async () => {
+    const user = userEvent.setup();
+    renderWithConfirm(<TransactionManager data={data} />);
+
+    await user.click(await screen.findByRole("button", { name: "Добавить операцию" }));
+    // Default expense category is the first one (cat-food); the "Пятёрочка" rule
+    // should move it to cat-fun as soon as the keyword appears in the description.
+    await user.type(await screen.findByRole("spinbutton"), "500");
+    // The description Textarea is the only free-text box in the dialog.
+    await user.type(screen.getByRole("textbox"), "Покупка в Пятёрочка");
+    await user.click(screen.getByRole("button", { name: "Добавить" }));
+
+    await waitFor(() =>
+      expect(apiClientMock.post).toHaveBeenCalledWith(
+        "/transactions",
+        expect.objectContaining({ type: "EXPENSE", categoryId: "cat-fun" })
+      )
+    );
   });
 });
