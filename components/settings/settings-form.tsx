@@ -52,6 +52,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  ALL_OPTION,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const shortcuts = [
@@ -255,18 +263,21 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         <SectionCard title={t("set.general.title")} fields>
           <div className="space-y-2">
             <Label>{t("set.currency")}</Label>
-            <select
-              name="currency"
+            <Select
               value={settings.currency}
-              onChange={(e) => void persist({ currency: e.target.value as CurrencyCode })}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              onValueChange={(value) => void persist({ currency: value as CurrencyCode })}
             >
-              {SUPPORTED_CURRENCIES.map((item) => (
-                <option key={item.code} value={item.code}>
-                  {item.code} — {item.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SUPPORTED_CURRENCIES.map((item) => (
+                  <SelectItem key={item.code} value={item.code}>
+                    {item.code} — {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">{t("set.currency.hint")}</p>
           </div>
           <ToggleRow
@@ -277,20 +288,22 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           />
           <div className="space-y-2">
             <Label>{t("set.defaultType")}</Label>
-            <select
-              name="defaultTransactionType"
+            <Select
               value={settings.defaultTransactionType}
-              onChange={(e) =>
+              onValueChange={(value) =>
                 void persist({
-                  defaultTransactionType: e.target
-                    .value as EditableSettings["defaultTransactionType"]
+                  defaultTransactionType: value as EditableSettings["defaultTransactionType"]
                 })
               }
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
-              <option value="EXPENSE">{t("set.type.expense")}</option>
-              <option value="INCOME">{t("set.type.income")}</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="EXPENSE">{t("set.type.expense")}</SelectItem>
+                <SelectItem value="INCOME">{t("set.type.income")}</SelectItem>
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">{t("set.defaultType.hint")}</p>
           </div>
         </SectionCard>
@@ -457,19 +470,24 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
-                    <select
-                      id="ai-model"
-                      value={settings.aiModel}
-                      onChange={(e) => void persist({ aiModel: e.target.value })}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    <Select
+                      value={settings.aiModel || ALL_OPTION}
+                      onValueChange={(value) =>
+                        void persist({ aiModel: value === ALL_OPTION ? "" : value })
+                      }
                     >
-                      <option value="">{t("set.ai.model.default")}</option>
-                      {AI_MODELS.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id="ai-model">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
+                        {AI_MODELS.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
                   </div>
                 </>
@@ -496,38 +514,44 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             <Label className="inline-flex items-center gap-1">
               {t("set.risk.profile")} <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
             </Label>
-            <select
-              name="riskProfileCode"
+            <Select
               value={settings.riskProfileCode}
-              onChange={(e) =>
+              onValueChange={(value) =>
                 void persist({
-                  riskProfileCode: e.target.value as EditableSettings["riskProfileCode"]
+                  riskProfileCode: value as EditableSettings["riskProfileCode"]
                 })
               }
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
             >
-              {pageData.riskProfiles.map((profile) => (
-                <option key={profile.id} value={profile.code}>
-                  {t(`riskProfile.${profile.code}`)} — {t(`riskProfile.${profile.code}.desc`)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageData.riskProfiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.code}>
+                    {t(`riskProfile.${profile.code}`)} — {t(`riskProfile.${profile.code}.desc`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">{t("set.risk.profile.hint")}</p>
           </div>
           <div className="space-y-2">
             <Label className="inline-flex items-center gap-1">
               {t("set.risk.fund")} <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
             </Label>
-            <select
-              name="emergencyFundMonthsTarget"
+            <Select
               value={String(settings.emergencyFundMonthsTarget)}
-              onChange={(e) => void persist({ emergencyFundMonthsTarget: Number(e.target.value) })}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              onValueChange={(value) => void persist({ emergencyFundMonthsTarget: Number(value) })}
             >
-              <option value="3">{t("set.risk.fund.months", { n: 3 })}</option>
-              <option value="6">{t("set.risk.fund.months12", { n: 6 })}</option>
-              <option value="12">{t("set.risk.fund.months12", { n: 12 })}</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3">{t("set.risk.fund.months", { n: 3 })}</SelectItem>
+                <SelectItem value="6">{t("set.risk.fund.months12", { n: 6 })}</SelectItem>
+                <SelectItem value="12">{t("set.risk.fund.months12", { n: 12 })}</SelectItem>
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">{t("set.risk.fund.hint")}</p>
           </div>
         </SectionCard>

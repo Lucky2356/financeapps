@@ -3,6 +3,14 @@
 import { useMemo, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ALL_OPTION,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import {
@@ -32,32 +40,42 @@ export function ForecastEventsCard({
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>{t("fc.events")}</CardTitle>
         <div className="flex flex-wrap gap-2">
-          <select
-            aria-label={t("fc.filterAccount")}
-            value={filter.account}
-            onChange={(event) => setFilter((prev) => ({ ...prev, account: event.target.value }))}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+          <Select
+            value={filter.account || ALL_OPTION}
+            onValueChange={(value) =>
+              setFilter((prev) => ({ ...prev, account: value === ALL_OPTION ? "" : value }))
+            }
           >
-            <option value="">{t("tx.allAccounts")}</option>
-            {accounts.map((account) => (
-              <option key={account} value={account}>
-                {account}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={t("fc.filterCategory")}
-            value={filter.category}
-            onChange={(event) => setFilter((prev) => ({ ...prev, category: event.target.value }))}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
+            <SelectTrigger className="h-9 w-44" aria-label={t("fc.filterAccount")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_OPTION}>{t("tx.allAccounts")}</SelectItem>
+              {accounts.map((account) => (
+                <SelectItem key={account} value={account}>
+                  {account}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={filter.category || ALL_OPTION}
+            onValueChange={(value) =>
+              setFilter((prev) => ({ ...prev, category: value === ALL_OPTION ? "" : value }))
+            }
           >
-            <option value="">{t("tx.allCategories")}</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 w-44" aria-label={t("fc.filterCategory")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_OPTION}>{t("tx.allCategories")}</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent>

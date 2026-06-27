@@ -34,6 +34,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -808,18 +815,21 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invest-risk">{t("inv.riskAllowed")}</Label>
-                <select
-                  id="invest-risk"
+                <Select
                   value={riskCode}
-                  onChange={(e) => setRiskCode(e.target.value as typeof riskCode)}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  onValueChange={(value) => setRiskCode(value as typeof riskCode)}
                 >
-                  {RISK_CODES.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {t(`riskProfile.${option.value}`)}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="invest-risk">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RISK_CODES.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {t(`riskProfile.${option.value}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="button" onClick={computeSuggestions}>
                 {t("inv.suggestBtn")}

@@ -24,6 +24,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { DebtPayoffService } from "@/services/DebtPayoffService";
@@ -242,17 +249,18 @@ function DebtDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>{t("common.type")}</Label>
-            <select
-              name="kind"
-              defaultValue={liability?.kind ?? "LOAN"}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            >
-              {KIND_VALUES.map((value) => (
-                <option key={value} value={value}>
-                  {t(`debtKind.${value}`)}
-                </option>
-              ))}
-            </select>
+            <Select name="kind" defaultValue={liability?.kind ?? "LOAN"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {KIND_VALUES.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(`debtKind.${value}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>{t("debt.dialog.balance")}</Label>

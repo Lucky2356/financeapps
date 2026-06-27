@@ -11,6 +11,13 @@ import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -112,31 +119,33 @@ export function DistributeCashflow({ freeCashflowLabel }: { freeCashflowLabel: s
               <form onSubmit={handleSubmit} className="grid gap-4">
                 <div className="space-y-2">
                   <Label>{t("dc.goal")}</Label>
-                  <select
-                    value={goalId}
-                    onChange={(e) => setGoalId(e.target.value)}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  >
-                    {goals.map((goal) => (
-                      <option key={goal.id} value={goal.id}>
-                        {goal.title}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={goalId} onValueChange={setGoalId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {goals.map((goal) => (
+                        <SelectItem key={goal.id} value={goal.id}>
+                          {goal.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>{t("dc.fromAccount")}</Label>
-                  <select
-                    value={accountId}
-                    onChange={(e) => setAccountId(e.target.value)}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  >
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={accountId} onValueChange={setAccountId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>{t("common.amount")}</Label>

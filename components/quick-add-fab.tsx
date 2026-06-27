@@ -14,6 +14,13 @@ import { useI18n } from "@/lib/i18n/context";
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -258,20 +265,18 @@ export function QuickAddFab({
                   </Button>
                 </div>
               ) : (
-                <select
-                  id="fab-category"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  required
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="">{t("ai.selectCategory")}</option>
-                  {filteredCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
+                <Select value={categoryId || undefined} onValueChange={setCategoryId}>
+                  <SelectTrigger id="fab-category">
+                    <SelectValue placeholder={t("ai.selectCategory")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
 
@@ -294,36 +299,35 @@ export function QuickAddFab({
                     onChange={(e) => setNewAccountName(e.target.value)}
                     placeholder={t("tx.dialog.accountPlaceholder")}
                   />
-                  <select
-                    value={newAccountType}
-                    onChange={(e) => setNewAccountType(e.target.value)}
-                    className="h-10 rounded-md border bg-background px-2 text-sm"
-                  >
-                    {ACCOUNT_TYPES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {t(opt.labelKey)}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={newAccountType} onValueChange={setNewAccountType}>
+                    <SelectTrigger className="w-40 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ACCOUNT_TYPES.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {t(opt.labelKey)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button type="button" variant="outline" onClick={() => void createAccount()}>
                     {t("tx.dialog.create")}
                   </Button>
                 </div>
               ) : (
-                <select
-                  id="fab-account"
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  required
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="">{t("ai.selectAccount")}</option>
-                  {activeAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={accountId || undefined} onValueChange={setAccountId}>
+                  <SelectTrigger id="fab-account">
+                    <SelectValue placeholder={t("ai.selectAccount")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
 

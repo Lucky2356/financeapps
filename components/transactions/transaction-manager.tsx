@@ -31,6 +31,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  ALL_OPTION,
+  normalizeSelectValues,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -133,9 +142,25 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     router.refresh();
   }
 
+  // Filters live in the URL. The themed Select submits a sentinel for "all", so
+  // we normalize it to "" and drop empties before navigating.
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const entries = normalizeSelectValues(
+      Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>
+    );
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(entries)) {
+      if (value) params.set(key, String(value));
+    }
+    router.push(`/transactions?${params.toString()}`);
+  }
+
   async function submitTransaction(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const payload = normalizeSelectValues(
+      Object.fromEntries(new FormData(event.currentTarget).entries())
+    );
 
     await run(
       () =>
@@ -175,7 +200,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     event.preventDefault();
     const payload = {
       action: "transfer",
-      ...Object.fromEntries(new FormData(event.currentTarget).entries())
+      ...normalizeSelectValues(Object.fromEntries(new FormData(event.currentTarget).entries()))
     };
 
     await run(() => apiClient.post("/transactions", payload), {
@@ -225,7 +250,11 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           {/* key remounts the uncontrolled filter inputs when the URL params
               change (e.g. arriving from a drill-down link) so the controls
               reflect the active category/account filter. */}
-          <form key={paramsString} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <form
+            key={paramsString}
+            onSubmit={applyFilters}
+            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"
+          >
             <div className="space-y-2 sm:col-span-2 xl:col-span-6">
               <Label htmlFor="q">{t("tx.search")}</Label>
               <div className="relative">
@@ -249,61 +278,61 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">{t("tx.type")}</Label>
-              <select
-                id="type"
-                name="type"
-                defaultValue={clientFilters.type}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="ALL">{t("tx.type.all")}</option>
-                <option value="INCOME">{t("tx.type.income")}</option>
-                <option value="EXPENSE">{t("tx.type.expense")}</option>
-              </select>
+              <Select name="type" defaultValue={clientFilters.type}>
+                <SelectTrigger id="type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{t("tx.type.all")}</SelectItem>
+                  <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
+                  <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="categoryId">{t("common.category")}</Label>
-              <select
-                id="categoryId"
-                name="categoryId"
-                defaultValue={clientFilters.categoryId}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="">{t("tx.allCategories")}</option>
-                {pageData.categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
+              <Select name="categoryId" defaultValue={clientFilters.categoryId || ALL_OPTION}>
+                <SelectTrigger id="categoryId">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_OPTION}>{t("tx.allCategories")}</SelectItem>
+                  {pageData.categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="accountId">{t("tx.account")}</Label>
-              <select
-                id="accountId"
-                name="accountId"
-                defaultValue={clientFilters.accountId}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="">{t("tx.allAccounts")}</option>
-                {pageData.accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </select>
+              <Select name="accountId" defaultValue={clientFilters.accountId || ALL_OPTION}>
+                <SelectTrigger id="accountId">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_OPTION}>{t("tx.allAccounts")}</SelectItem>
+                  {pageData.accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="limit">{t("tx.perPage")}</Label>
-              <select
-                id="limit"
-                name="limit"
-                defaultValue={clientFilters.limit}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
+              <Select name="limit" defaultValue={clientFilters.limit}>
+                <SelectTrigger id="limit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2 sm:col-span-2 xl:col-span-6">
               <Button type="submit">{t("tx.apply")}</Button>
@@ -563,33 +592,33 @@ function TransferDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("tx.transfer.from")}</Label>
-            <select
-              name="fromAccountId"
-              defaultValue={defaultFromAccount}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              required
-            >
-              {data.accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
+            <Select name="fromAccountId" defaultValue={defaultFromAccount} required>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {data.accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label>{t("tx.transfer.to")}</Label>
-            <select
-              name="toAccountId"
-              defaultValue={defaultToAccount}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              required
-            >
-              {data.accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
+            <Select name="toAccountId" defaultValue={defaultToAccount} required>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {data.accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>{t("tx.col.description")}</Label>
@@ -756,14 +785,18 @@ function TransactionDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("tx.type")}</Label>
-            <select
+            <Select
               value={selectedType}
-              onChange={(event) => changeType(event.target.value as "INCOME" | "EXPENSE")}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              onValueChange={(value) => changeType(value as "INCOME" | "EXPENSE")}
             >
-              <option value="EXPENSE">{t("tx.type.expense")}</option>
-              <option value="INCOME">{t("tx.type.income")}</option>
-            </select>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
+                <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -798,20 +831,21 @@ function TransactionDialog({
               </div>
             ) : (
               <>
-                <select
-                  value={effectiveCategoryId}
-                  onChange={(event) => pickCategory(event.target.value)}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                <Select
+                  value={effectiveCategoryId || undefined}
+                  onValueChange={(value) => pickCategory(value)}
                 >
-                  {matchingCategories.length === 0 ? (
-                    <option value="">{t("tx.dialog.createCategoryFirst")}</option>
-                  ) : null}
-                  {matchingCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("tx.dialog.createCategoryFirst")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {matchingCategories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {autoSuggested ? (
                   <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
                 ) : null}
@@ -836,17 +870,18 @@ function TransactionDialog({
                   onChange={(e) => setNewAccountName(e.target.value)}
                   placeholder={t("tx.dialog.accountPlaceholder")}
                 />
-                <select
-                  value={newAccountType}
-                  onChange={(e) => setNewAccountType(e.target.value)}
-                  className="h-10 rounded-md border bg-background px-2 text-sm"
-                >
-                  {ACCOUNT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {t(opt.labelKey)}
-                    </option>
-                  ))}
-                </select>
+                <Select value={newAccountType} onValueChange={setNewAccountType}>
+                  <SelectTrigger className="w-40 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {t(opt.labelKey)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button
                   type="button"
                   variant="outline"
@@ -857,20 +892,18 @@ function TransactionDialog({
                 </Button>
               </div>
             ) : (
-              <select
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              >
-                {data.accounts.length === 0 ? (
-                  <option value="">{t("tx.dialog.createAccountFirst")}</option>
-                ) : null}
-                {data.accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={accountId || undefined} onValueChange={setAccountId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("tx.dialog.createAccountFirst")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {data.accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
           <div className="space-y-2 sm:col-span-2">
