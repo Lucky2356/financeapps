@@ -3,6 +3,12 @@ export const APP_NAME = "Финансовый помощник";
 // displayed version always matches the real release.
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
 
+// Public GitHub repo that hosts the signed desktop releases. Used to offer a
+// ".exe" download on the web auth pages and to resolve the latest installer.
+export const GITHUB_REPO = "Lucky2356/financeapps";
+export const DESKTOP_RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases/latest`;
+export const GITHUB_LATEST_RELEASE_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+
 export const INVESTMENT_DISCLAIMER =
   "Информация в этом разделе не является индивидуальной инвестиционной рекомендацией. Решения об инвестициях пользователь принимает самостоятельно.";
 

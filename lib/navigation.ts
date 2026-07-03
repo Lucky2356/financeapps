@@ -9,7 +9,6 @@ import {
   Gauge,
   LayoutDashboard,
   LineChart,
-  Menu,
   Repeat,
   Settings,
   Tag,
@@ -18,73 +17,70 @@ import {
   type LucideIcon
 } from "lucide-react";
 
-// Single source of truth for app navigation, shared by the desktop sidebar and
-// the mobile bars so labels, routes and icons can never drift apart.
+// Single source of truth for app navigation, shared by the desktop sidebar, the
+// mobile bars and the in-page hub tabs, so labels, routes and icons never drift.
+//
+// To keep the app approachable, the sidebar shows only a handful of top-level
+// destinations ("hubs"). Related screens live as tabs *inside* a hub (rendered by
+// the HubTabs bar) instead of as separate sidebar buttons.
 
-// `label` is the Russian default (fallback). `labelKey` resolves the translated
-// string via the i18n catalog (see lib/i18n); section labels carry `labelKey` too.
 export type NavItem = { href: string; label: string; labelKey: string; icon: LucideIcon };
-export type NavSection = { label: string | null; labelKey?: string; items: NavItem[] };
+export type NavTab = { href: string; label: string; labelKey: string; icon: LucideIcon };
+export type HubGroup = { landing: string; tabs: NavTab[] };
 
-export const NAV_SECTIONS: NavSection[] = [
+// A hub groups several routes under one sidebar button; `landing` is where the
+// button points (the first tab). The first matching group owns a path.
+export const HUB_GROUPS: HubGroup[] = [
   {
-    label: null,
-    items: [{ href: "/", label: "Главная", labelKey: "nav.home", icon: LayoutDashboard }]
-  },
-  {
-    label: "Учёт",
-    labelKey: "section.accounting",
-    items: [
+    landing: "/transactions",
+    tabs: [
       { href: "/transactions", label: "Операции", labelKey: "nav.transactions", icon: ArrowDownUp },
       { href: "/accounts", label: "Счета", labelKey: "nav.accounts", icon: WalletCards },
       { href: "/debts", label: "Долги", labelKey: "nav.debts", icon: CreditCard },
-      { href: "/categories", label: "Категории", labelKey: "nav.categories", icon: Tag }
+      { href: "/categories", label: "Категории", labelKey: "nav.categories", icon: Tag },
+      { href: "/import", label: "Импорт", labelKey: "nav.import", icon: Download }
     ]
   },
   {
-    label: "Планирование",
-    labelKey: "section.planning",
-    items: [
+    landing: "/budgets",
+    tabs: [
       { href: "/budgets", label: "Бюджеты", labelKey: "nav.budgets", icon: Gauge },
       { href: "/goals", label: "Цели", labelKey: "nav.goals", icon: Flag },
       { href: "/recurring", label: "Плановые", labelKey: "nav.recurring", icon: CalendarClock },
-      { href: "/subscriptions", label: "Подписки", labelKey: "nav.subscriptions", icon: Repeat },
+      { href: "/subscriptions", label: "Подписки", labelKey: "nav.subscriptions", icon: Repeat }
+    ]
+  },
+  {
+    landing: "/analytics",
+    tabs: [
+      { href: "/analytics", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp },
       { href: "/forecast", label: "Прогноз", labelKey: "nav.forecast", icon: LineChart },
-      { href: "/analytics", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp }
-    ]
-  },
-  {
-    label: "Рынок",
-    labelKey: "section.market",
-    items: [
-      { href: "/investments", label: "Инвестиции", labelKey: "nav.investments", icon: BarChart3 }
-    ]
-  },
-  {
-    label: "Прочее",
-    labelKey: "section.other",
-    items: [
-      { href: "/reports", label: "Отчёты", labelKey: "nav.reports", icon: FileText },
-      { href: "/import", label: "Импорт", labelKey: "nav.import", icon: Download },
-      { href: "/settings", label: "Настройки", labelKey: "nav.settings", icon: Settings }
+      { href: "/reports", label: "Отчёты", labelKey: "nav.reports", icon: FileText }
     ]
   }
 ];
 
-export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((section) => section.items);
-
-// Mobile bottom bar: the 5 most-used destinations, with a compact "Ещё" entry.
-export const MOBILE_PRIMARY: NavItem[] = [
+// The six top-level destinations shown in the sidebar / mobile bottom bar. The
+// "Учёт" and "Планирование" buttons land on a hub whose other screens are tabs.
+export const MAIN_NAV: NavItem[] = [
   { href: "/", label: "Главная", labelKey: "nav.home", icon: LayoutDashboard },
-  { href: "/transactions", label: "Операции", labelKey: "nav.transactions", icon: ArrowDownUp },
-  { href: "/budgets", label: "Бюджеты", labelKey: "nav.budgets", icon: Gauge },
-  { href: "/investments", label: "Рынок", labelKey: "nav.market", icon: BarChart3 },
-  { href: "/settings", label: "Ещё", labelKey: "nav.more", icon: Menu }
+  { href: "/transactions", label: "Учёт", labelKey: "section.accounting", icon: ArrowDownUp },
+  { href: "/budgets", label: "Планирование", labelKey: "section.planning", icon: Gauge },
+  { href: "/analytics", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp },
+  { href: "/investments", label: "Инвестиции", labelKey: "nav.investments", icon: BarChart3 },
+  { href: "/settings", label: "Настройки", labelKey: "nav.settings", icon: Settings }
 ];
 
-const PRIMARY_DESTINATIONS = new Set(["/", "/transactions", "/budgets", "/investments"]);
+// The hub (if any) that owns the current path — used by the in-page tab bar.
+export function findHub(pathname: string): HubGroup | null {
+  return HUB_GROUPS.find((group) => group.tabs.some((tab) => tab.href === pathname)) ?? null;
+}
 
-// Everything not already on the bottom bar — shown in the scrollable mobile top bar.
-export const MOBILE_SECONDARY: NavItem[] = NAV_ITEMS.filter(
-  (item) => !PRIMARY_DESTINATIONS.has(item.href)
-);
+// Which sidebar button should be highlighted for a given path: the owning hub's
+// landing route, or the path itself for standalone destinations.
+export function activeNavHref(pathname: string): string {
+  return findHub(pathname)?.landing ?? pathname;
+}
+
+// Mobile bottom bar mirrors the sidebar; the hub tab bar handles sub-navigation.
+export const MOBILE_PRIMARY: NavItem[] = MAIN_NAV;

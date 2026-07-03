@@ -179,6 +179,7 @@ export const localStateSchema = z.object({
   autoMaterializeRecurring: z.boolean().default(false),
   paymentReminders: z.boolean().default(false),
   aiEnabled: z.boolean().default(false),
+  aiProvider: z.string().default("anthropic"),
   aiApiKey: z.string().default(""),
   aiModel: z.string().default(""),
   netWorthSnapshots: z

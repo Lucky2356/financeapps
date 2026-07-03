@@ -35,7 +35,7 @@ import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
-import { AI_MODELS } from "@/lib/ai/models";
+import { AI_PROVIDERS, providerInfo, type AiProvider } from "@/lib/ai/models";
 import { APP_VERSION } from "@/lib/constants";
 import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -82,6 +82,7 @@ type EditableSettings = {
   autoMaterializeRecurring: boolean;
   paymentReminders: boolean;
   aiEnabled: boolean;
+  aiProvider: string;
   aiApiKey: string;
   aiModel: string;
 };
@@ -98,6 +99,7 @@ function toEditable(data: SettingsPageData): EditableSettings {
     autoMaterializeRecurring: data.autoMaterializeRecurring ?? false,
     paymentReminders: data.paymentReminders ?? false,
     aiEnabled: data.aiEnabled ?? false,
+    aiProvider: data.aiProvider ?? "anthropic",
     aiApiKey: data.aiApiKey ?? "",
     aiModel: data.aiModel ?? ""
   };
@@ -154,6 +156,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         autoMaterializeRecurring: next.autoMaterializeRecurring,
         paymentReminders: next.paymentReminders,
         aiEnabled: next.aiEnabled,
+        aiProvider: next.aiProvider,
         aiApiKey: next.aiApiKey,
         aiModel: next.aiModel
       });
@@ -454,45 +457,74 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           />
           {settings.aiEnabled && (
             <>
-              {isLocalDesktopMode && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-key">{t("set.ai.key")}</Label>
-                    <Input
-                      id="ai-key"
-                      type="password"
-                      autoComplete="off"
-                      value={settings.aiApiKey}
-                      onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })}
-                      onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
-                      placeholder="sk-ant-..."
-                    />
-                    <p className="text-xs text-muted-foreground">{t("set.ai.key.hint")}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
-                    <Select
-                      value={settings.aiModel || ALL_OPTION}
-                      onValueChange={(value) =>
-                        void persist({ aiModel: value === ALL_OPTION ? "" : value })
-                      }
-                    >
-                      <SelectTrigger id="ai-model">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
-                        {AI_MODELS.map((model) => (
-                          <SelectItem key={model.id} value={model.id}>
-                            {model.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
-                  </div>
-                </>
-              )}
+              {isLocalDesktopMode &&
+                (() => {
+                  const activeProvider = providerInfo(settings.aiProvider);
+                  return (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-provider">{t("set.ai.provider")}</Label>
+                        <Select
+                          value={activeProvider.id}
+                          onValueChange={(value) => {
+                            // Switching provider resets the model to that
+                            // provider's default (empty = its default model).
+                            void persist({ aiProvider: value as AiProvider, aiModel: "" });
+                          }}
+                        >
+                          <SelectTrigger id="ai-provider">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {AI_PROVIDERS.map((provider) => (
+                              <SelectItem key={provider.id} value={provider.id}>
+                                {provider.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">{t("set.ai.provider.hint")}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-key">{t("set.ai.key")}</Label>
+                        <Input
+                          id="ai-key"
+                          type="password"
+                          autoComplete="off"
+                          value={settings.aiApiKey}
+                          onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })}
+                          onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
+                          placeholder={activeProvider.id === "anthropic" ? "sk-ant-..." : "sk-..."}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {t(activeProvider.keyHintKey)}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
+                        <Select
+                          value={settings.aiModel || ALL_OPTION}
+                          onValueChange={(value) =>
+                            void persist({ aiModel: value === ALL_OPTION ? "" : value })
+                          }
+                        >
+                          <SelectTrigger id="ai-model">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
+                            {activeProvider.models.map((model) => (
+                              <SelectItem key={model.id} value={model.id}>
+                                {model.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
+                      </div>
+                    </>
+                  );
+                })()}
               <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
                 {t("set.ai.warning")}
                 {!isLocalDesktopMode && t("set.ai.warning.web")}

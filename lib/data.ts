@@ -141,8 +141,9 @@ export type SettingsPageData = {
   autoMaterializeRecurring: boolean;
   paymentReminders: boolean;
   aiEnabled: boolean;
-  // Only populated on desktop (the user's own key, stored locally). The web
-  // path uses a server-side key and never returns this.
+  // Only populated on desktop (the user's own provider/key, stored locally). The
+  // web path uses a server-side key/provider and never returns these.
+  aiProvider?: string;
   aiApiKey?: string;
   aiModel?: string;
   riskProfiles: Array<{
