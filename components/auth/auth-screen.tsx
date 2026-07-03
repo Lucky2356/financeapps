@@ -2,6 +2,7 @@
 
 import { CircleDollarSign, Gauge, LineChart, ShieldCheck, Wallet } from "lucide-react";
 
+import { DownloadDesktopButton } from "@/components/auth/download-desktop-button";
 import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -39,7 +40,10 @@ export function AuthScreen({ children }: { children: React.ReactNode }) {
         </ul>
         <p className="text-xs text-muted-foreground">{t("auth.disclaimer")}</p>
       </section>
-      <div className="w-full max-w-sm justify-self-center lg:justify-self-end">{children}</div>
+      <div className="w-full max-w-sm justify-self-center space-y-4 lg:justify-self-end">
+        {children}
+        <DownloadDesktopButton />
+      </div>
     </div>
   );
 }

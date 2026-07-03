@@ -1,6 +1,6 @@
 {
   "name": "financial-assistant-mvp",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "private": true,
   "engines": {
     "node": ">=24 <25",
@@ -70,6 +70,7 @@
     "next": "^16.2.6",
     "next-auth": "^5.0.0-beta.31",
     "next-themes": "^0.4.3",
+    "openai": "^6.45.0",
     "otplib": "^13.4.1",
     "papaparse": "^5.4.1",
     "qrcode": "^1.5.4",

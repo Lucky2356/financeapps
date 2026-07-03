@@ -9,12 +9,15 @@ import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
-import { NAV_SECTIONS } from "@/lib/navigation";
+import { activeNavHref, MAIN_NAV } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { t } = useI18n();
+  // A short list of top-level destinations keeps the app approachable; related
+  // screens live as tabs inside their hub (see HubTabs), not as sidebar buttons.
+  const activeHref = activeNavHref(pathname);
 
   return (
     <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
@@ -47,37 +50,26 @@ export function AppSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3">
-        {NAV_SECTIONS.map((section, si) => (
-          <div key={si} className={si > 0 ? "mt-4" : undefined}>
-            {section.label ? (
-              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
-                {section.labelKey ? t(section.labelKey) : section.label}
-              </p>
-            ) : null}
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const active = pathname === item.href;
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150",
-                      active
-                        ? "bg-primary/10 font-semibold text-primary before:absolute before:left-0 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-primary before:content-['']"
-                        : "text-muted-foreground hover:bg-primary/5 hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    {t(item.labelKey)}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
+        {MAIN_NAV.map((item) => {
+          const active = activeHref === item.href;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150",
+                active
+                  ? "bg-primary/10 font-semibold text-primary before:absolute before:left-0 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-primary before:content-['']"
+                  : "text-muted-foreground hover:bg-primary/5 hover:text-foreground"
+              )}
+            >
+              <Icon className="size-4 shrink-0" />
+              {t(item.labelKey)}
+            </Link>
+          );
+        })}
       </nav>
 
       {/* Footer */}

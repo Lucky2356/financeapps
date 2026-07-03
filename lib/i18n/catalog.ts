@@ -984,6 +984,8 @@ const ru: Messages = {
   "auth.feature.privacy": "Данные изолированы по аккаунту; на десктопе — полностью офлайн",
   "auth.disclaimer":
     "Бесплатно и без рекламы. Инвестиционный раздел носит образовательный характер и не является индивидуальной инвестиционной рекомендацией.",
+  "auth.download.title": "Скачать приложение для Windows (.exe)",
+  "auth.download.hint": "Или пользуйтесь прямо в браузере — без установки",
   // Auth forms
   "auth.login.title": "Вход",
   "auth.register.title": "Регистрация",
@@ -1054,16 +1056,26 @@ const ru: Messages = {
   // Settings: AI
   "set.ai.title": "ИИ-ассистент",
   "set.ai.enable.title": "Включить ИИ-ассистент",
-  "set.ai.enable.desc": "Ввод операций текстом на странице «Операции» через Claude.",
-  "set.ai.key": "API-ключ Anthropic",
+  "set.ai.enable.desc":
+    "Ввод операций текстом на странице «Операции» через нейросеть на ваш выбор.",
+  "set.ai.provider": "Провайдер ИИ",
+  "set.ai.provider.hint":
+    "Выберите нейросеть: Claude (Anthropic), ChatGPT (OpenAI) или DeepSeek. Нужен API-ключ выбранного провайдера.",
+  "set.ai.key": "API-ключ",
   "set.ai.key.hint":
-    "Ключ хранится только на вашем устройстве и используется для запросов к Anthropic.",
+    "Ключ хранится только на вашем устройстве и используется для запросов к выбранному провайдеру.",
+  "set.ai.key.hint.anthropic":
+    "Ключ хранится только на вашем устройстве. Получить: console.anthropic.com → API Keys.",
+  "set.ai.key.hint.openai":
+    "Ключ хранится только на вашем устройстве. Получить: platform.openai.com → API keys.",
+  "set.ai.key.hint.deepseek":
+    "Ключ хранится только на вашем устройстве. Получить: platform.deepseek.com → API keys.",
   "set.ai.model": "Модель",
-  "set.ai.model.default": "По умолчанию (Opus 4.8)",
+  "set.ai.model.default": "По умолчанию",
   "set.ai.model.hint":
-    "Более мощные модели точнее, но дороже и медленнее. Для коротких фраз достаточно Haiku или Sonnet.",
+    "Более мощные модели точнее, но дороже и медленнее. Для коротких фраз хватает быстрой модели.",
   "set.ai.warning":
-    "Текст, который вы вводите, отправляется во внешний сервис Anthropic. Не указывайте конфиденциальные данные. Функцию можно отключить в любой момент.",
+    "Текст, который вы вводите, отправляется во внешний сервис выбранного провайдера. Не указывайте конфиденциальные данные. Функцию можно отключить в любой момент.",
   "set.ai.warning.web":
     " На сайте используется серверный ключ — если ИИ не настроен на сервере, запрос вернёт ошибку.",
   // Settings: risk
@@ -2163,6 +2175,8 @@ const en: Messages = {
   "auth.feature.privacy": "Data is isolated per account; on desktop — fully offline",
   "auth.disclaimer":
     "Free and ad-free. The investments section is educational and is not individual investment advice.",
+  "auth.download.title": "Download the Windows app (.exe)",
+  "auth.download.hint": "Or use it right here in your browser — no install needed",
   // Auth forms
   "auth.login.title": "Sign in",
   "auth.register.title": "Sign up",
@@ -2233,15 +2247,26 @@ const en: Messages = {
   // Settings: AI
   "set.ai.title": "AI assistant",
   "set.ai.enable.title": "Enable AI assistant",
-  "set.ai.enable.desc": "Enter transactions as text on the Transactions page via Claude.",
-  "set.ai.key": "Anthropic API key",
-  "set.ai.key.hint": "The key is stored only on your device and used for requests to Anthropic.",
+  "set.ai.enable.desc":
+    "Enter transactions as text on the Transactions page via the AI of your choice.",
+  "set.ai.provider": "AI provider",
+  "set.ai.provider.hint":
+    "Choose the AI: Claude (Anthropic), ChatGPT (OpenAI) or DeepSeek. Requires an API key for the selected provider.",
+  "set.ai.key": "API key",
+  "set.ai.key.hint":
+    "The key is stored only on your device and used for requests to the selected provider.",
+  "set.ai.key.hint.anthropic":
+    "The key is stored only on your device. Get one at console.anthropic.com → API Keys.",
+  "set.ai.key.hint.openai":
+    "The key is stored only on your device. Get one at platform.openai.com → API keys.",
+  "set.ai.key.hint.deepseek":
+    "The key is stored only on your device. Get one at platform.deepseek.com → API keys.",
   "set.ai.model": "Model",
-  "set.ai.model.default": "Default (Opus 4.8)",
+  "set.ai.model.default": "Default",
   "set.ai.model.hint":
-    "More powerful models are more accurate but pricier and slower. Haiku or Sonnet is enough for short phrases.",
+    "More powerful models are more accurate but pricier and slower. A fast model is enough for short phrases.",
   "set.ai.warning":
-    "The text you enter is sent to the external Anthropic service. Do not include confidential data. You can disable this feature at any time.",
+    "The text you enter is sent to the selected provider's external service. Do not include confidential data. You can disable this feature at any time.",
   "set.ai.warning.web":
     " On the website a server key is used — if AI is not configured on the server, the request will return an error.",
   // Settings: risk
