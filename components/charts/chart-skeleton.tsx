@@ -9,12 +9,11 @@ import { cn } from "@/lib/utils";
 export function ChartSkeleton({ className }: { className?: string }) {
   const { t } = useI18n();
   return (
-    <div
-      className={cn("h-64 w-full sm:h-72", className)}
-      role="status"
+    <output
+      className={cn("block h-64 w-full sm:h-72", className)}
       aria-label={t("chart.aria.loading")}
     >
       <Skeleton className="h-full w-full" />
-    </div>
+    </output>
   );
 }

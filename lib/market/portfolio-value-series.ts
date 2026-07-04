@@ -17,7 +17,11 @@ export function combinePortfolioValue(holdings: PortfolioHoldingSeries[]): Stock
     byDate: new Map(holding.points.map((p) => [p.date.slice(0, 10), p.price]))
   }));
 
-  const allDates = [...new Set(maps.flatMap((m) => [...m.byDate.keys()]))].sort();
+  // ISO YYYY-MM-DD strings sort chronologically; the explicit comparator makes
+  // that intent clear (and avoids a locale-dependent default sort).
+  const allDates = [...new Set(maps.flatMap((m) => [...m.byDate.keys()]))].sort((a, b) =>
+    a.localeCompare(b)
+  );
   const lastPrice = maps.map(() => 0);
   const result: StockPricePoint[] = [];
 
