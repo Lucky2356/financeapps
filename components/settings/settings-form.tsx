@@ -30,6 +30,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AccountSection } from "@/components/settings/account-section";
+import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
 import { LocalModePanel } from "@/components/settings/local-mode-panel";
 import { ProfileSection } from "@/components/settings/profile-section";
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
@@ -636,7 +637,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       id: "data",
       label: t("set.section.data"),
       icon: Database,
-      keywords: "данные data демо demo очистить clear backup резервная копия снимок snapshot local",
+      keywords:
+        "данные data демо demo очистить clear backup резервная копия снимок snapshot local синхронизация sync облако cloud папка folder dropbox drive",
       node: (
         <>
           <Card className="border-destructive/30">
@@ -680,8 +682,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               </Dialog>
             </CardContent>
           </Card>
-          {/* Desktop-only local snapshot tool (self-hides on web). */}
+          {/* Desktop-only local snapshot tool + cloud-folder sync (self-hide on web). */}
           <LocalModePanel />
+          <CloudSyncPanel />
         </>
       )
     });
