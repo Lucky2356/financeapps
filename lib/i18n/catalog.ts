@@ -1080,6 +1080,12 @@ const ru: Messages = {
   "set.ai.model.default": "По умолчанию",
   "set.ai.model.hint":
     "Более мощные модели точнее, но дороже и медленнее. Для коротких фраз хватает быстрой модели.",
+  "set.ai.effort": "Глубина обдумывания",
+  "set.ai.effort.hint":
+    "Глубже — точнее, но медленнее и дороже. Для ввода операций обычно хватает среднего уровня.",
+  "set.ai.effort.low": "Быстро",
+  "set.ai.effort.medium": "Сбалансированно",
+  "set.ai.effort.high": "Глубоко",
   "set.ai.warning":
     "Текст, который вы вводите, отправляется во внешний сервис выбранного провайдера. Не указывайте конфиденциальные данные. Функцию можно отключить в любой момент.",
   "set.ai.warning.web":
@@ -2281,6 +2287,12 @@ const en: Messages = {
   "set.ai.model.default": "Default",
   "set.ai.model.hint":
     "More powerful models are more accurate but pricier and slower. A fast model is enough for short phrases.",
+  "set.ai.effort": "Thinking depth",
+  "set.ai.effort.hint":
+    "Deeper is more accurate but slower and pricier. Balanced is usually enough for entering transactions.",
+  "set.ai.effort.low": "Fast",
+  "set.ai.effort.medium": "Balanced",
+  "set.ai.effort.high": "Deep",
   "set.ai.warning":
     "The text you enter is sent to the selected provider's external service. Do not include confidential data. You can disable this feature at any time.",
   "set.ai.warning.web":

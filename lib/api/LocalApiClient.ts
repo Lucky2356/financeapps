@@ -93,6 +93,7 @@ type LocalState = {
   paymentReminders: boolean;
   aiEnabled: boolean;
   aiProvider: string;
+  aiEffort: string;
   aiApiKey: string;
   aiModel: string;
   netWorthSnapshots: NetWorthSnapshot[];
@@ -189,6 +190,7 @@ function createInitialState(): LocalState {
     paymentReminders: false,
     aiEnabled: false,
     aiProvider: "anthropic",
+    aiEffort: "medium",
     aiApiKey: "",
     aiModel: "",
     netWorthSnapshots: [],
@@ -222,6 +224,7 @@ function createBlankState(): LocalState {
     paymentReminders: false,
     aiEnabled: false,
     aiProvider: "anthropic",
+    aiEffort: "medium",
     aiApiKey: "",
     aiModel: "",
     netWorthSnapshots: [],
@@ -1094,6 +1097,10 @@ export class LocalApiClient implements ApiClient {
       state.aiProvider =
         typeof raw.aiProvider === "string" ? raw.aiProvider.trim() || "anthropic" : "anthropic";
     }
+    if (raw.aiEffort !== undefined) {
+      state.aiEffort =
+        typeof raw.aiEffort === "string" ? raw.aiEffort.trim() || "medium" : "medium";
+    }
     if (raw.aiApiKey !== undefined) {
       state.aiApiKey = String(raw.aiApiKey ?? "").trim();
     }
@@ -1674,6 +1681,7 @@ export class LocalApiClient implements ApiClient {
       paymentReminders: state.paymentReminders ?? false,
       aiEnabled: state.aiEnabled ?? false,
       aiProvider: state.aiProvider ?? "anthropic",
+      aiEffort: state.aiEffort ?? "medium",
       aiApiKey: state.aiApiKey ?? "",
       aiModel: state.aiModel ?? "",
       riskProfiles: [

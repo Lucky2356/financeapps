@@ -447,11 +447,15 @@ describe("LocalApiClient automation (plan D2c)", () => {
     const client = createClient();
     await client.put("/settings", {
       aiEnabled: "on",
+      aiProvider: " openai ",
+      aiEffort: " high ",
       aiApiKey: "  sk-ant-test  ",
       aiModel: " claude-opus-4-8 "
     });
     const settings = await client.get<SettingsPageData>("/settings");
     expect(settings.aiEnabled).toBe(true);
+    expect(settings.aiProvider).toBe("openai");
+    expect(settings.aiEffort).toBe("high");
     expect(settings.aiApiKey).toBe("sk-ant-test");
     expect(settings.aiModel).toBe("claude-opus-4-8");
   });
