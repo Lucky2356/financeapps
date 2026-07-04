@@ -5,6 +5,12 @@
 //
 // Translation is incremental: the shell (navigation, errors, settings) is
 // covered here; page content is migrated key-by-key over time.
+//
+// NOTE: the two locale blocks below are parallel translations with identical
+// keys, so a copy-paste detector reports this file as heavily "duplicated".
+// That is a false positive (the repetition is translated text, not copied
+// logic); this file is excluded from duplication detection via
+// sonar-project.properties (sonar.cpd.exclusions).
 
 export const LOCALES = ["ru", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
