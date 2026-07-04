@@ -1086,6 +1086,12 @@ const ru: Messages = {
   "set.ai.effort.low": "Быстро",
   "set.ai.effort.medium": "Сбалансированно",
   "set.ai.effort.high": "Глубоко",
+  // FX rates (multi-currency)
+  "fx.updatedOn": "Курсы ЦБ РФ на {date}",
+  "fx.notLoaded": "Курсы валют ещё не загружены",
+  "fx.refresh": "Обновить курсы",
+  "fx.refreshed": "Курсы валют обновлены.",
+  "fx.refreshFail": "Не удалось загрузить курсы ЦБ.",
   "set.ai.warning":
     "Текст, который вы вводите, отправляется во внешний сервис выбранного провайдера. Не указывайте конфиденциальные данные. Функцию можно отключить в любой момент.",
   "set.ai.warning.web":
@@ -2293,6 +2299,12 @@ const en: Messages = {
   "set.ai.effort.low": "Fast",
   "set.ai.effort.medium": "Balanced",
   "set.ai.effort.high": "Deep",
+  // FX rates (multi-currency)
+  "fx.updatedOn": "CBR rates as of {date}",
+  "fx.notLoaded": "Exchange rates not loaded yet",
+  "fx.refresh": "Refresh rates",
+  "fx.refreshed": "Exchange rates updated.",
+  "fx.refreshFail": "Couldn't load CBR rates.",
   "set.ai.warning":
     "The text you enter is sent to the selected provider's external service. Do not include confidential data. You can disable this feature at any time.",
   "set.ai.warning.web":

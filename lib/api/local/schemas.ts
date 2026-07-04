@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
-import { CURRENCY_CODES } from "@/lib/currency";
+import { CURRENCY_CODES, DEFAULT_CURRENCY_RATES } from "@/lib/currency";
 
 // Zod schemas for the desktop LocalState document and its sub-entities,
 // extracted from LocalApiClient to keep the client a thinner router (plan A1).
@@ -174,6 +174,12 @@ export const investmentSchema = z.object({
 export const localStateSchema = z.object({
   schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
+  // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
+  // and cached here so cross-currency capital is a single honest number offline.
+  currencyRates: z
+    .record(z.string(), z.coerce.number().finite().positive())
+    .default(() => ({ ...DEFAULT_CURRENCY_RATES })),
+  currencyRatesUpdatedAt: z.string().nullable().optional().default(null),
   liabilities: z.array(liabilitySchema).default([]),
   rules: z.array(categorizationRuleSchema).default([]),
   autoMaterializeRecurring: z.boolean().default(false),

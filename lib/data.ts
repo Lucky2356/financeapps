@@ -147,6 +147,8 @@ export type SettingsPageData = {
   aiEffort?: string;
   aiApiKey?: string;
   aiModel?: string;
+  // Desktop-only: when the cached CBR FX rates were last refreshed (ISO) or null.
+  currencyRatesUpdatedAt?: string | null;
   riskProfiles: Array<{
     id: string;
     code: RiskProfileCode;
