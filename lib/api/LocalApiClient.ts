@@ -1089,7 +1089,10 @@ export class LocalApiClient implements ApiClient {
         raw.aiEnabled === true || raw.aiEnabled === "true" || raw.aiEnabled === "on";
     }
     if (raw.aiProvider !== undefined) {
-      state.aiProvider = String(raw.aiProvider ?? "anthropic").trim() || "anthropic";
+      // Only accept a string; anything else falls back to the default provider
+      // (avoids stringifying an object to "[object Object]").
+      state.aiProvider =
+        typeof raw.aiProvider === "string" ? raw.aiProvider.trim() || "anthropic" : "anthropic";
     }
     if (raw.aiApiKey !== undefined) {
       state.aiApiKey = String(raw.aiApiKey ?? "").trim();
