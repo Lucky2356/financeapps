@@ -125,6 +125,27 @@ export const portfolioRowSchema = z.object({
   share: z.coerce.number().finite().min(0),
   risk: z.enum(["LOW", "MEDIUM", "HIGH"])
 });
+// A realized investment event for the tax report: a sale (with per-share buy/
+// sell prices) or a dividend. Kept separate from the current-holdings list.
+export const realizedEventSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(["SELL", "DIVIDEND"]),
+  ticker: z
+    .string()
+    .trim()
+    .min(1)
+    .max(16)
+    .transform((value) => value.toUpperCase()),
+  name: z.string().trim().max(120).default(""),
+  date: z.string().min(1),
+  quantity: z.coerce.number().finite().min(0).default(0),
+  sellPrice: z.coerce.number().finite().min(0).default(0),
+  buyPrice: z.coerce.number().finite().min(0).default(0),
+  amount: z.coerce.number().finite().min(0).default(0),
+  fee: z.coerce.number().finite().min(0).default(0),
+  currency: z.enum(CURRENCY_CODES).default("RUB")
+});
+
 export const investmentSchema = z.object({
   source: z.enum(["database", "demo-fallback"]).default("database"),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
@@ -192,6 +213,7 @@ export const localStateSchema = z.object({
   netWorthSnapshots: z
     .array(z.object({ date: z.string().min(1), value: z.coerce.number().finite() }))
     .default([]),
+  realizedInvestmentEvents: z.array(realizedEventSchema).default([]),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

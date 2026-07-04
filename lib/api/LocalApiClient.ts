@@ -69,6 +69,7 @@ import type {
   DashboardData,
   InvestmentData,
   LiabilityRow,
+  RealizedInvestmentEvent,
   TransactionRow
 } from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
@@ -105,6 +106,7 @@ type LocalState = {
   currencyRates: CurrencyRates;
   currencyRatesUpdatedAt: string | null;
   netWorthSnapshots: NetWorthSnapshot[];
+  realizedInvestmentEvents: RealizedInvestmentEvent[];
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -204,6 +206,7 @@ function createInitialState(): LocalState {
     currencyRates: { ...DEFAULT_CURRENCY_RATES },
     currencyRatesUpdatedAt: null,
     netWorthSnapshots: [],
+    realizedInvestmentEvents: [],
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -240,6 +243,7 @@ function createBlankState(): LocalState {
     currencyRates: { ...DEFAULT_CURRENCY_RATES },
     currencyRatesUpdatedAt: null,
     netWorthSnapshots: [],
+    realizedInvestmentEvents: [],
     categories: [],
     transactions: [],
     budgets: [],
@@ -343,6 +347,7 @@ export class LocalApiClient implements ApiClient {
       await this.save(state);
       return invData as T;
     }
+    if (pathname === "/investments/events") return this.investmentEventsPage(state) as T;
     if (pathname === "/categories") return this.categoriesPage(state) as T;
     if (pathname === "/analytics") return this.analyticsPage(state) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
@@ -373,6 +378,10 @@ export class LocalApiClient implements ApiClient {
       state.goals = state.goals.filter((goal) => goal.id !== itemId);
     } else if (pathname === "/debts" && itemId) {
       state.liabilities = state.liabilities.filter((liability) => liability.id !== itemId);
+    } else if (pathname === "/investments/events" && itemId) {
+      state.realizedInvestmentEvents = (state.realizedInvestmentEvents ?? []).filter(
+        (event) => event.id !== itemId
+      );
     } else if (pathname === "/rules" && itemId) {
       state.rules = state.rules.filter((rule) => rule.id !== itemId);
     } else if (pathname === "/recurring" && itemId) {
@@ -459,6 +468,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.updateSettings(state, body));
     if (pathname === "/fx")
       return this.saveAndReturn<TResponse>(state, this.updateFxRates(state, body));
+    if (pathname === "/investments/events")
+      return this.saveAndReturn<TResponse>(state, this.addRealizedEvent(state, body));
     if (pathname === "/backup") return this.restoreBackup<TResponse>(body);
     if (pathname === "/investments")
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
@@ -1235,6 +1246,37 @@ export class LocalApiClient implements ApiClient {
       totalBalance: this.sumInBase(state, accounts),
       currency: state.currency
     };
+  }
+
+  // Realized investment events (desktop tax ledger): sells and dividends.
+  private investmentEventsPage(state: LocalState): {
+    events: RealizedInvestmentEvent[];
+    currency: string;
+  } {
+    return { events: state.realizedInvestmentEvents ?? [], currency: state.currency };
+  }
+
+  private addRealizedEvent(state: LocalState, body: unknown): RealizedInvestmentEvent {
+    const input = toFormObject(body);
+    const requestedCurrency = String(input.currency ?? "").toUpperCase();
+    const event: RealizedInvestmentEvent = {
+      id: id("revent"),
+      type: input.type === "DIVIDEND" ? "DIVIDEND" : "SELL",
+      ticker:
+        String(input.ticker ?? "")
+          .trim()
+          .toUpperCase() || "—",
+      name: String(input.name ?? "").trim(),
+      date: String(input.date ?? "").slice(0, 10) || isoDay(new Date()),
+      quantity: Math.max(Number(input.quantity ?? 0), 0),
+      sellPrice: Math.max(Number(input.sellPrice ?? 0), 0),
+      buyPrice: Math.max(Number(input.buyPrice ?? 0), 0),
+      amount: Math.max(Number(input.amount ?? 0), 0),
+      fee: Math.max(Number(input.fee ?? 0), 0),
+      currency: isSupportedCurrency(requestedCurrency) ? requestedCurrency : state.currency
+    };
+    state.realizedInvestmentEvents = [event, ...(state.realizedInvestmentEvents ?? [])];
+    return event;
   }
 
   // Merges a fresh FX table (RUB per unit, fetched client-side from the CBR feed)
