@@ -267,3 +267,18 @@ export type InvestmentData = {
   risks: RecommendationView[];
   education: RecommendationView[];
 };
+
+// A realized investment event (desktop tax ledger): a sale or a dividend.
+export type RealizedInvestmentEvent = {
+  id: string;
+  type: "SELL" | "DIVIDEND";
+  ticker: string;
+  name: string;
+  date: string;
+  quantity: number;
+  sellPrice: number;
+  buyPrice: number;
+  amount: number;
+  fee: number;
+  currency: string;
+};
