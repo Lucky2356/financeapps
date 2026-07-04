@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n/context";
 export default function Loading() {
   const { t } = useI18n();
   return (
-    <div className="page-grid" role="status" aria-label={t("loading.generic")}>
+    <output className="page-grid" aria-label={t("loading.generic")}>
       <div className="space-y-2">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-72" />
@@ -19,6 +19,6 @@ export default function Loading() {
         ))}
       </div>
       <Skeleton className="h-64 w-full rounded-xl" />
-    </div>
+    </output>
   );
 }
