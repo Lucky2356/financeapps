@@ -20,6 +20,7 @@ import { AllocationBar } from "@/components/investments/allocation-bar";
 import { HoldingCard } from "@/components/investments/holding-card";
 import { PortfolioHero } from "@/components/investments/portfolio-hero";
 import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
+import { TaxEstimateCard } from "@/components/investments/tax-estimate-card";
 import { SecuritySearch } from "@/components/investments/security-search";
 import { WatchlistCard } from "@/components/investments/watchlist-card";
 import { Badge } from "@/components/ui/badge";
@@ -531,6 +532,10 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               </CardContent>
             </Card>
           </section>
+
+          {data.portfolio.length > 0 && (
+            <TaxEstimateCard positions={data.portfolio} currency={data.currency} />
+          )}
 
           <section className="grid gap-5 xl:grid-cols-2">
             <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />
