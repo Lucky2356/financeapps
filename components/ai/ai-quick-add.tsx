@@ -96,7 +96,8 @@ export function AiQuickAdd() {
           context,
           apiKey,
           model: settings?.aiModel || undefined,
-          provider: (settings?.aiProvider as "anthropic" | "openai" | "deepseek") || undefined
+          provider: (settings?.aiProvider as "anthropic" | "openai" | "deepseek") || undefined,
+          effort: settings?.aiEffort || undefined
         });
       } else {
         result = await apiClient.post<AiTransactionDraft>("/ai/parse", { text, context });

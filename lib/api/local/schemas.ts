@@ -180,6 +180,7 @@ export const localStateSchema = z.object({
   paymentReminders: z.boolean().default(false),
   aiEnabled: z.boolean().default(false),
   aiProvider: z.string().default("anthropic"),
+  aiEffort: z.string().default("medium"),
   aiApiKey: z.string().default(""),
   aiModel: z.string().default(""),
   netWorthSnapshots: z

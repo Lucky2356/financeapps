@@ -36,7 +36,7 @@ import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
-import { AI_PROVIDERS, providerInfo, type AiProvider } from "@/lib/ai/models";
+import { AI_EFFORTS, AI_PROVIDERS, providerInfo, type AiProvider } from "@/lib/ai/models";
 import { APP_VERSION } from "@/lib/constants";
 import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -84,6 +84,7 @@ type EditableSettings = {
   paymentReminders: boolean;
   aiEnabled: boolean;
   aiProvider: string;
+  aiEffort: string;
   aiApiKey: string;
   aiModel: string;
 };
@@ -101,6 +102,7 @@ function toEditable(data: SettingsPageData): EditableSettings {
     paymentReminders: data.paymentReminders ?? false,
     aiEnabled: data.aiEnabled ?? false,
     aiProvider: data.aiProvider ?? "anthropic",
+    aiEffort: data.aiEffort ?? "medium",
     aiApiKey: data.aiApiKey ?? "",
     aiModel: data.aiModel ?? ""
   };
@@ -158,6 +160,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         paymentReminders: next.paymentReminders,
         aiEnabled: next.aiEnabled,
         aiProvider: next.aiProvider,
+        aiEffort: next.aiEffort,
         aiApiKey: next.aiApiKey,
         aiModel: next.aiModel
       });
@@ -522,6 +525,25 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-effort">{t("set.ai.effort")}</Label>
+                        <Select
+                          value={settings.aiEffort || "medium"}
+                          onValueChange={(value) => void persist({ aiEffort: value })}
+                        >
+                          <SelectTrigger id="ai-effort">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {AI_EFFORTS.map((effort) => (
+                              <SelectItem key={effort} value={effort}>
+                                {t(`set.ai.effort.${effort}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">{t("set.ai.effort.hint")}</p>
                       </div>
                     </>
                   );

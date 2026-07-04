@@ -92,7 +92,8 @@ export async function POST(request: NextRequest) {
       context,
       apiKey,
       model,
-      provider
+      provider,
+      effort: process.env.AI_EFFORT
     });
 
     return NextResponse.json(draft);
