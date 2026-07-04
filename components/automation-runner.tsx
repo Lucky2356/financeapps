@@ -6,12 +6,9 @@ import { useEffect, useRef } from "react";
 import { apiClient } from "@/lib/api/client";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { isPublicPath } from "@/lib/public-paths";
-import { formatCurrency } from "@/lib/format";
-import { useI18n } from "@/lib/i18n/context";
-import type { SettingsPageData } from "@/lib/data";
-import type { ForecastData } from "@/types/finance";
-
-type TFn = (key: string, vars?: Record<string, string | number>) => string;
+import { buildNotifications } from "@/lib/notifications";
+import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
+import type { DashboardData, ForecastData } from "@/types/finance";
 
 // True when the cached FX rates are missing or not from today (local date).
 function isFxStale(updatedAt: string | null | undefined): boolean {
@@ -22,14 +19,14 @@ function isFxStale(updatedAt: string | null | undefined): boolean {
   return day(then) !== day(new Date());
 }
 
-// Runs opt-in automation once per app load: auto-posts due recurring payments
-// (desktop) and fires a system reminder for payments due today. Uses the Web
+// Runs opt-in automation once per app load: refreshes FX rates (desktop),
+// auto-posts due recurring payments, and fires system notifications for urgent
+// items (cash gaps, budget overruns, payments due soon). Uses the Web
 // Notification API so it works in the browser and the Tauri webview without a
 // native plugin. Renders nothing.
 export function AutomationRunner() {
   const ran = useRef(false);
   const pathname = usePathname();
-  const { t } = useI18n();
 
   useEffect(() => {
     if (ran.current) return;
@@ -37,13 +34,13 @@ export function AutomationRunner() {
     // the snapshot/materialize calls would just 401.
     if (isPublicPath(pathname)) return;
     ran.current = true;
-    void runAutomation(t);
-  }, [pathname, t]);
+    void runAutomation();
+  }, [pathname]);
 
   return null;
 }
 
-async function runAutomation(t: TFn) {
+async function runAutomation() {
   let settings: SettingsPageData;
   try {
     settings = await apiClient.get<SettingsPageData>("/settings");
@@ -88,22 +85,65 @@ async function runAutomation(t: TFn) {
         Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
       if (permission !== "granted") return;
 
-      const forecast = await apiClient.get<ForecastData>("/forecast");
-      const today = new Date().toISOString().slice(0, 10);
-      const dueToday = forecast.upcomingEvents.filter(
-        (event) => event.type === "EXPENSE" && event.date.slice(0, 10) === today
-      );
-      if (dueToday.length === 0) return;
+      // Reuse the same three sources as the in-app bell and the same aggregation
+      // (buildNotifications): cash-gap warnings, budget overruns and payments due
+      // soon. Fire a system notification for the urgent ones (WARNING/CRITICAL),
+      // deduped per day so opening the app repeatedly does not re-notify.
+      const [dashboard, forecast, budgets] = await Promise.all([
+        apiClient.get<Pick<DashboardData, "recommendations">>("/dashboard").catch(() => null),
+        apiClient
+          .get<Pick<ForecastData, "upcomingEvents" | "warnings" | "currency">>("/forecast")
+          .catch(() => null),
+        apiClient.get<BudgetsPageData>("/budgets").catch(() => null)
+      ]);
 
-      const total = dueToday.reduce((sum, event) => sum + event.amount, 0);
-      new Notification(t("auto.notifTitle"), {
-        body: t("auto.notifBody", {
-          count: dueToday.length,
-          amount: formatCurrency(total, forecast.currency)
-        })
-      });
+      const urgent = buildNotifications({
+        recommendations: dashboard?.recommendations,
+        upcomingEvents: forecast?.upcomingEvents,
+        forecastWarnings: forecast?.warnings,
+        budgets: budgets?.budgets,
+        currency: forecast?.currency ?? budgets?.currency
+      }).filter((item) => item.severity === "WARNING" || item.severity === "CRITICAL");
+
+      const fresh = urgent.filter((item) => !alreadyNotified(item.id)).slice(0, 3);
+      for (const item of fresh) {
+        new Notification(item.title, { body: item.description });
+        markNotified(item.id);
+      }
     } catch {
       // Notification unavailable or denied — ignore.
     }
+  }
+}
+
+// Per-day dedupe for system notifications, backed by localStorage. Resets when
+// the local date changes so each actionable item notifies at most once a day.
+const NOTIFY_KEY = "notif-fired";
+
+function notifyState(): { date: string; ids: string[] } {
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+  try {
+    const raw = JSON.parse(localStorage.getItem(NOTIFY_KEY) ?? "{}") as {
+      date?: string;
+      ids?: string[];
+    };
+    if (raw.date === today && Array.isArray(raw.ids)) return { date: today, ids: raw.ids };
+  } catch {
+    /* corrupt/empty — start fresh */
+  }
+  return { date: today, ids: [] };
+}
+
+function alreadyNotified(id: string): boolean {
+  return notifyState().ids.includes(id);
+}
+
+function markNotified(id: string): void {
+  const state = notifyState();
+  if (!state.ids.includes(id)) state.ids.push(id);
+  try {
+    localStorage.setItem(NOTIFY_KEY, JSON.stringify(state));
+  } catch {
+    /* storage unavailable — best effort */
   }
 }
