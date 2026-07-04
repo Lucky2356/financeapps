@@ -1135,6 +1135,33 @@ const ru: Messages = {
   "fx.refresh": "Обновить курсы",
   "fx.refreshed": "Курсы валют обновлены.",
   "fx.refreshFail": "Не удалось загрузить курсы ЦБ.",
+  // Cloud-folder sync (desktop)
+  "sync.title": "Синхронизация через облачную папку",
+  "sync.desc":
+    "Приложение шифрует снимок данных и кладёт его в выбранную папку. Если эту папку синхронизирует ваш клиент Dropbox / Google Drive / OneDrive — данные попадут на другие устройства. Своего сервера не нужно.",
+  "sync.folder": "Папка синхронизации",
+  "sync.folderPlaceholder": "Папка не выбрана",
+  "sync.choose": "Выбрать папку",
+  "sync.passphrase": "Пароль шифрования",
+  "sync.passphrasePlaceholder": "Придумайте пароль",
+  "sync.passphraseHint":
+    "Один и тот же пароль на всех устройствах. Он не сохраняется — вводите при каждой выгрузке/загрузке. Забудете пароль — данные из облака не восстановить.",
+  "sync.push": "Выгрузить в облако",
+  "sync.pushing": "Выгрузка…",
+  "sync.pushed": "Данные выгружены в папку.",
+  "sync.pull": "Загрузить из облака",
+  "sync.pulling": "Загрузка…",
+  "sync.pulled": "Данные загружены.",
+  "sync.pull.confirmTitle": "Заменить локальные данные?",
+  "sync.pull.confirmDesc":
+    "Данные из облачной папки заменят текущие данные на этом устройстве. Действие нельзя отменить.",
+  "sync.warning":
+    "Последняя выгрузка перезаписывает облако, загрузка перезаписывает это устройство (last-write-wins). Автослияния нет — синхронизируйте по очереди.",
+  "sync.err.folder": "Не удалось открыть выбор папки.",
+  "sync.err.noFolder": "Сначала выберите папку.",
+  "sync.err.noPass": "Введите пароль шифрования.",
+  "sync.err.push": "Не удалось выгрузить данные.",
+  "sync.err.pull": "Не удалось загрузить данные.",
   // AI insights ("ask your finances")
   "aiq.title": "Спросите свои финансы",
   "aiq.placeholder": "Например: куда уходят деньги?",
@@ -2403,6 +2430,33 @@ const en: Messages = {
   "fx.refresh": "Refresh rates",
   "fx.refreshed": "Exchange rates updated.",
   "fx.refreshFail": "Couldn't load CBR rates.",
+  // Cloud-folder sync (desktop)
+  "sync.title": "Sync via a cloud folder",
+  "sync.desc":
+    "The app encrypts a snapshot of your data into a folder you choose. If that folder is synced by your Dropbox / Google Drive / OneDrive client, the data reaches your other devices. No server needed.",
+  "sync.folder": "Sync folder",
+  "sync.folderPlaceholder": "No folder selected",
+  "sync.choose": "Choose folder",
+  "sync.passphrase": "Encryption passphrase",
+  "sync.passphrasePlaceholder": "Choose a passphrase",
+  "sync.passphraseHint":
+    "Use the same passphrase on every device. It is never stored — enter it for each push/pull. If you forget it, the cloud data can't be recovered.",
+  "sync.push": "Push to cloud",
+  "sync.pushing": "Pushing…",
+  "sync.pushed": "Data pushed to the folder.",
+  "sync.pull": "Pull from cloud",
+  "sync.pulling": "Pulling…",
+  "sync.pulled": "Data pulled.",
+  "sync.pull.confirmTitle": "Replace local data?",
+  "sync.pull.confirmDesc":
+    "Data from the cloud folder will replace the current data on this device. This can't be undone.",
+  "sync.warning":
+    "The latest push overwrites the cloud, a pull overwrites this device (last-write-wins). No auto-merge — sync one device at a time.",
+  "sync.err.folder": "Couldn't open the folder picker.",
+  "sync.err.noFolder": "Choose a folder first.",
+  "sync.err.noPass": "Enter the encryption passphrase.",
+  "sync.err.push": "Couldn't push the data.",
+  "sync.err.pull": "Couldn't pull the data.",
   // AI insights ("ask your finances")
   "aiq.title": "Ask your finances",
   "aiq.placeholder": "e.g. where is my money going?",

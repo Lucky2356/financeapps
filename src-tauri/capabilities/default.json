@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Desktop permissions for CSV/JSON import and export.",
+  "description": "Desktop permissions for CSV/JSON import/export and cloud-folder sync.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -16,7 +16,7 @@
     "opener:allow-open-url",
     {
       "identifier": "fs:scope",
-      "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**"]
+      "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**", "$HOME/**"]
     }
   ]
 }
