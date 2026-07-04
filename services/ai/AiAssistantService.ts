@@ -50,24 +50,66 @@ export async function requestTransactionDraft({
 
   // Resolve the provider explicitly, or infer it from the model id; then pick
   // that provider's default model when none was given.
-  const resolvedProvider = provider ?? providerForModel(model);
-  const resolvedModel = model || providerInfo(resolvedProvider).defaultModel;
-  const resolvedEffort = normalizeEffort(effort);
   const { system, user } = buildParsePrompt(text, context);
-
-  const replyText =
-    resolvedProvider === "anthropic"
-      ? await callAnthropic(apiKey, resolvedModel, system, user, resolvedEffort)
-      : await callOpenAiCompatible(
-          resolvedProvider,
-          apiKey,
-          resolvedModel,
-          system,
-          user,
-          resolvedEffort
-        );
-
+  const replyText = await complete({ apiKey, model, provider, effort, system, user });
   return parseTransactionDraft(replyText, context);
+}
+
+export type RequestFinancialAnswerArgs = {
+  question: string;
+  // Compact, pre-computed finance summary (no raw transactions) — see
+  // lib/ai/finance-summary.ts. This is what leaves the device for the AI service.
+  summary: string;
+  apiKey: string;
+  model?: string;
+  provider?: AiProvider;
+  effort?: string;
+};
+
+// Natural-language Q&A over the user's finances ("ask your finances"). Returns
+// the model's free-text answer grounded in the provided summary.
+export async function requestFinancialAnswer({
+  question,
+  summary,
+  apiKey,
+  model,
+  provider,
+  effort
+}: RequestFinancialAnswerArgs): Promise<string> {
+  if (!apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (!question.trim()) throw new Error("Введите вопрос.");
+
+  const { buildInsightPrompt } = await import("@/lib/ai/insight-prompt");
+  const { system, user } = buildInsightPrompt(question, summary);
+  const answer = await complete({ apiKey, model, provider, effort, system, user });
+  if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте переформулировать.");
+  return answer.trim();
+}
+
+// Shared provider dispatch: resolves provider/model/effort and routes to the
+// right SDK, returning the raw text reply.
+async function complete(args: {
+  apiKey: string;
+  model?: string;
+  provider?: AiProvider;
+  effort?: string;
+  system: string;
+  user: string;
+}): Promise<string> {
+  const resolvedProvider = args.provider ?? providerForModel(args.model);
+  const resolvedModel = args.model || providerInfo(resolvedProvider).defaultModel;
+  const resolvedEffort = normalizeEffort(args.effort);
+
+  return resolvedProvider === "anthropic"
+    ? callAnthropic(args.apiKey, resolvedModel, args.system, args.user, resolvedEffort)
+    : callOpenAiCompatible(
+        resolvedProvider,
+        args.apiKey,
+        resolvedModel,
+        args.system,
+        args.user,
+        resolvedEffort
+      );
 }
 
 // dangerouslyAllowBrowser: the desktop app runs these in the Tauri webview with

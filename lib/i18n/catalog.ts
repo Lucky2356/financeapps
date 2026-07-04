@@ -1092,6 +1092,18 @@ const ru: Messages = {
   "fx.refresh": "Обновить курсы",
   "fx.refreshed": "Курсы валют обновлены.",
   "fx.refreshFail": "Не удалось загрузить курсы ЦБ.",
+  // AI insights ("ask your finances")
+  "aiq.title": "Спросите свои финансы",
+  "aiq.placeholder": "Например: куда уходят деньги?",
+  "aiq.ask": "Спросить",
+  "aiq.footer":
+    "Ассистент отвечает на основе сводки по вашим данным. Это ориентир, а не финансовый совет.",
+  "aiq.example.1": "Куда уходят деньги?",
+  "aiq.example.2": "Где можно сэкономить?",
+  "aiq.example.3": "Как у меня с нормой сбережений?",
+  "aiq.err.enterQuestion": "Введите вопрос.",
+  "aiq.err.loadData": "Не удалось загрузить данные для ответа.",
+  "aiq.err.failed": "Не удалось получить ответ ассистента.",
   "set.ai.warning":
     "Текст, который вы вводите, отправляется во внешний сервис выбранного провайдера. Не указывайте конфиденциальные данные. Функцию можно отключить в любой момент.",
   "set.ai.warning.web":
@@ -2305,6 +2317,18 @@ const en: Messages = {
   "fx.refresh": "Refresh rates",
   "fx.refreshed": "Exchange rates updated.",
   "fx.refreshFail": "Couldn't load CBR rates.",
+  // AI insights ("ask your finances")
+  "aiq.title": "Ask your finances",
+  "aiq.placeholder": "e.g. where is my money going?",
+  "aiq.ask": "Ask",
+  "aiq.footer":
+    "The assistant answers from a summary of your data. This is guidance, not financial advice.",
+  "aiq.example.1": "Where is my money going?",
+  "aiq.example.2": "Where can I cut back?",
+  "aiq.example.3": "How's my savings rate?",
+  "aiq.err.enterQuestion": "Enter a question.",
+  "aiq.err.loadData": "Couldn't load the data for an answer.",
+  "aiq.err.failed": "Couldn't get an answer from the assistant.",
   "set.ai.warning":
     "The text you enter is sent to the selected provider's external service. Do not include confidential data. You can disable this feature at any time.",
   "set.ai.warning.web":
