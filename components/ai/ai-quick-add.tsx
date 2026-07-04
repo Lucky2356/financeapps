@@ -1,8 +1,8 @@
 "use client";
 
-import { Loader2, Sparkles } from "lucide-react";
+import { Camera, Loader2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -35,6 +35,7 @@ export function AiQuickAdd() {
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<AiTransactionDraft | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,6 +111,55 @@ export function AiQuickAdd() {
     }
   }
 
+  async function recogniseReceipt(file: File) {
+    if (!file.type.startsWith("image/")) return toast.error(t("ai.err.notImage"));
+    const data = await loadRefs();
+    if (!data) return toast.error(t("ai.err.loadRefs"));
+    const context = buildContext(data, settings?.currency ?? "RUB");
+
+    try {
+      setParsing(true);
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("read failed"));
+        reader.readAsDataURL(file);
+      });
+      const imageBase64 = dataUrl.split(",")[1] ?? "";
+      const mimeType = file.type;
+
+      let result: AiTransactionDraft;
+      if (isLocalDesktopMode) {
+        const apiKey = settings?.aiApiKey ?? "";
+        if (!apiKey) {
+          toast.error(t("ai.err.noKey"));
+          return;
+        }
+        const { requestReceiptDraft } = await import("@/services/ai/AiAssistantService");
+        result = await requestReceiptDraft({
+          imageBase64,
+          mimeType,
+          context,
+          apiKey,
+          model: settings?.aiModel || undefined,
+          provider: (settings?.aiProvider as "anthropic" | "openai" | "deepseek") || undefined
+        });
+      } else {
+        result = await apiClient.post<AiTransactionDraft>("/ai/receipt", {
+          imageBase64,
+          mimeType,
+          context
+        });
+      }
+      setDraft(result);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("ai.err.recognise"));
+    } finally {
+      setParsing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   async function save() {
     if (!draft) return;
     if (!draft.accountId) return toast.error(t("ai.selectAccount"));
@@ -166,6 +216,27 @@ export function AiQuickAdd() {
             )}
             {t("ai.recognise")}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={parsing}
+            title={t("ai.receipt")}
+          >
+            <Camera className="size-4" />
+            <span className="sm:hidden">{t("ai.receipt")}</span>
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void recogniseReceipt(file);
+            }}
+          />
         </div>
 
         {draft && (
