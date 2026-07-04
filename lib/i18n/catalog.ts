@@ -1138,6 +1138,16 @@ const ru: Messages = {
   "set.update.unavailable": "Автообновление недоступно — открываю страницу релизов.",
   // Settings: account & security (web)
   "set.account.title": "Аккаунт и безопасность",
+  "set.profile.title": "Профиль",
+  "set.profile.name": "Отображаемое имя",
+  "set.profile.name.hint": "Как к вам обращаться в приложении.",
+  "set.profile.save": "Сохранить имя",
+  "set.profile.saved": "Профиль обновлён.",
+  "set.profile.saveFail": "Не удалось сохранить профиль.",
+  "set.profile.nameRequired": "Введите имя.",
+  "set.profile.email": "Email",
+  "set.profile.email.hint": "Используется для входа. Смена email пока недоступна.",
+  "set.profile.joined": "Дата регистрации",
   "set.2fa.title": "Двухфакторная аутентификация",
   "set.2fa.desc":
     "Дополнительный код из приложения-аутентификатора (Google Authenticator, Authy и т.п.) при входе.",
@@ -2328,6 +2338,16 @@ const en: Messages = {
   "set.update.unavailable": "Auto-update unavailable — opening the releases page.",
   // Settings: account & security (web)
   "set.account.title": "Account & security",
+  "set.profile.title": "Profile",
+  "set.profile.name": "Display name",
+  "set.profile.name.hint": "How you're addressed in the app.",
+  "set.profile.save": "Save name",
+  "set.profile.saved": "Profile updated.",
+  "set.profile.saveFail": "Couldn't save the profile.",
+  "set.profile.nameRequired": "Enter a name.",
+  "set.profile.email": "Email",
+  "set.profile.email.hint": "Used to sign in. Changing email isn't available yet.",
+  "set.profile.joined": "Member since",
   "set.2fa.title": "Two-factor authentication",
   "set.2fa.desc":
     "An extra code from an authenticator app (Google Authenticator, Authy, etc.) at sign-in.",
