@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData } from "@/lib/data";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
@@ -290,10 +291,24 @@ function AccountDialog({
       </DialogHeader>
       <form onSubmit={onSubmit} className="grid gap-4">
         {account ? <input type="hidden" name="id" value={account.id} /> : null}
-        <input type="hidden" name="currency" value="RUB" />
         <div className="space-y-2">
           <Label>{t("common.name")}</Label>
           <Input name="name" defaultValue={account?.name ?? ""} required />
+        </div>
+        <div className="space-y-2">
+          <Label>{t("common.currency")}</Label>
+          <Select name="currency" defaultValue={account?.currency ?? "RUB"}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_CURRENCIES.map((item) => (
+                <SelectItem key={item.code} value={item.code}>
+                  {item.code} — {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2">
           <Label>{t("common.type")}</Label>

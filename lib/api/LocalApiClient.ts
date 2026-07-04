@@ -22,7 +22,13 @@ import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/hel
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
-import { isSupportedCurrency, type CurrencyCode } from "@/lib/currency";
+import {
+  DEFAULT_CURRENCY_RATES,
+  isSupportedCurrency,
+  toBaseAmount,
+  type CurrencyCode,
+  type CurrencyRates
+} from "@/lib/currency";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
@@ -96,6 +102,8 @@ type LocalState = {
   aiEffort: string;
   aiApiKey: string;
   aiModel: string;
+  currencyRates: CurrencyRates;
+  currencyRatesUpdatedAt: string | null;
   netWorthSnapshots: NetWorthSnapshot[];
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
@@ -193,6 +201,8 @@ function createInitialState(): LocalState {
     aiEffort: "medium",
     aiApiKey: "",
     aiModel: "",
+    currencyRates: { ...DEFAULT_CURRENCY_RATES },
+    currencyRatesUpdatedAt: null,
     netWorthSnapshots: [],
     categories: defaultCategories,
     transactions: [],
@@ -227,6 +237,8 @@ function createBlankState(): LocalState {
     aiEffort: "medium",
     aiApiKey: "",
     aiModel: "",
+    currencyRates: { ...DEFAULT_CURRENCY_RATES },
+    currencyRatesUpdatedAt: null,
     netWorthSnapshots: [],
     categories: [],
     transactions: [],
@@ -445,6 +457,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.undoLastImport(state));
     if (pathname === "/settings")
       return this.saveAndReturn<TResponse>(state, this.updateSettings(state, body));
+    if (pathname === "/fx")
+      return this.saveAndReturn<TResponse>(state, this.updateFxRates(state, body));
     if (pathname === "/backup") return this.restoreBackup<TResponse>(body);
     if (pathname === "/investments")
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
@@ -499,12 +513,14 @@ export class LocalApiClient implements ApiClient {
 
   private upsertAccount(state: LocalState, body: unknown, method: "POST" | "PUT") {
     const input = toFormObject(body);
+    const requestedCurrency = String(input.currency ?? "").toUpperCase();
     const account = {
       id: method === "PUT" && input.id ? input.id : id("account"),
       name: input.name?.trim() || "Новый счет",
       type: input.type || "DEBIT_CARD",
       balance: Number(input.balance ?? 0),
-      currency: state.currency
+      // Honour an explicitly chosen supported currency; fall back to the base.
+      currency: isSupportedCurrency(requestedCurrency) ? requestedCurrency : state.currency
     };
 
     state.accounts =
@@ -1192,14 +1208,53 @@ export class LocalApiClient implements ApiClient {
     return state.investments.portfolio.find((item) => item.ticker === ticker);
   }
 
+  // Cached FX table (RUB per unit) for cross-currency aggregation. Falls back to
+  // the built-in defaults if a refresh has not populated it yet.
+  private rates(state: LocalState): CurrencyRates {
+    const rates = state.currencyRates;
+    return rates && Object.keys(rates).length > 0 ? rates : DEFAULT_CURRENCY_RATES;
+  }
+
+  // Sums a list of {balance, currency} items into the base currency (RUB) so a
+  // mixed-currency total is a single honest number, not raw digits added up.
+  private sumInBase(
+    state: LocalState,
+    items: Array<{ balance: number; currency: string }>
+  ): number {
+    const rates = this.rates(state);
+    return roundMoney(
+      items.reduce((sum, item) => sum + toBaseAmount(item.balance, item.currency, rates), 0)
+    );
+  }
+
   private accounts(state: LocalState): AccountsPageData {
     const accounts = state.accounts.filter((account) => !account.isArchived);
     return {
       source: "database",
       accounts,
-      totalBalance: roundMoney(accounts.reduce((sum, account) => sum + account.balance, 0)),
+      totalBalance: this.sumInBase(state, accounts),
       currency: state.currency
     };
+  }
+
+  // Merges a fresh FX table (RUB per unit, fetched client-side from the CBR feed)
+  // into the cached rates. Only positive finite rates for supported currencies
+  // are accepted; RUB stays pinned to 1. Records the refresh time so the UI can
+  // show how fresh the numbers are.
+  private updateFxRates(
+    state: LocalState,
+    body: unknown
+  ): { updatedAt: string; rates: CurrencyRates } {
+    const incoming = (body as { rates?: Record<string, unknown> } | undefined)?.rates ?? {};
+    const next: CurrencyRates = { ...this.rates(state), RUB: 1 };
+    for (const [code, value] of Object.entries(incoming)) {
+      if (!isSupportedCurrency(code) || code === "RUB") continue;
+      const rate = Number(value);
+      if (Number.isFinite(rate) && rate > 0) next[code] = rate;
+    }
+    state.currencyRates = next;
+    state.currencyRatesUpdatedAt = new Date().toISOString();
+    return { updatedAt: state.currencyRatesUpdatedAt, rates: next };
   }
 
   private transactions(state: LocalState, searchParams: URLSearchParams): TransactionsPageData {
@@ -1341,7 +1396,7 @@ export class LocalApiClient implements ApiClient {
     return {
       source: "database",
       liabilities,
-      total: roundMoney(liabilities.reduce((sum, item) => sum + item.balance, 0)),
+      total: this.sumInBase(state, liabilities),
       currency: state.currency
     };
   }
@@ -1549,9 +1604,7 @@ export class LocalApiClient implements ApiClient {
     const totalBalance = this.accounts(state).totalBalance;
     const portfolioValue = await this.portfolioValue(state);
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
-    const liabilitiesTotal = roundMoney(
-      state.liabilities.reduce((sum, item) => sum + item.balance, 0)
-    );
+    const liabilitiesTotal = this.sumInBase(state, state.liabilities);
     return computeNetWorth({ totalBalance, portfolioValue, goalSavings, liabilitiesTotal });
   }
 
@@ -1574,9 +1627,7 @@ export class LocalApiClient implements ApiClient {
     // Goal savings are money the user set aside from accounts, so they stay
     // part of net worth (a deposit just moves it from a balance into a goal).
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
-    const liabilitiesTotal = roundMoney(
-      state.liabilities.reduce((sum, item) => sum + item.balance, 0)
-    );
+    const liabilitiesTotal = this.sumInBase(state, state.liabilities);
     const netWorth = computeNetWorth({
       totalBalance,
       portfolioValue,
@@ -1588,9 +1639,10 @@ export class LocalApiClient implements ApiClient {
       snapshots: state.netWorthSnapshots ?? [],
       transactions: state.transactions
     });
-    const savingsBalance = state.accounts
-      .filter((account) => account.type === "SAVINGS")
-      .reduce((sum, account) => sum + account.balance, 0);
+    const savingsBalance = this.sumInBase(
+      state,
+      state.accounts.filter((account) => account.type === "SAVINGS")
+    );
     const averageMonthlyExpense =
       finance.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
       Math.max(finance.monthlyCashflow.length, 1);
@@ -1684,6 +1736,7 @@ export class LocalApiClient implements ApiClient {
       aiEffort: state.aiEffort ?? "medium",
       aiApiKey: state.aiApiKey ?? "",
       aiModel: state.aiModel ?? "",
+      currencyRatesUpdatedAt: state.currencyRatesUpdatedAt ?? null,
       riskProfiles: [
         {
           id: "risk-conservative",
@@ -1896,9 +1949,10 @@ export class LocalApiClient implements ApiClient {
     const averageExpense =
       monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
       Math.max(monthlyCashflow.length, 1);
-    const emergencyFund = state.accounts
-      .filter((account) => account.type === "SAVINGS")
-      .reduce((sum, account) => sum + account.balance, 0);
+    const emergencyFund = this.sumInBase(
+      state,
+      state.accounts.filter((account) => account.type === "SAVINGS")
+    );
     const softExpense = expenseRows
       .filter((row) => {
         const category = state.categories.find((item) => item.id === row.category.id);

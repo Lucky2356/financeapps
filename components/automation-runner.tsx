@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { apiClient } from "@/lib/api/client";
+import { isLocalDesktopMode } from "@/lib/platform/env";
 import { isPublicPath } from "@/lib/public-paths";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
@@ -11,6 +12,15 @@ import type { SettingsPageData } from "@/lib/data";
 import type { ForecastData } from "@/types/finance";
 
 type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+// True when the cached FX rates are missing or not from today (local date).
+function isFxStale(updatedAt: string | null | undefined): boolean {
+  if (!updatedAt) return true;
+  const then = new Date(updatedAt);
+  if (Number.isNaN(then.getTime())) return true;
+  const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return day(then) !== day(new Date());
+}
 
 // Runs opt-in automation once per app load: auto-posts due recurring payments
 // (desktop) and fires a system reminder for payments due today. Uses the Web
@@ -39,6 +49,19 @@ async function runAutomation(t: TFn) {
     settings = await apiClient.get<SettingsPageData>("/settings");
   } catch {
     return;
+  }
+
+  // Refresh FX rates from the CBR feed once per day (desktop only — the browser
+  // can't fetch cbr.ru cross-origin, and the Tauri webview has it CSP-allow-
+  // listed). Keeps cross-currency capital honest; failures keep cached rates.
+  if (isLocalDesktopMode && isFxStale(settings.currencyRatesUpdatedAt)) {
+    try {
+      const { fetchCbrRates } = await import("@/services/market/FxRatesProvider");
+      const rates = await fetchCbrRates();
+      await apiClient.post("/fx", { rates });
+    } catch {
+      // Offline or feed error — keep the last-known cached rates.
+    }
   }
 
   // Record today's net worth snapshot once per load (plan B7) — best-effort,

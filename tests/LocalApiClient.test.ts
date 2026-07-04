@@ -460,6 +460,26 @@ describe("LocalApiClient automation (plan D2c)", () => {
     expect(settings.aiModel).toBe("claude-opus-4-8");
   });
 
+  it("converts multi-currency balances to the base using cached FX rates", async () => {
+    const client = createClient();
+    await client.post("/accounts", { name: "Рубли", type: "DEBIT_CARD", balance: "1000" });
+    await client.post("/accounts", {
+      name: "Доллары",
+      type: "DEBIT_CARD",
+      balance: "100",
+      currency: "USD"
+    });
+
+    // Before a refresh the built-in default rate applies; set an explicit one.
+    await client.post("/fx", { rates: { USD: 90 } });
+    const accounts = await client.get<AccountsPageData>("/accounts");
+    // 1000 RUB + 100 USD * 90 = 10 000 RUB
+    expect(accounts.totalBalance).toBe(10000);
+
+    const settings = await client.get<SettingsPageData>("/settings");
+    expect(settings.currencyRatesUpdatedAt).toBeTruthy();
+  });
+
   it("materializes overdue recurring payments idempotently", async () => {
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта", balance: "100000" });
