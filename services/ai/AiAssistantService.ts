@@ -86,6 +86,120 @@ export async function requestFinancialAnswer({
   return answer.trim();
 }
 
+export type RequestReceiptDraftArgs = {
+  // Base64-encoded image WITHOUT the "data:...;base64," prefix.
+  imageBase64: string;
+  mimeType: string;
+  context: AiParseContext;
+  apiKey: string;
+  model?: string;
+  provider?: AiProvider;
+};
+
+const VISION_MEDIA = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+type VisionMedia = (typeof VISION_MEDIA)[number];
+
+function normalizeMedia(mimeType: string): VisionMedia {
+  return (VISION_MEDIA as readonly string[]).includes(mimeType)
+    ? (mimeType as VisionMedia)
+    : "image/jpeg";
+}
+
+// Reads a receipt photo and returns a draft transaction. Vision-capable
+// providers only (Anthropic, OpenAI); DeepSeek V4 has no image input here.
+export async function requestReceiptDraft({
+  imageBase64,
+  mimeType,
+  context,
+  apiKey,
+  model,
+  provider
+}: RequestReceiptDraftArgs): Promise<AiTransactionDraft> {
+  if (!apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (!imageBase64) throw new Error("Прикрепите фото чека.");
+
+  const resolvedProvider = provider ?? providerForModel(model);
+  if (resolvedProvider === "deepseek") {
+    throw new Error("Выбранный провайдер не поддерживает фото. Выберите Claude или ChatGPT.");
+  }
+  const resolvedModel = model || providerInfo(resolvedProvider).defaultModel;
+  const { system, user } = buildParsePrompt(
+    "Извлеки данные операции из прикреплённого фото чека: сумму, дату и подходящую категорию.",
+    context
+  );
+
+  const reply =
+    resolvedProvider === "anthropic"
+      ? await callAnthropicVision(apiKey, resolvedModel, system, user, imageBase64, mimeType)
+      : await callOpenAiVision(apiKey, resolvedModel, system, user, imageBase64, mimeType);
+
+  return parseTransactionDraft(reply, context);
+}
+
+async function callAnthropicVision(
+  apiKey: string,
+  model: string,
+  system: string,
+  user: string,
+  imageBase64: string,
+  mimeType: string
+): Promise<string> {
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  const response = await client.messages.create({
+    model,
+    max_tokens: 1024,
+    system,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: normalizeMedia(mimeType), data: imageBase64 }
+          },
+          { type: "text", text: user }
+        ]
+      }
+    ]
+  });
+  if (response.stop_reason === "refusal") {
+    throw new Error("Запрос отклонён ассистентом. Попробуйте другое фото.");
+  }
+  return response.content
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .join("")
+    .trim();
+}
+
+async function callOpenAiVision(
+  apiKey: string,
+  model: string,
+  system: string,
+  user: string,
+  imageBase64: string,
+  mimeType: string
+): Promise<string> {
+  const client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+  const response = await client.chat.completions.create({
+    model,
+    max_completion_tokens: 4096,
+    messages: [
+      { role: "system", content: system },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: user },
+          {
+            type: "image_url",
+            image_url: { url: `data:${normalizeMedia(mimeType)};base64,${imageBase64}` }
+          }
+        ]
+      }
+    ]
+  });
+  return response.choices[0]?.message?.content?.trim() ?? "";
+}
+
 // Shared provider dispatch: resolves provider/model/effort and routes to the
 // right SDK, returning the raw text reply.
 async function complete(args: {
