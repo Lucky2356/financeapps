@@ -101,6 +101,18 @@ const ru: Messages = {
   "page.subscriptions.desc":
     "Регулярные платежи в пересчёте на месяц и год — чтобы видеть, во что обходятся подписки.",
   "page.forecast.title": "Прогноз",
+  "scenario.title": "Сценарий «что если»",
+  "scenario.extraSavings": "Доп. сбережения в месяц",
+  "scenario.oneTime": "Крупная разовая трата",
+  "scenario.oneTimeMonth": "В каком месяце",
+  "scenario.horizon": "Горизонт",
+  "scenario.months": "{n} мес.",
+  "scenario.baselineEnding": "Как сейчас",
+  "scenario.scenarioEnding": "По сценарию",
+  "scenario.difference": "Разница",
+  "scenario.shortfall": "Внимание: по сценарию баланс уходит в минус на {n}-м месяце.",
+  "scenario.footer":
+    "Прикидка на основе средних доходов/расходов и текущего свободного остатка. Ориентир, а не гарантия.",
   "page.forecast.desc":
     "Плановый денежный поток на 30 и 90 дней, ближайшие обязательства и предупреждения о кассовых разрывах.",
   "page.analytics.title": "Аналитика",
@@ -1339,6 +1351,18 @@ const en: Messages = {
   "page.subscriptions.desc":
     "Recurring payments converted to monthly and yearly cost — so you can see what subscriptions cost.",
   "page.forecast.title": "Forecast",
+  "scenario.title": "What-if scenario",
+  "scenario.extraSavings": "Extra savings per month",
+  "scenario.oneTime": "One-time large expense",
+  "scenario.oneTimeMonth": "In which month",
+  "scenario.horizon": "Horizon",
+  "scenario.months": "{n} mo.",
+  "scenario.baselineEnding": "As is now",
+  "scenario.scenarioEnding": "With scenario",
+  "scenario.difference": "Difference",
+  "scenario.shortfall": "Heads up: the scenario balance goes negative in month {n}.",
+  "scenario.footer":
+    "A projection from your average income/expense and current free balance. Guidance, not a guarantee.",
   "page.forecast.desc":
     "Projected cash flow for 30 and 90 days, upcoming obligations and cash-gap warnings.",
   "page.analytics.title": "Analytics",
