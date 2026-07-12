@@ -5,12 +5,14 @@ import { Activity, PiggyBank, ShieldCheck, WalletCards } from "lucide-react";
 import { HealthGauge } from "@/components/charts/health-gauge";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { DashboardData } from "@/types/finance";
+import { useCountUp } from "@/hooks/use-count-up";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 export function DashboardOverview({ data }: { data: DashboardData }) {
   const { t } = useI18n();
+  const netWorthValue = useCountUp(data.netWorth);
   const balance = data.metrics.find((metric) => metric.key === "totalBalance") ?? data.metrics[0];
   const freeCash = data.metrics.find((metric) => metric.key === "freeCash");
   const savingsRate = data.metrics.find((metric) => metric.key === "savingsRate");
@@ -30,7 +32,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
   ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
-    <section className="overflow-hidden rounded-lg border shadow-soft">
+    <section className="reveal overflow-hidden rounded-lg border shadow-soft">
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
         <div className="border-b bg-gradient-to-br from-primary/6 via-card to-card p-5 sm:p-6 lg:border-b-0 lg:border-r">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -39,7 +41,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
             <InfoHint text={FINANCE_TERM_HINTS["Чистый капитал"]} />
           </div>
           <p className="stat mt-4 text-3xl sm:text-4xl">
-            {formatCurrency(data.netWorth, data.currency)}
+            {formatCurrency(Math.round(netWorthValue), data.currency)}
           </p>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">{t("dash.netWorthDesc")}</p>
 

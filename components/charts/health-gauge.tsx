@@ -1,3 +1,7 @@
+"use client";
+
+import { useCountUp } from "@/hooks/use-count-up";
+
 // Radial gauge for the Finance Health score (0–100). Pure SVG — a background
 // track plus a foreground arc whose length and colour track the score, with the
 // number in the centre. Replaces the flat linear progress bar on the dashboard.
@@ -5,7 +9,8 @@
 // Geometry: a 270° sweep with the 90° gap centred at the bottom. The SVG is
 // rotated 135° so the arc starts at the 7:30 position and runs clockwise; the
 // arc length is encoded directly in stroke-dasharray (no dashoffset maths, which
-// is fragile on a partial arc).
+// is fragile on a partial arc). The arc and number roll up on mount via a
+// count-up (reduced-motion snaps to the final value).
 
 const TONE = {
   good: "text-success",
@@ -27,11 +32,12 @@ export function HealthGauge({
   strokeWidth?: number;
 }) {
   const clamped = Math.max(0, Math.min(100, score));
+  const animated = useCountUp(clamped);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const sweep = 0.75; // 270° of the full circle
   const trackLen = circumference * sweep;
-  const valueLen = trackLen * (clamped / 100);
+  const valueLen = trackLen * (animated / 100);
   const center = size / 2;
 
   return (
@@ -73,7 +79,7 @@ export function HealthGauge({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="stat text-3xl leading-none">{clamped}</span>
+        <span className="stat text-3xl leading-none">{Math.round(animated)}</span>
         <span className="mt-0.5 text-[11px] text-muted-foreground">/ 100</span>
       </div>
     </div>
