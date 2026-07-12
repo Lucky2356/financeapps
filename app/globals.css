@@ -19,7 +19,9 @@
     --secondary: 210 40% 94%;
     --secondary-foreground: 224 28% 16%;
     --muted: 210 20% 92%;
-    --muted-foreground: 220 10% 42%;
+    /* Darkened from 42% → 38% L so secondary text clears WCAG AA (4.5:1) on the
+       light background/muted surfaces. */
+    --muted-foreground: 220 12% 38%;
     --accent: 35 95% 50%;
     --accent-foreground: 28 44% 14%;
     --destructive: 0 74% 50%;
@@ -74,6 +76,60 @@
     --sidebar-border: 220 18% 14%;
   }
 
+  /* ── Accent themes ───────────────────────────────────────────────────────
+     The default (emerald) lives in :root/.dark above. Selecting another accent
+     stamps data-accent on <html> (see AppearanceProvider + the anti-FOUC inline
+     script in layout.tsx) and only re-points the primary/ring/sidebar-accent
+     hues — the rest of the palette is untouched. Light blocks first, then the
+     matching .dark blocks, so equal-specificity dark rules win by source order. */
+  :root[data-accent="blue"] {
+    --primary: 217 91% 45%;
+    --ring: 217 91% 45%;
+    --sidebar-accent: 213 90% 58%;
+  }
+  :root[data-accent="violet"] {
+    --primary: 262 70% 52%;
+    --ring: 262 70% 52%;
+    --sidebar-accent: 263 75% 62%;
+  }
+  :root[data-accent="amber"] {
+    --primary: 32 90% 45%;
+    --primary-foreground: 30 46% 12%;
+    --ring: 32 90% 45%;
+    --sidebar-accent: 38 92% 55%;
+  }
+  .dark[data-accent="blue"] {
+    --primary: 213 90% 62%;
+    --primary-foreground: 220 44% 10%;
+    --ring: 213 90% 62%;
+    --sidebar-accent: 213 90% 62%;
+  }
+  .dark[data-accent="violet"] {
+    --primary: 263 78% 68%;
+    --primary-foreground: 264 44% 12%;
+    --ring: 263 78% 68%;
+    --sidebar-accent: 263 78% 68%;
+  }
+  .dark[data-accent="amber"] {
+    --primary: 38 92% 56%;
+    --primary-foreground: 30 46% 12%;
+    --ring: 38 92% 56%;
+    --sidebar-accent: 38 92% 56%;
+  }
+
+  /* ── Interface density ───────────────────────────────────────────────────
+     data-density on <html> scales the padding of cards and table rows. Default
+     (comfortable) matches the previous fixed spacing; compact tightens it for
+     large histories on desktop. */
+  :root {
+    --density-card: 1.25rem; /* comfortable: p-5 */
+    --density-row-y: 0.625rem; /* comfortable table cell padding-y */
+  }
+  :root[data-density="compact"] {
+    --density-card: 0.85rem;
+    --density-row-y: 0.35rem;
+  }
+
   * {
     @apply border-border;
     letter-spacing: 0;
@@ -81,8 +137,9 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    /* Inter itself is loaded and applied via next/font (see app/layout.tsx);
+       this stack is only the fallback while the webfont loads or is unavailable. */
     font-family:
-      Inter,
       ui-sans-serif,
       system-ui,
       -apple-system,
@@ -113,11 +170,28 @@
   h3 {
     letter-spacing: -0.02em;
   }
+
+  /* Money and other figures line up column-to-column instead of jittering as
+     digits change width. Applied to every table cell and, opt-in, via `.num`. */
+  table,
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
 }
 
 @layer components {
   .page-grid {
     @apply grid gap-5;
+  }
+
+  /* Unified treatment for headline money figures: tabular digits, tight
+     tracking, consistent weight. Use on the big numbers in metric cards, the
+     dashboard hero and report/summary values. */
+  .stat {
+    @apply font-bold tracking-tight;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
   }
 
   .surface {

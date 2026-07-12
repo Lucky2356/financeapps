@@ -38,7 +38,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
             {t("dash.netWorth")}
             <InfoHint text={FINANCE_TERM_HINTS["Чистый капитал"]} />
           </div>
-          <p className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
+          <p className="stat mt-4 text-3xl sm:text-4xl">
             {formatCurrency(data.netWorth, data.currency)}
           </p>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">{t("dash.netWorthDesc")}</p>
@@ -60,7 +60,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-muted-foreground">{t("dash.health")}</p>
-              <p className="mt-2 text-3xl font-semibold">{data.health.score}/100</p>
+              <p className="num mt-2 text-3xl font-semibold">{data.health.score}/100</p>
             </div>
             <span
               className={cn(
@@ -102,15 +102,15 @@ function Signal({
         <Icon
           className={cn(
             "size-4",
-            tone === "success" && "text-success-foreground",
-            tone === "warning" && "text-warning-foreground",
+            tone === "success" && "text-success",
+            tone === "warning" && "text-warning",
             tone === "danger" && "text-destructive",
             (!tone || tone === "default") && "text-primary"
           )}
         />
         {label}
       </div>
-      <p className="mt-2 truncate text-base font-semibold">{value}</p>
+      <p className="num mt-2 truncate text-base font-semibold">{value}</p>
     </div>
   );
 }

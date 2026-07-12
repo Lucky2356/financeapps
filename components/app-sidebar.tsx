@@ -24,7 +24,7 @@ export function AppSidebar() {
       {/* Logo */}
       <div className="border-b p-5">
         <Link href="/" className="flex items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-emerald-400/80 text-white shadow-sm">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-sidebar-accent text-white shadow-sm">
             <CircleDollarSign className="size-[18px]" />
           </span>
           <span className="min-w-0">

@@ -21,7 +21,7 @@ export function AuthScreen({ children }: { children: React.ReactNode }) {
     <div className="mx-auto grid min-h-[80vh] w-full max-w-5xl items-center gap-10 py-8 lg:grid-cols-2">
       <section className="hidden flex-col gap-6 lg:flex">
         <div className="flex items-center gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-emerald-400/80 text-white shadow-sm">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-sidebar-accent text-white shadow-sm">
             <CircleDollarSign className="size-6" />
           </span>
           <div>
