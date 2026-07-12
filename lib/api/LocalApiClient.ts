@@ -742,7 +742,9 @@ export class LocalApiClient implements ApiClient {
       title: input.title?.trim() || "Новая цель",
       targetAmount: Number(input.targetAmount),
       currentAmount: Number(input.currentAmount ?? 0),
-      deadline: new Date(input.deadline).toISOString()
+      deadline: new Date(input.deadline).toISOString(),
+      linkedAccountId: input.linkedAccountId?.trim() || undefined,
+      plannedContribution: Math.max(Number(input.plannedContribution ?? 0), 0)
     });
     state.goals =
       method === "PUT"

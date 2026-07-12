@@ -53,6 +53,8 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
   async function submitGoal(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    // "none" is the sentinel for an unlinked goal (empty Select value).
+    if (payload.linkedAccountId === "none") payload.linkedAccountId = "";
 
     await run(
       () =>
@@ -194,6 +196,13 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                       >
                         {pace.hint}
                       </p>
+                      {goal.plannedContribution ? (
+                        <p className="mt-1 text-xs text-primary">
+                          {t("goal.plannedLine", {
+                            amount: formatCurrency(goal.plannedContribution, pageData.currency)
+                          })}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>
@@ -366,6 +375,21 @@ function GoalDialog({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useI18n();
+  const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiClient
+      .get<AccountsPageData>("/accounts")
+      .then((data) => {
+        if (!cancelled) setAccounts(data?.accounts ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <DialogContent>
       <DialogHeader>
@@ -416,6 +440,35 @@ function GoalDialog({
             defaultValue={goal ? formatInputDate(goal.deadline) : formatInputDate(new Date())}
             required
           />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>{t("goal.dialog.linkedAccount")}</Label>
+            <Select name="linkedAccountId" defaultValue={goal?.linkedAccountId || "none"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t("goal.dialog.noAccount")}</SelectItem>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("goal.dialog.planned")}</Label>
+            <Input
+              name="plannedContribution"
+              type="number"
+              min="0"
+              step="100"
+              defaultValue={goal?.plannedContribution ?? ""}
+              placeholder="0"
+            />
+          </div>
         </div>
         <DialogFooter>
           <Button type="submit">{t("common.save")}</Button>

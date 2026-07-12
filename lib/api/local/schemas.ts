@@ -76,7 +76,11 @@ export const goalRowSchema = z.object({
   currentAmount: z.coerce.number().finite().min(0),
   deadline: z.string().min(1),
   progress: z.coerce.number().finite().min(0).default(0),
-  monthlyContribution: z.coerce.number().finite().min(0).default(0)
+  monthlyContribution: z.coerce.number().finite().min(0).default(0),
+  // Optional link to a funding account and a user-set planned monthly
+  // contribution (distinct from the computed pace `monthlyContribution`).
+  linkedAccountId: z.string().default(""),
+  plannedContribution: z.coerce.number().finite().min(0).default(0)
 });
 export const recurringRowSchema = z.object({
   id: z.string().min(1),
