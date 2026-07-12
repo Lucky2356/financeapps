@@ -1,6 +1,7 @@
 import type { RiskProfileCode, SecurityRisk } from "@prisma/client";
 
 import type { PortfolioRow, WatchlistRow } from "@/types/finance";
+import { translate, type Locale } from "@/lib/i18n/catalog";
 
 export type InvestmentSuggestion = {
   ticker: string;
@@ -21,7 +22,11 @@ const ALLOWED_RISK: Record<RiskProfileCode, SecurityRisk[]> = {
   AGGRESSIVE: ["LOW", "MEDIUM", "HIGH"]
 };
 const RISK_STABILITY: Record<SecurityRisk, number> = { LOW: 1, MEDIUM: 0.65, HIGH: 0.35 };
-const RISK_LABEL: Record<SecurityRisk, string> = { LOW: "низкий риск", MEDIUM: "умеренный риск", HIGH: "высокий риск" };
+const RISK_LABEL_KEY: Record<SecurityRisk, string> = {
+  LOW: "inv.suggest.risk.low",
+  MEDIUM: "inv.suggest.risk.medium",
+  HIGH: "inv.suggest.risk.high"
+};
 
 // Recommends which securities to add to make the portfolio more diversified and
 // resilient for a given monthly budget and risk profile. Allocates the budget
@@ -32,8 +37,10 @@ export class InvestmentSuggestionService {
     riskProfile: RiskProfileCode;
     portfolio: PortfolioRow[];
     securities: WatchlistRow[];
+    locale?: Locale;
   }): InvestmentSuggestion[] {
     const { budget, riskProfile, portfolio, securities } = params;
+    const locale: Locale = params.locale ?? "ru";
     if (!Number.isFinite(budget) || budget <= 0) return [];
 
     const allowed = ALLOWED_RISK[riskProfile] ?? ALLOWED_RISK.MODERATE;
@@ -45,8 +52,13 @@ export class InvestmentSuggestionService {
     }
     const heldTickers = new Set(portfolio.map((position) => position.ticker));
 
-    const affordable = securities.filter((security) => allowed.includes(security.risk) && security.price <= budget);
-    const candidates = affordable.length > 0 ? affordable : securities.filter((security) => allowed.includes(security.risk));
+    const affordable = securities.filter(
+      (security) => allowed.includes(security.risk) && security.price <= budget
+    );
+    const candidates =
+      affordable.length > 0
+        ? affordable
+        : securities.filter((security) => allowed.includes(security.risk));
 
     const scored = candidates
       .map((security) => {
@@ -72,10 +84,15 @@ export class InvestmentSuggestionService {
         const amount = budget * (score / scoreSum);
         const suggestedQuantity = Math.floor(amount / security.price);
         const reasons: string[] = [];
-        if (isNewSector) reasons.push(`добавляет новый сектор «${security.sector}»`);
-        else reasons.push(`усиливает диверсификацию в секторе «${security.sector}»`);
-        reasons.push(RISK_LABEL[security.risk]);
-        if (security.change30d > 0) reasons.push(`рост за 30 дней +${security.change30d.toFixed(1)}%`);
+        if (isNewSector)
+          reasons.push(translate(locale, "inv.suggest.newSector", { sector: security.sector }));
+        else
+          reasons.push(translate(locale, "inv.suggest.diversifies", { sector: security.sector }));
+        reasons.push(translate(locale, RISK_LABEL_KEY[security.risk]));
+        if (security.change30d > 0)
+          reasons.push(
+            translate(locale, "inv.suggest.momentum", { pct: security.change30d.toFixed(1) })
+          );
         return {
           ticker: security.ticker,
           name: security.name,

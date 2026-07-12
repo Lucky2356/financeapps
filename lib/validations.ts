@@ -36,6 +36,8 @@ export const transactionFilterSchema = z.object({
   categoryId: z.string().optional(),
   accountId: z.string().optional(),
   q: z.string().trim().max(120).optional(),
+  minAmount: z.coerce.number().finite().nonnegative().optional(),
+  maxAmount: z.coerce.number().finite().nonnegative().optional(),
   page: z.coerce.number().int().min(1).catch(1).default(1),
   limit: z.coerce.number().int().min(10).max(100).catch(20).default(20)
 });

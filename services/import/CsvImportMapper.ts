@@ -2,6 +2,7 @@ import { format, isValid } from "date-fns";
 import Papa from "papaparse";
 
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
+import { translate, type Locale } from "@/lib/i18n/catalog";
 
 export type ExistingTransactionLike = {
   date: string | Date;
@@ -176,7 +177,8 @@ export class CsvImportMapper {
 
   validateRows(
     rows: Array<Record<string, unknown>>,
-    mapping: CsvColumnMapping
+    mapping: CsvColumnMapping,
+    locale: Locale = "ru"
   ): CsvValidationResult {
     const warnings: string[] = [];
     let validRows = 0;
@@ -191,12 +193,12 @@ export class CsvImportMapper {
       }
 
       if (amount === null || amount === 0) {
-        warnings.push(`Строка ${rowNumber}: сумма пустая, нулевая или не распознана`);
+        warnings.push(translate(locale, "imp.warn.amount", { row: rowNumber }));
         return;
       }
 
       if (!date) {
-        warnings.push(`Строка ${rowNumber}: дата не распознана`);
+        warnings.push(translate(locale, "imp.warn.date", { row: rowNumber }));
         return;
       }
 

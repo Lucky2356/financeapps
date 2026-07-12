@@ -1,6 +1,16 @@
 "use client";
 
-import { ArrowRightLeft, Download, Edit2, Plus, ReceiptText, Search, Trash2 } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Download,
+  Edit2,
+  Plus,
+  ReceiptText,
+  Search,
+  Star,
+  Trash2,
+  X
+} from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,8 +21,10 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { TransactionsPageData } from "@/lib/data";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
@@ -49,6 +61,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const router = useRouter();
@@ -63,14 +76,22 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     categoryId: searchParams.get("categoryId") ?? "",
     accountId: searchParams.get("accountId") ?? "",
     q: searchParams.get("q") ?? "",
+    minAmount: searchParams.get("minAmount") ?? "",
+    maxAmount: searchParams.get("maxAmount") ?? "",
     limit: searchParams.get("limit") ?? String(pageData.pagination.limit)
   };
+  const criteria = criteriaFromParams(searchParams);
   const { run, pending: isMutating } = useApiMutation();
+  const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<
     TransactionsPageData["transactions"][number] | null
   >(null);
+  // Bulk selection: ids of transactions ticked for a batch action.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkPending, setBulkPending] = useState(false);
   const loadTransactions = useCallback(
     async (forceApi = false) => {
       if (!paramsString && !forceApi) {
@@ -112,22 +133,15 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     };
   }, [data, paramsString]);
 
-  const visibleTransactions = pageData.transactions.filter((transaction) => {
-    const date = transaction.date.slice(0, 10);
-    if (clientFilters.from && date < clientFilters.from) return false;
-    if (clientFilters.to && date > clientFilters.to) return false;
-    if (clientFilters.type !== "ALL" && transaction.type !== clientFilters.type) return false;
-    if (clientFilters.categoryId && transaction.category.id !== clientFilters.categoryId)
-      return false;
-    if (clientFilters.accountId && transaction.account.id !== clientFilters.accountId) return false;
-    if (clientFilters.q) {
-      const query = clientFilters.q.toLowerCase();
-      const haystack =
-        `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
-      if (!haystack.includes(query)) return false;
-    }
-    return true;
-  });
+  const visibleTransactions = pageData.transactions.filter((transaction) =>
+    matchesCriteria(transaction, criteria)
+  );
+
+  // Reset the batch selection whenever the filter/page changes so a stale tick
+  // never targets a row the user can no longer see.
+  useEffect(() => {
+    void Promise.resolve().then(() => setSelectedIds(new Set()));
+  }, [paramsString]);
   const totals = visibleTransactions.reduce(
     (acc, transaction) => {
       if (transaction.type === "INCOME") acc.income += transaction.amount;
@@ -197,6 +211,126 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     });
   }
 
+  // Bulk selection helpers.
+  const allVisibleSelected =
+    visibleTransactions.length > 0 && visibleTransactions.every((tx) => selectedIds.has(tx.id));
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(() =>
+      allVisibleSelected ? new Set() : new Set(visibleTransactions.map((tx) => tx.id))
+    );
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  // PUT payload mirroring the edit dialog's fields, with an overridden category.
+  function updatePayload(
+    transaction: TransactionsPageData["transactions"][number],
+    categoryId: string
+  ) {
+    return {
+      id: transaction.id,
+      amount: String(transaction.amount),
+      type: transaction.type,
+      date: formatInputDate(transaction.date),
+      categoryId,
+      accountId: transaction.account.id,
+      description: transaction.description ?? ""
+    };
+  }
+
+  async function bulkDelete() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const ok = await confirm({
+      title: t("tx.bulk.deleteTitle"),
+      description: t("tx.bulk.deleteDesc", { count: ids.length }),
+      destructive: true,
+      confirmLabel: t("common.delete")
+    });
+    if (!ok) return;
+    setBulkPending(true);
+    let done = 0;
+    for (const id of ids) {
+      try {
+        await apiClient.delete(`/transactions?id=${encodeURIComponent(id)}`);
+        done += 1;
+      } catch {
+        /* keep going; summary reports how many succeeded */
+      }
+    }
+    setBulkPending(false);
+    clearSelection();
+    toast.success(t("tx.bulk.deleted", { count: done }));
+    await refresh();
+  }
+
+  async function bulkCategorize() {
+    const category = pageData.categories.find((item) => item.id === bulkCategory);
+    if (!category) return;
+    const targets = visibleTransactions.filter((tx) => selectedIds.has(tx.id));
+    setBulkPending(true);
+    let applied = 0;
+    let skipped = 0;
+    for (const transaction of targets) {
+      // A category is income- or expense-typed; skip mismatches rather than fail.
+      if (transaction.type !== category.kind) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        await apiClient.put("/transactions", updatePayload(transaction, category.id));
+        applied += 1;
+      } catch {
+        skipped += 1;
+      }
+    }
+    setBulkPending(false);
+    clearSelection();
+    setBulkCategory("");
+    toast.success(t("tx.bulk.categorized", { applied, skipped }));
+    await refresh();
+  }
+
+  async function bulkApplyRules() {
+    if (pageData.rules.length === 0) {
+      toast.info(t("tx.bulk.noRules"));
+      return;
+    }
+    const targets = visibleTransactions.filter((tx) => selectedIds.has(tx.id));
+    setBulkPending(true);
+    let applied = 0;
+    for (const transaction of targets) {
+      const ruled = transaction.description
+        ? matchRule(transaction.description, pageData.rules)
+        : null;
+      if (!ruled || ruled === transaction.category.id) continue;
+      const category = pageData.categories.find((item) => item.id === ruled);
+      if (!category || category.kind !== transaction.type) continue;
+      try {
+        await apiClient.put("/transactions", updatePayload(transaction, ruled));
+        applied += 1;
+      } catch {
+        /* continue */
+      }
+    }
+    setBulkPending(false);
+    clearSelection();
+    toast.success(t("tx.bulk.rulesApplied", { count: applied }));
+    await refresh();
+  }
+
   async function submitTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = {
@@ -247,7 +381,8 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <SavedFilters currentParams={paramsString} />
           {/* key remounts the uncontrolled filter inputs when the URL params
               change (e.g. arriving from a drill-down link) so the controls
               reflect the active category/account filter. */}
@@ -290,21 +425,38 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>{t("common.category")}</Label>
+              <CategoryMultiSelect
+                categories={pageData.categories}
+                initial={criteria.categoryIds ?? []}
+              />
+            </div>
             <div className="space-y-2">
-              <Label htmlFor="categoryId">{t("common.category")}</Label>
-              <Select name="categoryId" defaultValue={clientFilters.categoryId || ALL_OPTION}>
-                <SelectTrigger id="categoryId">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_OPTION}>{t("tx.allCategories")}</SelectItem>
-                  {pageData.categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="minAmount">{t("tx.minAmount")}</Label>
+              <Input
+                id="minAmount"
+                name="minAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                defaultValue={clientFilters.minAmount}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="maxAmount">{t("tx.maxAmount")}</Label>
+              <Input
+                id="maxAmount"
+                name="maxAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                defaultValue={clientFilters.maxAmount}
+                placeholder="∞"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="accountId">{t("tx.account")}</Label>
@@ -382,10 +534,66 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             />
           ) : (
             <>
+              {selectedIds.size > 0 ? (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 p-3">
+                  <span className="text-sm font-medium">
+                    {t("tx.bulk.selected", { count: selectedIds.size })}
+                  </span>
+                  <Select value={bulkCategory || undefined} onValueChange={setBulkCategory}>
+                    <SelectTrigger className="h-9 w-52">
+                      <SelectValue placeholder={t("tx.bulk.pickCategory")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pageData.categories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!bulkCategory || bulkPending}
+                    onClick={() => void bulkCategorize()}
+                  >
+                    {t("tx.bulk.setCategory")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={bulkPending}
+                    onClick={() => void bulkApplyRules()}
+                  >
+                    {t("tx.bulk.applyRules")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={bulkPending}
+                    onClick={() => void bulkDelete()}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                    {t("common.delete")}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={clearSelection}>
+                    {t("tx.bulk.clear")}
+                  </Button>
+                </div>
+              ) : null}
               <div className="hidden md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8">
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-[hsl(var(--primary))]"
+                          checked={allVisibleSelected}
+                          onChange={toggleSelectAll}
+                          aria-label={t("tx.bulk.selectAll")}
+                        />
+                      </TableHead>
                       <TableHead>{t("common.date")}</TableHead>
                       <TableHead>{t("common.category")}</TableHead>
                       <TableHead>{t("tx.account")}</TableHead>
@@ -397,6 +605,15 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                   <TableBody>
                     {visibleTransactions.map((transaction) => (
                       <TableRow key={transaction.id}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-[hsl(var(--primary))]"
+                            checked={selectedIds.has(transaction.id)}
+                            onChange={() => toggleSelect(transaction.id)}
+                            aria-label={t("tx.bulk.selectRow")}
+                          />
+                        </TableCell>
                         <TableCell>{formatDate(transaction.date)}</TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-2">
@@ -463,7 +680,14 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 {visibleTransactions.map((transaction) => (
                   <div key={transaction.id} className="rounded-lg border p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <input
+                        type="checkbox"
+                        className="mt-1 size-4 shrink-0 accent-[hsl(var(--primary))]"
+                        checked={selectedIds.has(transaction.id)}
+                        onChange={() => toggleSelect(transaction.id)}
+                        aria-label={t("tx.bulk.selectRow")}
+                      />
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{transaction.category.label}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {formatDate(transaction.date)} · {transaction.account.label}
@@ -532,6 +756,177 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           />
         )}
       </Dialog>
+    </div>
+  );
+}
+
+// Multi-category filter: toggleable chips that mirror the selection into a
+// hidden `categoryId` input (comma-separated) so it submits with the filter form.
+// A single `?categoryId=x` (from a drill-down link) still selects that one chip.
+function CategoryMultiSelect({
+  categories,
+  initial
+}: {
+  categories: { id: string; label: string }[];
+  initial: string[];
+}) {
+  const { t } = useI18n();
+  const [selected, setSelected] = useState<string[]>(initial);
+
+  function toggle(categoryId: string) {
+    setSelected((prev) =>
+      prev.includes(categoryId) ? prev.filter((x) => x !== categoryId) : [...prev, categoryId]
+    );
+  }
+
+  return (
+    <div>
+      <input type="hidden" name="categoryId" value={selected.join(",")} />
+      <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto rounded-md border p-2">
+        {categories.length === 0 ? (
+          <span className="text-xs text-muted-foreground">{t("tx.allCategories")}</span>
+        ) : (
+          categories.map((category) => {
+            const active = selected.includes(category.id);
+            return (
+              <button
+                key={category.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggle(category.id)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input bg-background hover:bg-accent"
+                )}
+              >
+                {category.label}
+              </button>
+            );
+          })
+        )}
+      </div>
+      {selected.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => setSelected([])}
+          className="mt-1 text-xs text-primary hover:underline"
+        >
+          {t("tx.clearCategories")}
+        </button>
+      ) : (
+        <p className="mt-1 text-xs text-muted-foreground">{t("tx.allCategories")}</p>
+      )}
+    </div>
+  );
+}
+
+type SavedFilter = { name: string; params: string };
+const SAVED_FILTERS_KEY = "tx-saved-filters";
+
+// Named filter presets persisted in localStorage. Saving snapshots the currently
+// applied URL params; applying navigates to them. No server involved.
+function SavedFilters({ currentParams }: { currentParams: string }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [saved, setSaved] = useState<SavedFilter[]>([]);
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(SAVED_FILTERS_KEY);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as SavedFilter[];
+      if (Array.isArray(parsed)) void Promise.resolve().then(() => setSaved(parsed));
+    } catch {
+      /* ignore malformed */
+    }
+  }, []);
+
+  function persist(next: SavedFilter[]) {
+    setSaved(next);
+    try {
+      localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore quota */
+    }
+  }
+
+  function confirmSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    persist([...saved.filter((f) => f.name !== trimmed), { name: trimmed, params: currentParams }]);
+    setName("");
+    setNaming(false);
+    toast.success(t("tx.saved.savedToast"));
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium text-muted-foreground">{t("tx.saved.title")}</span>
+      {saved.map((filter) => (
+        <span
+          key={filter.name}
+          className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-xs"
+        >
+          <button
+            type="button"
+            className="hover:text-primary"
+            onClick={() => router.push(`/transactions?${filter.params}`)}
+          >
+            {filter.name}
+          </button>
+          <button
+            type="button"
+            aria-label={t("common.delete")}
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => persist(saved.filter((f) => f.name !== filter.name))}
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+      {naming ? (
+        <form onSubmit={confirmSave} className="flex items-center gap-1">
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t("tx.saved.namePlaceholder")}
+            className="h-8 w-40"
+            autoFocus
+          />
+          <Button type="submit" size="sm">
+            {t("tx.dialog.create")}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setNaming(false)}>
+            {t("tx.dialog.cancel")}
+          </Button>
+        </form>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (!currentParams) {
+              toast.info(t("tx.saved.empty"));
+              return;
+            }
+            setNaming(true);
+          }}
+        >
+          <Star className="size-3.5" />
+          {t("tx.saved.save")}
+        </Button>
+      )}
     </div>
   );
 }

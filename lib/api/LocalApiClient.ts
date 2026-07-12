@@ -20,6 +20,7 @@ import type {
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
+import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
 import {
@@ -1302,33 +1303,21 @@ export class LocalApiClient implements ApiClient {
   private transactions(state: LocalState, searchParams: URLSearchParams): TransactionsPageData {
     const page = Math.max(1, Number(searchParams.get("page") || 1));
     const limit = Math.min(100, Math.max(10, Number(searchParams.get("limit") || 20)));
+    const criteria = criteriaFromParams(searchParams);
     const filters = {
-      from: searchParams.get("from") || undefined,
-      to: searchParams.get("to") || undefined,
-      type: (searchParams.get("type") as TransactionsPageData["filters"]["type"]) || "ALL",
+      from: criteria.from,
+      to: criteria.to,
+      type: criteria.type ?? "ALL",
       categoryId: searchParams.get("categoryId") || undefined,
-      accountId: searchParams.get("accountId") || undefined,
-      q: searchParams.get("q") || undefined,
+      accountId: criteria.accountId,
+      q: criteria.q,
+      minAmount: criteria.minAmount,
+      maxAmount: criteria.maxAmount,
       page,
       limit
     };
     const filtered = [...state.transactions]
-      .filter((transaction) => {
-        const date = transaction.date.slice(0, 10);
-        if (filters.from && date < filters.from) return false;
-        if (filters.to && date > filters.to) return false;
-        if (filters.type && filters.type !== "ALL" && transaction.type !== filters.type)
-          return false;
-        if (filters.categoryId && transaction.category.id !== filters.categoryId) return false;
-        if (filters.accountId && transaction.account.id !== filters.accountId) return false;
-        if (filters.q) {
-          const query = filters.q.toLowerCase();
-          const haystack =
-            `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
-          if (!haystack.includes(query)) return false;
-        }
-        return true;
-      })
+      .filter((transaction) => matchesCriteria(transaction, criteria))
       .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
     const start = (page - 1) * limit;
 

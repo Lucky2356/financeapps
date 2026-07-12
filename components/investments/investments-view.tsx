@@ -82,7 +82,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 export function InvestmentsView({ data: initialData }: { data: InvestmentData }) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data, reload } = useApiPageData(initialData, "/investments");
   const { run } = useApiMutation();
   const [watchlistOpen, setWatchlistOpen] = useState(false);
@@ -166,7 +166,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       budget: value,
       riskProfile: riskCode,
       portfolio: data.portfolio,
-      securities: data.securities
+      securities: data.securities,
+      locale
     });
     setSuggestions(result);
     setSuggested(true);

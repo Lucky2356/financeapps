@@ -151,7 +151,10 @@ export function ImportExportPanel({
     runtimeConfig.platform !== "desktop" || runtimeConfig.desktopDataMode === "local";
   const mapper = useMemo(() => new CsvImportMapper(), []);
   const importPresets = useMemo(() => mapper.presets(), [mapper]);
-  const validation = useMemo(() => mapper.validateRows(rows, mapping), [mapper, mapping, rows]);
+  const validation = useMemo(
+    () => mapper.validateRows(rows, mapping, locale),
+    [mapper, mapping, rows, locale]
+  );
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   // Rows that match an already-stored transaction or repeat earlier in the file.
   const duplicateIndices = useMemo(
