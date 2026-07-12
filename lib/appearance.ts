@@ -11,7 +11,7 @@ export const DEFAULT_ACCENT: Accent = "emerald";
 
 export const ACCENT_STORAGE_KEY = "ui-accent";
 
-export function isAccent(value: unknown): value is Accent {
+function isAccent(value: unknown): value is Accent {
   return typeof value === "string" && (ACCENTS as readonly string[]).includes(value);
 }
 
