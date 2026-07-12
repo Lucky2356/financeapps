@@ -2,6 +2,8 @@
 
 import { AlertTriangle, CheckCircle2, Info, Printer, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
+import { addMonths } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -15,9 +17,11 @@ import {
   YAxis
 } from "recharts";
 
-import type { AnalyticsData } from "@/lib/data";
+import { apiClient } from "@/lib/api/client";
+import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
+import { buildCategoryTrends, type CategoryTrend } from "@/lib/analytics/category-trends";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -283,7 +287,108 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
           </CardContent>
         </Card>
       </div>
+
+      <CategoryTrendsSection currency={data.currency} />
     </div>
+  );
+}
+
+// Inline sparkline of monthly totals (no chart lib needed for a tiny mark).
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const width = 88;
+  const height = 26;
+  const max = Math.max(...values, 1);
+  const step = values.length > 1 ? width / (values.length - 1) : width;
+  const points = values
+    .map((value, index) => {
+      const x = index * step;
+      const y = height - (value / max) * (height - 4) - 2;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg width={width} height={height} className="shrink-0" aria-hidden>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CategoryTrendsSection({ currency }: { currency: string }) {
+  const { t } = useI18n();
+  const [transactions, setTransactions] = useState<TransactionsPageData["transactions"]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const from = formatInputDate(addMonths(new Date(), -13));
+        const result = await apiClient.get<TransactionsPageData>(
+          `/transactions?limit=100&from=${from}`
+        );
+        if (!cancelled) setTransactions(result.transactions);
+      } catch {
+        /* offline / unavailable — section stays empty */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const trends = useMemo(() => buildCategoryTrends(transactions).slice(0, 8), [transactions]);
+
+  if (trends.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("an.trends.title")}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t("an.trends.desc")}</p>
+      </CardHeader>
+      <CardContent className="grid gap-2">
+        {trends.map((trend: CategoryTrend) => (
+          <div
+            key={trend.categoryId}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                className="inline-block size-3 shrink-0 rounded-full"
+                style={{ backgroundColor: trend.color }}
+              />
+              <span className="truncate font-medium">{trend.category}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <Sparkline values={trend.monthly.map((m) => m.total)} color={trend.color} />
+              <div className="text-right">
+                <p className="font-semibold">{formatCurrency(trend.currentTotal, currency)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("an.trends.avg", { amount: formatCurrency(trend.averageTotal, currency) })}
+                </p>
+              </div>
+              {trend.anomaly === "high" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+                  <TrendingUp className="size-3" />
+                  {t("an.trends.more", { pct: Math.abs(trend.changePct).toFixed(0) })}
+                </span>
+              ) : trend.anomaly === "low" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
+                  <TrendingDown className="size-3" />
+                  {t("an.trends.less", { pct: Math.abs(trend.changePct).toFixed(0) })}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
