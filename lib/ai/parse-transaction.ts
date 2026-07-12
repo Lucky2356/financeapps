@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { extractJsonObject } from "@/lib/ai/extract-json";
+
 // Pure helpers for the AI-assisted transaction entry (plan D3). Everything in
 // this file is network-free and fully unit-testable: prompt construction and
 // strict validation/normalization of the model's JSON reply. The actual
@@ -111,11 +113,4 @@ export function parseTransactionDraft(
     categoryId: category?.id ?? null,
     accountId: account?.id ?? null
   };
-}
-
-function extractJsonObject(text: string): string | null {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  return text.slice(start, end + 1);
 }
