@@ -53,7 +53,12 @@ export const transactionRowSchema = z.object({
   account: optionSchema,
   category: optionSchema.extend({ color: z.string().trim().min(1).max(32).default("#64748b") }),
   // Optional link to the recurring template that materialized this transaction
-  recurringId: z.string().optional()
+  recurringId: z.string().optional(),
+  // Free-form cross-cutting labels beyond the category.
+  tags: z.array(z.string().trim().min(1).max(40)).default([]),
+  // Shared id linking the rows of a single split (each row is a normal
+  // transaction, so all existing aggregations count them without double-counting).
+  splitGroupId: z.string().optional()
 });
 export const budgetRowSchema = z.object({
   id: z.string().min(1),
