@@ -26,6 +26,32 @@ describe("matchRule", () => {
     expect(matchRule("Аптека", rules)).toBeNull();
     expect(matchRule("   ", rules)).toBeNull();
   });
+
+  it("is tolerant of ё/е spelling in either direction", () => {
+    // Rule written with «е», description with «ё».
+    expect(
+      matchRule("ПЯТЁРОЧКА №1234 МОСКВА", [{ id: "1", match: "Пятерочка", categoryId: "cat-food" }])
+    ).toBe("cat-food");
+    // Rule written with «ё», description with «е».
+    expect(matchRule("оплата ПЯТЕРОЧКА сегодня", rules)).toBe("cat-food");
+  });
+
+  it("ignores punctuation and card masks / digits", () => {
+    // Space vs dot in "Яндекс.Такси".
+    expect(matchRule("ЯНДЕКС ТАКСИ *4521 поездка", rules)).toBe("cat-taxi");
+  });
+
+  it("supports several comma/semicolon-separated keywords in one rule", () => {
+    const multi: CategorizationRule[] = [
+      { id: "m", match: "мтс, мобильная связь", categoryId: "cat-mobile" }
+    ];
+    expect(matchRule("Оплата МТС", multi)).toBe("cat-mobile");
+    expect(matchRule("Мобильная связь за март", multi)).toBe("cat-mobile");
+  });
+
+  it("skips empty / whitespace-only rules", () => {
+    expect(matchRule("что угодно", [{ id: "e", match: "   ", categoryId: "cat-x" }])).toBeNull();
+  });
 });
 
 describe("suggestCategoryId with rules", () => {

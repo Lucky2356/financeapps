@@ -7,6 +7,7 @@
 // there is nothing confident to suggest.
 
 import { matchRule, type CategorizationRule } from "@/lib/categorization-rules";
+import { normalizeForMatch } from "@/lib/text/normalize";
 
 export type SuggestHistoryItem = {
   description?: string | null;
@@ -15,9 +16,9 @@ export type SuggestHistoryItem = {
 };
 
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+  // Normalize first (case, ё/е, punctuation, digits) so history matching is as
+  // forgiving as the rules — then keep word-ish tokens of length >= 3.
+  return normalizeForMatch(text)
     .split(/\s+/)
     .filter((word) => word.length >= 3);
 }
