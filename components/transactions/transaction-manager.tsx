@@ -2,11 +2,13 @@
 
 import {
   ArrowRightLeft,
+  ChevronDown,
   Download,
   Edit2,
   Plus,
   ReceiptText,
   Search,
+  SlidersHorizontal,
   Split,
   Star,
   Trash2,
@@ -95,6 +97,41 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkPending, setBulkPending] = useState(false);
+  // Filter panel is collapsed by default (it's tall); the preference persists.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FILTERS_OPEN_KEY) === "1") {
+        void Promise.resolve().then(() => setFiltersOpen(true));
+      }
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  function toggleFilters() {
+    setFiltersOpen((open) => {
+      const next = !open;
+      try {
+        localStorage.setItem(FILTERS_OPEN_KEY, next ? "1" : "0");
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
+  }
+  // Count of active filters (everything except paging + the "all" defaults) for
+  // the collapsed-panel badge.
+  const activeFilterCount =
+    [
+      clientFilters.from,
+      clientFilters.to,
+      clientFilters.q,
+      clientFilters.minAmount,
+      clientFilters.maxAmount,
+      clientFilters.tag,
+      clientFilters.accountId,
+      clientFilters.type !== "ALL" ? clientFilters.type : ""
+    ].filter(Boolean).length + (criteria.categoryIds?.length ? 1 : 0);
   const loadTransactions = useCallback(
     async (forceApi = false) => {
       if (!paramsString && !forceApi) {
@@ -391,7 +428,26 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     <div className="space-y-5">
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("tx.filters")}</CardTitle>
+          <button
+            type="button"
+            onClick={toggleFilters}
+            aria-expanded={filtersOpen}
+            className="group flex items-center gap-2 text-left"
+          >
+            <SlidersHorizontal className="size-4 text-muted-foreground" />
+            <CardTitle>{t("tx.filters")}</CardTitle>
+            {activeFilterCount > 0 ? (
+              <span className="num inline-flex min-w-5 items-center justify-center rounded-full bg-primary/15 px-1.5 text-xs font-semibold text-primary">
+                {activeFilterCount}
+              </span>
+            ) : null}
+            <ChevronDown
+              className={cn(
+                "size-4 text-muted-foreground transition-transform",
+                filtersOpen && "rotate-180"
+              )}
+            />
+          </button>
           <div className="flex flex-wrap gap-2">
             <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
               <DialogTrigger asChild>
@@ -429,135 +485,137 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <SavedFilters currentParams={paramsString} />
-          {/* key remounts the uncontrolled filter inputs when the URL params
+        {filtersOpen ? (
+          <CardContent className="space-y-4">
+            <SavedFilters currentParams={paramsString} />
+            {/* key remounts the uncontrolled filter inputs when the URL params
               change (e.g. arriving from a drill-down link) so the controls
               reflect the active category/account filter. */}
-          <form
-            key={paramsString}
-            onSubmit={applyFilters}
-            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"
-          >
-            <div className="space-y-2 sm:col-span-2 xl:col-span-6">
-              <Label htmlFor="q">{t("tx.search")}</Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="q"
-                  name="q"
-                  defaultValue={clientFilters.q}
-                  placeholder={t("tx.search.placeholder")}
-                  className="pl-9"
+            <form
+              key={paramsString}
+              onSubmit={applyFilters}
+              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"
+            >
+              <div className="space-y-2 sm:col-span-2 xl:col-span-6">
+                <Label htmlFor="q">{t("tx.search")}</Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="q"
+                    name="q"
+                    defaultValue={clientFilters.q}
+                    placeholder={t("tx.search.placeholder")}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="from">{t("tx.from")}</Label>
+                <Input id="from" name="from" type="date" defaultValue={clientFilters.from} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="to">{t("tx.to")}</Label>
+                <Input id="to" name="to" type="date" defaultValue={clientFilters.to} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">{t("tx.type")}</Label>
+                <Select name="type" defaultValue={clientFilters.type}>
+                  <SelectTrigger id="type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">{t("tx.type.all")}</SelectItem>
+                    <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
+                    <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>{t("common.category")}</Label>
+                <CategoryMultiSelect
+                  categories={pageData.categories}
+                  initial={criteria.categoryIds ?? []}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="from">{t("tx.from")}</Label>
-              <Input id="from" name="from" type="date" defaultValue={clientFilters.from} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="to">{t("tx.to")}</Label>
-              <Input id="to" name="to" type="date" defaultValue={clientFilters.to} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="type">{t("tx.type")}</Label>
-              <Select name="type" defaultValue={clientFilters.type}>
-                <SelectTrigger id="type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">{t("tx.type.all")}</SelectItem>
-                  <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
-                  <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>{t("common.category")}</Label>
-              <CategoryMultiSelect
-                categories={pageData.categories}
-                initial={criteria.categoryIds ?? []}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="minAmount">{t("tx.minAmount")}</Label>
-              <Input
-                id="minAmount"
-                name="minAmount"
-                type="number"
-                min="0"
-                step="0.01"
-                inputMode="decimal"
-                defaultValue={clientFilters.minAmount}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="maxAmount">{t("tx.maxAmount")}</Label>
-              <Input
-                id="maxAmount"
-                name="maxAmount"
-                type="number"
-                min="0"
-                step="0.01"
-                inputMode="decimal"
-                defaultValue={clientFilters.maxAmount}
-                placeholder="∞"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tag">{t("tx.tag")}</Label>
-              <Input
-                id="tag"
-                name="tag"
-                defaultValue={clientFilters.tag}
-                placeholder={t("tx.tagPlaceholder")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="accountId">{t("tx.account")}</Label>
-              <Select name="accountId" defaultValue={clientFilters.accountId || ALL_OPTION}>
-                <SelectTrigger id="accountId">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_OPTION}>{t("tx.allAccounts")}</SelectItem>
-                  {pageData.accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="limit">{t("tx.perPage")}</Label>
-              <Select name="limit" defaultValue={clientFilters.limit}>
-                <SelectTrigger id="limit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2 sm:col-span-2 xl:col-span-6">
-              <Button type="submit">{t("tx.apply")}</Button>
-              <Button asChild variant="outline">
-                <Link href="/transactions">{t("tx.reset")}</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/import">
-                  <Download className="size-4" />
-                  {t("nav.import")}
-                </Link>
-              </Button>
-            </div>
-          </form>
-        </CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="minAmount">{t("tx.minAmount")}</Label>
+                <Input
+                  id="minAmount"
+                  name="minAmount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  defaultValue={clientFilters.minAmount}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="maxAmount">{t("tx.maxAmount")}</Label>
+                <Input
+                  id="maxAmount"
+                  name="maxAmount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  defaultValue={clientFilters.maxAmount}
+                  placeholder="∞"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tag">{t("tx.tag")}</Label>
+                <Input
+                  id="tag"
+                  name="tag"
+                  defaultValue={clientFilters.tag}
+                  placeholder={t("tx.tagPlaceholder")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="accountId">{t("tx.account")}</Label>
+                <Select name="accountId" defaultValue={clientFilters.accountId || ALL_OPTION}>
+                  <SelectTrigger id="accountId">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_OPTION}>{t("tx.allAccounts")}</SelectItem>
+                    {pageData.accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="limit">{t("tx.perPage")}</Label>
+                <Select name="limit" defaultValue={clientFilters.limit}>
+                  <SelectTrigger id="limit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 sm:col-span-2 xl:col-span-6">
+                <Button type="submit">{t("tx.apply")}</Button>
+                <Button asChild variant="outline">
+                  <Link href="/transactions">{t("tx.reset")}</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/import">
+                    <Download className="size-4" />
+                    {t("nav.import")}
+                  </Link>
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        ) : null}
       </Card>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -915,6 +973,7 @@ function CategoryMultiSelect({
 
 type SavedFilter = { name: string; params: string };
 const SAVED_FILTERS_KEY = "tx-saved-filters";
+const FILTERS_OPEN_KEY = "tx-filters-open";
 
 // Named filter presets persisted in localStorage. Saving snapshots the currently
 // applied URL params; applying navigates to them. No server involved.

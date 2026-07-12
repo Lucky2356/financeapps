@@ -427,25 +427,35 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           <div className="space-y-2">
             <Label>{t("set.accent")}</Label>
             <div className="flex flex-wrap gap-2">
-              {ACCENTS.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setAccent(value as Accent)}
-                  aria-pressed={accent === value}
-                  aria-label={t(`set.accent.${value}`)}
-                  title={t(`set.accent.${value}`)}
-                  className={cn(
-                    "flex size-10 items-center justify-center rounded-lg border transition-transform hover:scale-105",
-                    accent === value ? "border-primary ring-2 ring-primary/30" : "border-border"
-                  )}
-                >
-                  <span
-                    className="size-5 rounded-full"
-                    style={{ background: `hsl(${ACCENT_SWATCH[value]})` }}
-                  />
-                </button>
-              ))}
+              {ACCENTS.map((value) => {
+                const selected = accent === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setAccent(value as Accent)}
+                    aria-pressed={selected}
+                    aria-label={t(`set.accent.${value}`)}
+                    title={t(`set.accent.${value}`)}
+                    className={cn(
+                      // Selection ring is neutral (foreground), NOT the accent
+                      // colour — otherwise a blue ring on the blue swatch is
+                      // invisible and the picker looks like nothing is selected.
+                      "flex size-10 items-center justify-center rounded-lg border transition-transform hover:scale-105",
+                      selected
+                        ? "border-foreground/40 ring-2 ring-foreground/50 ring-offset-2 ring-offset-card"
+                        : "border-border"
+                    )}
+                  >
+                    <span
+                      className="flex size-5 items-center justify-center rounded-full"
+                      style={{ background: `hsl(${ACCENT_SWATCH[value]})` }}
+                    >
+                      {selected ? <Check className="size-3.5 text-white drop-shadow" /> : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <p className="text-xs text-muted-foreground">{t("set.accent.hint")}</p>
           </div>
