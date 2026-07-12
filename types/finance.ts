@@ -229,6 +229,8 @@ export type GoalRow = {
   deadline: string;
   progress: number;
   monthlyContribution: number;
+  linkedAccountId?: string;
+  plannedContribution?: number;
 };
 
 export type WatchlistRow = {

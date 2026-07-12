@@ -42,7 +42,9 @@ describe("GoalManager", () => {
 
     await user.click(await screen.findByRole("button", { name: "Создать цель" }));
     await user.type(await screen.findByRole("textbox"), "Отпуск");
-    await user.type(screen.getByRole("spinbutton"), "200000");
+    // The dialog now has two number inputs (target amount, planned contribution);
+    // the first is the required target amount.
+    await user.type(screen.getAllByRole("spinbutton")[0], "200000");
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() =>
