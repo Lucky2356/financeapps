@@ -16,18 +16,27 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ForecastEvent } from "@/types/finance";
+import { budgetResetMarker, type CalendarMarker } from "@/lib/calendar/markers";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 type DayBucket = { income: number; expense: number; events: ForecastEvent[] };
 
+const MARKER_DOT: Record<CalendarMarker["kind"], string> = {
+  goal: "bg-primary",
+  "budget-reset": "bg-amber-500",
+  dividend: "bg-emerald-500"
+};
+
 export function CashflowCalendar({
   events,
-  currency
+  currency,
+  markers = []
 }: {
   events: ForecastEvent[];
   currency: string;
+  markers?: CalendarMarker[];
 }) {
   const { t, locale } = useI18n();
   const dfLocale = locale === "en" ? enUS : ru;
@@ -49,6 +58,18 @@ export function CashflowCalendar({
     return map;
   }, [events]);
 
+  // Overlay markers (goal deadlines, dividends) + the budget reset for the month.
+  const markersByDay = useMemo(() => {
+    const all = [...markers, budgetResetMarker(month, t("cal.budgetReset"))];
+    const map = new Map<string, CalendarMarker[]>();
+    for (const marker of all) {
+      const list = map.get(marker.date) ?? [];
+      list.push(marker);
+      map.set(marker.date, list);
+    }
+    return map;
+  }, [markers, month, t]);
+
   const days = useMemo(() => {
     const start = startOfMonth(month);
     const end = endOfMonth(month);
@@ -57,6 +78,7 @@ export function CashflowCalendar({
   }, [month]);
 
   const selectedBucket = selected ? byDay.get(selected) : undefined;
+  const selectedMarkers = selected ? markersByDay.get(selected) : undefined;
   const todayKey = format(new Date(), "yyyy-MM-dd");
 
   return (
@@ -98,6 +120,7 @@ export function CashflowCalendar({
             if (!day) return <div key={`blank-${index}`} />;
             const key = format(day, "yyyy-MM-dd");
             const bucket = byDay.get(key);
+            const dayMarkers = markersByDay.get(key);
             const isToday = key === todayKey;
             const isSelected = key === selected;
             return (
@@ -130,17 +153,49 @@ export function CashflowCalendar({
                     −{compact(bucket.expense, t("cal.thousand"))}
                   </span>
                 ) : null}
+                {dayMarkers ? (
+                  <span className="mt-auto flex flex-wrap gap-0.5 pt-0.5">
+                    {dayMarkers.map((marker) => (
+                      <span
+                        key={marker.id}
+                        className={cn("size-1.5 rounded-full", MARKER_DOT[marker.kind])}
+                        title={marker.title}
+                      />
+                    ))}
+                  </span>
+                ) : null}
               </button>
             );
           })}
         </div>
 
-        {selectedBucket ? (
+        <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-primary" />
+            {t("cal.legend.goal")}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-amber-500" />
+            {t("cal.legend.budget")}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            {t("cal.legend.dividend")}
+          </span>
+        </div>
+
+        {selectedBucket || selectedMarkers ? (
           <div className="mt-4 space-y-2 rounded-lg border p-3">
             <p className="text-sm font-medium">
               {format(new Date(`${selected}T00:00:00`), "d MMMM yyyy", { locale: dfLocale })}
             </p>
-            {selectedBucket.events.map((event) => (
+            {selectedMarkers?.map((marker) => (
+              <div key={marker.id} className="flex items-center gap-2 text-sm">
+                <span className={cn("size-2 shrink-0 rounded-full", MARKER_DOT[marker.kind])} />
+                <span className="min-w-0 truncate">{marker.title}</span>
+              </div>
+            ))}
+            {selectedBucket?.events.map((event) => (
               <div key={event.id} className="flex items-center justify-between gap-3 text-sm">
                 <span className="min-w-0 truncate">
                   {event.title}
