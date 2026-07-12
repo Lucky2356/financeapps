@@ -123,11 +123,11 @@
      large histories on desktop. */
   :root {
     --density-card: 1.25rem; /* comfortable: p-5 */
-    --density-row-y: 0.625rem; /* comfortable table cell padding-y */
+    --density-row-y: 0.75rem; /* comfortable table cell padding-y */
   }
   :root[data-density="compact"] {
     --density-card: 0.85rem;
-    --density-row-y: 0.35rem;
+    --density-row-y: 0.4rem;
   }
 
   * {
@@ -235,6 +235,21 @@
     border-color: hsl(var(--border) / 0.6);
   }
 
+  /* Gentle entrance for sections/cards as they appear. */
+  .reveal {
+    animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   /* Subtle shimmer for loading placeholders */
   .shimmer {
     background: linear-gradient(
@@ -260,6 +275,23 @@
   /* Safe padding for mobile bottom nav */
   .pb-safe-nav {
     padding-bottom: max(5rem, calc(4rem + env(safe-area-inset-bottom)));
+  }
+}
+
+/* Respect users who prefer less motion: neutralise entrance animations,
+   transitions and the shimmer everywhere. Numeric count-ups check this flag in
+   JS and snap straight to the final value. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal {
+    transform: none !important;
   }
 }
 
