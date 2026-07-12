@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   question: z.string().trim().min(1).max(500),
-  summary: z.string().trim().min(1).max(4000)
+  summary: z.string().trim().min(1).max(4000),
+  locale: z.enum(["ru", "en"]).default("ru")
 });
 
 export async function POST(request: NextRequest) {
@@ -35,10 +36,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { question, summary } = bodySchema.parse(await request.json());
+    const { question, summary, locale } = bodySchema.parse(await request.json());
     const answer = await requestFinancialAnswer({
       question,
       summary,
+      locale,
       apiKey,
       model,
       provider,

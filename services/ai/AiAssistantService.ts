@@ -80,6 +80,7 @@ export type RequestFinancialAnswerArgs = {
   model?: string;
   provider?: AiProvider;
   effort?: string;
+  locale?: AiLocale;
 };
 
 // Natural-language Q&A over the user's finances ("ask your finances"). Returns
@@ -90,13 +91,14 @@ export async function requestFinancialAnswer({
   apiKey,
   model,
   provider,
-  effort
+  effort,
+  locale = "ru"
 }: RequestFinancialAnswerArgs): Promise<string> {
   if (!apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
   if (!question.trim()) throw new Error("Введите вопрос.");
 
   const { buildInsightPrompt } = await import("@/lib/ai/insight-prompt");
-  const { system, user } = buildInsightPrompt(question, summary);
+  const { system, user } = buildInsightPrompt(question, summary, locale);
   const answer = await complete({ apiKey, model, provider, effort, system, user });
   if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте переформулировать.");
   return answer.trim();
