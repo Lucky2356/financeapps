@@ -46,8 +46,14 @@ describe("runLocalStateMigrations", () => {
 
   it("upgrades a v2 state to v3", () => {
     const v2: RawLocalState = { schemaVersion: 2, lastBackupAt: null, importBatches: [] };
-    const migrated = runLocalStateMigrations(v2);
+    const migrated = runLocalStateMigrations(v2, 3);
     expect(migrated.schemaVersion).toBe(3);
+  });
+
+  it("upgrades a v3 state to v4", () => {
+    const v3: RawLocalState = { schemaVersion: 3, accounts: [], transactions: [] };
+    const migrated = runLocalStateMigrations(v3);
+    expect(migrated.schemaVersion).toBe(4);
   });
 
   it("defaults a missing schemaVersion to 1 and migrates from there", () => {

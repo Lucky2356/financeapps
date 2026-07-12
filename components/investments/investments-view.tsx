@@ -21,6 +21,8 @@ import { HoldingCard } from "@/components/investments/holding-card";
 import { PortfolioHero } from "@/components/investments/portfolio-hero";
 import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
 import { RealizedTaxReport } from "@/components/investments/realized-tax-report";
+import { DividendTracker } from "@/components/investments/dividend-tracker";
+import { RebalancePanel } from "@/components/investments/rebalance-panel";
 import { TaxEstimateCard } from "@/components/investments/tax-estimate-card";
 import { SecuritySearch } from "@/components/investments/security-search";
 import { WatchlistCard } from "@/components/investments/watchlist-card";
@@ -538,6 +540,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           {data.portfolio.length > 0 && (
             <TaxEstimateCard positions={data.portfolio} currency={data.currency} />
           )}
+          <RebalancePanel positions={data.portfolio} currency={data.currency} />
+          <DividendTracker />
           <RealizedTaxReport />
 
           <section className="grid gap-5 xl:grid-cols-2">

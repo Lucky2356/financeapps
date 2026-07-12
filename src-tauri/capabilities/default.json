@@ -9,6 +9,8 @@
     "dialog:allow-save",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
+    "fs:allow-read-dir",
+    "fs:allow-remove",
     "window-state:allow-restore-state",
     "window-state:allow-save-window-state",
     "updater:default",

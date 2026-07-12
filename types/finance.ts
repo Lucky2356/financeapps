@@ -282,3 +282,18 @@ export type RealizedInvestmentEvent = {
   fee: number;
   currency: string;
 };
+
+export type ExpectedDividend = {
+  id: string;
+  ticker: string;
+  name: string;
+  date: string;
+  amount: number;
+  currency: string;
+};
+
+export type TargetAllocation = {
+  id: string;
+  sector: string;
+  targetPct: number;
+};

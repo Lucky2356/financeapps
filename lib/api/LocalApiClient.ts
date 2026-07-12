@@ -68,9 +68,11 @@ import type {
   AccountRow,
   CategoryRow,
   DashboardData,
+  ExpectedDividend,
   InvestmentData,
   LiabilityRow,
   RealizedInvestmentEvent,
+  TargetAllocation,
   TransactionRow
 } from "@/types/finance";
 import type { ProfileList, UserProfile } from "@/types/profiles";
@@ -85,7 +87,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3;
+  schemaVersion: 1 | 2 | 3 | 4;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -108,6 +110,8 @@ type LocalState = {
   currencyRatesUpdatedAt: string | null;
   netWorthSnapshots: NetWorthSnapshot[];
   realizedInvestmentEvents: RealizedInvestmentEvent[];
+  expectedDividends: ExpectedDividend[];
+  targetAllocations: TargetAllocation[];
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -185,7 +189,7 @@ function createInitialState(): LocalState {
   // the user adds their own. Default categories are kept only so that operations
   // can be categorized out of the box; they carry no monetary data.
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -208,6 +212,8 @@ function createInitialState(): LocalState {
     currencyRatesUpdatedAt: null,
     netWorthSnapshots: [],
     realizedInvestmentEvents: [],
+    expectedDividends: [],
+    targetAllocations: [],
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -222,7 +228,7 @@ function createInitialState(): LocalState {
 // Unlike createInitialState() this seeds nothing: no accounts, categories or watchlist.
 function createBlankState(): LocalState {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -245,6 +251,8 @@ function createBlankState(): LocalState {
     currencyRatesUpdatedAt: null,
     netWorthSnapshots: [],
     realizedInvestmentEvents: [],
+    expectedDividends: [],
+    targetAllocations: [],
     categories: [],
     transactions: [],
     budgets: [],
@@ -349,6 +357,16 @@ export class LocalApiClient implements ApiClient {
       return invData as T;
     }
     if (pathname === "/investments/events") return this.investmentEventsPage(state) as T;
+    if (pathname === "/investments/dividends")
+      return {
+        dividends: state.expectedDividends ?? [],
+        realized: (state.realizedInvestmentEvents ?? []).filter(
+          (event) => event.type === "DIVIDEND"
+        ),
+        currency: state.currency
+      } as T;
+    if (pathname === "/investments/targets")
+      return { targets: state.targetAllocations ?? [], currency: state.currency } as T;
     if (pathname === "/categories") return this.categoriesPage(state) as T;
     if (pathname === "/analytics") return this.analyticsPage(state) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
@@ -382,6 +400,14 @@ export class LocalApiClient implements ApiClient {
     } else if (pathname === "/investments/events" && itemId) {
       state.realizedInvestmentEvents = (state.realizedInvestmentEvents ?? []).filter(
         (event) => event.id !== itemId
+      );
+    } else if (pathname === "/investments/dividends" && itemId) {
+      state.expectedDividends = (state.expectedDividends ?? []).filter(
+        (dividend) => dividend.id !== itemId
+      );
+    } else if (pathname === "/investments/targets" && itemId) {
+      state.targetAllocations = (state.targetAllocations ?? []).filter(
+        (target) => target.id !== itemId
       );
     } else if (pathname === "/rules" && itemId) {
       state.rules = state.rules.filter((rule) => rule.id !== itemId);
@@ -471,6 +497,10 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.updateFxRates(state, body));
     if (pathname === "/investments/events")
       return this.saveAndReturn<TResponse>(state, this.addRealizedEvent(state, body));
+    if (pathname === "/investments/dividends")
+      return this.saveAndReturn<TResponse>(state, this.addExpectedDividend(state, body));
+    if (pathname === "/investments/targets")
+      return this.saveAndReturn<TResponse>(state, this.setTargetAllocations(state, body));
     if (pathname === "/backup") return this.restoreBackup<TResponse>(body);
     if (pathname === "/investments")
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
@@ -1278,6 +1308,43 @@ export class LocalApiClient implements ApiClient {
     };
     state.realizedInvestmentEvents = [event, ...(state.realizedInvestmentEvents ?? [])];
     return event;
+  }
+
+  private addExpectedDividend(state: LocalState, body: unknown): ExpectedDividend {
+    const input = toFormObject(body);
+    const requestedCurrency = String(input.currency ?? "").toUpperCase();
+    const dividend: ExpectedDividend = {
+      id: id("exdiv"),
+      ticker:
+        String(input.ticker ?? "")
+          .trim()
+          .toUpperCase() || "—",
+      name: String(input.name ?? "").trim(),
+      date: String(input.date ?? "").slice(0, 10) || isoDay(new Date()),
+      amount: Math.max(Number(input.amount ?? 0), 0),
+      currency: isSupportedCurrency(requestedCurrency) ? requestedCurrency : state.currency
+    };
+    state.expectedDividends = [dividend, ...(state.expectedDividends ?? [])].sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+    return dividend;
+  }
+
+  // Replaces the full target-allocation set (the UI edits it as one list).
+  private setTargetAllocations(state: LocalState, body: unknown): { targets: TargetAllocation[] } {
+    const raw = (body as { targets?: unknown })?.targets;
+    const list = Array.isArray(raw) ? raw : [];
+    state.targetAllocations = list
+      .map((item) => {
+        const record = item as Record<string, unknown>;
+        return {
+          id: String(record.id ?? id("target")),
+          sector: String(record.sector ?? "").trim(),
+          targetPct: Math.max(0, Math.min(100, Number(record.targetPct ?? 0)))
+        };
+      })
+      .filter((target) => target.sector.length > 0);
+    return { targets: state.targetAllocations };
   }
 
   // Merges a fresh FX table (RUB per unit, fetched client-side from the CBR feed)
