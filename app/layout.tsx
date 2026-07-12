@@ -6,6 +6,7 @@ import { LayoutShell } from "@/components/layout-shell";
 import { Providers } from "@/components/providers";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { APP_NAME } from "@/lib/constants";
+import { APPEARANCE_FOUC_SCRIPT } from "@/lib/appearance";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"], display: "swap" });
 
@@ -46,6 +47,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru" suppressHydrationWarning>
+      <head>
+        {/* Stamp accent/density onto <html> before first paint (no flash). */}
+        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_FOUC_SCRIPT }} />
+      </head>
       <body className={inter.className}>
         <Providers>
           <LayoutShell>{children}</LayoutShell>

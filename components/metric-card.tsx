@@ -21,23 +21,30 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
   const TrendIcon = trendPositive ? TrendingUp : TrendingDown;
 
   return (
-    <Card className={cn(
-      "card-hover min-h-32 overflow-hidden",
-      tone === "success" && "metric-accent-success bg-gradient-to-br from-success/5 to-transparent",
-      tone === "warning" && "metric-accent-warning bg-gradient-to-br from-warning/8 to-transparent",
-      tone === "danger"  && "metric-accent-danger bg-gradient-to-br from-destructive/6 to-transparent",
-      tone === "default" && "card-accent-top",
-    )}>
+    <Card
+      className={cn(
+        "card-hover min-h-32 overflow-hidden",
+        tone === "success" &&
+          "metric-accent-success bg-gradient-to-br from-success/5 to-transparent",
+        tone === "warning" &&
+          "metric-accent-warning bg-gradient-to-br from-warning/8 to-transparent",
+        tone === "danger" &&
+          "metric-accent-danger bg-gradient-to-br from-destructive/6 to-transparent",
+        tone === "default" && "card-accent-top"
+      )}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
           {metric.title}
-          {FINANCE_TERM_HINTS[metric.title] ? <InfoHint text={FINANCE_TERM_HINTS[metric.title]} /> : null}
+          {FINANCE_TERM_HINTS[metric.title] ? (
+            <InfoHint text={FINANCE_TERM_HINTS[metric.title]} />
+          ) : null}
         </CardTitle>
         <span
           className={cn(
             "flex size-9 items-center justify-center rounded-lg",
-            tone === "success" && "bg-success/15 text-success-foreground",
-            tone === "warning" && "bg-warning/18 text-warning-foreground",
+            tone === "success" && "bg-success/15 text-success",
+            tone === "warning" && "bg-warning/18 text-warning",
             tone === "danger" && "bg-destructive/12 text-destructive",
             tone === "default" && "bg-primary/10 text-primary"
           )}
@@ -46,7 +53,7 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
         </span>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold tracking-tight">{metric.value}</div>
+        <div className="stat text-2xl">{metric.value}</div>
         <p className="mt-1 text-xs text-muted-foreground">{metric.detail}</p>
         {trend && (
           <div
