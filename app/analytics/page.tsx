@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AiInsightPanel } from "@/components/analytics/ai-insight-panel";
+import { AiReviewCard } from "@/components/ai/ai-review-card";
 import { AnalyticsClient } from "@/components/analytics/analytics-client";
 import { PageHeader } from "@/components/page-header";
 import { getAnalyticsData } from "@/lib/data";
@@ -18,6 +19,7 @@ export default async function AnalyticsPage() {
     <div className="page-grid">
       <PageHeader titleKey="page.analytics.title" descriptionKey="page.analytics.desc" />
       <AiInsightPanel />
+      <AiReviewCard />
       <AnalyticsClient initialData={data} />
     </div>
   );

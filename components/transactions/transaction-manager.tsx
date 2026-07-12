@@ -9,6 +9,7 @@ import {
   ReceiptText,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Split,
   Star,
   Trash2,
@@ -25,6 +26,9 @@ import { apiClient } from "@/lib/api/client";
 import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import { isLocalDesktopMode } from "@/lib/platform/env";
+import type { AiProvider } from "@/lib/ai/models";
+import { useAiSettings } from "@/hooks/use-ai-settings";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -68,7 +72,8 @@ import { cn } from "@/lib/utils";
 
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const aiSettings = useAiSettings();
   const searchParams = useSearchParams();
   const paramsString = searchParams.toString();
   const [pageData, setPageData] = useState(data);
@@ -369,6 +374,71 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     clearSelection();
     toast.success(t("tx.bulk.rulesApplied", { count: applied }));
     await refresh();
+  }
+
+  // AI batch categorization over the selected rows: asks the model for a category
+  // per selected transaction and applies only the confident, valid suggestions.
+  async function bulkAiCategorize() {
+    const targets = visibleTransactions.filter((tx) => selectedIds.has(tx.id));
+    if (targets.length === 0) return;
+    const items = targets.map((tx) => ({
+      id: tx.id,
+      description: tx.description ?? "",
+      type: tx.type
+    }));
+    const categories = pageData.categories.map((c) => ({
+      id: c.id,
+      label: c.label,
+      kind: c.kind
+    }));
+
+    setBulkPending(true);
+    try {
+      let suggestions: { id: string; categoryId: string }[];
+      if (isLocalDesktopMode) {
+        const apiKey = aiSettings?.aiApiKey ?? "";
+        if (!apiKey) {
+          toast.error(t("ai.err.noKey"));
+          return;
+        }
+        const { requestBatchCategorization } = await import("@/services/ai/AiAssistantService");
+        suggestions = await requestBatchCategorization({
+          items,
+          categories,
+          locale: locale === "en" ? "en" : "ru",
+          apiKey,
+          model: aiSettings?.aiModel || undefined,
+          provider: (aiSettings?.aiProvider as AiProvider) || undefined,
+          effort: aiSettings?.aiEffort || undefined
+        });
+      } else {
+        const res = await apiClient.post<{ suggestions: { id: string; categoryId: string }[] }>(
+          "/ai/categorize",
+          { items, categories, locale }
+        );
+        suggestions = res.suggestions;
+      }
+
+      const byId = new Map(targets.map((tx) => [tx.id, tx]));
+      let applied = 0;
+      for (const s of suggestions) {
+        const tx = byId.get(s.id);
+        if (!tx || tx.category.id === s.categoryId) continue;
+        try {
+          await apiClient.put("/transactions", updatePayload(tx, s.categoryId));
+          applied += 1;
+        } catch {
+          /* skip */
+        }
+      }
+      clearSelection();
+      toast.success(t("tx.bulk.aiCategorized", { applied }));
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("aiq.err.failed"));
+    } finally {
+      setBulkPending(false);
+    }
   }
 
   // A split is N normal EXPENSE transactions sharing a generated splitGroupId —
@@ -682,6 +752,17 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                   >
                     {t("tx.bulk.applyRules")}
                   </Button>
+                  {aiSettings?.aiEnabled ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={bulkPending}
+                      onClick={() => void bulkAiCategorize()}
+                    >
+                      <Sparkles className="size-4 text-primary" />
+                      {t("tx.bulk.aiCategorize")}
+                    </Button>
+                  ) : null}
                   <Button
                     size="sm"
                     variant="outline"
