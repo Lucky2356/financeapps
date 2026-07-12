@@ -14,6 +14,22 @@ import {
   type AiParseContext,
   type AiTransactionDraft
 } from "@/lib/ai/parse-transaction";
+import type { AiLocale } from "@/lib/ai/lang";
+import {
+  buildCategorizePrompt,
+  parseCategorizeReply,
+  type BatchCategory,
+  type BatchItem,
+  type BatchSuggestion
+} from "@/lib/ai/categorize-batch";
+import { buildReviewPrompt } from "@/lib/ai/review-prompt";
+import {
+  buildBudgetPlanPrompt,
+  parseBudgetPlan,
+  type BudgetCategoryInput,
+  type BudgetSuggestion
+} from "@/lib/ai/budget-plan";
+import { buildGoalPlanPrompt, type GoalPlanInput } from "@/lib/ai/goal-plan";
 
 // Thin wrapper over an LLM Messages/Chat API for AI-assisted transaction entry.
 // Used in two places with the same signature:
@@ -83,6 +99,67 @@ export async function requestFinancialAnswer({
   const { system, user } = buildInsightPrompt(question, summary);
   const answer = await complete({ apiKey, model, provider, effort, system, user });
   if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте переформулировать.");
+  return answer.trim();
+}
+
+type BaseAiArgs = {
+  apiKey: string;
+  model?: string;
+  provider?: AiProvider;
+  effort?: string;
+  locale: AiLocale;
+};
+
+// AI batch categorization (plan 1.3.0). Returns validated {id, categoryId} pairs
+// — only known ids matching each transaction's income/expense kind.
+export async function requestBatchCategorization(
+  args: BaseAiArgs & { items: BatchItem[]; categories: BatchCategory[] }
+): Promise<BatchSuggestion[]> {
+  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (args.items.length === 0) return [];
+  const { system, user } = buildCategorizePrompt(args.items, args.categories, args.locale);
+  const reply = await complete({ ...args, system, user });
+  return parseCategorizeReply(reply, args.items, args.categories);
+}
+
+// AI financial coach: a structured written review grounded in the summary.
+export async function requestFinancialReview(
+  args: BaseAiArgs & { summary: string }
+): Promise<string> {
+  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (!args.summary.trim()) throw new Error("Недостаточно данных для разбора.");
+  const { system, user } = buildReviewPrompt(args.summary, args.locale);
+  const answer = await complete({ ...args, system, user });
+  if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте ещё раз.");
+  return answer.trim();
+}
+
+// AI budget planner: proposes monthly limits per expense category.
+export async function requestBudgetPlan(
+  args: BaseAiArgs & {
+    categories: BudgetCategoryInput[];
+    avgMonthlyIncome: number;
+    currency: string;
+  }
+): Promise<BudgetSuggestion[]> {
+  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (args.categories.length === 0) return [];
+  const { system, user } = buildBudgetPlanPrompt(
+    args.categories,
+    args.avgMonthlyIncome,
+    args.currency,
+    args.locale
+  );
+  const reply = await complete({ ...args, system, user });
+  return parseBudgetPlan(reply, args.categories);
+}
+
+// AI savings plan for a single goal (free-text advisory).
+export async function requestGoalPlan(args: BaseAiArgs & { goal: GoalPlanInput }): Promise<string> {
+  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  const { system, user } = buildGoalPlanPrompt(args.goal, args.locale);
+  const answer = await complete({ ...args, system, user });
+  if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте ещё раз.");
   return answer.trim();
 }
 

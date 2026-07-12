@@ -13,6 +13,7 @@ import { describeGoalPace } from "@/lib/goal-pace";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { AiGoalPlanButton } from "@/components/ai/ai-goal-plan-button";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,6 +128,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                       </p>
                     </div>
                     <div className="flex gap-1">
+                      <AiGoalPlanButton goal={goal} currency={pageData.currency} />
                       <DepositDialog
                         goal={goal}
                         currency={pageData.currency}
