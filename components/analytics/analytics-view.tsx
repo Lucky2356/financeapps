@@ -68,13 +68,9 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
         <SummaryCard
           label={t("an.avgSavings")}
           value={`${data.avgSavingsRate.toFixed(1)}%`}
-          colorClass="text-blue-700 dark:text-blue-400"
+          colorClass="text-primary"
         />
-        <SummaryCard
-          label={t("an.bestMonth")}
-          value={data.bestMonth}
-          colorClass="text-purple-700 dark:text-purple-400"
-        />
+        <SummaryCard label={t("an.bestMonth")} value={data.bestMonth} colorClass="text-primary" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
