@@ -1,9 +1,17 @@
 import { ArrowDownRight, ArrowUpRight, Minus, TrendingDown, TrendingUp } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sparkline } from "@/components/charts/sparkline";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { MetricCard as MetricCardType } from "@/types/finance";
 import { cn } from "@/lib/utils";
+
+const toneText = {
+  default: "text-primary",
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-destructive"
+} as const;
 
 const toneIcon = {
   default: Minus,
@@ -53,7 +61,12 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
         </span>
       </CardHeader>
       <CardContent>
-        <div className="stat text-2xl">{metric.value}</div>
+        <div className="flex items-end justify-between gap-3">
+          <div className="stat text-2xl">{metric.value}</div>
+          {metric.spark && metric.spark.length > 1 ? (
+            <Sparkline values={metric.spark} className={cn("shrink-0", toneText[tone])} />
+          ) : null}
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">{metric.detail}</p>
         {trend && (
           <div

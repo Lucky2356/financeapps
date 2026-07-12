@@ -15,6 +15,8 @@ export type MetricCard = {
   detail: string;
   tone?: "default" | "success" | "warning" | "danger";
   trend?: { value: number; label: string };
+  /** Optional recent series (e.g. monthly income/expense) for an inline sparkline. */
+  spark?: number[];
 };
 
 export type CategoryRow = {

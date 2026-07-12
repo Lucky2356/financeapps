@@ -365,7 +365,8 @@ function buildDemoDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
         value: formatCurrency(input.currentMonthIncome),
         detail: t("svc.metric.month.detail"),
         tone: "success",
-        trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
+        trend: buildTrend(currMonth.income, prevMonth?.income ?? 0),
+        spark: input.monthlyCashflow.map((month) => month.income)
       },
       {
         key: "monthExpense",
@@ -373,7 +374,8 @@ function buildDemoDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
         value: formatCurrency(input.currentMonthExpense),
         detail: t("svc.metric.month.detail"),
         tone: "warning",
-        trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
+        trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0),
+        spark: input.monthlyCashflow.map((month) => month.expense)
       },
       {
         key: "freeCash",
@@ -965,7 +967,8 @@ export async function getDashboardData(): Promise<DashboardData> {
             value: formatCurrency(input.currentMonthIncome, user.currency),
             detail: t("svc.metric.month.detail"),
             tone: "success",
-            trend: buildTrend(currMonth.income, prevMonth?.income ?? 0)
+            trend: buildTrend(currMonth.income, prevMonth?.income ?? 0),
+            spark: input.monthlyCashflow.map((month) => month.income)
           },
           {
             key: "monthExpense",
@@ -973,7 +976,8 @@ export async function getDashboardData(): Promise<DashboardData> {
             value: formatCurrency(input.currentMonthExpense, user.currency),
             detail: t("svc.metric.month.detail"),
             tone: "warning",
-            trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0)
+            trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0),
+            spark: input.monthlyCashflow.map((month) => month.expense)
           },
           {
             key: "freeCash",
