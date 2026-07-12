@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 // (Settings → AI). Desktop calls the provider client-side with the user's key;
 // web proxies through /api/ai/insights with the server key.
 export function AiInsightPanel() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [settings, setSettings] = useState<SettingsPageData | null>(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
@@ -67,6 +67,7 @@ export function AiInsightPanel() {
         result = await requestFinancialAnswer({
           question: trimmed,
           summary,
+          locale: locale === "en" ? "en" : "ru",
           apiKey,
           model: settings?.aiModel || undefined,
           provider: (settings?.aiProvider as "anthropic" | "openai" | "deepseek") || undefined,
@@ -75,7 +76,8 @@ export function AiInsightPanel() {
       } else {
         const res = await apiClient.post<{ answer: string }>("/ai/insights", {
           question: trimmed,
-          summary
+          summary,
+          locale
         });
         result = res.answer;
       }

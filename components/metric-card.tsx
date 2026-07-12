@@ -2,7 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Minus, TrendingDown, TrendingUp } from "l
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkline } from "@/components/charts/sparkline";
-import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
+import { METRIC_HINT_KEY, InfoHint } from "@/components/info-hint";
 import type { MetricCard as MetricCardType } from "@/types/finance";
 import { cn } from "@/lib/utils";
 
@@ -44,8 +44,8 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
           {metric.title}
-          {FINANCE_TERM_HINTS[metric.title] ? (
-            <InfoHint text={FINANCE_TERM_HINTS[metric.title]} />
+          {metric.key && METRIC_HINT_KEY[metric.key] ? (
+            <InfoHint text={METRIC_HINT_KEY[metric.key]} />
           ) : null}
         </CardTitle>
         <span

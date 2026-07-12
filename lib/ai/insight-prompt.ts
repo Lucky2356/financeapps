@@ -2,13 +2,17 @@
 // unit-testable. The model is grounded strictly in the pre-computed summary
 // (lib/ai/finance-summary.ts) so it never invents numbers the app didn't send.
 
+import { answerLanguageInstruction, type AiLocale } from "@/lib/ai/lang";
+
 export function buildInsightPrompt(
   question: string,
-  summary: string
+  summary: string,
+  locale: AiLocale = "ru"
 ): { system: string; user: string } {
   const system = [
     "Ты — дружелюбный финансовый помощник в приложении личных финансов.",
-    "Отвечай на русском языке, кратко и по делу (2–5 предложений), без воды.",
+    "Отвечай кратко и по делу (2–5 предложений), без воды.",
+    answerLanguageInstruction(locale),
     "Опирайся ТОЛЬКО на приведённую сводку по финансам пользователя.",
     "Не выдумывай цифры и факты, которых нет в сводке.",
     "Если данных для ответа недостаточно — честно скажи об этом и предложи, что добавить.",

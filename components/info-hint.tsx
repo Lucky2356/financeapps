@@ -19,6 +19,17 @@ export const FINANCE_TERM_HINTS: Record<string, string> = {
   "Риск-профиль": "hint.riskProfile"
 };
 
+// Locale-independent lookup by a metric's stable `key` (see MetricCard.key) →
+// catalog key. Used by the metric cards so hints also appear in English, where
+// the display title no longer matches the Russian keys above.
+export const METRIC_HINT_KEY: Record<string, string> = {
+  netWorth: "hint.netWorth",
+  totalBalance: "hint.totalBalance",
+  freeCash: "hint.freeCash",
+  savingsRate: "hint.savingsRate",
+  emergencyFund: "hint.cushion"
+};
+
 // Lightweight "?" hint with a click-to-open popover. No external popover/tooltip
 // dependency — closes on outside click or Escape. Used to explain finance terms.
 export function InfoHint({ text, className }: { text: string; className?: string }) {
