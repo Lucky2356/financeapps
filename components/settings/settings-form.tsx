@@ -28,6 +28,8 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
+import { ACCENTS, type Accent } from "@/lib/appearance";
+import { useAppearance } from "@/hooks/use-appearance";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AccountSection } from "@/components/settings/account-section";
 import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
@@ -111,6 +113,14 @@ function toEditable(data: SettingsPageData): EditableSettings {
 
 const RELEASES_URL = "https://github.com/Lucky2356/financeapps/releases/latest";
 
+// Representative swatch colour (HSL triple) for each accent in the picker.
+const ACCENT_SWATCH: Record<Accent, string> = {
+  emerald: "161 68% 42%",
+  blue: "217 91% 50%",
+  violet: "262 70% 56%",
+  amber: "38 92% 52%"
+};
+
 type Section = {
   id: string;
   label: string;
@@ -122,6 +132,7 @@ type Section = {
 export function SettingsForm({ data }: { data: SettingsPageData }) {
   const { setTheme } = useTheme();
   const { t, locale, setLocale } = useI18n();
+  const { accent, setAccent } = useAppearance();
   const confirm = useConfirm();
   const { data: pageData, reload } = useApiPageData(data, "/settings");
   const [clearing, setClearing] = useState(false);
@@ -412,6 +423,31 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </label>
               ))}
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("set.accent")}</Label>
+            <div className="flex flex-wrap gap-2">
+              {ACCENTS.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setAccent(value as Accent)}
+                  aria-pressed={accent === value}
+                  aria-label={t(`set.accent.${value}`)}
+                  title={t(`set.accent.${value}`)}
+                  className={cn(
+                    "flex size-10 items-center justify-center rounded-lg border transition-transform hover:scale-105",
+                    accent === value ? "border-primary ring-2 ring-primary/30" : "border-border"
+                  )}
+                >
+                  <span
+                    className="size-5 rounded-full"
+                    style={{ background: `hsl(${ACCENT_SWATCH[value]})` }}
+                  />
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("set.accent.hint")}</p>
           </div>
           <div className="space-y-2">
             <Label>{t("settings.language.title")}</Label>
