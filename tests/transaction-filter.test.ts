@@ -67,6 +67,16 @@ describe("matchesCriteria", () => {
     expect(matchesCriteria(tx(), { q: "карта" })).toBe(true);
     expect(matchesCriteria(tx(), { q: "перекрёсток" })).toBe(false);
   });
+
+  it("filters by tag (case-insensitive)", () => {
+    expect(matchesCriteria(tx({ tags: ["Отпуск", "Еда"] }), { tag: "отпуск" })).toBe(true);
+    expect(matchesCriteria(tx({ tags: ["Еда"] }), { tag: "отпуск" })).toBe(false);
+    expect(matchesCriteria(tx(), { tag: "отпуск" })).toBe(false);
+  });
+
+  it("includes tags in the text search haystack", () => {
+    expect(matchesCriteria(tx({ tags: ["командировка"] }), { q: "командиров" })).toBe(true);
+  });
 });
 
 describe("criteriaFromParams", () => {

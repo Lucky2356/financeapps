@@ -14,6 +14,8 @@ export type TxFilterCriteria = {
   q?: string;
   minAmount?: number;
   maxAmount?: number;
+  /** Match transactions carrying this tag (case-insensitive). */
+  tag?: string;
 };
 
 // Minimal structural shape every transaction row satisfies (TransactionRow and
@@ -25,6 +27,7 @@ export type FilterableTransaction = {
   description?: string | null;
   account: { id: string; label: string };
   category: { id: string; label: string };
+  tags?: string[];
 };
 
 /** Parses a `categoryId` query value that may hold a comma-separated list. */
@@ -49,7 +52,8 @@ export function criteriaFromParams(params: URLSearchParams): TxFilterCriteria {
     accountId: params.get("accountId") || undefined,
     q: params.get("q") || undefined,
     minAmount: min ? Number(min) : undefined,
-    maxAmount: max ? Number(max) : undefined
+    maxAmount: max ? Number(max) : undefined,
+    tag: params.get("tag") || undefined
   };
 }
 
@@ -72,10 +76,15 @@ export function matchesCriteria(
   if (typeof criteria.maxAmount === "number" && !Number.isNaN(criteria.maxAmount)) {
     if (transaction.amount > criteria.maxAmount) return false;
   }
+  if (criteria.tag) {
+    const wanted = criteria.tag.toLowerCase();
+    const tags = (transaction.tags ?? []).map((tag) => tag.toLowerCase());
+    if (!tags.includes(wanted)) return false;
+  }
   if (criteria.q) {
     const query = criteria.q.toLowerCase();
     const haystack =
-      `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
+      `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label} ${(transaction.tags ?? []).join(" ")}`.toLowerCase();
     if (!haystack.includes(query)) return false;
   }
   return true;

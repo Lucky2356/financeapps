@@ -163,6 +163,8 @@ export type TransactionRow = {
   description: string | null;
   account: Option;
   category: Option & { color: string; icon?: string };
+  tags?: string[];
+  splitGroupId?: string;
 };
 
 export type RecurringTransactionRow = {

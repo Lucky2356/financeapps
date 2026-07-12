@@ -7,6 +7,7 @@ import {
   Plus,
   ReceiptText,
   Search,
+  Split,
   Star,
   Trash2,
   X
@@ -78,6 +79,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     q: searchParams.get("q") ?? "",
     minAmount: searchParams.get("minAmount") ?? "",
     maxAmount: searchParams.get("maxAmount") ?? "",
+    tag: searchParams.get("tag") ?? "",
     limit: searchParams.get("limit") ?? String(pageData.pagination.limit)
   };
   const criteria = criteriaFromParams(searchParams);
@@ -85,6 +87,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<
     TransactionsPageData["transactions"][number] | null
   >(null);
@@ -331,6 +334,42 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     await refresh();
   }
 
+  // A split is N normal EXPENSE transactions sharing a generated splitGroupId —
+  // each is counted by every existing aggregation, so nothing double-counts.
+  async function submitSplit(payload: {
+    date: string;
+    accountId: string;
+    description: string;
+    rows: { categoryId: string; amount: string }[];
+  }) {
+    const splitGroupId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `split-${Date.now()}`;
+    setBulkPending(true);
+    let created = 0;
+    for (const row of payload.rows) {
+      try {
+        await apiClient.post("/transactions", {
+          type: "EXPENSE",
+          amount: row.amount,
+          categoryId: row.categoryId,
+          accountId: payload.accountId,
+          date: payload.date,
+          description: payload.description,
+          splitGroupId
+        });
+        created += 1;
+      } catch {
+        /* continue; summary reports how many landed */
+      }
+    }
+    setBulkPending(false);
+    setSplitOpen(false);
+    toast.success(t("tx.split.created", { count: created }));
+    await refresh();
+  }
+
   async function submitTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = {
@@ -362,6 +401,15 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 </Button>
               </DialogTrigger>
               <TransferDialog data={pageData} pending={isMutating} onSubmit={submitTransfer} />
+            </Dialog>
+            <Dialog open={splitOpen} onOpenChange={setSplitOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Split className="size-4" />
+                  {t("tx.split")}
+                </Button>
+              </DialogTrigger>
+              <SplitDialog data={pageData} pending={bulkPending} onSubmit={submitSplit} />
             </Dialog>
             <Dialog open={addOpen} onOpenChange={setAddOpen}>
               <DialogTrigger asChild>
@@ -456,6 +504,15 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 inputMode="decimal"
                 defaultValue={clientFilters.maxAmount}
                 placeholder="∞"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tag">{t("tx.tag")}</Label>
+              <Input
+                id="tag"
+                name="tag"
+                defaultValue={clientFilters.tag}
+                placeholder={t("tx.tagPlaceholder")}
               />
             </div>
             <div className="space-y-2">
@@ -627,8 +684,25 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                           </span>
                         </TableCell>
                         <TableCell>{transaction.account.label}</TableCell>
-                        <TableCell className="max-w-60 truncate text-muted-foreground">
-                          {transaction.description ?? "—"}
+                        <TableCell className="max-w-60 text-muted-foreground">
+                          <span className="block truncate">{transaction.description ?? "—"}</span>
+                          {(transaction.tags?.length || transaction.splitGroupId) && (
+                            <span className="mt-1 flex flex-wrap gap-1">
+                              {transaction.splitGroupId ? (
+                                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                                  {t("tx.split.badge")}
+                                </span>
+                              ) : null}
+                              {transaction.tags?.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell
                           className={
@@ -695,6 +769,23 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         <p className="mt-2 text-sm text-muted-foreground">
                           {transaction.description ?? t("tx.noDescription")}
                         </p>
+                        {(transaction.tags?.length || transaction.splitGroupId) && (
+                          <span className="mt-2 flex flex-wrap gap-1">
+                            {transaction.splitGroupId ? (
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                                {t("tx.split.badge")}
+                              </span>
+                            ) : null}
+                            {transaction.tags?.map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </div>
                       <p
                         className={
@@ -1031,6 +1122,155 @@ function TransferDialog({
   );
 }
 
+function SplitDialog({
+  data,
+  pending,
+  onSubmit
+}: {
+  data: TransactionsPageData;
+  pending?: boolean;
+  onSubmit: (payload: {
+    date: string;
+    accountId: string;
+    description: string;
+    rows: { categoryId: string; amount: string }[];
+  }) => void;
+}) {
+  const { t } = useI18n();
+  const expenseCategories = useMemo(
+    () => data.categories.filter((category) => category.kind === "EXPENSE"),
+    [data.categories]
+  );
+  const [accountId, setAccountId] = useState(data.accounts[0]?.id ?? "");
+  const [date, setDate] = useState(formatInputDate(new Date()));
+  const [description, setDescription] = useState("");
+  const [rows, setRows] = useState<{ categoryId: string; amount: string }[]>([
+    { categoryId: expenseCategories[0]?.id ?? "", amount: "" },
+    { categoryId: expenseCategories[1]?.id ?? expenseCategories[0]?.id ?? "", amount: "" }
+  ]);
+
+  const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const valid =
+    accountId && rows.length >= 2 && rows.every((row) => row.categoryId && Number(row.amount) > 0);
+
+  function updateRow(index: number, patch: Partial<{ categoryId: string; amount: string }>) {
+    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{t("tx.split.title")}</DialogTitle>
+        <DialogDescription>{t("tx.split.desc")}</DialogDescription>
+      </DialogHeader>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid) onSubmit({ date, accountId, description, rows });
+        }}
+        className="grid gap-4"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>{t("common.date")}</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>{t("tx.account")}</Label>
+            <Select value={accountId || undefined} onValueChange={setAccountId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {data.accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label>{t("tx.col.description")}</Label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t("tx.split.descPlaceholder")}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {rows.map((row, index) => (
+            <div key={index} className="flex gap-2">
+              <Select
+                value={row.categoryId || undefined}
+                onValueChange={(value) => updateRow(index, { categoryId: value })}
+              >
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder={t("common.category")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {expenseCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={row.amount}
+                onChange={(e) => updateRow(index, { amount: e.target.value })}
+                placeholder={t("common.amount")}
+                className="w-32"
+              />
+              {rows.length > 2 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setRows((prev) => prev.filter((_, i) => i !== index))}
+                  aria-label={t("common.delete")}
+                >
+                  <Trash2 className="size-4 text-destructive" />
+                </Button>
+              ) : null}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setRows((prev) => [
+                ...prev,
+                { categoryId: expenseCategories[0]?.id ?? "", amount: "" }
+              ])
+            }
+          >
+            <Plus className="size-4" />
+            {t("tx.split.addRow")}
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">{t("tx.split.total")}</span>
+          <span className="font-semibold">{formatCurrency(total)}</span>
+        </div>
+
+        <DialogFooter>
+          <Button type="submit" disabled={pending || !valid}>
+            {pending ? t("tx.dialog.saving") : t("tx.split.submit")}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  );
+}
+
 const ACCOUNT_TYPE_OPTIONS = [
   { value: "DEBIT_CARD", labelKey: "tx.acctType.DEBIT_CARD" },
   { value: "CASH", labelKey: "tx.acctType.CASH" },
@@ -1333,6 +1573,15 @@ function TransactionDialog({
               defaultValue={transaction?.description ?? ""}
               onChange={(event) => onDescriptionChange(event.target.value)}
               placeholder={t("tx.dialog.descPlaceholder")}
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor={`${transaction?.id ?? "new"}-tags`}>{t("tx.dialog.tags")}</Label>
+            <Input
+              id={`${transaction?.id ?? "new"}-tags`}
+              name="tags"
+              defaultValue={transaction?.tags?.join(", ") ?? ""}
+              placeholder={t("tx.dialog.tagsPlaceholder")}
             />
           </div>
         </div>

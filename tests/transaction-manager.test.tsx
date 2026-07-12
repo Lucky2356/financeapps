@@ -80,8 +80,9 @@ describe("TransactionManager", () => {
     // Default expense category is the first one (cat-food); the "Пятёрочка" rule
     // should move it to cat-fun as soon as the keyword appears in the description.
     await user.type(await screen.findByRole("spinbutton"), "500");
-    // The description Textarea is the only free-text box in the dialog.
-    await user.type(screen.getByRole("textbox"), "Покупка в Пятёрочка");
+    // Target the description Textarea specifically (a separate tags input also
+    // renders as a textbox now).
+    await user.type(screen.getByPlaceholderText(/подберётся/), "Покупка в Пятёрочка");
     await user.click(screen.getByRole("button", { name: "Добавить" }));
 
     await waitFor(() =>

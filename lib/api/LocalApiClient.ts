@@ -597,6 +597,11 @@ export class LocalApiClient implements ApiClient {
     const amount = Number(input.amount);
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
     const linkedRecurringId = recurringId ?? previous?.recurringId;
+    const tags = String(input.tags ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 12);
     const transaction: TransactionRow & { recurringId?: string } = {
       id: method === "PUT" && input.id ? input.id : id("tx"),
       amount,
@@ -605,7 +610,9 @@ export class LocalApiClient implements ApiClient {
       description: input.description?.trim() || null,
       account: { id: account.id, label: account.name },
       category: { id: category.id, label: category.label, color: category.color },
-      ...(linkedRecurringId ? { recurringId: linkedRecurringId } : {})
+      ...(linkedRecurringId ? { recurringId: linkedRecurringId } : {}),
+      ...(tags.length ? { tags } : {}),
+      ...(input.splitGroupId ? { splitGroupId: String(input.splitGroupId) } : {})
     };
 
     state.transactions = [
