@@ -11,6 +11,7 @@ import {
   currentMonthRange
 } from "@/lib/data/derive";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
+import { matchesCriteria } from "@/lib/transactions/filter";
 import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 import { getServerLocale } from "@/lib/i18n/server-locale";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
@@ -65,6 +66,8 @@ export type TransactionsPageData = {
     categoryId?: string;
     accountId?: string;
     q?: string;
+    minAmount?: number;
+    maxAmount?: number;
     page?: number;
     limit?: number;
   };
@@ -598,11 +601,29 @@ function transactionWhere(
   userId: string,
   filters: TransactionFilters
 ): Prisma.TransactionWhereInput {
+  const categoryIds = filters.categoryId
+    ? filters.categoryId
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : [];
   return {
     userId,
     ...(filters.type && filters.type !== "ALL" ? { type: filters.type } : {}),
-    ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+    ...(categoryIds.length === 1
+      ? { categoryId: categoryIds[0] }
+      : categoryIds.length > 1
+        ? { categoryId: { in: categoryIds } }
+        : {}),
     ...(filters.accountId ? { accountId: filters.accountId } : {}),
+    ...(filters.minAmount != null || filters.maxAmount != null
+      ? {
+          amount: {
+            ...(filters.minAmount != null ? { gte: filters.minAmount } : {}),
+            ...(filters.maxAmount != null ? { lte: filters.maxAmount } : {})
+          }
+        }
+      : {}),
     ...(filters.q
       ? {
           OR: [
@@ -1009,21 +1030,24 @@ export async function getTransactionsPageData(
 
   return safeData<TransactionsPageData>(
     () => {
-      const filteredTransactions = buildDemoTransactions().filter((transaction) => {
-        if (parsed.type && parsed.type !== "ALL" && transaction.type !== parsed.type) return false;
-        if (parsed.categoryId && transaction.category.id !== parsed.categoryId) return false;
-        if (parsed.accountId && transaction.account.id !== parsed.accountId) return false;
-        if (parsed.q) {
-          const query = parsed.q.toLowerCase();
-          const haystack =
-            `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label}`.toLowerCase();
-          if (!haystack.includes(query)) return false;
-        }
-        if (parsed.from && new Date(transaction.date) < new Date(parsed.from)) return false;
-        if (parsed.to && new Date(transaction.date) > new Date(`${parsed.to}T23:59:59`))
-          return false;
-        return true;
-      });
+      const demoCriteria = {
+        from: parsed.from,
+        to: parsed.to,
+        type: parsed.type,
+        categoryIds: parsed.categoryId
+          ? parsed.categoryId
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean)
+          : [],
+        accountId: parsed.accountId,
+        q: parsed.q,
+        minAmount: parsed.minAmount,
+        maxAmount: parsed.maxAmount
+      };
+      const filteredTransactions = buildDemoTransactions().filter((transaction) =>
+        matchesCriteria(transaction, demoCriteria)
+      );
       const start = (parsed.page - 1) * parsed.limit;
       const transactions = filteredTransactions.slice(start, start + parsed.limit);
 
