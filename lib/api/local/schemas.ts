@@ -146,6 +146,26 @@ export const realizedEventSchema = z.object({
   currency: z.enum(CURRENCY_CODES).default("RUB")
 });
 
+export const expectedDividendSchema = z.object({
+  id: z.string().min(1),
+  ticker: z
+    .string()
+    .trim()
+    .min(1)
+    .max(16)
+    .transform((value) => value.toUpperCase()),
+  name: z.string().trim().max(120).default(""),
+  date: z.string().min(1),
+  amount: z.coerce.number().finite().min(0).default(0),
+  currency: z.enum(CURRENCY_CODES).default("RUB")
+});
+
+export const targetAllocationSchema = z.object({
+  id: z.string().min(1),
+  sector: z.string().trim().min(1).max(60),
+  targetPct: z.coerce.number().finite().min(0).max(100)
+});
+
 export const investmentSchema = z.object({
   source: z.enum(["database", "demo-fallback"]).default("database"),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
@@ -193,7 +213,7 @@ export const investmentSchema = z.object({
     .default([])
 });
 export const localStateSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
   // and cached here so cross-currency capital is a single honest number offline.
@@ -214,6 +234,8 @@ export const localStateSchema = z.object({
     .array(z.object({ date: z.string().min(1), value: z.coerce.number().finite() }))
     .default([]),
   realizedInvestmentEvents: z.array(realizedEventSchema).default([]),
+  expectedDividends: z.array(expectedDividendSchema).default([]),
+  targetAllocations: z.array(targetAllocationSchema).default([]),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()

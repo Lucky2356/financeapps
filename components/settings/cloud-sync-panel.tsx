@@ -7,11 +7,25 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n/context";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { pickSyncFolder, pullFromFolder, pushToFolder } from "@/lib/sync/FolderSyncService";
+import { type AutoBackupConfig, type BackupFrequency } from "@/lib/backup/auto-backup";
+import {
+  loadAutoBackupConfig,
+  runAutoBackup,
+  saveAutoBackupConfig,
+  setLastBackupRun
+} from "@/lib/backup/AutoBackupService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 const FOLDER_KEY = "sync-folder";
 
@@ -20,7 +34,12 @@ const FOLDER_KEY = "sync-folder";
 // devices. The passphrase is never stored — it is entered per push/pull.
 export function CloudSyncPanel() {
   if (!isLocalDesktopMode) return null;
-  return <CloudSyncPanelInner />;
+  return (
+    <>
+      <CloudSyncPanelInner />
+      <AutoBackupSection />
+    </>
+  );
 }
 
 function CloudSyncPanelInner() {
@@ -140,6 +159,116 @@ function CloudSyncPanelInner() {
         <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
           {t("sync.warning")}
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Scheduled local backups: a timestamped snapshot written to a chosen folder on
+// app start, with rotation. No passphrase (on-disk safety copy, not cloud sync).
+function AutoBackupSection() {
+  const { t } = useI18n();
+  const [config, setConfig] = useState<AutoBackupConfig>({
+    frequency: "off",
+    folder: null,
+    keep: 7
+  });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => setConfig(loadAutoBackupConfig()));
+  }, []);
+
+  function update(next: Partial<AutoBackupConfig>) {
+    const merged = { ...config, ...next };
+    setConfig(merged);
+    saveAutoBackupConfig(merged);
+  }
+
+  async function chooseFolder() {
+    try {
+      const picked = await pickSyncFolder();
+      if (picked) update({ folder: picked });
+    } catch {
+      toast.error(t("sync.err.folder"));
+    }
+  }
+
+  async function runNow() {
+    if (!config.folder) return toast.error(t("sync.err.noFolder"));
+    setBusy(true);
+    try {
+      await runAutoBackup({
+        ...config,
+        frequency: config.frequency === "off" ? "daily" : config.frequency
+      });
+      setLastBackupRun(new Date().toISOString());
+      toast.success(t("backup.done"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("backup.error"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CloudUpload className="size-4" />
+          {t("backup.title")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">{t("backup.desc")}</p>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>{t("backup.frequency")}</Label>
+            <Select
+              value={config.frequency}
+              onValueChange={(value) => update({ frequency: value as BackupFrequency })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">{t("backup.freq.off")}</SelectItem>
+                <SelectItem value="daily">{t("backup.freq.daily")}</SelectItem>
+                <SelectItem value="weekly">{t("backup.freq.weekly")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="backup-keep">{t("backup.keep")}</Label>
+            <Input
+              id="backup-keep"
+              type="number"
+              min="1"
+              max="90"
+              value={config.keep}
+              onChange={(event) =>
+                update({ keep: Math.max(1, Math.min(90, Number(event.target.value) || 1)) })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>{t("backup.folder")}</Label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input readOnly value={config.folder ?? ""} placeholder={t("sync.folderPlaceholder")} />
+            <Button type="button" variant="outline" onClick={() => void chooseFolder()}>
+              <FolderOpen className="size-4" />
+              {t("sync.choose")}
+            </Button>
+          </div>
+        </div>
+
+        <Button type="button" variant="outline" onClick={() => void runNow()} disabled={busy}>
+          <CloudUpload className="size-4" />
+          {busy ? t("backup.running") : t("backup.runNow")}
+        </Button>
       </CardContent>
     </Card>
   );

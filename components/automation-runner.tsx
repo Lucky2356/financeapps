@@ -69,6 +69,23 @@ async function runAutomation() {
     // Ignore (offline / unauthenticated).
   }
 
+  // Scheduled local backup (desktop only): if a backup is due per the user's
+  // chosen cadence, write a timestamped snapshot to their folder and rotate.
+  if (isLocalDesktopMode) {
+    try {
+      const { loadAutoBackupConfig, getLastBackupRun, setLastBackupRun, runAutoBackup } =
+        await import("@/lib/backup/AutoBackupService");
+      const { shouldRunAutoBackup } = await import("@/lib/backup/auto-backup");
+      const config = loadAutoBackupConfig();
+      if (config.folder && shouldRunAutoBackup(config.frequency, getLastBackupRun())) {
+        await runAutoBackup(config);
+        setLastBackupRun(new Date().toISOString());
+      }
+    } catch {
+      // Best-effort; a failed backup must not break app startup.
+    }
+  }
+
   if (settings.autoMaterializeRecurring) {
     try {
       // Both modes expose /recurring/materialize-all (desktop LocalApiClient,
