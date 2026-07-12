@@ -2,7 +2,7 @@
 
 import { Activity, PiggyBank, ShieldCheck, WalletCards } from "lucide-react";
 
-import { Progress } from "@/components/ui/progress";
+import { HealthGauge } from "@/components/charts/health-gauge";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { DashboardData } from "@/types/finance";
 import { formatCurrency } from "@/lib/format";
@@ -57,11 +57,8 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         </div>
 
         <div className="p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">{t("dash.health")}</p>
-              <p className="num mt-2 text-3xl font-semibold">{data.health.score}/100</p>
-            </div>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm font-medium text-muted-foreground">{t("dash.health")}</p>
             <span
               className={cn(
                 "rounded-md px-3 py-1 text-xs font-semibold",
@@ -77,8 +74,10 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
                   : t("dash.health.critical")}
             </span>
           </div>
-          <Progress value={data.health.score} className="mt-4" />
-          <p className="mt-3 text-sm text-muted-foreground">{data.health.summary}</p>
+          <div className="mt-4 flex items-center gap-5">
+            <HealthGauge score={data.health.score} tone={healthTone} />
+            <p className="text-sm text-muted-foreground">{data.health.summary}</p>
+          </div>
         </div>
       </div>
     </section>

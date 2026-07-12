@@ -12,6 +12,7 @@ import {
 
 import type { NetWorthPoint } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -25,16 +26,17 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
         <AreaChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="netWorthFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#149365" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#149365" stopOpacity={0.02} />
+              <stop offset="0%" stopColor={chartTokens.primary} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={chartTokens.primary} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="month" tickLine={false} axisLine={false} />
+          <CartesianGrid {...chartGridProps} />
+          <XAxis dataKey="month" tickLine={false} axisLine={false} tick={chartAxisTick} />
           <YAxis
             tickFormatter={(value) => axisCurrency(Number(value))}
             tickLine={false}
             axisLine={false}
+            tick={chartAxisTick}
             width={78}
           />
           <Tooltip
@@ -46,7 +48,7 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
             type="monotone"
             dataKey="value"
             name={t("chart.series.netWorth")}
-            stroke="#149365"
+            stroke={chartTokens.primary}
             strokeWidth={2}
             fill="url(#netWorthFill)"
           />

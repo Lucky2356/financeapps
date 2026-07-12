@@ -1776,14 +1776,16 @@ export class LocalApiClient implements ApiClient {
           title: t("svc.metric.monthIncome"),
           value: formatCurrency(finance.currentMonthIncome, currency),
           detail: t("svc.metric.month.detail"),
-          tone: "success"
+          tone: "success",
+          spark: finance.monthlyCashflow.map((month) => month.income)
         },
         {
           key: "monthExpense",
           title: t("svc.metric.monthExpense"),
           value: formatCurrency(finance.currentMonthExpense, currency),
           detail: t("svc.metric.month.detail"),
-          tone: "warning"
+          tone: "warning",
+          spark: finance.monthlyCashflow.map((month) => month.expense)
         },
         {
           key: "freeCash",

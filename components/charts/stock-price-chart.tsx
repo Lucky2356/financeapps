@@ -11,6 +11,7 @@ import {
 } from "recharts";
 
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { useI18n } from "@/lib/i18n/context";
 
 export type StockPricePoint = { date: string; price: number };
@@ -18,7 +19,7 @@ export type StockPricePoint = { date: string; price: number };
 // Historical close-price chart for a single security (real MOEX data).
 export function StockPriceChart({ data, up }: { data: StockPricePoint[]; up: boolean }) {
   const { t, locale } = useI18n();
-  const stroke = up ? "#149365" : "#dc2626";
+  const stroke = up ? chartTokens.income : chartTokens.danger;
   const axisPrice = (value: number) => {
     if (Math.abs(value) >= 1000) return `${Math.round(value / 1000)}${t("chart.thousandShort")}`;
     if (Math.abs(value) >= 1) return `${Math.round(value)}`;
@@ -41,12 +42,19 @@ export function StockPriceChart({ data, up }: { data: StockPricePoint[]; up: boo
               <stop offset="100%" stopColor={stroke} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={40} />
+          <CartesianGrid {...chartGridProps} />
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={false}
+            minTickGap={40}
+            tick={chartAxisTick}
+          />
           <YAxis
             tickFormatter={(v) => axisPrice(Number(v))}
             tickLine={false}
             axisLine={false}
+            tick={chartAxisTick}
             width={48}
             domain={["auto", "auto"]}
           />

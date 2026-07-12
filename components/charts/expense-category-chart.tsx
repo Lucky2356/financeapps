@@ -4,6 +4,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { ChartDatum } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { chartTokens } from "@/lib/charts/palette";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -22,7 +23,7 @@ export function ExpenseCategoryChart({ data }: { data: ChartDatum[] }) {
             paddingAngle={2}
           >
             {data.map((entry) => (
-              <Cell key={entry.name} fill={entry.fill ?? "#149365"} />
+              <Cell key={entry.name} fill={entry.fill ?? chartTokens.primary} />
             ))}
           </Pie>
           <Tooltip {...chartTooltipProps} formatter={(value) => formatCurrency(Number(value))} />
