@@ -19,7 +19,12 @@ export function AuthScreen({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   return (
     <div className="mx-auto grid min-h-[80vh] w-full max-w-5xl items-center gap-10 py-8 lg:grid-cols-2">
-      <section className="hidden flex-col gap-6 lg:flex">
+      <section className="relative hidden flex-col gap-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-card to-card p-8 shadow-soft lg:flex">
+        {/* Soft brand glow in the corner. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-[radial-gradient(circle,hsl(var(--primary)/0.18),transparent_70%)]"
+        />
         <div className="flex items-center gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-sidebar-accent text-white shadow-sm">
             <CircleDollarSign className="size-6" />
