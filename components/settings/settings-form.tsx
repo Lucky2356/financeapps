@@ -787,8 +787,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     });
 
     return list;
+    // `accent` MUST stay in this list: the accent swatches are built inside this
+    // memo, so without it the checkmark would freeze on the old colour while the
+    // app colour (applied imperatively) changes — the bug users reported.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, pageData, status, locale, loadingSample, clearing, checkingUpdate]);
+  }, [settings, pageData, status, locale, accent, loadingSample, clearing, checkingUpdate]);
 
   const trimmedQuery = query.trim().toLowerCase();
   const matches = trimmedQuery
