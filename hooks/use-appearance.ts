@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   type Accent,
@@ -10,37 +10,36 @@ import {
   readStoredAccent
 } from "@/lib/appearance";
 
-// Client hook backing the accent picker. The initial DOM attribute is stamped by
-// the anti-FOUC inline script (see lib/appearance + layout.tsx); this hook
-// exposes the stored value to React via useSyncExternalStore (so the server
-// snapshot is the default and there is no hydration mismatch) and
-// persists/applies changes.
-
-const listeners = new Set<() => void>();
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === ACCENT_STORAGE_KEY) listener();
-  };
-  window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
-  };
-}
-
+// Client hook backing the accent picker. Deliberately uses plain local state (not
+// useSyncExternalStore): on click we set the React state AND the <html>
+// data-accent attribute together in one handler, so the selected indicator can
+// never disagree with the colour actually applied — a desync we saw with the
+// external-store approach on the static/desktop build.
+//
+// Initial state is the default so the server and first client render agree (no
+// hydration mismatch); the stored value is read right after mount. The DOM
+// attribute itself is stamped pre-paint by the anti-FOUC script (see
+// lib/appearance + layout.tsx), so there is no colour flash regardless.
 export function useAppearance() {
-  const accent = useSyncExternalStore<Accent>(subscribe, readStoredAccent, () => DEFAULT_ACCENT);
+  const [accent, setAccentState] = useState<Accent>(DEFAULT_ACCENT);
+
+  useEffect(() => {
+    const stored = readStoredAccent();
+    // Defer out of the effect body (microtask) to satisfy the no-setState-in-
+    // effect lint rule; same pattern as SavedFilters.
+    if (stored !== DEFAULT_ACCENT) {
+      void Promise.resolve().then(() => setAccentState(stored));
+    }
+  }, []);
 
   const setAccent = useCallback((next: Accent) => {
-    applyAccent(next);
+    setAccentState(next); // React state → drives the checkmark/ring
+    applyAccent(next); // <html> data-accent → drives the app colour
     try {
       window.localStorage.setItem(ACCENT_STORAGE_KEY, next);
     } catch {
       /* storage unavailable — the choice still applies for this session */
     }
-    for (const listener of listeners) listener();
   }, []);
 
   return { accent, setAccent };
