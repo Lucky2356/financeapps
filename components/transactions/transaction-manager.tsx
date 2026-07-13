@@ -2,6 +2,7 @@
 
 import {
   ArrowRightLeft,
+  Check,
   ChevronDown,
   Download,
   Edit2,
@@ -19,7 +20,7 @@ import { CategoryIcon } from "@/components/category-icon";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -1002,6 +1003,8 @@ function CategoryMultiSelect({
 }) {
   const { t } = useI18n();
   const [selected, setSelected] = useState<string[]>(initial);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
   function toggle(categoryId: string) {
     setSelected((prev) =>
@@ -1009,45 +1012,88 @@ function CategoryMultiSelect({
     );
   }
 
+  // Close the dropdown on an outside click / Escape.
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: PointerEvent) {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const label =
+    selected.length === 0
+      ? t("tx.allCategories")
+      : t("tx.categoriesSelected", { count: selected.length });
+
   return (
-    <div>
+    <div className="relative" ref={ref}>
       <input type="hidden" name="categoryId" value={selected.join(",")} />
-      <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto rounded-md border p-2">
-        {categories.length === 0 ? (
-          <span className="text-xs text-muted-foreground">{t("tx.allCategories")}</span>
-        ) : (
-          categories.map((category) => {
-            const active = selected.includes(category.id);
-            return (
-              <button
-                key={category.id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggle(category.id)}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  active
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-input bg-background hover:bg-accent"
-                )}
-              >
-                {category.label}
-              </button>
-            );
-          })
-        )}
-      </div>
-      {selected.length > 0 ? (
-        <button
-          type="button"
-          onClick={() => setSelected([])}
-          className="mt-1 text-xs text-primary hover:underline"
-        >
-          {t("tx.clearCategories")}
-        </button>
-      ) : (
-        <p className="mt-1 text-xs text-muted-foreground">{t("tx.allCategories")}</p>
-      )}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-ring/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
+          {label}
+        </span>
+        <ChevronDown
+          className={cn("size-4 shrink-0 opacity-60 transition-transform", open && "rotate-180")}
+        />
+      </button>
+      {open ? (
+        <div className="absolute z-50 mt-1 max-h-64 w-full min-w-56 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
+          {categories.length === 0 ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("tx.allCategories")}</p>
+          ) : (
+            <>
+              {selected.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setSelected([])}
+                  className="mb-1 w-full rounded-sm px-2 py-1.5 text-left text-xs text-primary hover:bg-accent"
+                >
+                  {t("tx.clearCategories")}
+                </button>
+              ) : null}
+              {categories.map((category) => {
+                const active = selected.includes(category.id);
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => toggle(category.id)}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  >
+                    <span
+                      className={cn(
+                        "flex size-4 shrink-0 items-center justify-center rounded border",
+                        active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-input"
+                      )}
+                    >
+                      {active ? <Check className="size-3" /> : null}
+                    </span>
+                    <span className="truncate">{category.label}</span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
