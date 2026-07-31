@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/derive";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { matchesCriteria } from "@/lib/transactions/filter";
+import { pickBestWorstMonth } from "@/lib/analytics/best-month";
 import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 import { getServerLocale } from "@/lib/i18n/server-locale";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
@@ -1828,8 +1829,7 @@ function buildAnalyticsFromTransactions(
     monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length
   );
 
-  const bestMonthData = [...monthlyCashflow].sort((a, b) => b.savings - a.savings)[0];
-  const worstMonthData = [...monthlyCashflow].sort((a, b) => a.savings - b.savings)[0];
+  const bestWorst = pickBestWorstMonth(monthlyCashflow);
 
   // Top expense categories (last 6 months)
   const categoryTotals = new Map<
@@ -1868,8 +1868,8 @@ function buildAnalyticsFromTransactions(
     avgMonthlyIncome,
     avgMonthlyExpense,
     avgSavingsRate,
-    bestMonth: bestMonthData?.month ?? "-",
-    worstMonth: worstMonthData?.month ?? "-",
+    bestMonth: bestWorst.best,
+    worstMonth: bestWorst.worst,
     expenseChangePct: derived.expenseChangePct,
     savingsRateTrend: derived.savingsRateTrend,
     insights: derived.insights
@@ -1905,8 +1905,9 @@ function buildDemoAnalytics(locale: Locale = DEFAULT_LOCALE): AnalyticsData {
   const avgMonthlyIncome = roundMoney(patchedTotals.income / 6);
   const avgMonthlyExpense = roundMoney(patchedTotals.expense / 6);
   const avgSavingsRate = roundMoney(patchedCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / 6);
-  const bestMonth = [...patchedCashflow].sort((a, b) => b.savings - a.savings)[0]?.month ?? "-";
-  const worstMonth = [...patchedCashflow].sort((a, b) => a.savings - b.savings)[0]?.month ?? "-";
+  const patchedBestWorst = pickBestWorstMonth(patchedCashflow);
+  const bestMonth = patchedBestWorst.best;
+  const worstMonth = patchedBestWorst.worst;
 
   const topExpenseCategories =
     result.topExpenseCategories.length > 0

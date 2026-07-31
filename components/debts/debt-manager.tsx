@@ -264,11 +264,14 @@ function DebtDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("debt.dialog.balance")}</Label>
+            {/* step="0.01" (not 100): a coarse step makes the browser reject any
+                real-world amount that isn't a round hundred ("281285"). */}
             <Input
               name="balance"
               type="number"
               min="0"
-              step="100"
+              step="0.01"
+              inputMode="decimal"
               defaultValue={liability?.balance ?? ""}
               required
             />
@@ -279,7 +282,8 @@ function DebtDialog({
               name="originalAmount"
               type="number"
               min="0"
-              step="100"
+              step="0.01"
+              inputMode="decimal"
               defaultValue={liability?.originalAmount ?? ""}
             />
           </div>
@@ -289,7 +293,8 @@ function DebtDialog({
               name="interestRate"
               type="number"
               min="0"
-              step="0.1"
+              step="0.01"
+              inputMode="decimal"
               defaultValue={liability?.interestRate ?? ""}
             />
           </div>
@@ -299,18 +304,28 @@ function DebtDialog({
               name="minPayment"
               type="number"
               min="0"
-              step="100"
+              step="0.01"
+              inputMode="decimal"
               defaultValue={liability?.minPayment ?? ""}
             />
           </div>
           <div className="space-y-2">
             <Label>{t("debt.dialog.dueDay")}</Label>
+            {/* `max` alone doesn't stop typing (27678890 got in), so clamp on blur. */}
             <Input
               name="dueDay"
               type="number"
               min="1"
               max="31"
+              step="1"
+              inputMode="numeric"
               defaultValue={liability?.dueDay ?? ""}
+              onBlur={(event) => {
+                const raw = event.target.value.trim();
+                if (!raw) return;
+                const clamped = Math.min(31, Math.max(1, Math.round(Number(raw))));
+                event.target.value = Number.isFinite(clamped) ? String(clamped) : "";
+              }}
             />
           </div>
         </div>

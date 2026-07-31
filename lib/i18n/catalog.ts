@@ -500,6 +500,12 @@ const ru: Messages = {
   // Notifications
   "notif.title": "Уведомления",
   "notif.empty": "Нет активных уведомлений",
+  "notif.budgetExceeded": "Превышен бюджет: {category}",
+  "notif.budgetSpent": "Потрачено {spent} из {limit}.",
+  "notif.duePayment": "Платёж {when}: {title}",
+  "notif.due.today": "сегодня",
+  "notif.due.tomorrow": "завтра",
+  "notif.due.inDays": "через {days} дн.",
   "notif.ariaSome": "{count} важных уведомлений",
   "notifSev.INFO": "Инфо",
   "notifSev.SUCCESS": "Ок",
@@ -534,10 +540,10 @@ const ru: Messages = {
     "Ваши данные привязаны к аккаунту и защищены — доступны после входа с любого устройства. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках.",
   "ob.step1.title": "1. Добавьте счета",
   "ob.step1.desc":
-    "На вкладке «Счета» создайте свои счета (наличные, карта, накопительный, брокерский) и укажите текущий баланс. С них будут учитываться операции.",
+    "На вкладке «Счета» создайте свои счета (наличные, карта, накопительный, брокерский) и укажите текущий баланс. Расходы будут списываться с этих счетов, а доходы — зачисляться на них.",
   "ob.step2.title": "2. Записывайте операции",
   "ob.step2.desc":
-    "Нажмите «Операция» на главной или клавиши Alt+N, чтобы быстро добавить доход или расход. Прямо в окне можно создать новый счёт и новую категорию. Категория подбирается по описанию автоматически.",
+    "Нажмите «Операция» на главной или клавиши Alt+N, чтобы быстро добавить доход или расход. Прямо в окне можно создать новый счёт и новую категорию. Категория подставляется автоматически — по вашим правилам и прошлым операциям, без ИИ. Если включить ИИ-ассистента в настройках, он поможет разобрать сложные описания.",
   "ob.step3.title": "3. Бюджеты и аналитика",
   "ob.step3.desc":
     "Задайте лимиты по категориям на вкладке «Бюджеты» (можно нажать «Предложить лимиты» — посчитаем по вашим средним тратам). На «Аналитике» смотрите динамику и структуру расходов.",
@@ -549,7 +555,7 @@ const ru: Messages = {
     "На вкладке «Импорт» можно загрузить CSV из банка, выбрать пресет колонок и скачать резервную копию. Перед восстановлением мы покажем preview, чтобы случайно не заменить данные не тем файлом.",
   "ob.forecast.title": "6. Прогноз и инвестиции",
   "ob.forecast.desc":
-    "Добавляйте плановые платежи — «Прогноз» построит денежный поток и календарь на 90 дней. На «Инвестициях» можно подобрать бумаги под бюджет и риск-профиль.",
+    "Добавляйте плановые платежи — «Прогноз» построит денежный поток и календарь на 90 дней по вашему расписанию (обычный расчёт, не ИИ). На «Инвестициях» можно подобрать бумаги под бюджет и риск-профиль.",
   "ob.step6.title": "Подсказка: быстрый поиск",
   "ob.step6.desc":
     "Нажмите Ctrl+K в любой момент, чтобы открыть командную палитру — быстрый переход по разделам и поиск счетов и категорий. Готово, можно начинать!",
@@ -1948,6 +1954,12 @@ const en: Messages = {
   // Notifications
   "notif.title": "Notifications",
   "notif.empty": "No active notifications",
+  "notif.budgetExceeded": "Budget exceeded: {category}",
+  "notif.budgetSpent": "Spent {spent} of {limit}.",
+  "notif.duePayment": "Payment {when}: {title}",
+  "notif.due.today": "today",
+  "notif.due.tomorrow": "tomorrow",
+  "notif.due.inDays": "in {days} days",
   "notif.ariaSome": "{count} important notifications",
   "notifSev.INFO": "Info",
   "notifSev.SUCCESS": "OK",
@@ -1982,10 +1994,10 @@ const en: Messages = {
     "Your data is tied to your account and protected — available after signing in from any device. Want to explore the app with a ready-made example or start with a clean slate? “Load example” can be cleared anytime in Settings.",
   "ob.step1.title": "1. Add accounts",
   "ob.step1.desc":
-    "On the Accounts tab create your accounts (cash, card, savings, brokerage) and set the current balance. Transactions will be tracked from them.",
+    "On the Accounts tab create your accounts (cash, card, savings, brokerage) and set the current balance. Expenses are deducted from these accounts and income is credited to them.",
   "ob.step2.title": "2. Record transactions",
   "ob.step2.desc":
-    "Click “Transaction” on the home page or press Alt+N to quickly add income or an expense. You can create a new account and category right in the dialog. The category is picked from the description automatically.",
+    "Click “Transaction” on the home page or press Alt+N to quickly add income or an expense. You can create a new account and category right in the dialog. The category is filled in automatically — from your rules and past transactions, no AI involved. Turn on the AI assistant in Settings and it will also help with tricky descriptions.",
   "ob.step3.title": "3. Budgets and analytics",
   "ob.step3.desc":
     "Set per-category limits on the Budgets tab (you can click “Suggest limits” — we'll calculate from your average spend). On Analytics, view trends and spending structure.",
@@ -1997,7 +2009,7 @@ const en: Messages = {
     "On the Import tab you can upload a bank CSV, choose a column preset and download a backup. Before restoring we show a preview, so you don't accidentally replace data with the wrong file.",
   "ob.forecast.title": "6. Forecast and investments",
   "ob.forecast.desc":
-    "Add scheduled payments — Forecast will build a cash flow and a 90-day calendar. On Investments you can pick securities to match your budget and risk profile.",
+    "Add scheduled payments — Forecast will build a cash flow and a 90-day calendar from your schedule (a plain calculation, not AI). On Investments you can pick securities to match your budget and risk profile.",
   "ob.step6.title": "Tip: quick search",
   "ob.step6.desc":
     "Press Ctrl+K anytime to open the command palette — quick navigation across sections and search for accounts and categories. That's it, you're ready to go!",

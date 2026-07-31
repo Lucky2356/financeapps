@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api/client";
 import { isLocalDesktopMode } from "@/lib/platform/env";
 import { isPublicPath } from "@/lib/public-paths";
 import { buildNotifications } from "@/lib/notifications";
+import { getClientLocale } from "@/lib/i18n/client-locale";
 import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
 
@@ -119,7 +120,8 @@ async function runAutomation() {
         upcomingEvents: forecast?.upcomingEvents,
         forecastWarnings: forecast?.warnings,
         budgets: budgets?.budgets,
-        currency: forecast?.currency ?? budgets?.currency
+        currency: forecast?.currency ?? budgets?.currency,
+        locale: getClientLocale()
       }).filter((item) => item.severity === "WARNING" || item.severity === "CRITICAL");
 
       const fresh = urgent.filter((item) => !alreadyNotified(item.id)).slice(0, 3);
