@@ -22,6 +22,7 @@ import { PortfolioHero } from "@/components/investments/portfolio-hero";
 import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
 import { RealizedTaxReport } from "@/components/investments/realized-tax-report";
 import { DividendTracker } from "@/components/investments/dividend-tracker";
+import { MarketAlertsPanel } from "@/components/investments/market-alerts-panel";
 import { RebalancePanel } from "@/components/investments/rebalance-panel";
 import { TaxEstimateCard } from "@/components/investments/tax-estimate-card";
 import { SecuritySearch } from "@/components/investments/security-search";
@@ -541,6 +542,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             <TaxEstimateCard positions={data.portfolio} currency={data.currency} />
           )}
           <RebalancePanel positions={data.portfolio} currency={data.currency} />
+          <MarketAlertsPanel />
           <DividendTracker />
           <RealizedTaxReport />
 

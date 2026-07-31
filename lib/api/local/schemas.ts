@@ -176,6 +176,22 @@ export const expectedDividendSchema = z.object({
   currency: z.enum(CURRENCY_CODES).default("RUB")
 });
 
+// A user "flag" on a company fundamental: notify when the metric crosses a
+// threshold (e.g. ETLN debt_ebitda > 3.5). Desktop-only (needs the HTTP plugin).
+export const marketAlertSchema = z.object({
+  id: z.string().min(1),
+  ticker: z
+    .string()
+    .trim()
+    .min(1)
+    .max(16)
+    .transform((value) => value.toUpperCase()),
+  metric: z.string().trim().min(1).max(40),
+  op: z.enum([">", "<", ">=", "<="]),
+  value: z.coerce.number().finite(),
+  lastFiredAt: z.string().optional()
+});
+
 export const targetAllocationSchema = z.object({
   id: z.string().min(1),
   sector: z.string().trim().min(1).max(60),
@@ -252,6 +268,7 @@ export const localStateSchema = z.object({
   realizedInvestmentEvents: z.array(realizedEventSchema).default([]),
   expectedDividends: z.array(expectedDividendSchema).default([]),
   targetAllocations: z.array(targetAllocationSchema).default([]),
+  marketAlerts: z.array(marketAlertSchema).default([]),
   demoMode: z.boolean().default(false),
   emergencyFundMonthsTarget: z.coerce
     .number()
