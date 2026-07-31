@@ -204,6 +204,7 @@ const ru: Messages = {
   // Budgets manager
   "bud.title": "Лимиты по категориям",
   "bud.suggest": "Предложить лимиты",
+  "bud.newCategory": "Категория",
   "bud.suggestTitle": "Заполнить пустые лимиты по средним тратам за 3 месяца",
   "bud.prevMonth": "Предыдущий месяц",
   "bud.nextMonth": "Следующий месяц",
@@ -1659,6 +1660,7 @@ const en: Messages = {
   // Budgets manager
   "bud.title": "Per-category limits",
   "bud.suggest": "Suggest limits",
+  "bud.newCategory": "Category",
   "bud.suggestTitle": "Fill empty limits using average spend over 3 months",
   "bud.prevMonth": "Previous month",
   "bud.nextMonth": "Next month",

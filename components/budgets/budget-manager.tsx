@@ -2,9 +2,10 @@
 
 import { format, subMonths } from "date-fns";
 import { enUS, ru } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Sparkles, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,9 +16,11 @@ import type { Locale } from "@/lib/i18n/catalog";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { CategoryDialog } from "@/components/categories/category-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -58,6 +61,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
 
   const { run } = useApiMutation();
   const confirm = useConfirm();
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const monthOptions = buildMonthOptions(locale);
   const currentIndex = monthOptions.findIndex((option) => option.value === selectedMonth);
   const hasPrev = currentIndex > 0;
@@ -66,6 +70,21 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   async function refresh() {
     await reload();
     router.refresh();
+  }
+
+  // Create a category straight from the budgets screen; the list reloads so the
+  // new category immediately gets a limit row.
+  async function submitCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    await run(() => apiClient.post("/categories", payload), {
+      success: t("cat.toast.added"),
+      error: t("cat.toast.saveError"),
+      onSuccess: async () => {
+        setCategoryOpen(false);
+        await refresh();
+      }
+    });
   }
 
   function navigateToMonth(monthValue: string) {
@@ -163,6 +182,21 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>{t("bud.title")}</CardTitle>
         <div className="flex items-center gap-2">
+          {/* Create a category without leaving the budgets screen — limits are
+              set per category, so this is where users notice one is missing. */}
+          <Dialog open={categoryOpen} onOpenChange={setCategoryOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Plus className="size-4" />
+                {t("bud.newCategory")}
+              </Button>
+            </DialogTrigger>
+            <CategoryDialog
+              title={t("cat.new", { title: t("cat.expense") })}
+              defaultKind="EXPENSE"
+              onSubmit={submitCategory}
+            />
+          </Dialog>
           <Button
             variant="outline"
             size="sm"
