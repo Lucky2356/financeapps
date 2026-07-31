@@ -3,7 +3,7 @@
 import { CreditCard, Edit2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import type { LiabilitiesPageData } from "@/lib/data";
@@ -201,6 +201,13 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
                 <p className="mt-3 text-xs text-muted-foreground">
                   {payoffHint(liability, pageData.currency, t)}
                 </p>
+                {liability.autoPay ? (
+                  <p className="mt-1 text-xs text-primary">
+                    {liability.lastPaidMonth
+                      ? t("debt.autoPay.lastPaid", { month: liability.lastPaidMonth })
+                      : t("debt.autoPay.title")}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           ))}
@@ -235,6 +242,36 @@ function DebtDialog({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useI18n();
+  // Auto-payment needs an account to charge and an expense category to file it
+  // under; both are loaded lazily (they aren't part of the debts payload).
+  const [autoPay, setAutoPay] = useState(liability?.autoPay ?? false);
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; label: string }>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [accountsData, categoriesData] = await Promise.all([
+        apiClient
+          .get<{ accounts?: Array<{ id: string; name: string }> }>("/accounts")
+          .catch(() => null),
+        apiClient
+          .get<{ categories?: Array<{ id: string; label: string; kind: string }> }>("/categories")
+          .catch(() => null)
+      ]);
+      if (cancelled) return;
+      setAccounts(accountsData?.accounts ?? []);
+      setCategories(
+        (categoriesData?.categories ?? [])
+          .filter((category) => category.kind === "EXPENSE")
+          .map((category) => ({ id: category.id, label: category.label }))
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <DialogContent>
       <DialogHeader>
@@ -328,6 +365,65 @@ function DebtDialog({
               }}
             />
           </div>
+        </div>
+
+        {/* Auto-payment (desktop): post the monthly payment on the due day and
+            reduce the balance, instead of entering it by hand every month. */}
+        <div className="space-y-3 rounded-lg border p-3">
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="autoPay"
+              value="true"
+              className="mt-0.5 size-4 rounded border accent-primary"
+              checked={autoPay}
+              onChange={(event) => setAutoPay(event.target.checked)}
+            />
+            <span>
+              <span className="block font-medium">{t("debt.autoPay.title")}</span>
+              <span className="block text-xs text-muted-foreground">{t("debt.autoPay.desc")}</span>
+            </span>
+          </label>
+          {autoPay ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t("debt.autoPay.account")}</Label>
+                <Select
+                  name="paymentAccountId"
+                  defaultValue={liability?.paymentAccountId ?? accounts[0]?.id}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t("debt.autoPay.category")}</Label>
+                <Select
+                  name="paymentCategoryId"
+                  defaultValue={liability?.paymentCategoryId ?? categories[0]?.id}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button type="submit">{t("common.save")}</Button>

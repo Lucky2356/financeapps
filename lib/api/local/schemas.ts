@@ -25,7 +25,14 @@ export const liabilitySchema = z.object({
   interestRate: z.coerce.number().finite().min(0).default(0),
   minPayment: z.coerce.number().finite().min(0).default(0),
   dueDay: z.coerce.number().int().min(1).max(31).optional(),
-  currency: z.enum(CURRENCY_CODES).default("RUB")
+  currency: z.enum(CURRENCY_CODES).default("RUB"),
+  // Auto-payment (v5): when enabled, the monthly payment is posted as a real
+  // expense on the due day and the balance goes down. lastPaidMonth (YYYY-MM)
+  // makes the posting idempotent.
+  autoPay: z.boolean().optional(),
+  paymentAccountId: z.string().optional(),
+  paymentCategoryId: z.string().optional(),
+  lastPaidMonth: z.string().optional()
 });
 export const categorizationRuleSchema = z.object({
   id: z.string().min(1),
@@ -222,7 +229,7 @@ export const investmentSchema = z.object({
     .default([])
 });
 export const localStateSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
   // and cached here so cross-currency capital is a single honest number offline.

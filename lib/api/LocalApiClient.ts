@@ -21,6 +21,7 @@ import type {
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
 import {
@@ -87,7 +88,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4;
+  schemaVersion: 1 | 2 | 3 | 4 | 5;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -189,7 +190,7 @@ function createInitialState(): LocalState {
   // the user adds their own. Default categories are kept only so that operations
   // can be categorized out of the box; they carry no monetary data.
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -228,7 +229,7 @@ function createInitialState(): LocalState {
 // Unlike createInitialState() this seeds nothing: no accounts, categories or watchlist.
 function createBlankState(): LocalState {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -485,6 +486,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
     if (pathname === "/recurring/materialize-all")
       return this.saveAndReturn<TResponse>(state, this.materializeAllDue(state));
+    if (pathname === "/debts/auto-pay")
+      return this.saveAndReturn<TResponse>(state, this.autoPayDebts(state));
     if (pathname === "/networth/snapshot")
       return this.saveAndReturn<TResponse>(state, await this.recordNetWorthSnapshot(state));
     if (pathname === "/import")
@@ -781,7 +784,18 @@ export class LocalApiClient implements ApiClient {
       ...(Number.isInteger(dueDayRaw) && dueDayRaw >= 1 && dueDayRaw <= 31
         ? { dueDay: dueDayRaw }
         : {}),
-      currency: isSupportedCurrency(input.currency ?? "") ? input.currency : state.currency
+      currency: isSupportedCurrency(input.currency ?? "") ? input.currency : state.currency,
+      // Auto-payment settings (v5). Keep lastPaidMonth from the existing record
+      // so editing a liability never re-opens an already posted month.
+      // FormData sends the checkbox value as the string "true" when ticked.
+      autoPay: input.autoPay === "true",
+      ...(input.paymentAccountId ? { paymentAccountId: input.paymentAccountId } : {}),
+      ...(input.paymentCategoryId ? { paymentCategoryId: input.paymentCategoryId } : {}),
+      ...(() => {
+        const previous =
+          method === "PUT" ? state.liabilities.find((item) => item.id === input.id) : undefined;
+        return previous?.lastPaidMonth ? { lastPaidMonth: previous.lastPaidMonth } : {};
+      })()
     };
     state.liabilities =
       method === "PUT"
@@ -989,6 +1003,62 @@ export class LocalApiClient implements ApiClient {
       );
     }
     return { created };
+  }
+
+  // Posts the monthly payment for every liability whose due day has arrived and
+  // that hasn't been charged this month yet (see lib/debts/auto-pay for the pure
+  // rules). Each posting creates a normal EXPENSE transaction — so budgets and
+  // analytics see it like any other spending — and reduces the outstanding
+  // balance. Idempotent: `lastPaidMonth` stops a second run in the same month.
+  private autoPayDebts(state: LocalState) {
+    const today = new Date();
+    const due = dueLiabilities(state.liabilities, today);
+    if (due.length === 0) return { posted: 0 };
+
+    const fallbackAccount = state.accounts.find((account) => !account.isArchived);
+    const fallbackCategory = state.categories.find((category) => category.kind === "EXPENSE");
+    let posted = 0;
+
+    for (const liability of due) {
+      const accountId =
+        state.accounts.find((account) => account.id === liability.paymentAccountId)?.id ??
+        fallbackAccount?.id;
+      const categoryId =
+        state.categories.find(
+          (category) => category.id === liability.paymentCategoryId && category.kind === "EXPENSE"
+        )?.id ?? fallbackCategory?.id;
+      // Without an account or an expense category there is nowhere to post.
+      if (!accountId || !categoryId) continue;
+
+      const amount = paymentAmount(liability);
+      if (amount <= 0) continue;
+
+      this.upsertTransaction(
+        state,
+        {
+          amount: String(amount),
+          type: "EXPENSE",
+          accountId,
+          categoryId,
+          date: today.toISOString(),
+          description: liability.name
+        },
+        "POST"
+      );
+
+      state.liabilities = state.liabilities.map((item) =>
+        item.id === liability.id
+          ? {
+              ...item,
+              balance: Math.max(0, Math.round((item.balance - amount) * 100) / 100),
+              lastPaidMonth: monthKey(today)
+            }
+          : item
+      );
+      posted += 1;
+    }
+
+    return { posted };
   }
 
   private importCsvRows(state: LocalState, body: unknown) {

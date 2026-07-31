@@ -205,6 +205,12 @@ export type LiabilityRow = {
   currency: string;
   // Derived: 0..100 share of the original principal already repaid.
   progress: number;
+  /** Post the monthly payment automatically on the due day (desktop). */
+  autoPay?: boolean;
+  paymentAccountId?: string;
+  paymentCategoryId?: string;
+  /** YYYY-MM of the last auto-posted payment — keeps posting idempotent. */
+  lastPaidMonth?: string;
 };
 
 export type BudgetRow = {
