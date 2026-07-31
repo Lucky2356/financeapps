@@ -27,9 +27,40 @@ const badgeVariant = {
   CRITICAL: "destructive"
 } as const;
 
+// Ids the user has already seen, so the badge goes quiet after opening the list
+// and lights up again only for genuinely new notifications.
+const READ_KEY = "notif-read";
+
+function loadRead(): string[] {
+  try {
+    const raw = localStorage.getItem(READ_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function NotificationBell() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [items, setItems] = useState<NotificationItem[]>([]);
+  const [readIds, setReadIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const stored = loadRead();
+    if (stored.length > 0) void Promise.resolve().then(() => setReadIds(stored));
+  }, []);
+
+  // Called when the dialog opens: everything currently listed counts as seen.
+  function markAllRead(currentItems: NotificationItem[]) {
+    const ids = currentItems.map((item) => item.id);
+    setReadIds(ids);
+    try {
+      localStorage.setItem(READ_KEY, JSON.stringify(ids));
+    } catch {
+      /* storage unavailable — badge just won't persist as read */
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -50,19 +81,26 @@ export function NotificationBell() {
           upcomingEvents: forecast?.upcomingEvents,
           forecastWarnings: forecast?.warnings,
           budgets: budgets?.budgets,
-          currency: forecast?.currency ?? budgets?.currency
+          currency: forecast?.currency ?? budgets?.currency,
+          locale
         })
       );
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale]);
 
-  const urgentCount = countUrgent(items);
+  // Only unseen urgent items light the badge.
+  const unreadItems = items.filter((item) => !readIds.includes(item.id));
+  const urgentCount = countUrgent(unreadItems);
 
   return (
-    <Dialog>
+    <Dialog
+      onOpenChange={(open) => {
+        if (open) markAllRead(items);
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="ghost"

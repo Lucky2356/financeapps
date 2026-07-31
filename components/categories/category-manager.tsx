@@ -33,19 +33,38 @@ import {
 } from "@/components/ui/table";
 import type { CategoryRow } from "@/types/finance";
 
+// Category swatches: a broad, readable spread across the hue circle in two
+// tones (deep + light) so similar-looking categories can still be told apart.
 const PRESET_COLORS = [
+  // Deep tones
   "#16a34a",
   "#0d9488",
+  "#0891b2",
   "#2563eb",
+  "#4f46e5",
   "#7c3aed",
+  "#c026d3",
   "#db2777",
+  "#e11d48",
   "#dc2626",
   "#ea580c",
+  "#b45309",
+  // Light / accent tones
+  "#4ade80",
+  "#2dd4bf",
+  "#38bdf8",
+  "#60a5fa",
+  "#818cf8",
+  "#a78bfa",
+  "#e879f9",
+  "#f472b6",
+  "#fb7185",
   "#f97316",
   "#eab308",
-  "#0891b2",
+  "#84cc16",
+  // Neutrals
   "#64748b",
-  "#84cc16"
+  "#334155"
 ];
 
 export function CategoryManager({ data }: { data: CategoriesPageData }) {
