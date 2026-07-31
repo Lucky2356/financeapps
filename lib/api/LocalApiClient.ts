@@ -22,6 +22,7 @@ import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/hel
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
+import type { MarketAlert } from "@/lib/market/alerts";
 import { buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
 import {
@@ -113,6 +114,7 @@ type LocalState = {
   realizedInvestmentEvents: RealizedInvestmentEvent[];
   expectedDividends: ExpectedDividend[];
   targetAllocations: TargetAllocation[];
+  marketAlerts: MarketAlert[];
   categories: CategoryOption[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
@@ -215,6 +217,7 @@ function createInitialState(): LocalState {
     realizedInvestmentEvents: [],
     expectedDividends: [],
     targetAllocations: [],
+    marketAlerts: [],
     categories: defaultCategories,
     transactions: [],
     budgets: [],
@@ -254,6 +257,7 @@ function createBlankState(): LocalState {
     realizedInvestmentEvents: [],
     expectedDividends: [],
     targetAllocations: [],
+    marketAlerts: [],
     categories: [],
     transactions: [],
     budgets: [],
@@ -358,6 +362,7 @@ export class LocalApiClient implements ApiClient {
       return invData as T;
     }
     if (pathname === "/investments/events") return this.investmentEventsPage(state) as T;
+    if (pathname === "/market/alerts") return { alerts: state.marketAlerts ?? [] } as T;
     if (pathname === "/investments/dividends")
       return {
         dividends: state.expectedDividends ?? [],
@@ -402,6 +407,8 @@ export class LocalApiClient implements ApiClient {
       state.realizedInvestmentEvents = (state.realizedInvestmentEvents ?? []).filter(
         (event) => event.id !== itemId
       );
+    } else if (pathname === "/market/alerts" && itemId) {
+      state.marketAlerts = (state.marketAlerts ?? []).filter((alert) => alert.id !== itemId);
     } else if (pathname === "/investments/dividends" && itemId) {
       state.expectedDividends = (state.expectedDividends ?? []).filter(
         (dividend) => dividend.id !== itemId
@@ -504,6 +511,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.addExpectedDividend(state, body));
     if (pathname === "/investments/targets")
       return this.saveAndReturn<TResponse>(state, this.setTargetAllocations(state, body));
+    if (pathname === "/market/alerts")
+      return this.saveAndReturn<TResponse>(state, this.addMarketAlert(state, body));
     if (pathname === "/backup") return this.restoreBackup<TResponse>(body);
     if (pathname === "/investments")
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
@@ -1407,6 +1416,26 @@ export class LocalApiClient implements ApiClient {
       a.date.localeCompare(b.date)
     );
     return dividend;
+  }
+
+  // Adds an alert flag on a company fundamental (e.g. ETLN debt_ebitda > 3.5).
+  private addMarketAlert(state: LocalState, body: unknown): MarketAlert {
+    const input = toFormObject(body);
+    const rawOp = String(input.op ?? ">");
+    const alert: MarketAlert = {
+      id: id("alert"),
+      ticker:
+        String(input.ticker ?? "")
+          .trim()
+          .toUpperCase() || "—",
+      metric: String(input.metric ?? "debt_ebitda").trim(),
+      op: (["<", ">", "<=", ">="] as const).includes(rawOp as MarketAlert["op"])
+        ? (rawOp as MarketAlert["op"])
+        : ">",
+      value: Number(input.value ?? 0)
+    };
+    state.marketAlerts = [alert, ...(state.marketAlerts ?? [])];
+    return alert;
   }
 
   // Replaces the full target-allocation set (the UI edits it as one list).

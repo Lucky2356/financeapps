@@ -14,6 +14,10 @@ pub fn run() {
     // can't proceed (the webview CSP blocks navigating to external URLs, so
     // window.open does nothing on desktop).
     .plugin(tauri_plugin_opener::init())
+    // Reads public company fundamentals from smart-lab.ru for the investment
+    // alert flags. Runs in Rust so the site's missing CORS headers don't block
+    // it; the allowed URLs are restricted in capabilities/default.json.
+    .plugin(tauri_plugin_http::init())
     .setup(|_app| {
       // Future secure tokens must use OS keychain / secure storage, never plain files.
       Ok(())
