@@ -95,6 +95,17 @@ async function runAutomation() {
     } catch {
       // Best-effort; ignore failures (e.g. no accounts yet).
     }
+
+    if (isLocalDesktopMode) {
+      try {
+        // Debts with auto-payment enabled: post the monthly payment once the due
+        // day has passed and reduce the balance (desktop-only, idempotent per
+        // month — see lib/debts/auto-pay).
+        await apiClient.post("/debts/auto-pay");
+      } catch {
+        // Best-effort; ignore failures.
+      }
+    }
   }
 
   if (settings.paymentReminders && typeof window !== "undefined" && "Notification" in window) {

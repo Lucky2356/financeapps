@@ -14,7 +14,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 4;
+export const LATEST_LOCAL_STATE_VERSION = 5;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -41,6 +41,14 @@ export const localStateMigrations: LocalStateMigration[] = [
     // v4 added expected-dividend and target-allocation lists (investments). Zod
     // defaults fill the empty arrays, so the migration only stamps the version.
     migrate: (state) => ({ ...state, schemaVersion: 4 })
+  },
+  {
+    from: 4,
+    to: 5,
+    // v5 added optional auto-payment fields on liabilities (autoPay, payment
+    // account/category, lastPaidMonth). All optional — Zod fills the rest, so
+    // the migration only stamps the version.
+    migrate: (state) => ({ ...state, schemaVersion: 5 })
   }
 ];
 

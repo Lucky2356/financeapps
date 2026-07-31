@@ -415,6 +415,12 @@ const ru: Messages = {
   "debt.dialog.rate": "Ставка, % годовых",
   "debt.dialog.payment": "Платёж в месяц",
   "debt.dialog.dueDay": "День платежа",
+  "debt.autoPay.title": "Проводить платёж автоматически",
+  "debt.autoPay.desc":
+    "В день платежа приложение само создаст расходную операцию и уменьшит остаток долга.",
+  "debt.autoPay.account": "Счёт списания",
+  "debt.autoPay.category": "Категория расхода",
+  "debt.autoPay.lastPaid": "Последний авто-платёж: {month}",
   // Frequency
   "freq.WEEKLY": "еженедельно",
   "freq.MONTHLY": "ежемесячно",
@@ -1871,6 +1877,12 @@ const en: Messages = {
   "debt.dialog.rate": "Rate, % per year",
   "debt.dialog.payment": "Monthly payment",
   "debt.dialog.dueDay": "Payment day",
+  "debt.autoPay.title": "Post the payment automatically",
+  "debt.autoPay.desc":
+    "On the due day the app creates the expense transaction and reduces the outstanding balance.",
+  "debt.autoPay.account": "Account to charge",
+  "debt.autoPay.category": "Expense category",
+  "debt.autoPay.lastPaid": "Last auto-payment: {month}",
   // Frequency
   "freq.WEEKLY": "weekly",
   "freq.MONTHLY": "monthly",
