@@ -98,6 +98,49 @@ describe("LocalApiClient", () => {
     expect(afterDelete.portfolio).toHaveLength(0);
   });
 
+  it("keeps portfolio positions whose ticker is outside the curated board", async () => {
+    // Regression: "Сохранить позицию" appeared to do nothing for a security
+    // picked through the full-board search (e.g. ETLN). The position was written
+    // and then immediately dropped, because the portfolio was rebuilt from the
+    // curated securities list only.
+    const client = createClient();
+    await client.post("/investments", { ticker: "SBER", quantity: "10", averageBuyPrice: "250" });
+
+    const backup = await client.get<Record<string, unknown>>("/backup");
+    const investments = backup.investments as InvestmentData;
+    const offBoard = {
+      ...investments.portfolio[0],
+      ticker: "ETLN",
+      name: "Эталон",
+      sector: "Строительство",
+      quantity: 11,
+      averageBuyPrice: 90,
+      currentPrice: 96,
+      currentValue: 1056,
+      pnl: 66
+    };
+    await client.post("/backup", {
+      backup: { ...backup, investments: { ...investments, portfolio: [offBoard] } }
+    });
+
+    const restored = await client.get<InvestmentData>("/investments");
+    expect(restored.portfolio).toHaveLength(1);
+    expect(restored.portfolio[0]).toMatchObject({
+      ticker: "ETLN",
+      name: "Эталон",
+      quantity: 11,
+      averageBuyPrice: 90,
+      // Unknown to the market directory → the stored price snapshot survives.
+      currentPrice: 96,
+      share: 100
+    });
+
+    // And it must still be there after a second read (the read path persists the
+    // rebuilt portfolio back into the local state).
+    const again = await client.get<InvestmentData>("/investments");
+    expect(again.portfolio.map((position) => position.ticker)).toEqual(["ETLN"]);
+  });
+
   it("validates local backups before restore", async () => {
     const client = createClient();
     const backup = await client.get<{ schemaVersion: number; lastBackupAt: string | null }>(

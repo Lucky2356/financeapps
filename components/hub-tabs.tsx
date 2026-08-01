@@ -16,8 +16,19 @@ export function HubTabs() {
   const hub = findHub(pathname);
   if (!hub) return null;
 
+  // On a phone (and on a tablet, where the sidebar already eats 16rem) the tabs
+  // WRAP into rows instead of scrolling sideways: a hidden tab off the right
+  // edge — and a clipped active one — was the single worst part of the mobile
+  // layout. Four tabs wrap 2+2, five wrap 3+2, and `grow` stretches the last row
+  // so every row looks deliberate. Only from `lg` is the content column wide
+  // enough to seat every tab in one row without cutting a label.
+  const twoPerRow = hub.tabs.length === 4;
+
   return (
-    <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border bg-muted/40 p-1 shadow-soft">
+    <div
+      data-testid="hub-tabs"
+      className="mb-5 flex flex-wrap gap-1 rounded-xl border bg-muted/40 p-1 shadow-soft"
+    >
       {hub.tabs.map((tab) => {
         const active = pathname === tab.href;
         const Icon = tab.icon;
@@ -27,14 +38,18 @@ export function HubTabs() {
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+              // Stacked in a narrow cell so the full label fits ("Transactions"
+              // would otherwise be clipped next to the icon).
+              "flex min-w-0 grow flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-xs font-medium transition-all duration-150",
+              "lg:basis-0 lg:flex-row lg:gap-2 lg:px-3 lg:py-2 lg:text-sm",
+              twoPerRow ? "basis-[calc(50%-0.125rem)]" : "basis-[calc(33.333%-0.167rem)]",
               active
                 ? "bg-background text-primary shadow-sm ring-1 ring-primary/10"
                 : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
             )}
           >
             <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "opacity-70")} />
-            {t(tab.labelKey)}
+            <span className="truncate">{t(tab.labelKey)}</span>
           </Link>
         );
       })}

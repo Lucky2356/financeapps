@@ -1692,25 +1692,43 @@ export class LocalApiClient implements ApiClient {
       .filter((item, index, rows) => rows.findIndex((row) => row.ticker === item.ticker) === index)
       .sort((left, right) => left.ticker.localeCompare(right.ticker));
 
-    const rowsWithoutShare = state.investments.portfolio
-      .map((position) => {
-        const security = securityByTicker.get(position.ticker);
-        if (!security) return null;
-        const currentValue = roundMoney(security.price * position.quantity);
-        return {
-          ticker: security.ticker,
-          name: security.name,
-          sector: security.sector,
-          quantity: position.quantity,
-          averageBuyPrice: position.averageBuyPrice,
-          currentPrice: security.price,
-          currentValue,
-          pnl: roundMoney((security.price - position.averageBuyPrice) * position.quantity),
-          share: 0,
-          risk: security.risk
-        };
+    // A position may hold a security outside the curated board — the "add
+    // position" dialog searches the WHOLE MOEX board. Resolve those tickers
+    // live (the board snapshot is shared and cached, so this is cheap) so their
+    // price stays fresh; if the market is unreachable we keep the stored
+    // snapshot. Dropping unknown tickers here used to make a just-saved
+    // position disappear the moment it was written.
+    const unresolved = [
+      ...new Set(
+        state.investments.portfolio
+          .map((position) => position.ticker)
+          .filter((ticker) => !securityByTicker.has(ticker))
+      )
+    ];
+    await Promise.all(
+      unresolved.map(async (ticker) => {
+        const resolved = await provider.getSecurityByTicker(ticker).catch(() => null);
+        if (resolved) securityByTicker.set(resolved.ticker, resolved);
       })
-      .filter((position): position is InvestmentData["portfolio"][number] => Boolean(position));
+    );
+
+    const rowsWithoutShare = state.investments.portfolio.map((position) => {
+      const security = securityByTicker.get(position.ticker);
+      const price = security && security.price > 0 ? security.price : position.currentPrice;
+      const currentValue = roundMoney(price * position.quantity);
+      return {
+        ticker: position.ticker,
+        name: security?.name ?? position.name,
+        sector: security?.sector ?? position.sector,
+        quantity: position.quantity,
+        averageBuyPrice: position.averageBuyPrice,
+        currentPrice: price,
+        currentValue,
+        pnl: roundMoney((price - position.averageBuyPrice) * position.quantity),
+        share: 0,
+        risk: security?.risk ?? position.risk
+      };
+    });
     const total = rowsWithoutShare.reduce((sum, row) => sum + row.currentValue, 0);
     const portfolio = rowsWithoutShare.map((row) => ({
       ...row,
