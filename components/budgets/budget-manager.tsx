@@ -181,7 +181,9 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>{t("bud.title")}</CardTitle>
-        <div className="flex items-center gap-2">
+        {/* Four controls in a row do not fit a phone — let them wrap instead of
+            stretching the card past the screen. */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Create a category without leaving the budgets screen — limits are
               set per category, so this is where users notice one is missing. */}
           <Dialog open={categoryOpen} onOpenChange={setCategoryOpen}>
@@ -216,7 +218,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
             <ChevronLeft className="size-4" />
           </Button>
           <Select value={selectedMonth} onValueChange={navigateToMonth}>
-            <SelectTrigger className="h-9 w-44">
+            <SelectTrigger className="h-9 w-36 sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -133,14 +133,16 @@ export function SetupChecklist() {
 
   return (
     <div className="rounded-lg border border-primary/30 bg-primary/[0.06] p-5">
-      <div className="flex items-start justify-between gap-3">
+      {/* Wraps on a narrow screen: "Загрузить демо-данные" does not fit next to
+          the heading on a phone and would otherwise push the page sideways. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold">{t("sc.title")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {t("sc.progress", { done: doneCount, total: steps.length })}
           </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {counts.accounts === 0 && counts.transactions === 0 ? (
             <Button
               size="sm"
