@@ -211,6 +211,12 @@ export type LiabilityRow = {
   paymentCategoryId?: string;
   /** YYYY-MM of the last auto-posted payment — keeps posting idempotent. */
   lastPaidMonth?: string;
+  /**
+   * ISO date the owner marked the debt as repaid. A settled debt keeps its
+   * record for history but stops counting anywhere: not in capital, not in the
+   * health score, not in planning and never auto-paid again.
+   */
+  settledAt?: string;
 };
 
 export type BudgetRow = {

@@ -23,6 +23,7 @@ import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
+import { activeDebts } from "@/lib/debts/settled";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
@@ -37,6 +38,7 @@ import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
 import {
+  LATEST_LOCAL_STATE_VERSION,
   runLocalStateMigrations,
   type RawLocalState
 } from "@/lib/storage/migrations/runLocalStateMigrations";
@@ -90,7 +92,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -200,7 +202,7 @@ function createInitialState(): LocalState {
   // the user adds their own. Default categories are kept only so that operations
   // can be categorized out of the box; they carry no monetary data.
   return {
-    schemaVersion: 5,
+    schemaVersion: LATEST_LOCAL_STATE_VERSION,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -240,7 +242,7 @@ function createInitialState(): LocalState {
 // Unlike createInitialState() this seeds nothing: no accounts, categories or watchlist.
 function createBlankState(): LocalState {
   return {
-    schemaVersion: 5,
+    schemaVersion: LATEST_LOCAL_STATE_VERSION,
     currency,
     demoMode: false,
     emergencyFundMonthsTarget: 6,
@@ -809,6 +811,18 @@ export class LocalApiClient implements ApiClient {
         const previous =
           method === "PUT" ? state.liabilities.find((item) => item.id === input.id) : undefined;
         return previous?.lastPaidMonth ? { lastPaidMonth: previous.lastPaidMonth } : {};
+      })(),
+      // «Погашен» (v6). The form sends it as a checkbox; editing other fields
+      // must not silently un-settle a debt, so an absent field keeps the
+      // stored value.
+      ...(() => {
+        const previous =
+          method === "PUT" ? state.liabilities.find((item) => item.id === input.id) : undefined;
+        if (input.settled === undefined) {
+          return previous?.settledAt ? { settledAt: previous.settledAt } : {};
+        }
+        if (input.settled !== "true") return {};
+        return { settledAt: previous?.settledAt ?? new Date().toISOString().slice(0, 10) };
       })()
     };
     state.liabilities =
@@ -1567,7 +1581,8 @@ export class LocalApiClient implements ApiClient {
     return {
       source: "database",
       liabilities,
-      total: this.sumInBase(state, liabilities),
+      // Repaid debts stay in the list as history but are no longer owed.
+      total: this.sumInBase(state, activeDebts(liabilities)),
       currency: state.currency
     };
   }
@@ -1622,7 +1637,7 @@ export class LocalApiClient implements ApiClient {
         );
     // Debts with a due day are scheduled obligations — they belong here too,
     // otherwise the due day entered on the debts page has no visible effect.
-    const debtPayments = plannedDebtPayments(state.liabilities ?? []);
+    const debtPayments = plannedDebtPayments(activeDebts(state.liabilities ?? []));
     return {
       source: "database",
       recurringTransactions: rows,
@@ -1790,7 +1805,7 @@ export class LocalApiClient implements ApiClient {
     const totalBalance = this.accounts(state).totalBalance;
     const portfolioValue = await this.portfolioValue(state);
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
-    const liabilitiesTotal = this.sumInBase(state, state.liabilities);
+    const liabilitiesTotal = this.sumInBase(state, activeDebts(state.liabilities));
     return computeNetWorth({ totalBalance, portfolioValue, goalSavings, liabilitiesTotal });
   }
 
@@ -1813,7 +1828,7 @@ export class LocalApiClient implements ApiClient {
     // Goal savings are money the user set aside from accounts, so they stay
     // part of net worth (a deposit just moves it from a balance into a goal).
     const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
-    const liabilitiesTotal = this.sumInBase(state, state.liabilities);
+    const liabilitiesTotal = this.sumInBase(state, activeDebts(state.liabilities));
     const netWorth = computeNetWorth({
       totalBalance,
       portfolioValue,
@@ -2174,7 +2189,10 @@ export class LocalApiClient implements ApiClient {
         currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
       subscriptionAndEntertainmentShare:
         currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
-      monthlyDebtPayments: state.liabilities.reduce((sum, item) => sum + item.minPayment, 0),
+      monthlyDebtPayments: activeDebts(state.liabilities).reduce(
+        (sum, item) => sum + item.minPayment,
+        0
+      ),
       goals: this.goals(state).goals.map((goal) => ({
         title: goal.title,
         progress: goal.progress,

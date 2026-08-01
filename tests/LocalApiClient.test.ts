@@ -104,7 +104,7 @@ describe("LocalApiClient", () => {
       "/backup"
     );
 
-    expect(backup.schemaVersion).toBe(5);
+    expect(backup.schemaVersion).toBe(6);
     expect(backup.lastBackupAt).toEqual(expect.any(String));
     await expect(client.post("/backup", { backup })).resolves.toEqual({ restored: true });
     await expect(
@@ -124,7 +124,7 @@ describe("LocalApiClient", () => {
     const migrated = await client.get<{ schemaVersion: number; lastBackupAt: string | null }>(
       "/backup"
     );
-    expect(migrated.schemaVersion).toBe(5);
+    expect(migrated.schemaVersion).toBe(6);
     expect(migrated.lastBackupAt).toEqual(expect.any(String));
   });
 

@@ -7,6 +7,7 @@
 //
 // Rules:
 //   • only liabilities with a due day, a payment amount and a remaining balance;
+//   • a debt marked as repaid disappears from the schedule entirely;
 //   • the payment never exceeds the remaining balance (same as auto-pay);
 //   • a short month clamps the due day (31st → last day of February);
 //   • once the month's payment is posted, the schedule points at the next month;
@@ -14,6 +15,7 @@
 //     reported as due (overdue payments must not silently jump a month).
 
 import { effectiveDueDay, monthKey, type AutoPayLiability } from "@/lib/debts/auto-pay";
+import { isSettledDebt } from "@/lib/debts/settled";
 
 export type PlannedDebtLiability = AutoPayLiability;
 
@@ -42,6 +44,7 @@ export function nextDueDate(
   liability: PlannedDebtLiability,
   today: Date = new Date()
 ): Date | null {
+  if (isSettledDebt(liability)) return null;
   if (!liability.dueDay) return null;
   if (liability.minPayment <= 0 || liability.balance <= 0) return null;
 
