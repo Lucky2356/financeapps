@@ -3,7 +3,9 @@
 import type { FilePickResult, FileSystemAdapter } from "@/lib/files/FileSystemAdapter";
 
 export class BrowserFileSystemAdapter implements FileSystemAdapter {
-  async pickTextFile(accept = ".csv,.json,text/csv,application/json"): Promise<FilePickResult | null> {
+  async pickTextFile(
+    accept = ".csv,.json,text/csv,application/json"
+  ): Promise<FilePickResult | null> {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = accept;
@@ -22,7 +24,11 @@ export class BrowserFileSystemAdapter implements FileSystemAdapter {
     };
   }
 
-  async saveTextFile(filename: string, content: string, mimeType = "text/plain;charset=utf-8"): Promise<void> {
+  async saveTextFile(
+    filename: string,
+    content: string,
+    mimeType = "text/plain;charset=utf-8"
+  ): Promise<void> {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

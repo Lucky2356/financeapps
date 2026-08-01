@@ -7,6 +7,7 @@ import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { pickBestWorstMonth } from "@/lib/analytics/best-month";
 import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
+import { type InterestAccrual } from "@/lib/accounts/interest";
 import { type PlannedDebtPayment } from "@/lib/debts/planned";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown } from "@/lib/net-worth";
@@ -82,6 +83,8 @@ export type RecurringTransactionsPageData = {
   budgetHints: Array<{ categoryId: string; amount: number }>;
   /** Scheduled payments derived from the debts page (read-only here). */
   debtPayments: PlannedDebtPayment[];
+  /** Interest savings accounts will credit in the next 12 months (read-only). */
+  interestAccruals: InterestAccrual[];
   currency: string;
   summary: {
     activeCount: number;
@@ -501,6 +504,7 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
     categories: [],
     budgetHints: [],
     debtPayments: [],
+    interestAccruals: [],
     currency: "RUB",
     summary: {
       activeCount: 0,

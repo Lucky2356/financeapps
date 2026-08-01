@@ -5,11 +5,7 @@ import { roundMoney } from "@/lib/utils";
 // remainder carries over (an overspend does not create negative headroom).
 // Shared by the web (Prisma) and desktop (LocalApiClient) paths.
 
-export function rolloverCarry(
-  enabled: boolean,
-  prevLimit: number,
-  prevSpent: number
-): number {
+export function rolloverCarry(enabled: boolean, prevLimit: number, prevSpent: number): number {
   if (!enabled) return 0;
   return Math.max(0, roundMoney(prevLimit - prevSpent));
 }

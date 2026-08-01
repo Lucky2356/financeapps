@@ -189,6 +189,10 @@ export type AccountRow = {
   type: string;
   balance: number;
   currency: string;
+  /** Annual interest rate in percent (savings accounts). */
+  interestRate?: number;
+  /** How often that interest is added to the balance. */
+  interestCompounding?: "MONTHLY" | "QUARTERLY" | "YEARLY";
 };
 
 export type LiabilityKind = "CREDIT_CARD" | "LOAN" | "MORTGAGE" | "INSTALLMENT" | "OTHER";

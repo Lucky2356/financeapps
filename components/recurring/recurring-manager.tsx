@@ -1,6 +1,15 @@
 "use client";
 
-import { CalendarClock, CheckCircle2, Edit2, Landmark, Plus, Power, Trash2 } from "lucide-react";
+import {
+  CalendarClock,
+  CheckCircle2,
+  Edit2,
+  Landmark,
+  PiggyBank,
+  Plus,
+  Power,
+  Trash2
+} from "lucide-react";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -382,6 +391,55 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                     -{formatCurrency(payment.amount, pageData.currency)}
                   </p>
                 </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* The mirror image of debts: a savings account with a rate credits money
+          on known dates. Read-only here — the rate is set on the accounts page. */}
+      {(pageData.interestAccruals ?? []).length > 0 ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>{t("rec.interest.title")}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{t("rec.interest.desc")}</p>
+              <p className="mt-1 text-sm font-medium">
+                {t("rec.interest.year", {
+                  total: formatCurrency(
+                    pageData.interestAccruals.reduce((sum, item) => sum + item.amount, 0),
+                    pageData.currency
+                  )
+                })}
+              </p>
+            </div>
+            <Button variant="outline" asChild>
+              <Link href="/accounts">
+                <PiggyBank className="size-4" />
+                {t("rec.interest.manage")}
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {/* Only the next few accruals: the full year would be a wall of rows. */}
+            {pageData.interestAccruals.slice(0, 6).map((accrual) => (
+              <div
+                key={`${accrual.accountId}-${accrual.date}`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{accrual.accountName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(accrual.date)} ·{" "}
+                    {t("rec.interest.on", {
+                      balance: formatCurrency(accrual.onBalance, pageData.currency)
+                    })}
+                  </p>
+                </div>
+                <p className="font-semibold text-success-foreground">
+                  +{formatCurrency(accrual.amount, pageData.currency)}
+                </p>
               </div>
             ))}
           </CardContent>

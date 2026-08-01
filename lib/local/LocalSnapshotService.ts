@@ -56,7 +56,9 @@ export class LocalSnapshotService {
     const payload = await this.fetchSnapshot();
     const keys = Object.keys(payload);
 
-    await Promise.all(keys.map((key) => this.storage.setItem(key, payload[key as keyof SnapshotPayload])));
+    await Promise.all(
+      keys.map((key) => this.storage.setItem(key, payload[key as keyof SnapshotPayload]))
+    );
     const metadata: LocalSnapshotMetadata = {
       schemaVersion: 1,
       savedAt: new Date().toISOString(),

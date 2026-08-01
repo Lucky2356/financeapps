@@ -2,6 +2,7 @@ import type { TransactionType } from "@/types/enums";
 import { addDays, differenceInCalendarDays, format, isAfter, isBefore, startOfDay } from "date-fns";
 import { enUS, ru } from "date-fns/locale";
 
+import { upcomingInterest } from "@/lib/accounts/interest";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 import type {
   AccountRow,
@@ -38,7 +39,13 @@ export class CashflowForecastService {
         .filter((account) => liquidAccountTypes.has(account.type))
         .reduce((sum, account) => sum + account.balance, 0)
     );
-    const events = this.buildEvents(input.recurringTransactions, today, horizon);
+    // Savings interest is planned income exactly like a recurring salary: it
+    // arrives on a known date for a known amount, so leaving it out of the
+    // forecast understates every horizon balance.
+    const events = [
+      ...this.buildEvents(input.recurringTransactions, today, horizon),
+      ...this.buildInterestEvents(input.accounts, today, horizonDays, locale)
+    ].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
     const points = this.buildPoints(startingBalance, events, today, horizonDays, dfLocale);
     const plannedIncome30d = this.sumEvents(events, "INCOME", 30, today);
     const plannedExpense30d = this.sumEvents(events, "EXPENSE", 30, today);
@@ -113,6 +120,25 @@ export class CashflowForecastService {
     return events.sort(
       (left, right) => new Date(left.date).getTime() - new Date(right.date).getTime()
     );
+  }
+
+  // Interest credited by savings accounts inside the horizon, as income events.
+  private buildInterestEvents(
+    accounts: AccountRow[],
+    today: Date,
+    horizonDays: number,
+    locale: Locale
+  ): ForecastEvent[] {
+    const title = translate(locale, "forecast.interestEvent");
+    return upcomingInterest(accounts, today, horizonDays).map((accrual) => ({
+      id: `interest-${accrual.accountId}-${accrual.date.slice(0, 10)}`,
+      date: accrual.date,
+      title,
+      amount: accrual.amount,
+      type: "INCOME" as TransactionType,
+      category: title,
+      account: accrual.accountName
+    }));
   }
 
   private buildPoints(

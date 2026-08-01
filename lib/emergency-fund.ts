@@ -13,7 +13,11 @@ export function buildEmergencyFund(params: {
   const months = averageMonthlyExpense > 0 ? savingsBalance / averageMonthlyExpense : 0;
   const targetAmount = Math.round(targetMonths * averageMonthlyExpense);
   const progress =
-    targetAmount > 0 ? clamp(Math.round((savingsBalance / targetAmount) * 100), 0, 100) : savingsBalance > 0 ? 100 : 0;
+    targetAmount > 0
+      ? clamp(Math.round((savingsBalance / targetAmount) * 100), 0, 100)
+      : savingsBalance > 0
+        ? 100
+        : 0;
 
   return {
     amount: Math.round(savingsBalance),
