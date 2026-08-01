@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import { LATEST_LOCAL_STATE_VERSION } from "@/lib/storage/migrations/runLocalStateMigrations";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type {
   AccountsPageData,
@@ -141,13 +142,52 @@ describe("LocalApiClient", () => {
     expect(again.portfolio.map((position) => position.ticker)).toEqual(["ETLN"]);
   });
 
+  it("derives the average buy price from the list of purchases", async () => {
+    const client = createClient();
+    await client.post("/investments", {
+      ticker: "SBER",
+      lots: JSON.stringify([
+        { date: "2026-01-10", quantity: 10, price: 100 },
+        { date: "2026-03-05", quantity: 30, price: 200 }
+      ]),
+      // A stale average in the form must lose to the purchases it came from.
+      quantity: "1",
+      averageBuyPrice: "999"
+    });
+
+    const data = await client.get<InvestmentData>("/investments");
+    expect(data.portfolio[0]).toMatchObject({
+      ticker: "SBER",
+      quantity: 40,
+      averageBuyPrice: 175
+    });
+    expect(data.portfolio[0].lots).toEqual([
+      { date: "2026-01-10", quantity: 10, price: 100 },
+      { date: "2026-03-05", quantity: 30, price: 200 }
+    ]);
+  });
+
+  it("falls back to the hand-typed average when no purchases are listed", async () => {
+    const client = createClient();
+    await client.post("/investments", {
+      ticker: "GAZP",
+      lots: "[]",
+      quantity: "5",
+      averageBuyPrice: "123.45"
+    });
+
+    const data = await client.get<InvestmentData>("/investments");
+    expect(data.portfolio[0]).toMatchObject({ quantity: 5, averageBuyPrice: 123.45 });
+    expect(data.portfolio[0].lots).toBeUndefined();
+  });
+
   it("validates local backups before restore", async () => {
     const client = createClient();
     const backup = await client.get<{ schemaVersion: number; lastBackupAt: string | null }>(
       "/backup"
     );
 
-    expect(backup.schemaVersion).toBe(6);
+    expect(backup.schemaVersion).toBe(LATEST_LOCAL_STATE_VERSION);
     expect(backup.lastBackupAt).toEqual(expect.any(String));
     await expect(client.post("/backup", { backup })).resolves.toEqual({ restored: true });
     await expect(
@@ -167,7 +207,7 @@ describe("LocalApiClient", () => {
     const migrated = await client.get<{ schemaVersion: number; lastBackupAt: string | null }>(
       "/backup"
     );
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(LATEST_LOCAL_STATE_VERSION);
     expect(migrated.lastBackupAt).toEqual(expect.any(String));
   });
 

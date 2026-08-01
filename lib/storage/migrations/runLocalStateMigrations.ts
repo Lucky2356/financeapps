@@ -14,7 +14,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 6;
+export const LATEST_LOCAL_STATE_VERSION = 7;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -57,6 +57,15 @@ export const localStateMigrations: LocalStateMigration[] = [
     // means the debt is still owed, which is exactly the pre-v6 behaviour, so
     // the migration only stamps the version.
     migrate: (state) => ({ ...state, schemaVersion: 6 })
+  },
+  {
+    from: 6,
+    to: 7,
+    // v7 added the optional list of purchase lots on a portfolio position, from
+    // which the average buy price is computed. Positions without it keep the
+    // average that was typed in by hand, so the migration only stamps the
+    // version.
+    migrate: (state) => ({ ...state, schemaVersion: 7 })
   }
 ];
 

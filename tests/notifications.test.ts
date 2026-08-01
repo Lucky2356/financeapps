@@ -6,14 +6,34 @@ import type { BudgetRow, ForecastEvent } from "@/types/finance";
 const now = new Date("2026-06-01T12:00:00");
 
 function expense(id: string, date: string, amount = 1000): ForecastEvent {
-  return { id, date, title: `Платёж ${id}`, amount, type: "EXPENSE", category: "ЖКХ", account: "Карта" };
+  return {
+    id,
+    date,
+    title: `Платёж ${id}`,
+    amount,
+    type: "EXPENSE",
+    category: "ЖКХ",
+    account: "Карта"
+  };
 }
 
 describe("buildNotifications", () => {
   it("flags exceeded budgets as warnings", () => {
     const budgets = [
-      { categoryId: "cat-food", category: "Продукты", spent: 1500, limitAmount: 1000, isExceeded: true },
-      { categoryId: "cat-transport", category: "Транспорт", spent: 200, limitAmount: 1000, isExceeded: false }
+      {
+        categoryId: "cat-food",
+        category: "Продукты",
+        spent: 1500,
+        limitAmount: 1000,
+        isExceeded: true
+      },
+      {
+        categoryId: "cat-transport",
+        category: "Транспорт",
+        spent: 200,
+        limitAmount: 1000,
+        isExceeded: false
+      }
     ] as unknown as BudgetRow[];
 
     const items = buildNotifications({ budgets, now });

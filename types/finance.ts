@@ -260,6 +260,13 @@ export type WatchlistRow = {
   comment: string;
 };
 
+/** One purchase of a security — see `lib/investments/lots.ts`. */
+export type PurchaseLot = {
+  date: string;
+  quantity: number;
+  price: number;
+};
+
 export type PortfolioRow = {
   ticker: string;
   name: string;
@@ -271,6 +278,13 @@ export type PortfolioRow = {
   pnl: number;
   share: number;
   risk: SecurityRisk;
+  /**
+   * The purchases this position was built from. `quantity` and
+   * `averageBuyPrice` above are derived from them. Absent on positions entered
+   * before the lots editor existed (and on one-click buys from the picker),
+   * which keep only the resulting average.
+   */
+  lots?: PurchaseLot[];
 };
 
 export type InvestmentData = {

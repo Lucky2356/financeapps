@@ -127,6 +127,13 @@ export const watchlistRowSchema = z.object({
   risk: z.enum(["LOW", "MEDIUM", "HIGH"]),
   comment: z.string().trim().max(500).default("")
 });
+// One purchase of a security. Optional on a position: holdings entered before
+// v7 (and quick "add suggestion" buys) only carry the resulting average.
+export const purchaseLotSchema = z.object({
+  date: z.string().min(1),
+  quantity: z.coerce.number().finite().positive(),
+  price: z.coerce.number().finite().positive()
+});
 export const portfolioRowSchema = z.object({
   ticker: z
     .string()
@@ -142,7 +149,8 @@ export const portfolioRowSchema = z.object({
   currentValue: z.coerce.number().finite().min(0),
   pnl: z.coerce.number().finite(),
   share: z.coerce.number().finite().min(0),
-  risk: z.enum(["LOW", "MEDIUM", "HIGH"])
+  risk: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  lots: z.array(purchaseLotSchema).optional()
 });
 // A realized investment event for the tax report: a sale (with per-share buy/
 // sell prices) or a dividend. Kept separate from the current-holdings list.
@@ -254,7 +262,8 @@ export const localStateSchema = z.object({
     z.literal(3),
     z.literal(4),
     z.literal(5),
-    z.literal(6)
+    z.literal(6),
+    z.literal(7)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed

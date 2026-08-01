@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { openSettled, seedExampleData } from "./helpers";
+
 // Guards the promise that the same bundle is usable on a small phone, a large
 // phone and a tablet: nothing may be wider than the screen. A single
 // overflowing element pushes the whole document sideways — the page then pans
@@ -95,39 +97,6 @@ async function findOverflow(page: import("@playwright/test").Page, width: number
       offenders: offenders.slice(0, 10)
     };
   }, width);
-}
-
-// Fills the device storage with the built-in example through the app's own
-// onboarding button. Empty screens hide the interesting cases: it is tables,
-// charts and long category names that overflow, and they only exist with data.
-async function seedExampleData(page: import("@playwright/test").Page) {
-  await page.goto("/");
-  const loadExample = page.getByRole("button", { name: "Загрузить пример" });
-  await loadExample.waitFor({ state: "visible", timeout: 30_000 });
-  await loadExample.click();
-  // The app reloads itself once the example is written to IndexedDB. Waiting for
-  // the button to disappear is the honest signal — `networkidle` never settles
-  // here, because the market-data pages keep polling MOEX in the background.
-  await expect(loadExample).toBeHidden({ timeout: 30_000 });
-}
-
-// Opens a route and lets the client swap the empty server shell for real data.
-// The seeding step ends with the app reloading itself, so the first navigation
-// right after it can be aborted mid-flight — retry instead of failing the test.
-async function openSettled(page: import("@playwright/test").Page, route: string) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await page.goto(route);
-      break;
-    } catch (error) {
-      if (attempt >= 3 || !String(error).includes("ERR_ABORTED")) throw error;
-      await page.waitForTimeout(500);
-    }
-  }
-  await page.locator("main").first().waitFor({ state: "visible", timeout: 30_000 });
-  // Charts and lazy panels mount a frame or two after hydration; the layout
-  // assertions below are a snapshot, so give them time to settle.
-  await page.waitForTimeout(1_500);
 }
 
 // Section tabs must be readable at a glance on a phone: none may sit off the

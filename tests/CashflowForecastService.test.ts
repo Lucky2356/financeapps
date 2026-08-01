@@ -8,7 +8,9 @@ describe("CashflowForecastService", () => {
       source: "database",
       currency: "RUB",
       today: new Date("2026-01-01"),
-      accounts: [{ id: "cash", name: "Карта", type: "DEBIT_CARD", balance: 10000, currency: "RUB" }],
+      accounts: [
+        { id: "cash", name: "Карта", type: "DEBIT_CARD", balance: 10000, currency: "RUB" }
+      ],
       goals: [],
       recurringTransactions: [
         {

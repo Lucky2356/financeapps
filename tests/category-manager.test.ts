@@ -26,7 +26,7 @@ describe("Category management in LocalApiClient", () => {
       kind: "EXPENSE",
       color: "#ff0000",
       isEssential: false,
-      isSubscription: false,
+      isSubscription: false
     });
 
     const after = await client.get<CategoriesPageData>("/categories");
@@ -49,16 +49,16 @@ describe("Category management in LocalApiClient", () => {
       kind: "INCOME",
       color: "#16a34a",
       isEssential: false,
-      isSubscription: false,
+      isSubscription: false
     });
 
     await expect(
       client.post("/categories", {
-        name: "уникальная",  // same name, different case
+        name: "уникальная", // same name, different case
         kind: "INCOME",
         color: "#0d9488",
         isEssential: false,
-        isSubscription: false,
+        isSubscription: false
       })
     ).rejects.toThrow();
   });
@@ -76,19 +76,17 @@ describe("Category management in LocalApiClient", () => {
     const account = await client.post<{ id: string }>("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
-      balance: "0",
+      balance: "0"
     });
     await client.post("/transactions", {
       amount: "500",
       type: "EXPENSE",
       accountId: account.id,
       categoryId: expenseCategory.id,
-      date: new Date().toISOString(),
+      date: new Date().toISOString()
     });
 
     // Try to delete — should throw
-    await expect(
-      client.delete(`/categories?id=${expenseCategory.id}`)
-    ).rejects.toThrow();
+    await expect(client.delete(`/categories?id=${expenseCategory.id}`)).rejects.toThrow();
   });
 });

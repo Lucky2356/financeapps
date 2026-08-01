@@ -11,12 +11,16 @@ const history: SuggestHistoryItem[] = [
 
 describe("suggestCategoryId", () => {
   it("suggests the category most associated with matching keywords", () => {
-    expect(suggestCategoryId("Пятёрочка вечерние продукты", history, { type: "EXPENSE" })).toBe("cat-food");
+    expect(suggestCategoryId("Пятёрочка вечерние продукты", history, { type: "EXPENSE" })).toBe(
+      "cat-food"
+    );
   });
 
   it("respects the transaction type filter", () => {
     // "месяц" appears in an INCOME item; an expense query must not borrow it.
-    expect(suggestCategoryId("проезд на метро", history, { type: "EXPENSE" })).toBe("cat-transport");
+    expect(suggestCategoryId("проезд на метро", history, { type: "EXPENSE" })).toBe(
+      "cat-transport"
+    );
   });
 
   it("returns null when nothing meaningful matches", () => {

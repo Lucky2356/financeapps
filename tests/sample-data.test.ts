@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { AccountsPageData, BudgetsPageData, GoalsPageData, TransactionsPageData } from "@/lib/data";
+import type {
+  AccountsPageData,
+  BudgetsPageData,
+  GoalsPageData,
+  TransactionsPageData
+} from "@/lib/data";
 import type { DashboardData } from "@/types/finance";
 
 describe("sample data seeding", () => {
