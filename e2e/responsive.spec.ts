@@ -8,7 +8,10 @@ import { expect, test } from "@playwright/test";
 const VIEWPORTS = [
   { name: "small phone", width: 360, height: 740 },
   { name: "large phone", width: 430, height: 932 },
-  { name: "tablet", width: 820, height: 1180 }
+  { name: "tablet", width: 820, height: 1180 },
+  // `lg` is where the sidebar and the single-row tab strip both appear — the
+  // narrowest layout in which every section tab has to fit one line.
+  { name: "laptop", width: 1024, height: 768 }
 ];
 
 const ROUTES = [
@@ -100,22 +103,75 @@ async function findOverflow(page: import("@playwright/test").Page, width: number
 async function seedExampleData(page: import("@playwright/test").Page) {
   await page.goto("/");
   const loadExample = page.getByRole("button", { name: "Загрузить пример" });
-  await loadExample.waitFor({ state: "visible", timeout: 15_000 });
+  await loadExample.waitFor({ state: "visible", timeout: 30_000 });
   await loadExample.click();
-  // The app reloads itself once the example is written to IndexedDB.
-  await page.waitForLoadState("networkidle");
-  await expect(loadExample).toBeHidden({ timeout: 15_000 });
+  // The app reloads itself once the example is written to IndexedDB. Waiting for
+  // the button to disappear is the honest signal — `networkidle` never settles
+  // here, because the market-data pages keep polling MOEX in the background.
+  await expect(loadExample).toBeHidden({ timeout: 30_000 });
+}
+
+// Opens a route and lets the client swap the empty server shell for real data.
+// The seeding step ends with the app reloading itself, so the first navigation
+// right after it can be aborted mid-flight — retry instead of failing the test.
+async function openSettled(page: import("@playwright/test").Page, route: string) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await page.goto(route);
+      break;
+    } catch (error) {
+      if (attempt >= 3 || !String(error).includes("ERR_ABORTED")) throw error;
+      await page.waitForTimeout(500);
+    }
+  }
+  await page.locator("main").first().waitFor({ state: "visible", timeout: 30_000 });
+  // Charts and lazy panels mount a frame or two after hydration; the layout
+  // assertions below are a snapshot, so give them time to settle.
+  await page.waitForTimeout(1_500);
+}
+
+// Section tabs must be readable at a glance on a phone: none may sit off the
+// right edge behind a sideways scroll, and no label may be cut mid-word (1.5.1
+// shipped a strip where the active tab read "ерации" instead of "Операции").
+async function findUnreadableTabs(page: import("@playwright/test").Page) {
+  return page.evaluate(() => {
+    const problems: string[] = [];
+    const bars = document.querySelectorAll(
+      '[data-testid="hub-tabs"], [data-testid="section-tabs"]'
+    );
+    for (const bar of Array.from(bars)) {
+      if (bar.scrollWidth > bar.clientWidth + 1)
+        problems.push(`лента прокручивается вбок (${bar.scrollWidth} > ${bar.clientWidth})`);
+      for (const tab of Array.from(bar.querySelectorAll("a, button"))) {
+        const label = (tab.textContent ?? "").trim();
+        // The label lives in its own span when it can truncate; otherwise the
+        // control itself must not clip.
+        const box = tab.querySelector("span") ?? tab;
+        if (box.scrollWidth > box.clientWidth + 1) problems.push(`«${label}» обрезана`);
+      }
+    }
+    return problems;
+  });
 }
 
 for (const viewport of VIEWPORTS) {
   test.describe(`${viewport.name} (${viewport.width}px)`, () => {
+    for (const route of ["/transactions", "/budgets", "/analytics", "/investments", "/settings"]) {
+      test(`${route}: вкладки разделов видны целиком`, async ({ page }) => {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await seedExampleData(page);
+        await openSettled(page, route);
+
+        const problems = await findUnreadableTabs(page);
+        expect(problems, `Вкладки на ${route}:\n  ${problems.join("\n  ")}`).toEqual([]);
+      });
+    }
+
     for (const route of ROUTES) {
       test(`${route} fits the screen`, async ({ page }) => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await seedExampleData(page);
-        await page.goto(route);
-        // Wait for the client to swap the empty server shell for real data.
-        await page.waitForLoadState("networkidle");
+        await openSettled(page, route);
 
         const { documentWidth, offenders } = await findOverflow(page, viewport.width);
 

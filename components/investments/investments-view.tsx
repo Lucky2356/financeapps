@@ -267,8 +267,12 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
   return (
     <div className="space-y-5">
-      {/* Tabs cut the endless scroll: Overview / Market / Analytics. */}
-      <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/30 p-1">
+      {/* Tabs cut the endless scroll: Overview / Market / Analytics. They wrap
+          instead of scrolling sideways, so none is hidden off a phone screen. */}
+      <div
+        data-testid="section-tabs"
+        className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1"
+      >
         {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -277,14 +281,15 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               type="button"
               onClick={() => selectTab(tab.id)}
               className={cn(
-                "flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex min-w-0 grow basis-[calc(33.333%-0.167rem)] items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors",
+                "sm:basis-0 sm:gap-2 sm:px-3 sm:text-sm",
                 activeTab === tab.id
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon className="size-4" />
-              {t(tab.labelKey)}
+              <Icon className="size-4 shrink-0" />
+              <span className="truncate">{t(tab.labelKey)}</span>
             </button>
           );
         })}
