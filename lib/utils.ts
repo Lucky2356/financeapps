@@ -24,7 +24,12 @@ export function roundMoney(value: number) {
 export function toNumber(value: unknown) {
   if (typeof value === "number") return value;
   if (typeof value === "string") return Number(value.replace(",", "."));
-  if (value && typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
+  if (
+    value &&
+    typeof value === "object" &&
+    "toNumber" in value &&
+    typeof value.toNumber === "function"
+  ) {
     return value.toNumber();
   }
   return Number(value ?? 0);

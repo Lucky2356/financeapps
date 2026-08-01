@@ -11,7 +11,10 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
   async getItem<T>(key: string): Promise<T | null> {
     const db = await this.open();
     return new Promise((resolve, reject) => {
-      const request = db.transaction(this.storeName, "readonly").objectStore(this.storeName).get(key);
+      const request = db
+        .transaction(this.storeName, "readonly")
+        .objectStore(this.storeName)
+        .get(key);
       request.onsuccess = () => resolve((request.result?.value as T) ?? null);
       request.onerror = () => reject(request.error);
     });
@@ -20,7 +23,10 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
   async setItem<T>(key: string, value: T): Promise<void> {
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
-      const request = db.transaction(this.storeName, "readwrite").objectStore(this.storeName).put({ key, value });
+      const request = db
+        .transaction(this.storeName, "readwrite")
+        .objectStore(this.storeName)
+        .put({ key, value });
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -29,7 +35,10 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
   async removeItem(key: string): Promise<void> {
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
-      const request = db.transaction(this.storeName, "readwrite").objectStore(this.storeName).delete(key);
+      const request = db
+        .transaction(this.storeName, "readwrite")
+        .objectStore(this.storeName)
+        .delete(key);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
@@ -38,7 +47,10 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
   async clear(): Promise<void> {
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
-      const request = db.transaction(this.storeName, "readwrite").objectStore(this.storeName).clear();
+      const request = db
+        .transaction(this.storeName, "readwrite")
+        .objectStore(this.storeName)
+        .clear();
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });

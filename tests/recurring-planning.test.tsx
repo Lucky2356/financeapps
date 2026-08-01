@@ -31,6 +31,7 @@ const baseData: RecurringTransactionsPageData = {
     { categoryId: "cat-food", amount: 15000 },
     { categoryId: "cat-transport", amount: 5000 }
   ],
+  interestAccruals: [],
   debtPayments: [
     {
       id: "debt-1",

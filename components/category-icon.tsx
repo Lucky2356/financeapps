@@ -40,7 +40,7 @@ import {
   Utensils,
   Wallet,
   Wrench,
-  Zap,
+  Zap
 } from "lucide-react";
 
 const ICON_MAP = {
@@ -85,7 +85,7 @@ const ICON_MAP = {
   ArrowRightLeft,
   Tag,
   Repeat,
-  Star,
+  Star
 } as const;
 
 export function CategoryIcon({ name, className }: { name?: string | null; className?: string }) {

@@ -58,7 +58,9 @@ export class LocalFinanceRepository implements FinanceRepository {
   private async required<T>(key: string): Promise<T> {
     const value = await this.storage.getItem<T>(key);
     if (!value) {
-      throw new Error(`Local mode data is not initialized for ${key}. SQLite/IndexedDB sync is TODO for MVP.`);
+      throw new Error(
+        `Local mode data is not initialized for ${key}. SQLite/IndexedDB sync is TODO for MVP.`
+      );
     }
     return value;
   }

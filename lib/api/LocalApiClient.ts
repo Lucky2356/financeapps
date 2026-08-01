@@ -22,6 +22,7 @@ import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/hel
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
+import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts } from "@/lib/debts/settled";
 import { parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
@@ -93,7 +94,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -582,7 +583,17 @@ export class LocalApiClient implements ApiClient {
       type: input.type || "DEBIT_CARD",
       balance: Number(input.balance ?? 0),
       // Honour an explicitly chosen supported currency; fall back to the base.
-      currency: isSupportedCurrency(requestedCurrency) ? requestedCurrency : state.currency
+      currency: isSupportedCurrency(requestedCurrency) ? requestedCurrency : state.currency,
+      // Savings terms. A blank rate means "no interest", so the fields are
+      // dropped rather than stored as zero.
+      ...(() => {
+        const rate = Number(input.interestRate);
+        if (!Number.isFinite(rate) || rate <= 0) return {};
+        const period = input.interestCompounding;
+        const compounding: AccountRow["interestCompounding"] =
+          period === "QUARTERLY" || period === "YEARLY" ? period : "MONTHLY";
+        return { interestRate: rate, interestCompounding: compounding };
+      })()
     };
 
     state.accounts =
@@ -1645,6 +1656,9 @@ export class LocalApiClient implements ApiClient {
     // Debts with a due day are scheduled obligations — they belong here too,
     // otherwise the due day entered on the debts page has no visible effect.
     const debtPayments = plannedDebtPayments(activeDebts(state.liabilities ?? []));
+    // Savings interest is the mirror image: money the plan will ADD, on dates
+    // that follow from the rate and the capitalisation period.
+    const interestAccruals = upcomingInterest(this.accounts(state).accounts);
     return {
       source: "database",
       recurringTransactions: rows,
@@ -1655,6 +1669,7 @@ export class LocalApiClient implements ApiClient {
         amount: budget.limitAmount
       })),
       debtPayments,
+      interestAccruals,
       currency: state.currency,
       summary: {
         activeCount: active.length + debtPayments.length,
@@ -1669,7 +1684,9 @@ export class LocalApiClient implements ApiClient {
               .filter((payment) => payment.isDue || payment.daysUntilNext <= 7)
               .reduce((sum, payment) => sum + payment.amount, 0)
         ),
-        monthlyPlannedIncome: roundMoney(monthly("INCOME")),
+        monthlyPlannedIncome: roundMoney(
+          monthly("INCOME") + monthlyInterestAverage(interestAccruals)
+        ),
         monthlyPlannedExpense: roundMoney(
           monthly("EXPENSE") + plannedDebtMonthlyTotal(debtPayments)
         )

@@ -14,7 +14,11 @@ export const accountSchema = z.object({
   type: z.enum(["CASH", "DEBIT_CARD", "SAVINGS", "BROKERAGE"]),
   balance: z.coerce.number().finite(),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
-  isArchived: z.boolean().optional()
+  isArchived: z.boolean().optional(),
+  // Savings terms (v8): annual rate in percent and how often it is capitalised.
+  // Optional — an account without a rate simply earns nothing.
+  interestRate: z.coerce.number().finite().min(0).max(1000).optional(),
+  interestCompounding: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]).optional()
 });
 export const liabilitySchema = z.object({
   id: z.string().min(1),
@@ -263,7 +267,8 @@ export const localStateSchema = z.object({
     z.literal(4),
     z.literal(5),
     z.literal(6),
-    z.literal(7)
+    z.literal(7),
+    z.literal(8)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed

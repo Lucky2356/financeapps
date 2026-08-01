@@ -19,12 +19,23 @@ vi.mock("sonner", () => ({ toast }));
 
 import { AccountManager } from "@/components/accounts/account-manager";
 
-const emptyData: AccountsPageData = { source: "database", accounts: [], totalBalance: 0, currency: "RUB" };
+const emptyData: AccountsPageData = {
+  source: "database",
+  accounts: [],
+  totalBalance: 0,
+  currency: "RUB"
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   apiClientMock.get.mockResolvedValue(emptyData);
-  apiClientMock.post.mockResolvedValue({ id: "acc-1", name: "Карта", type: "DEBIT_CARD", balance: 0, currency: "RUB" });
+  apiClientMock.post.mockResolvedValue({
+    id: "acc-1",
+    name: "Карта",
+    type: "DEBIT_CARD",
+    balance: 0,
+    currency: "RUB"
+  });
 });
 
 describe("AccountManager", () => {
@@ -43,7 +54,12 @@ describe("AccountManager", () => {
     await user.type(nameField, "Новая карта");
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
 
-    await waitFor(() => expect(apiClientMock.post).toHaveBeenCalledWith("/accounts", expect.objectContaining({ name: "Новая карта" })));
+    await waitFor(() =>
+      expect(apiClientMock.post).toHaveBeenCalledWith(
+        "/accounts",
+        expect.objectContaining({ name: "Новая карта" })
+      )
+    );
     expect(toast.success).toHaveBeenCalled();
   });
 });

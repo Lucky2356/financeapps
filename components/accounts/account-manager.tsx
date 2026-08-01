@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
+import { earnsInterest, interestSchedule, totalInterest } from "@/lib/accounts/interest";
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData } from "@/lib/data";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
@@ -153,7 +154,10 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                             {account.name}
                           </Link>
                         </TableCell>
-                        <TableCell>{t(`accountType.${account.type}`)}</TableCell>
+                        <TableCell>
+                          {t(`accountType.${account.type}`)}
+                          <InterestNote account={account} />
+                        </TableCell>
                         <TableCell>{account.currency}</TableCell>
                         <TableCell className="text-right font-semibold">
                           {formatCurrency(account.balance, account.currency)}
@@ -215,6 +219,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                         <p className="mt-1 text-sm text-muted-foreground">
                           {t(`accountType.${account.type}`)}
                         </p>
+                        <InterestNote account={account} />
                       </div>
                       <p className="font-semibold">
                         {formatCurrency(account.balance, account.currency)}
@@ -274,6 +279,24 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
   );
 }
 
+// The rate an account earns, plus what it adds over a year — the number the
+// owner actually wants to see next to a savings balance.
+function InterestNote({ account }: { account: AccountsPageData["accounts"][number] }) {
+  const { t } = useI18n();
+  if (!earnsInterest(account)) return null;
+  return (
+    <p className="mt-1 text-xs text-success-foreground">
+      {t("acc.interest.year", {
+        rate: account.interestRate ?? 0,
+        total: formatCurrency(
+          totalInterest(interestSchedule(account, new Date(), 365)),
+          account.currency
+        )
+      })}
+    </p>
+  );
+}
+
 function AccountDialog({
   title,
   account,
@@ -284,6 +307,11 @@ function AccountDialog({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useI18n();
+  // The savings terms only make sense where money is parked, so they follow the
+  // chosen type instead of cluttering every account form.
+  const [type, setType] = useState(account?.type ?? "DEBIT_CARD");
+  const earnsInterest = type === "SAVINGS" || type === "BROKERAGE";
+
   return (
     <DialogContent>
       <DialogHeader>
@@ -312,7 +340,7 @@ function AccountDialog({
         </div>
         <div className="space-y-2">
           <Label>{t("common.type")}</Label>
-          <Select name="type" defaultValue={account?.type ?? "DEBIT_CARD"}>
+          <Select name="type" value={type} onValueChange={setType}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -334,6 +362,38 @@ function AccountDialog({
             required
           />
         </div>
+        {earnsInterest ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t("acc.rate")}</Label>
+              <Input
+                name="interestRate"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                defaultValue={account?.interestRate ?? ""}
+              />
+              <p className="text-xs text-muted-foreground">{t("acc.rate.hint")}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>{t("acc.compounding")}</Label>
+              <Select
+                name="interestCompounding"
+                defaultValue={account?.interestCompounding ?? "MONTHLY"}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">{t("acc.compounding.MONTHLY")}</SelectItem>
+                  <SelectItem value="QUARTERLY">{t("acc.compounding.QUARTERLY")}</SelectItem>
+                  <SelectItem value="YEARLY">{t("acc.compounding.YEARLY")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : null}
         <DialogFooter>
           <Button type="submit">{t("common.save")}</Button>
         </DialogFooter>

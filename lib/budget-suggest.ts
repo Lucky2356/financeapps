@@ -20,7 +20,9 @@ export function suggestedLimitFor(
   const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
 
   const total = transactions
-    .filter((tx) => tx.type === "EXPENSE" && tx.category.id === categoryId && new Date(tx.date) >= start)
+    .filter(
+      (tx) => tx.type === "EXPENSE" && tx.category.id === categoryId && new Date(tx.date) >= start
+    )
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   if (total <= 0) return 0;

@@ -14,7 +14,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 7;
+export const LATEST_LOCAL_STATE_VERSION = 8;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -66,6 +66,14 @@ export const localStateMigrations: LocalStateMigration[] = [
     // average that was typed in by hand, so the migration only stamps the
     // version.
     migrate: (state) => ({ ...state, schemaVersion: 7 })
+  },
+  {
+    from: 7,
+    to: 8,
+    // v8 added optional savings terms on an account (annual rate + how often it
+    // is capitalised). An account without them earns nothing, which is exactly
+    // the pre-v8 behaviour, so the migration only stamps the version.
+    migrate: (state) => ({ ...state, schemaVersion: 8 })
   }
 ];
 
