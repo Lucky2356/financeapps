@@ -214,14 +214,38 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   // checks GitHub for a newer release and installs it in place; otherwise the
   // button opens the releases page.
   async function checkForUpdates() {
-    // Android has no updater plugin — a new version arrives as an APK the owner
-    // installs, so send them straight to the releases page.
+    // Android has no updater plugin, so the app reads the same release manifest
+    // itself. It can tell the owner a newer version exists and hand the APK to
+    // Android — the download and the install confirmation are the system's job.
     if (isAndroidShell()) {
       try {
-        const { openUrl } = await import("@tauri-apps/plugin-opener");
-        await openUrl(RELEASES_URL);
-      } catch {
-        window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
+        setCheckingUpdate(true);
+        const { checkAndroidUpdate, markCheckedToday, startAndroidUpdate } =
+          await import("@/lib/updates/android");
+        markCheckedToday();
+        const update = await checkAndroidUpdate();
+        if (!update) {
+          toast.success(t("set.update.current"));
+          return;
+        }
+        const confirmed = await confirm({
+          title: t("set.update.available", { version: update.version }),
+          description: t("set.update.androidConfirm"),
+          confirmLabel: t("set.update.confirmLabel")
+        });
+        if (!confirmed) return;
+        await startAndroidUpdate(update);
+      } catch (error) {
+        console.error("[updater:android]", error);
+        toast.message(t("set.update.unavailable"));
+        try {
+          const { openUrl } = await import("@tauri-apps/plugin-opener");
+          await openUrl(RELEASES_URL);
+        } catch {
+          /* opener unavailable — nothing more to do */
+        }
+      } finally {
+        setCheckingUpdate(false);
       }
       return;
     }

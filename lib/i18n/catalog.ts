@@ -1476,6 +1476,8 @@ const ru: Messages = {
   "set.update.current": "У вас актуальная версия.",
   "set.update.available": "Доступно обновление {version}",
   "set.update.downloadConfirm": "Скачать и установить сейчас? Приложение перезапустится.",
+  "set.update.androidConfirm":
+    "Откроется загрузка APK. После скачивания нажмите на файл — установку подтвердит системный установщик Android. Данные и настройки сохранятся.",
   "set.update.confirmLabel": "Обновить",
   "set.update.downloading": "Загрузка обновления…",
   "set.update.unavailable": "Автообновление недоступно — открываю страницу релизов.",
@@ -3018,6 +3020,8 @@ const en: Messages = {
   "set.update.current": "You have the latest version.",
   "set.update.available": "Update {version} available",
   "set.update.downloadConfirm": "Download and install now? The app will restart.",
+  "set.update.androidConfirm":
+    "The APK download will open. Tap the finished file — Android’s own installer asks for confirmation. Your data and settings are kept.",
   "set.update.confirmLabel": "Update",
   "set.update.downloading": "Downloading update…",
   "set.update.unavailable": "Auto-update unavailable — opening the releases page.",
