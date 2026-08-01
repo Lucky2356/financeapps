@@ -220,7 +220,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                         {formatCurrency(account.balance, account.currency)}
                       </p>
                     </div>
-                    <div className="mt-4 flex gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       <Button asChild variant="outline" size="sm">
                         <Link href={`/transactions?accountId=${encodeURIComponent(account.id)}`}>
                           <ReceiptText className="size-4" />

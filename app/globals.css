@@ -165,6 +165,27 @@
     scroll-behavior: smooth;
   }
 
+  /* Last line of defence for the phone: the page may scroll up and down, never
+     sideways. `clip` rather than `hidden` so sticky headers keep working. The
+     layout rules below are what actually keep content inside the screen — this
+     only guarantees that a floating overlay (a chart tooltip under the finger)
+     can never shift the whole page and clip the fixed navigation. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  /* Nothing may be wider than the screen — a phone must never pan sideways,
+     because the header and the bottom bar are fixed and get clipped the moment
+     it does. Flex and grid boxes size to their content's minimum by default, so
+     a single long row keeps its full width and stretches everything around it;
+     this lets layout boxes shrink instead. Written with :where() so it carries
+     zero specificity and any utility class still wins. Content that genuinely
+     needs the extra width (tables, tab strips) gets its own scroll container. */
+  :where(div, section, article, main, aside, header, footer, nav, form, ul, ol, li, dl, p) {
+    min-width: 0;
+  }
+
   h1,
   h2,
   h3 {
@@ -181,8 +202,15 @@
 }
 
 @layer components {
+  /* Every page body is one column. `minmax(0, 1fr)` instead of the implicit
+     `auto` is what keeps a phone usable: a grid track defaults to the
+     min-content width of its widest child, so one wide table or chart would
+     stretch the track — and with it every sibling and the page itself — past
+     the screen, letting the whole layout pan sideways and clipping the fixed
+     header and bottom bar. */
   .page-grid {
     @apply grid gap-5;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Unified treatment for headline money figures: tabular digits, tight
