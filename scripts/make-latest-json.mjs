@@ -42,11 +42,20 @@ const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(
   tag
 )}/${encodeURIComponent(installer)}`;
 
+// The Android APK is built and uploaded separately (its signing keystore never
+// leaves the owner's machine), but its asset name is fixed by the build, so the
+// manifest can point at it before it is uploaded. The Android app has no
+// updater plugin and only reads the URL — there is no minisign signature to
+// verify, because the APK's own signing key is what Android checks on install.
+const apkName = `financial-assistant_${version}_universal.apk`;
+const apkUrl = `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${apkName}`;
+
 const manifest = {
   version,
   pub_date: new Date().toISOString(),
   platforms: {
-    "windows-x86_64": { signature, url }
+    "windows-x86_64": { signature, url },
+    "android-universal": { url: apkUrl }
   }
 };
 
@@ -55,3 +64,4 @@ writeFileSync(outPath, JSON.stringify(manifest, null, 2), "utf8");
 console.log(`Wrote ${outPath}`);
 console.log(`  installer: ${installer}`);
 console.log(`  url:       ${url}`);
+console.log(`  apk:       ${apkUrl}`);

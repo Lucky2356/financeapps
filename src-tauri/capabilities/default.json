@@ -23,7 +23,11 @@
     },
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://smart-lab.ru/*" }],
+      "allow": [
+        { "url": "https://smart-lab.ru/*" },
+        { "url": "https://github.com/Lucky2356/financeapps/releases/*" },
+        { "url": "https://objects.githubusercontent.com/*" }
+      ],
       "deny": []
     }
   ]

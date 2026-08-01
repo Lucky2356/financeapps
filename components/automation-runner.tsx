@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { buildNotifications } from "@/lib/notifications";
+import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
+import { isAndroidShell } from "@/lib/platform/device";
 import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
 
@@ -52,6 +55,33 @@ async function runAutomation() {
       await apiClient.post("/fx", { rates });
     } catch {
       // Offline or feed error — keep the last-known cached rates.
+    }
+  }
+
+  // Android has no in-place updater, so the app looks for a newer release
+  // itself — once a day — and says so. Installing stays a deliberate act: the
+  // toast opens the APK, and Android's own installer asks for confirmation.
+  if (isAndroidShell()) {
+    try {
+      const { checkAndroidUpdate, markCheckedToday, shouldCheckToday, startAndroidUpdate } =
+        await import("@/lib/updates/android");
+      if (shouldCheckToday()) {
+        markCheckedToday();
+        const update = await checkAndroidUpdate();
+        if (update) {
+          const locale = getClientLocale();
+          toast.message(translate(locale, "set.update.available", { version: update.version }), {
+            duration: 15_000,
+            action: {
+              label: translate(locale, "set.update.confirmLabel"),
+              onClick: () => void startAndroidUpdate(update)
+            }
+          });
+        }
+      }
+    } catch {
+      // Offline or GitHub unreachable — silence is right here; the owner can
+      // still check by hand from Settings.
     }
   }
 
