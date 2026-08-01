@@ -142,7 +142,8 @@ export function SetupChecklist() {
             {t("sc.progress", { done: doneCount, total: steps.length })}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-1">
+        {/* ml-auto keeps the actions on the right when they wrap under the heading. */}
+        <div className="ml-auto flex flex-wrap items-center gap-1">
           {counts.accounts === 0 && counts.transactions === 0 ? (
             <Button
               size="sm"

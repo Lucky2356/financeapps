@@ -98,7 +98,7 @@ export function TransactionsAnalytics() {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {metrics.map((metric) => (
                   <div key={metric.label} className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">{metric.label}</p>
