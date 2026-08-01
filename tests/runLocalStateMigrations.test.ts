@@ -58,8 +58,14 @@ describe("runLocalStateMigrations", () => {
 
   it("upgrades a v4 state to v5 (liability auto-payment fields)", () => {
     const v4: RawLocalState = { schemaVersion: 4, liabilities: [] };
-    const migrated = runLocalStateMigrations(v4);
+    const migrated = runLocalStateMigrations(v4, 5);
     expect(migrated.schemaVersion).toBe(5);
+  });
+
+  it("upgrades a v5 state to v6 (the «погашен» marker on liabilities)", () => {
+    const v5: RawLocalState = { schemaVersion: 5, liabilities: [] };
+    const migrated = runLocalStateMigrations(v5);
+    expect(migrated.schemaVersion).toBe(6);
   });
 
   it("defaults a missing schemaVersion to 1 and migrates from there", () => {

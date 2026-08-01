@@ -14,7 +14,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 5;
+export const LATEST_LOCAL_STATE_VERSION = 6;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -49,6 +49,14 @@ export const localStateMigrations: LocalStateMigration[] = [
     // account/category, lastPaidMonth). All optional — Zod fills the rest, so
     // the migration only stamps the version.
     migrate: (state) => ({ ...state, schemaVersion: 5 })
+  },
+  {
+    from: 5,
+    to: 6,
+    // v6 added the optional settledAt marker on liabilities ("погашен"). Absent
+    // means the debt is still owed, which is exactly the pre-v6 behaviour, so
+    // the migration only stamps the version.
+    migrate: (state) => ({ ...state, schemaVersion: 6 })
   }
 ];
 

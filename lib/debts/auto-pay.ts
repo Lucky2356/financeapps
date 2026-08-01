@@ -9,7 +9,10 @@
 //   • at most one payment per calendar month (lastPaidMonth guard) — reopening
 //     the app must never post the same payment twice;
 //   • a short month clamps the due day (31st → last day of February);
-//   • the payment never exceeds the remaining balance.
+//   • the payment never exceeds the remaining balance;
+//   • a debt marked as repaid is never charged again.
+
+import { isSettledDebt } from "@/lib/debts/settled";
 
 export type AutoPayLiability = {
   id: string;
@@ -22,6 +25,8 @@ export type AutoPayLiability = {
   paymentCategoryId?: string;
   /** YYYY-MM of the last auto-posted payment. */
   lastPaidMonth?: string;
+  /** ISO date the owner marked the debt as repaid — nothing is posted after that. */
+  settledAt?: string;
 };
 
 export function monthKey(date: Date): string {
@@ -41,6 +46,7 @@ export function paymentAmount(liability: AutoPayLiability): number {
 }
 
 export function isDue(liability: AutoPayLiability, today: Date): boolean {
+  if (isSettledDebt(liability)) return false;
   if (!liability.autoPay) return false;
   if (!liability.dueDay) return false;
   if (liability.minPayment <= 0 || liability.balance <= 0) return false;

@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, Edit2, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, CreditCard, Edit2, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
@@ -14,6 +14,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { activeDebts, settledDebts } from "@/lib/debts/settled";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { DebtPayoffService } from "@/services/DebtPayoffService";
+import { cn } from "@/lib/utils";
 
 const KIND_VALUES = ["CREDIT_CARD", "LOAN", "MORTGAGE", "INSTALLMENT", "OTHER"] as const;
 
@@ -98,6 +100,37 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
     );
   }
 
+  // One tap on the card marks a debt repaid (or brings it back). Sends the whole
+  // record because the endpoint rebuilds the liability from the payload.
+  async function toggleSettled(liability: LiabilitiesPageData["liabilities"][number]) {
+    const settled = Boolean(liability.settledAt);
+    await run(
+      () =>
+        apiClient.put("/debts", {
+          id: liability.id,
+          name: liability.name,
+          kind: liability.kind,
+          balance: String(liability.balance),
+          originalAmount: String(liability.originalAmount),
+          interestRate: String(liability.interestRate),
+          minPayment: String(liability.minPayment),
+          ...(liability.dueDay ? { dueDay: String(liability.dueDay) } : {}),
+          currency: liability.currency,
+          ...(liability.autoPay ? { autoPay: "true" } : {}),
+          ...(liability.paymentAccountId ? { paymentAccountId: liability.paymentAccountId } : {}),
+          ...(liability.paymentCategoryId
+            ? { paymentCategoryId: liability.paymentCategoryId }
+            : {}),
+          settled: settled ? "false" : "true"
+        }),
+      {
+        success: settled ? t("debt.toast.reopened") : t("debt.toast.settled"),
+        error: t("debt.toast.saveError"),
+        onSuccess: refresh
+      }
+    );
+  }
+
   async function remove(id: string, name: string) {
     const confirmed = await confirm({
       title: t("debt.delete.title"),
@@ -145,72 +178,97 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {pageData.liabilities.map((liability) => (
-            <Card key={liability.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle>{liability.name}</CardTitle>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {t(`debtKind.${liability.kind}`)}
-                    </p>
+          {[...activeDebts(pageData.liabilities), ...settledDebts(pageData.liabilities)].map(
+            (liability) => (
+              <Card key={liability.id} className={cn(Boolean(liability.settledAt) && "opacity-70")}>
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <CardTitle>{liability.name}</CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {liability.settledAt
+                          ? t("debt.settled.badge", { date: liability.settledAt })
+                          : t(`debtKind.${liability.kind}`)}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={
+                          liability.settledAt ? t("debt.settled.undo") : t("debt.settled.mark")
+                        }
+                        aria-label={
+                          liability.settledAt ? t("debt.settled.undo") : t("debt.settled.mark")
+                        }
+                        onClick={() => void toggleSettled(liability)}
+                      >
+                        <CheckCircle2
+                          className={cn(
+                            "size-4",
+                            liability.settledAt ? "text-success-foreground" : "opacity-60"
+                          )}
+                        />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={t("common.editAria")}
+                        aria-label={t("debt.edit")}
+                        onClick={() => setEditing(liability)}
+                      >
+                        <Edit2 className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        title={t("common.delete")}
+                        aria-label={t("debt.deleteAria")}
+                        onClick={() => void remove(liability.id, liability.name)}
+                      >
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title={t("common.editAria")}
-                      aria-label={t("debt.edit")}
-                      onClick={() => setEditing(liability)}
-                    >
-                      <Edit2 className="size-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      title={t("common.delete")}
-                      aria-label={t("debt.deleteAria")}
-                      onClick={() => void remove(liability.id, liability.name)}
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
+                </CardHeader>
+                <CardContent>
+                  {liability.originalAmount > 0 ? <Progress value={liability.progress} /> : null}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{t("debt.balance")}</p>
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(liability.balance, pageData.currency)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">{t("debt.rate")}</p>
+                      <p className="text-sm font-semibold">{liability.interestRate}%</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">{t("debt.payment")}</p>
+                      <p className="text-sm font-semibold">
+                        {formatCurrency(liability.minPayment, pageData.currency)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {liability.originalAmount > 0 ? <Progress value={liability.progress} /> : null}
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t("debt.balance")}</p>
-                    <p className="text-sm font-semibold">
-                      {formatCurrency(liability.balance, pageData.currency)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t("debt.rate")}</p>
-                    <p className="text-sm font-semibold">{liability.interestRate}%</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t("debt.payment")}</p>
-                    <p className="text-sm font-semibold">
-                      {formatCurrency(liability.minPayment, pageData.currency)}
-                    </p>
-                  </div>
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {payoffHint(liability, pageData.currency, t)}
-                </p>
-                {liability.autoPay ? (
-                  <p className="mt-1 text-xs text-primary">
-                    {liability.lastPaidMonth
-                      ? t("debt.autoPay.lastPaid", { month: liability.lastPaidMonth })
-                      : t("debt.autoPay.title")}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {payoffHint(liability, pageData.currency, t)}
                   </p>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))}
+                  {liability.autoPay && !liability.settledAt ? (
+                    <p className="mt-1 text-xs text-primary">
+                      {liability.lastPaidMonth
+                        ? t("debt.autoPay.lastPaid", { month: liability.lastPaidMonth })
+                        : t("debt.autoPay.title")}
+                    </p>
+                  ) : null}
+                  {liability.settledAt ? (
+                    <p className="mt-1 text-xs text-success-foreground">{t("debt.settled.note")}</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )
+          )}
         </div>
       )}
 
@@ -366,6 +424,22 @@ function DebtDialog({
             />
           </div>
         </div>
+
+        {/* Marking a debt as repaid keeps it on the screen as history but takes
+            it out of every calculation — capital, health score, planning. */}
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm">
+          <input
+            type="checkbox"
+            name="settled"
+            value="true"
+            className="mt-0.5 size-4 rounded border accent-primary"
+            defaultChecked={Boolean(liability?.settledAt)}
+          />
+          <span>
+            <span className="block font-medium">{t("debt.settled.title")}</span>
+            <span className="block text-xs text-muted-foreground">{t("debt.settled.desc")}</span>
+          </span>
+        </label>
 
         {/* Auto-payment (desktop): post the monthly payment on the due day and
             reduce the balance, instead of entering it by hand every month. */}

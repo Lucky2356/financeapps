@@ -32,7 +32,10 @@ export const liabilitySchema = z.object({
   autoPay: z.boolean().optional(),
   paymentAccountId: z.string().optional(),
   paymentCategoryId: z.string().optional(),
-  lastPaidMonth: z.string().optional()
+  lastPaidMonth: z.string().optional(),
+  // Marked as repaid by the owner (v6): ISO date. A settled debt keeps its
+  // history but stops counting anywhere — capital, health score, planning.
+  settledAt: z.string().optional()
 });
 export const categorizationRuleSchema = z.object({
   id: z.string().min(1),
@@ -245,7 +248,14 @@ export const investmentSchema = z.object({
     .default([])
 });
 export const localStateSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  schemaVersion: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+    z.literal(6)
+  ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
   // and cached here so cross-currency capital is a single honest number offline.
