@@ -17,6 +17,11 @@ import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 import { getServerLocale } from "@/lib/i18n/server-locale";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
 import { effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
+import {
+  plannedDebtMonthlyTotal,
+  plannedDebtPayments,
+  type PlannedDebtPayment
+} from "@/lib/debts/planned";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import type { CategorizationRule } from "@/lib/categorization-rules";
@@ -86,6 +91,10 @@ export type RecurringTransactionsPageData = {
   recurringTransactions: RecurringTransactionRow[];
   accounts: AccountRow[];
   categories: CategoryOption[];
+  /** Monthly limits per category — prefill the template amount from the budget. */
+  budgetHints: Array<{ categoryId: string; amount: number }>;
+  /** Scheduled payments derived from the debts page (read-only here). */
+  debtPayments: PlannedDebtPayment[];
   currency: string;
   summary: {
     activeCount: number;
@@ -209,22 +218,34 @@ const frequencyMonthlyFactor: Record<RecurrenceFrequency, number> = {
   YEARLY: 1 / 12
 };
 
-function buildRecurringSummary(rows: RecurringTransactionRow[]) {
+// Debt payments are obligations just like templates, so they count towards the
+// planning summary — otherwise the monthly load understates what has to be paid.
+function buildRecurringSummary(
+  rows: RecurringTransactionRow[],
+  debtPayments: PlannedDebtPayment[] = []
+) {
   const service = new RecurringTransactionService();
   const activeRows = rows.filter((row) => row.isActive);
-  const nextSevenDaysAmount = activeRows
-    .filter((row) => service.isUpcomingSoon(new Date(row.nextDate)) || row.isDue)
-    .reduce((sum, row) => sum + row.amount, 0);
+  const dueDebts = debtPayments.filter((payment) => payment.isDue);
+  const nextSevenDaysAmount =
+    activeRows
+      .filter((row) => service.isUpcomingSoon(new Date(row.nextDate)) || row.isDue)
+      .reduce((sum, row) => sum + row.amount, 0) +
+    debtPayments
+      .filter((payment) => payment.isDue || payment.daysUntilNext <= 7)
+      .reduce((sum, payment) => sum + payment.amount, 0);
   const monthlyAmount = (type: TransactionType) =>
     activeRows
       .filter((row) => row.type === type)
       .reduce((sum, row) => sum + row.amount * frequencyMonthlyFactor[row.frequency], 0);
 
   return {
-    activeCount: activeRows.length,
-    dueCount: activeRows.filter((row) => row.isDue).length,
+    activeCount: activeRows.length + debtPayments.length,
+    dueCount: activeRows.filter((row) => row.isDue).length + dueDebts.length,
     nextSevenDaysAmount: roundMoney(nextSevenDaysAmount),
-    monthlyPlannedExpense: roundMoney(monthlyAmount("EXPENSE")),
+    monthlyPlannedExpense: roundMoney(
+      monthlyAmount("EXPENSE") + plannedDebtMonthlyTotal(debtPayments)
+    ),
     monthlyPlannedIncome: roundMoney(monthlyAmount("INCOME"))
   };
 }
@@ -1139,6 +1160,8 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
         recurringTransactions,
         accounts: demoAccounts,
         categories: demoCategories,
+        budgetHints: [],
+        debtPayments: [],
         currency: "RUB",
         summary: buildRecurringSummary(recurringTransactions)
       };
@@ -1148,7 +1171,7 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
       const user = await getDefaultUser();
       if (!user) throw new Error("No user found.");
       const service = new RecurringTransactionService();
-      const [recurringRows, accounts, categories] = await Promise.all([
+      const [recurringRows, accounts, categories, budgets, liabilities] = await Promise.all([
         prisma.recurringTransaction.findMany({
           where: { userId: user.id },
           orderBy: [{ isActive: "desc" }, { nextDate: "asc" }],
@@ -1161,10 +1184,23 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
         prisma.category.findMany({
           where: { userId: user.id },
           orderBy: [{ kind: "asc" }, { name: "asc" }]
-        })
+        }),
+        prisma.budget.findMany({
+          where: { userId: user.id, month: startOfMonth(new Date()) }
+        }),
+        prisma.liability.findMany({ where: { userId: user.id }, orderBy: { name: "asc" } })
       ]);
       const recurringTransactions = service.sortUpcoming(
         recurringRows.map(toRecurringTransactionRow)
+      );
+      const debtPayments = plannedDebtPayments(
+        liabilities.map((liability) => ({
+          id: liability.id,
+          name: liability.name,
+          balance: toNumber(liability.balance),
+          minPayment: toNumber(liability.minPayment),
+          dueDay: liability.dueDay ?? undefined
+        }))
       );
 
       return {
@@ -1172,8 +1208,13 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
         recurringTransactions,
         accounts: accounts.map(toAccountRow),
         categories: categories.map(toCategoryOption),
+        budgetHints: budgets.map((budget) => ({
+          categoryId: budget.categoryId,
+          amount: toNumber(budget.limitAmount)
+        })),
+        debtPayments,
         currency: user.currency,
-        summary: buildRecurringSummary(recurringTransactions)
+        summary: buildRecurringSummary(recurringTransactions, debtPayments)
       };
     },
     () => ({
@@ -1181,6 +1222,8 @@ export async function getRecurringTransactionsPageData(): Promise<RecurringTrans
       recurringTransactions: [],
       accounts: [],
       categories: [],
+      budgetHints: [],
+      debtPayments: [],
       currency: "RUB",
       summary: {
         activeCount: 0,

@@ -35,6 +35,8 @@ const recurringData: RecurringTransactionsPageData = {
   recurringTransactions: [],
   accounts: [],
   categories: [],
+  budgetHints: [],
+  debtPayments: [],
   currency: "RUB",
   summary: {
     activeCount: 0,

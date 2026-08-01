@@ -256,7 +256,7 @@ describe("LocalApiClient", () => {
     expect(investments.watchlist).toHaveLength(0);
   });
 
-  it("immediately materializes a transaction when a recurring payment is created", async () => {
+  it("does not post an operation when a recurring template is created", async () => {
     const client = createClient();
     const account = await seedAccount(client);
 
@@ -273,15 +273,14 @@ describe("LocalApiClient", () => {
     const transactions = await client.get<TransactionsPageData>("/transactions");
     const recurring = await client.get<RecurringTransactionsPageData>("/recurring");
 
-    // A real transaction was created right away
-    expect(
-      transactions.transactions.some((t) => t.amount === 5000 && t.category.id === "cat-food")
-    ).toBe(true);
-    // And the next date advanced past today, so it is no longer "due now"
-    expect(recurring.recurringTransactions[0].isDue).toBe(false);
+    // Planning is not bookkeeping: the ledger stays untouched…
+    expect(transactions.transactions.some((t) => t.category.id === "cat-food")).toBe(false);
+    // …and the template keeps the date the user entered, waiting to be posted.
+    expect(recurring.recurringTransactions[0].isDue).toBe(true);
+    expect(recurring.recurringTransactions[0].amount).toBe(5000);
   });
 
-  it("keeps the linked transaction in sync when a recurring amount is edited", async () => {
+  it("keeps already posted operations untouched when a template is edited or deleted", async () => {
     const client = createClient();
     const account = await seedAccount(client);
 
@@ -297,6 +296,15 @@ describe("LocalApiClient", () => {
       isActive: "true"
     });
 
+    // The user posts today's occurrence…
+    await client.post("/recurring/materialize", { id: created.id });
+    expect(
+      (await client.get<TransactionsPageData>("/transactions")).transactions.some(
+        (t) => t.amount === 5000
+      )
+    ).toBe(true);
+
+    // …then raises the planned amount: the posted operation is a fact, it stays 5000.
     await client.put("/recurring", {
       id: created.id,
       amount: "8000",
@@ -308,9 +316,17 @@ describe("LocalApiClient", () => {
       isActive: "true"
     });
 
-    const transactions = await client.get<TransactionsPageData>("/transactions");
-    expect(transactions.transactions.some((t) => t.amount === 8000)).toBe(true);
-    expect(transactions.transactions.some((t) => t.amount === 5000)).toBe(false);
+    let transactions = await client.get<TransactionsPageData>("/transactions");
+    expect(transactions.transactions.some((t) => t.amount === 5000)).toBe(true);
+    expect(transactions.transactions.some((t) => t.amount === 8000)).toBe(false);
+
+    // Deleting the plan does not erase the payment that already happened.
+    await client.delete(`/recurring?id=${created.id}`);
+    transactions = await client.get<TransactionsPageData>("/transactions");
+    expect(transactions.transactions.some((t) => t.amount === 5000)).toBe(true);
+    expect(
+      (await client.get<RecurringTransactionsPageData>("/recurring")).recurringTransactions
+    ).toHaveLength(0);
   });
 
   it("returns a budget warning when an expense exceeds its limit", async () => {
@@ -478,6 +494,29 @@ describe("LocalApiClient automation (plan D2c)", () => {
 
     const settings = await client.get<SettingsPageData>("/settings");
     expect(settings.currencyRatesUpdatedAt).toBeTruthy();
+  });
+
+  it("surfaces debts with a due day on the planning screen", async () => {
+    const client = createClient();
+    await client.post("/budgets", { categoryId: "cat-food", limitAmount: "15000" });
+    await client.post("/debts", {
+      name: "Ипотека",
+      kind: "MORTGAGE",
+      balance: "1000000",
+      originalAmount: "1200000",
+      interestRate: "9",
+      minPayment: "25000",
+      dueDay: "10"
+    });
+
+    const recurring = await client.get<RecurringTransactionsPageData>("/recurring");
+
+    expect(recurring.debtPayments).toHaveLength(1);
+    expect(recurring.debtPayments[0]).toMatchObject({ name: "Ипотека", amount: 25000 });
+    // The debt payment counts towards the planned monthly load…
+    expect(recurring.summary.monthlyPlannedExpense).toBe(25000);
+    // …and the budget limit is offered as a hint for new templates.
+    expect(recurring.budgetHints).toEqual([{ categoryId: "cat-food", amount: 15000 }]);
   });
 
   it("materializes overdue recurring payments idempotently", async () => {

@@ -1,8 +1,9 @@
 "use client";
 
-import { CalendarClock, CheckCircle2, Edit2, Plus, Power, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, Edit2, Landmark, Plus, Power, Trash2 } from "lucide-react";
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -331,6 +332,62 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
         )}
       </Dialog>
 
+      {/* Debts are obligations with a date, so they show up here automatically.
+          They are edited on the debts page — this list is read-only on purpose. */}
+      {(pageData.debtPayments ?? []).length > 0 ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>{t("rec.debts.title")}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{t("rec.debts.desc")}</p>
+            </div>
+            <Button variant="outline" asChild>
+              <Link href="/debts">
+                <Landmark className="size-4" />
+                {t("rec.debts.manage")}
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {pageData.debtPayments.map((payment) => (
+              <div
+                key={payment.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{payment.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(payment.dueDate)} · {t("recFreq.MONTHLY")}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={payment.autoPay ? "border-success/30 text-success-foreground" : ""}
+                  >
+                    {payment.autoPay ? t("rec.debts.auto") : t("rec.debts.manual")}
+                  </Badge>
+                  {payment.isDue ? (
+                    <Badge className="border-warning/30 bg-warning/15 text-warning-foreground">
+                      {t("rec.status.due")}
+                    </Badge>
+                  ) : payment.daysUntilNext <= 7 ? (
+                    <Badge className="border-info/30 bg-info/12 text-info-foreground">
+                      {t("rec.status.soon")}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">{t("rec.status.scheduled")}</Badge>
+                  )}
+                  <p className="font-semibold">
+                    -{formatCurrency(payment.amount, pageData.currency)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>{t("rec.load.title")}</CardTitle>
@@ -434,17 +491,42 @@ function RecurringDialog({
     () => data.categories.filter((category) => category.kind === selectedType),
     [data.categories, selectedType]
   );
-  const [categoryId, setCategoryId] = useState(
-    recurring?.category.id ?? matchingCategories[0]?.id ?? ""
+  const budgetByCategory = useMemo(
+    () => new Map((data.budgetHints ?? []).map((hint) => [hint.categoryId, hint.amount])),
+    [data.budgetHints]
   );
+  const initialCategoryId = recurring?.category.id ?? matchingCategories[0]?.id ?? "";
+  const [categoryId, setCategoryId] = useState(initialCategoryId);
   const effectiveCategoryId = matchingCategories.some((category) => category.id === categoryId)
     ? categoryId
     : (matchingCategories[0]?.id ?? "");
+  // The budget for a category already answers "how much per month" — prefill it,
+  // but never overwrite a number the user typed themselves.
+  const [amount, setAmount] = useState(() =>
+    recurring
+      ? String(recurring.amount)
+      : (budgetByCategory.get(initialCategoryId)?.toString() ?? "")
+  );
+  const [amountEdited, setAmountEdited] = useState(false);
+  const budgetHint = budgetByCategory.get(effectiveCategoryId);
+
+  function applyBudgetAmount(nextCategoryId: string) {
+    if (amountEdited) return;
+    const hint = budgetByCategory.get(nextCategoryId);
+    setAmount(hint === undefined ? "" : String(hint));
+  }
 
   function changeType(value: "INCOME" | "EXPENSE") {
     const nextCategories = data.categories.filter((category) => category.kind === value);
+    const nextCategoryId = nextCategories[0]?.id ?? "";
     setSelectedType(value);
-    setCategoryId(nextCategories[0]?.id ?? "");
+    setCategoryId(nextCategoryId);
+    applyBudgetAmount(nextCategoryId);
+  }
+
+  function changeCategory(value: string) {
+    setCategoryId(value);
+    applyBudgetAmount(value);
   }
 
   return (
@@ -462,11 +544,23 @@ function RecurringDialog({
             <Input
               name="amount"
               type="number"
+              inputMode="decimal"
               min="0"
               step="0.01"
-              defaultValue={recurring?.amount ?? ""}
+              value={amount}
+              onChange={(event) => {
+                setAmount(event.target.value);
+                setAmountEdited(true);
+              }}
               required
             />
+            {budgetHint !== undefined ? (
+              <p className="text-xs text-muted-foreground">
+                {t("rec.dialog.fromBudget", {
+                  amount: formatCurrency(budgetHint, data.currency)
+                })}
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label>{t("tx.type")}</Label>
@@ -489,7 +583,7 @@ function RecurringDialog({
             <Select
               name="categoryId"
               value={effectiveCategoryId || undefined}
-              onValueChange={setCategoryId}
+              onValueChange={changeCategory}
             >
               <SelectTrigger>
                 <SelectValue />

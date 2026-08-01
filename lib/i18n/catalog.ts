@@ -454,9 +454,10 @@ const ru: Messages = {
   "rec.add": "Добавить шаблон",
   "rec.new": "Новый шаблон",
   "rec.new.desc":
-    "Для зарплаты, аренды, подписок, ЖКХ и других повторяющихся операций. Операция создастся сразу.",
+    "Для зарплаты, аренды, подписок, ЖКХ и других повторяющихся операций. Это только план — операция появится в учёте в дату платежа.",
   "rec.edit": "Редактировать шаблон",
-  "rec.edit.desc": "Изменения суммы сразу применятся к созданной операции.",
+  "rec.edit.desc":
+    "Изменения затронут только будущие платежи — уже проведённые операции останутся как есть.",
   "rec.empty.title": "Плановых операций пока нет",
   "rec.empty.desc":
     "Добавьте повторяющиеся доходы и расходы, чтобы видеть будущую нагрузку заранее.",
@@ -479,6 +480,13 @@ const ru: Messages = {
   "rec.status.due": "Нужно создать",
   "rec.status.soon": "Скоро",
   "rec.status.scheduled": "Запланирован",
+  "rec.dialog.fromBudget": "Из бюджета категории: {amount}",
+  "rec.debts.title": "Платежи по долгам",
+  "rec.debts.desc":
+    "Берутся из раздела «Долги» — день платежа и минимальный платёж. Учитываются в плановой нагрузке.",
+  "rec.debts.manage": "К долгам",
+  "rec.debts.auto": "Списывается автоматически",
+  "rec.debts.manual": "Платёж вручную",
   "rec.load.title": "Плановая нагрузка",
   "rec.load.income": "Плановые доходы в месяц",
   "rec.load.expense": "Плановые расходы в месяц",
@@ -1949,9 +1957,10 @@ const en: Messages = {
   "rec.add": "Add template",
   "rec.new": "New template",
   "rec.new.desc":
-    "For salary, rent, subscriptions, utilities and other recurring transactions. The transaction is created right away.",
+    "For salary, rent, subscriptions, utilities and other recurring transactions. This is a plan only — the operation appears in the ledger on its due date.",
   "rec.edit": "Edit template",
-  "rec.edit.desc": "Amount changes apply immediately to the created transaction.",
+  "rec.edit.desc":
+    "Changes affect future payments only — operations already posted stay as they are.",
   "rec.empty.title": "No scheduled transactions yet",
   "rec.empty.desc": "Add recurring income and expenses to see your future load ahead of time.",
   "rec.col.nextDate": "Next date",
@@ -1973,6 +1982,13 @@ const en: Messages = {
   "rec.status.due": "Action needed",
   "rec.status.soon": "Soon",
   "rec.status.scheduled": "Scheduled",
+  "rec.dialog.fromBudget": "From the category budget: {amount}",
+  "rec.debts.title": "Debt payments",
+  "rec.debts.desc":
+    "Taken from the Debts page — due day and minimum payment. Included in the planned load.",
+  "rec.debts.manage": "Go to debts",
+  "rec.debts.auto": "Posted automatically",
+  "rec.debts.manual": "Paid manually",
   "rec.load.title": "Planned load",
   "rec.load.income": "Planned monthly income",
   "rec.load.expense": "Planned monthly expenses",
