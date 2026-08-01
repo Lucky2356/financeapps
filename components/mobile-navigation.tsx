@@ -15,7 +15,7 @@ export function MobileTopBar() {
   const { t } = useI18n();
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-card/95 px-4 py-3 shadow-soft backdrop-blur md:hidden">
+    <header className="sticky top-0 z-40 border-b bg-card/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] shadow-soft backdrop-blur md:hidden">
       <div className="flex items-center justify-between gap-3">
         <Link href="/" className="min-w-0">
           <span className="block truncate text-sm font-semibold">{APP_NAME}</span>

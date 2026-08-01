@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: `%s | ${APP_NAME}`
   },
   description:
-    "Учёт личных финансов: операции, бюджеты, цели, долги, прогноз и аналитика. Десктоп (офлайн) и веб.",
+    "Учёт личных финансов: операции, бюджеты, цели, долги, прогноз и аналитика. Офлайн, на компьютере и на телефоне.",
   keywords: ["личные финансы", "бюджет", "учёт расходов", "финансовый помощник", "накопления"],
   manifest: "/manifest.json",
   appleWebApp: {
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: APP_NAME,
     description:
-      "Учёт личных финансов: операции, бюджеты, цели, долги, прогноз и аналитика. Десктоп (офлайн) и веб.",
+      "Учёт личных финансов: операции, бюджеты, цели, долги, прогноз и аналитика. Офлайн, на компьютере и на телефоне.",
     type: "website",
     locale: "ru_RU",
     siteName: APP_NAME
@@ -37,6 +37,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // The Android activity draws edge to edge (MainActivity.enableEdgeToEdge), so
+  // the page must extend under the status and navigation bars and pad itself
+  // with env(safe-area-inset-*) — without `cover` those insets are always 0.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
     { media: "(prefers-color-scheme: dark)", color: "#101421" }

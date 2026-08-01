@@ -186,7 +186,7 @@ export function QuickAddFab({
     <>
       <Button
         size="icon"
-        className="fixed bottom-20 right-4 z-40 size-14 rounded-full shadow-lg md:bottom-6 md:right-6"
+        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 size-14 rounded-full shadow-lg md:bottom-6 md:right-6"
         onClick={() => void openDialog()}
         aria-label={t("qa.fabAria")}
       >
