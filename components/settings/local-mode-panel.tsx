@@ -10,13 +10,11 @@ import { apiClient } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { LocalSnapshotService, type LocalSnapshotMetadata } from "@/lib/local/LocalSnapshotService";
-import { isLocalDesktopMode, runtimeConfig } from "@/lib/platform/env";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
 
 // Desktop local-mode utility (IndexedDB snapshot). Hidden on the web app, where
 // it is irrelevant and confusing for end users.
 export function LocalModePanel() {
-  if (!isLocalDesktopMode) return null;
   return <LocalModePanelInner />;
 }
 
@@ -68,13 +66,6 @@ function LocalModePanelInner() {
             <div className="min-w-0 text-sm">
               <p className="font-medium">{t("lmp.snapshotTitle")}</p>
               <p className="mt-1 text-muted-foreground">{t("lmp.snapshotDesc")}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {t("lmp.runtime", {
-                  platform: runtimeConfig.platform,
-                  dataMode: runtimeConfig.desktopDataMode,
-                  apiMode: runtimeConfig.apiMode
-                })}
-              </p>
             </div>
           </div>
         </div>

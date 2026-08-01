@@ -3,7 +3,7 @@ import type {
   RecurrenceFrequency,
   SecurityRisk,
   TransactionType
-} from "@prisma/client";
+} from "@/types/enums";
 
 export type DataSource = "database" | "demo-fallback";
 

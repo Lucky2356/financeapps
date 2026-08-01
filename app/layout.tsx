@@ -4,7 +4,6 @@ import { Inter } from "next/font/google";
 import "@/app/globals.css";
 import { LayoutShell } from "@/components/layout-shell";
 import { Providers } from "@/components/providers";
-import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { APP_NAME } from "@/lib/constants";
 import { APPEARANCE_FOUC_SCRIPT } from "@/lib/appearance";
 
@@ -54,7 +53,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className={inter.className}>
         <Providers>
           <LayoutShell>{children}</LayoutShell>
-          <ServiceWorkerRegister />
         </Providers>
       </body>
     </html>

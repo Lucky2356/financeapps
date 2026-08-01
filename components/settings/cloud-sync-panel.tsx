@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { useI18n } from "@/lib/i18n/context";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { pickSyncFolder, pullFromFolder, pushToFolder } from "@/lib/sync/FolderSyncService";
 import { type AutoBackupConfig, type BackupFrequency } from "@/lib/backup/auto-backup";
 import {
@@ -33,7 +32,6 @@ const FOLDER_KEY = "sync-folder";
 // user's cloud client (Dropbox / Google Drive / OneDrive) mirrors across
 // devices. The passphrase is never stored — it is entered per push/pull.
 export function CloudSyncPanel() {
-  if (!isLocalDesktopMode) return null;
   return (
     <>
       <CloudSyncPanelInner />

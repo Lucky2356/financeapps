@@ -1,19 +1,11 @@
-import { FetchApiClient } from "@/lib/api/FetchApiClient";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import { MockApiClient } from "@/lib/api/MockApiClient";
 import type { ApiClient } from "@/lib/api/ApiClient";
-import { runtimeConfig } from "@/lib/platform/env";
 
+// One client, one data source: everything the app knows lives in the device's
+// IndexedDB and is served by LocalApiClient. There is no remote API left to
+// fall back to.
 export function createApiClient(): ApiClient {
-  if (runtimeConfig.platform === "desktop" && runtimeConfig.desktopDataMode === "local") {
-    return new LocalApiClient();
-  }
-
-  if (runtimeConfig.apiMode === "mock") {
-    return new MockApiClient();
-  }
-
-  return new FetchApiClient(runtimeConfig.apiBaseUrl);
+  return new LocalApiClient();
 }
 
 export const apiClient = createApiClient();

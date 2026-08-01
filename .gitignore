@@ -11,8 +11,6 @@ coverage
 dev-server.*.log
 prisma/migrations/dev.db
 src-tauri/target
-android
-ios
 playwright-report
 test-results
 blob-report
@@ -22,3 +20,9 @@ blob-report
 # Tauri updater signing keys — must never be committed (store as GitHub secrets)
 *.key
 *.key.pub
+
+# Android release signing — the keystore and its passwords stay on the owner's
+# machine (and in GitHub secrets), never in the repository.
+*.jks
+*.keystore
+keystore.properties

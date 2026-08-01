@@ -2,30 +2,33 @@
 
 # 💰 Финансовый помощник
 
-### Личные финансы, бюджеты, цели и аналитика рынка — на десктопе (офлайн) и в вебе
+### Личные финансы, бюджеты, цели и аналитика рынка — на компьютере и на телефоне, полностью офлайн
 
 [![CI](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml/badge.svg)](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-![Tests](https://img.shields.io/badge/tests-258%20passing-success)
-![Platforms](https://img.shields.io/badge/platform-Windows%20desktop%20%7C%20Web-blue)
+![Tests](https://img.shields.io/badge/tests-379%20passing-success)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)](https://tauri.app/)
-[![Prisma](https://img.shields.io/badge/Prisma-5-2d3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-[Возможности](#-возможности) · [Архитектура](#-архитектура) · [Быстрый старт](#-быстрый-старт) · [Десктоп](#-десктоп-windows) · [Деплой](#-деплой-веб) · [Вклад](CONTRIBUTING.md)
+[Возможности](#-возможности) · [Архитектура](#-архитектура) · [Быстрый старт](#-быстрый-старт) · [Windows](#-windows) · [Android](#-android) · [Вклад](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-**Финансовый помощник** — приложение для учёта личных финансов с двумя режимами из одной кодовой базы:
+**Финансовый помощник** — приложение для учёта личных финансов, которое работает **только на вашем
+устройстве**. Ни сервера, ни аккаунта, ни облака: все данные лежат в локальном хранилище (IndexedDB)
+того устройства, где вы их ввели.
 
-- 🖥️ **Десктоп (Windows)** — полностью офлайн, данные хранятся локально на устройстве (IndexedDB), без облака и банковских интеграций. Автообновление через GitHub Releases.
-- 🌐 **Веб** — многопользовательский режим с регистрацией, изоляцией данных по аккаунту (NextAuth), PostgreSQL и Docker-деплоем.
+- 🖥️ **Windows** — установщик NSIS, авто-обновление через GitHub Releases.
+- 📱 **Android** — APK с тем же интерфейсом и теми же функциями.
+- 🔄 **Перенос данных** между устройствами — файлом резервной копии (выгрузить → перенести →
+  восстановить), см. [docs/ANDROID.md](docs/ANDROID.md).
 
 > **Дисклеймер.** Инвестиционный раздел показывает аналитику, риски и образовательные подсказки и **не** является индивидуальной инвестиционной рекомендацией.
 
@@ -49,43 +52,37 @@
 | **Капитал** | Net worth с **реальными снимками во времени** (не только реконструкция) |
 | **Дашборд** | Финансовый health-score по факторам, метрики, графики |
 | **Импорт/экспорт** | CSV с **авто-определением банка** (Сбер/Т-Банк/Альфа/ВТБ), экспорт CSV/JSON, полный backup |
-| **🤖 ИИ-ассистент** | Ввод операции текстом через Claude (opt-in, приватность по умолчанию) |
+| **🤖 ИИ-ассистент** | Ввод операции текстом через Claude/OpenAI/DeepSeek (opt-in, ключ пользователя) |
 
-Дополнительно: мультивалюта, тёмная/светлая тема, плотность интерфейса, горячие клавиши (с русской раскладкой), PWA с офлайн-режимом.
+Дополнительно: мультивалюта, тёмная/светлая тема, плотность интерфейса, горячие клавиши (с русской раскладкой).
 
 ---
 
 ## 🏗️ Архитектура
 
-Один фронтенд, два источника данных — абстрагировано через интерфейс `ApiClient` (`lib/api/`).
-Серверные API-роуты помечены расширением `.web.ts` и **компилируются только в веб-сборке** — десктопный статический экспорт их не содержит.
+Один фронтенд — статический экспорт Next.js — и один источник данных: `LocalApiClient` поверх
+IndexedDB. Windows и Android запускают **один и тот же бандл** в оболочке Tauri 2, поэтому набор
+функций на телефоне и на компьютере совпадает полностью.
 
 ```mermaid
 flowchart TD
-    UI["React UI · Next.js App Router"] --> AC{"ApiClient"}
+    UI["React UI · Next.js App Router (static export)"] --> LOCAL["LocalApiClient"]
+    LOCAL --> IDB[("IndexedDB · на устройстве")]
 
-    AC -->|"web"| FETCH["FetchApiClient → /api/*.web.ts"]
-    AC -->|"desktop"| LOCAL["LocalApiClient"]
-
-    subgraph WEB ["🌐 Веб · Node-сервер"]
-        CADDY["Caddy · HTTPS"] --> UI
-        AUTH["NextAuth · изоляция по userId"] --> FETCH
-        FETCH --> PRISMA["Prisma ORM"] --> PG[("PostgreSQL")]
-        BACKUP["pg_dump · ежедневные бэкапы"] --> PG
-    end
-
-    subgraph DESK ["🖥️ Десктоп · Tauri 2"]
-        LOCAL --> IDB[("IndexedDB · на устройстве")]
+    subgraph WIN ["🖥️ Windows · Tauri 2"]
         UPD["Updater · GitHub Releases"]
     end
 
-    AI["AI: Claude (opt-in)"] -. "desktop: ключ пользователя / web: серверный прокси" .- AC
+    subgraph AND ["📱 Android · Tauri 2"]
+        APK["APK · установка вручную"]
+    end
+
+    BACKUP["Резервная копия .json"] -. "перенос между устройствами" .- IDB
+    AI["ИИ: Claude / OpenAI / DeepSeek (opt-in, ключ пользователя)"] -. -. LOCAL
 ```
 
-| Режим | Платформа | Данные | Запуск |
-|---|---|---|---|
-| **Десктоп** | Tauri 2 (Windows) | IndexedDB (локально) | статический экспорт в оболочке |
-| **Веб** | Node-сервер | PostgreSQL + Prisma | `app/api/*.web.ts` → Prisma |
+Серверной части нет: нет базы данных, нет аккаунтов, нет API-роутов. Страницы отдаются пустыми, а
+реальные цифры подставляет клиент из хранилища устройства.
 
 ---
 
@@ -95,19 +92,15 @@ flowchart TD
 git clone https://github.com/Lucky2356/financeapps.git
 cd financeapps
 npm install
-cp .env.example .env
-
-npm run docker:db:up            # локальный PostgreSQL в Docker
-npm run db:migrate              # применить миграции
-npm run db:seed                 # демо-данные (опционально)
 npm run dev                     # http://localhost:3000
 ```
 
-> `npm run dev` всегда запускается в **веб-режиме** (Prisma). Локальное хранилище (IndexedDB) проверяется на десктоп-сборке или модульными тестами.
+`npm run dev` открывает то же приложение в браузере — с теми же локальными данными в IndexedDB.
+Нативные диалоги файлов там недоступны, вместо них используется обычная загрузка/выгрузка.
 
 ---
 
-## 🖥️ Десктоп (Windows)
+## 🖥️ Windows
 
 Требуется Rust toolchain (подробно — [docs/WINDOWS_DESKTOP.md](docs/WINDOWS_DESKTOP.md)).
 
@@ -120,48 +113,49 @@ npm run tauri:dev       # запустить в режиме разработк�
 
 ---
 
-## 🌐 Деплой (веб)
+## 📱 Android
 
-Веб поднимается в Docker (PostgreSQL + Next.js standalone + Caddy для HTTPS + ежедневные бэкапы):
+Требуется Android SDK + NDK + JDK 17 (подробно, вместе с ключом подписи — [docs/ANDROID.md](docs/ANDROID.md)).
 
 ```bash
-cp .env.docker.example .env     # задать POSTGRES_PASSWORD, AUTH_SECRET, ...
-docker compose up -d --build
+npm run android:build         # релизный APK (нужен keystore)
+npm run android:build:debug   # отладочный APK, ставится без своего ключа
+npm run android:dev           # запуск на подключённом устройстве
 ```
 
-Для слабого сервера есть путь со сборкой образа в CI (GHCR) и `docker-compose.prod.yml` — без сборки на сервере. Полное руководство (HTTPS, бэкапы, обновление): [docs/WEB_DEPLOY.md](docs/WEB_DEPLOY.md).
+APK лежит в релизах рядом с установщиком для Windows. Авто-обновления на Android нет — новая версия
+ставится APK поверх старой.
 
 ---
 
 ## 🧱 Технологии
 
-- **Frontend:** Next.js 16 (App Router), React 18, TypeScript 5, Tailwind CSS, Radix UI, Recharts
-- **Backend (web):** Route Handlers, Prisma ORM, PostgreSQL, NextAuth (Auth.js v5)
-- **Desktop:** Tauri 2, IndexedDB, плагины updater/process/fs/dialog
-- **AI:** Anthropic Claude (`@anthropic-ai/sdk`), opt-in
+- **Frontend:** Next.js 16 (App Router, статический экспорт), React 19, TypeScript 5, Tailwind CSS, Radix UI, Recharts
+- **Оболочка:** Tauri 2 (Windows + Android), плагины fs/dialog/http/opener/process, updater и window-state — только на десктопе
+- **Хранилище:** IndexedDB на устройстве, миграции состояния в `lib/storage/migrations`
+- **AI:** Anthropic Claude / OpenAI / DeepSeek, opt-in, ключ пользователя
 - **Качество:** Vitest + Testing Library, Playwright (E2E), ESLint, Prettier, Husky + lint-staged
-- **Инфра:** Docker, Caddy, GitHub Actions (CI + релизы desktop + образ GHCR), Sentry (опц.)
-- **Валидация/утилиты:** Zod, date-fns, PapaParse, bcryptjs
+- **Инфра:** GitHub Actions (CI + релизы)
+- **Валидация/утилиты:** Zod, date-fns, PapaParse
 
 ---
 
 ## 📁 Структура проекта
 
 ```text
-app/                # страницы (App Router); серверные роуты — app/api/*/route.web.ts (web-only)
-components/         # UI; *-manager.tsx — клиентские обёртки над активным ApiClient
+app/                # страницы (App Router), статический экспорт
+components/         # UI; *-manager.tsx — клиентские обёртки над LocalApiClient
 hooks/              # useApiPageData и пр.
 lib/
-  api/              # ApiClient: FetchApiClient (web) и LocalApiClient (desktop)
-  auth/             # NextAuth seam, хеширование паролей, провижининг
-  data.ts           # серверное чтение данных (+ заглушки для статического экспорта)
+  api/              # LocalApiClient — единственный источник данных
+  data.ts           # типы данных страниц + пустые заглушки для серверной оболочки
+  storage/          # адаптеры IndexedDB и миграции состояния
   net-worth*.ts     # расчёт капитала и снимки во времени
 services/           # бизнес-логика: прогноз, рекомендации, импорт, рыночные данные, AI
-prisma/             # схема БД, миграции, сиды
-src-tauri/          # десктоп-оболочка Tauri
+src-tauri/          # оболочка Tauri: Rust, capabilities, gen/android — gradle-проект
 tests/              # модульные тесты (Vitest)
 e2e/                # Playwright
-docs/               # деплой, релизы, десктоп, установка
+docs/               # десктоп, Android, релизы, установка
 ```
 
 ---
@@ -170,31 +164,30 @@ docs/               # деплой, релизы, десктоп, установ
 
 | Команда | Назначение |
 |---|---|
-| `npm run dev` | Дев-сервер (веб) |
-| `npm run build:web` / `build:static` | Сборка веб / статический экспорт (десктоп) |
+| `npm run dev` | Дев-сервер в браузере |
+| `npm run build:static` | Статический экспорт (общий бандл для обеих оболочек) |
 | `npm run typecheck` · `lint` | Типы (`tsc --noEmit`) · ESLint (0 предупреждений) |
 | `npm run test` · `test:coverage` | Модульные тесты · покрытие |
 | `npm run test:e2e` | Playwright E2E |
-| `npm run tauri:build` · `tauri:dev` | Десктоп: сборка · запуск |
-| `npm run db:migrate` · `db:seed` · `db:studio` | Prisma |
-| `npm run docker:db:up` · `docker:db:down` | Локальный PostgreSQL |
+| `npm run tauri:build` · `tauri:dev` | Windows: сборка · запуск |
+| `npm run android:build` · `android:build:debug` · `android:dev` | Android: релизный APK · отладочный APK · запуск |
 
 ---
 
 ## ✅ Качество
 
-- **258** модульных тестов (Vitest) + E2E (Playwright)
-- Пороги покрытия в CI; гейты: `typecheck`, `lint`, `test`, `build:web`, `build:static`
-- Pre-commit хук (Husky + lint-staged): ESLint + Prettier + связанные тесты + typecheck
+- **379** модульных тестов (Vitest) + E2E (Playwright)
+- Пороги покрытия в CI; гейты: `typecheck`, `lint`, `test`, `build:static`
+- Pre-commit хук (Husky + lint-staged): ESLint + Prettier + связанные тесты
 - Строгая типизация (без `as any`), валидация ввода через Zod
 
 ---
 
 ## 🔐 Безопасность и приватность
 
-- Веб: пароли — только bcrypt-хеш; **изоляция данных по пользователю** (проверена тестами/рантаймом); rate-limit; HTTPS (Caddy).
-- Десктоп: данные не покидают устройство (IndexedDB).
-- ИИ-ассистент **выключен по умолчанию**; при включении отправляет минимальный срез во внешний сервис Anthropic с явным предупреждением.
+- Данные не покидают устройство: ни сервера, ни аккаунта, ни синхронизации через облако.
+- Перенос между устройствами делает сам владелец — файлом резервной копии.
+- ИИ-ассистент **выключен по умолчанию**; при включении отправляет минимальный срез во внешний сервис с явным предупреждением, по ключу самого пользователя.
 - Банковские логины/скрейпинг **не** используются. Рыночные данные — публичный MOEX ISS.
 - Уязвимости — см. [SECURITY.md](SECURITY.md).
 
@@ -203,14 +196,12 @@ docs/               # деплой, релизы, десктоп, установ
 ## 🗺️ Дорожная карта
 
 - [x] Мультивалюта, долги и стратегии погашения, подписки, отчёты/PDF
-- [x] ИИ-ассистент (Claude, opt-in) — desktop и web
-- [x] Веб: аутентификация и изоляция по пользователю
+- [x] ИИ-ассистент (Claude/OpenAI/DeepSeek, opt-in)
 - [x] Снимки капитала во времени
-- [x] Деплой: Docker + HTTPS + бэкапы + CI-образ
-- [ ] Сброс пароля по email + OAuth (Google/Yandex)
-- [ ] Домен + доверенный TLS-сертификат
+- [x] Планирование отдельно от учёта; бюджеты и долги в плановых
+- [x] Android-версия с переносом данных с ПК и обратно
+- [ ] Быстрый обмен резервной копией между устройствами (без ручного переноса файла)
 - [ ] Семейный/общий доступ к бюджету
-- [ ] Масштабирование (реплики БД, кеш, очереди)
 
 ---
 

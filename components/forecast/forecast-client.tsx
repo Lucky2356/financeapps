@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import { CashflowCalendar } from "@/components/forecast/cashflow-calendar";
 import { ForecastView } from "@/components/forecast/forecast-view";
-import { SourceBanner } from "@/components/source-banner";
 import { apiClient } from "@/lib/api/client";
 import { goalDeadlineMarkers, type CalendarMarker } from "@/lib/calendar/markers";
 import { upcomingDividends } from "@/lib/investments/dividends";
@@ -49,7 +48,6 @@ export function ForecastClient({ initialData }: { initialData: ForecastData }) {
 
   return (
     <>
-      <SourceBanner source={data.source} />
       <ForecastView data={data} />
       <CashflowCalendar events={data.events} currency={data.currency} markers={markers} />
     </>

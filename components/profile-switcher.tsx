@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import type { ProfileList, UserProfile } from "@/types/profiles";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,9 +34,6 @@ const PROFILE_COLORS = [
 
 export function ProfileSwitcher() {
   // Only show in desktop-local mode
-  if (!isLocalDesktopMode) {
-    return null;
-  }
 
   return <ProfileSwitcherInner />;
 }

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import type { AnalyticsData } from "@/lib/data";
 import type { AiProvider } from "@/lib/ai/models";
 import { useAiSettings } from "@/hooks/use-ai-settings";
@@ -60,30 +59,22 @@ export function AiGoalPlanButton({ goal, currency }: { goal: GoalLike; currency:
 
     try {
       setLoading(true);
-      let result: string;
-      if (isLocalDesktopMode) {
-        const apiKey = settings?.aiApiKey ?? "";
-        if (!apiKey) {
-          toast.error(t("ai.err.noKey"));
-          return;
-        }
-        const { requestGoalPlan } = await import("@/services/ai/AiAssistantService");
-        result = await requestGoalPlan({
+      const apiKey = settings?.aiApiKey ?? "";
+      if (!apiKey) {
+        toast.error(t("ai.err.noKey"));
+        return;
+      }
+      const { requestGoalPlan } = await import("@/services/ai/AiAssistantService");
+      setPlan(
+        await requestGoalPlan({
           goal: payload,
           locale: locale === "en" ? "en" : "ru",
           apiKey,
           model: settings?.aiModel || undefined,
           provider: (settings?.aiProvider as AiProvider) || undefined,
           effort: settings?.aiEffort || undefined
-        });
-      } else {
-        const res = await apiClient.post<{ answer: string }>("/ai/goal-plan", {
-          goal: payload,
-          locale
-        });
-        result = res.answer;
-      }
-      setPlan(result);
+        })
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("aiq.err.failed"));
     } finally {

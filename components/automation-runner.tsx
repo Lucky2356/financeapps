@@ -1,11 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
-import { isPublicPath } from "@/lib/public-paths";
 import { buildNotifications } from "@/lib/notifications";
 import { getClientLocale } from "@/lib/i18n/client-locale";
 import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
@@ -27,16 +24,12 @@ function isFxStale(updatedAt: string | null | undefined): boolean {
 // native plugin. Renders nothing.
 export function AutomationRunner() {
   const ran = useRef(false);
-  const pathname = usePathname();
 
   useEffect(() => {
     if (ran.current) return;
-    // Skip on public auth pages (login/register/legal): there is no session, so
-    // the snapshot/materialize calls would just 401.
-    if (isPublicPath(pathname)) return;
     ran.current = true;
     void runAutomation();
-  }, [pathname]);
+  }, []);
 
   return null;
 }
@@ -49,10 +42,10 @@ async function runAutomation() {
     return;
   }
 
-  // Refresh FX rates from the CBR feed once per day (desktop only — the browser
-  // can't fetch cbr.ru cross-origin, and the Tauri webview has it CSP-allow-
-  // listed). Keeps cross-currency capital honest; failures keep cached rates.
-  if (isLocalDesktopMode && isFxStale(settings.currencyRatesUpdatedAt)) {
+  // Refresh FX rates from the CBR feed once per day. The Tauri webview has
+  // cbr.ru CSP-allow-listed; keeps cross-currency capital honest, and a failure
+  // simply keeps the cached rates.
+  if (isFxStale(settings.currencyRatesUpdatedAt)) {
     try {
       const { fetchCbrRates } = await import("@/services/market/FxRatesProvider");
       const rates = await fetchCbrRates();
@@ -70,41 +63,36 @@ async function runAutomation() {
     // Ignore (offline / unauthenticated).
   }
 
-  // Scheduled local backup (desktop only): if a backup is due per the user's
-  // chosen cadence, write a timestamped snapshot to their folder and rotate.
-  if (isLocalDesktopMode) {
-    try {
-      const { loadAutoBackupConfig, getLastBackupRun, setLastBackupRun, runAutoBackup } =
-        await import("@/lib/backup/AutoBackupService");
-      const { shouldRunAutoBackup } = await import("@/lib/backup/auto-backup");
-      const config = loadAutoBackupConfig();
-      if (config.folder && shouldRunAutoBackup(config.frequency, getLastBackupRun())) {
-        await runAutoBackup(config);
-        setLastBackupRun(new Date().toISOString());
-      }
-    } catch {
-      // Best-effort; a failed backup must not break app startup.
+  // Scheduled local backup: if a backup is due per the user's chosen cadence,
+  // write a timestamped snapshot to their folder and rotate.
+  try {
+    const { loadAutoBackupConfig, getLastBackupRun, setLastBackupRun, runAutoBackup } =
+      await import("@/lib/backup/AutoBackupService");
+    const { shouldRunAutoBackup } = await import("@/lib/backup/auto-backup");
+    const config = loadAutoBackupConfig();
+    if (config.folder && shouldRunAutoBackup(config.frequency, getLastBackupRun())) {
+      await runAutoBackup(config);
+      setLastBackupRun(new Date().toISOString());
     }
+  } catch {
+    // Best-effort; a failed backup must not break app startup.
   }
 
   if (settings.autoMaterializeRecurring) {
     try {
-      // Both modes expose /recurring/materialize-all (desktop LocalApiClient,
-      // web batch route) — auto-post all due templates once per load.
+      // Auto-post every template whose due date has arrived.
       await apiClient.post("/recurring/materialize-all");
     } catch {
       // Best-effort; ignore failures (e.g. no accounts yet).
     }
 
-    if (isLocalDesktopMode) {
-      try {
-        // Debts with auto-payment enabled: post the monthly payment once the due
-        // day has passed and reduce the balance (desktop-only, idempotent per
-        // month — see lib/debts/auto-pay).
-        await apiClient.post("/debts/auto-pay");
-      } catch {
-        // Best-effort; ignore failures.
-      }
+    try {
+      // Debts with auto-payment enabled: post the monthly payment once the due
+      // day has passed and reduce the balance (idempotent per month — see
+      // lib/debts/auto-pay).
+      await apiClient.post("/debts/auto-pay");
+    } catch {
+      // Best-effort; ignore failures.
     }
   }
 

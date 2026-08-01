@@ -1,4 +1,4 @@
-import type { TransactionType } from "@prisma/client";
+import type { TransactionType } from "@/types/enums";
 import { addDays, differenceInCalendarDays, format, isAfter, isBefore, startOfDay } from "date-fns";
 import { enUS, ru } from "date-fns/locale";
 

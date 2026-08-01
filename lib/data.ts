@@ -1,40 +1,21 @@
-import type { Prisma, RecurrenceFrequency, RiskProfileCode, TransactionType } from "@prisma/client";
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
 
 import { ACCOUNT_TYPE_LABELS, RISK_PROFILE_LABELS } from "@/lib/constants";
-import { shouldUseBuildFallbackData } from "@/lib/build-mode";
-import {
-  buildCategoryExpenses,
-  buildMonthlyCashflow,
-  buildSectorStructure,
-  currentMonthRange
-} from "@/lib/data/derive";
+import { buildMonthlyCashflow, currentMonthRange } from "@/lib/data/derive";
 import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
-import { matchesCriteria } from "@/lib/transactions/filter";
 import { pickBestWorstMonth } from "@/lib/analytics/best-month";
 import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
-import { getServerLocale } from "@/lib/i18n/server-locale";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
-import { effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
-import {
-  plannedDebtMonthlyTotal,
-  plannedDebtPayments,
-  type PlannedDebtPayment
-} from "@/lib/debts/planned";
+import { type PlannedDebtPayment } from "@/lib/debts/planned";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
-import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
+import { buildNetWorthBreakdown } from "@/lib/net-worth";
 import type { CategorizationRule } from "@/lib/categorization-rules";
-import { prisma } from "@/lib/prisma";
-import { findCurrentUser } from "@/lib/auth/current-user";
-import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
+import { clamp, percent, roundMoney } from "@/lib/utils";
 import { transactionFilterSchema } from "@/lib/validations";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
-import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
-import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
-import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
 import type {
   AccountRow,
   BudgetRow,
@@ -49,15 +30,21 @@ import type {
   RecommendationView,
   TransactionRow
 } from "@/types/finance";
-import {
-  budgetLimits,
-  buildDemoGoals,
-  buildDemoRecurringTransactions,
-  buildDemoTransactions,
-  demoAccounts,
-  demoCategories,
-  type CategoryOption
-} from "@/lib/data/demo-seed";
+import type { RiskProfileCode } from "@/types/enums";
+import { budgetLimits, demoCategories, type CategoryOption } from "@/lib/data/demo-seed";
+
+// ---------------------------------------------------------------------------
+// Server-rendered page data.
+//
+// The app has no backend: every screen is server-rendered EMPTY and the client
+// immediately fills it in from the device's IndexedDB through LocalApiClient
+// (see hooks/use-api-page-data). Handing out demo or stale numbers here would
+// show "phantom" data for a frame and hand forms account ids that do not exist
+// on the device, so the shell must stay empty on purpose.
+//
+// What lives in this module is therefore only the page-data *shapes* plus the
+// empty values that satisfy them.
+// ---------------------------------------------------------------------------
 
 export type TransactionsPageData = {
   source: DataSource;
@@ -154,13 +141,12 @@ export type SettingsPageData = {
   autoMaterializeRecurring: boolean;
   paymentReminders: boolean;
   aiEnabled: boolean;
-  // Only populated on desktop (the user's own provider/key, stored locally). The
-  // web path uses a server-side key/provider and never returns these.
+  /** The user's own provider/key, stored on the device and never sent anywhere. */
   aiProvider?: string;
   aiEffort?: string;
   aiApiKey?: string;
   aiModel?: string;
-  // Desktop-only: when the cached CBR FX rates were last refreshed (ISO) or null.
+  /** When the cached CBR FX rates were last refreshed (ISO) or null. */
   currencyRatesUpdatedAt?: string | null;
   riskProfiles: Array<{
     id: string;
@@ -210,45 +196,7 @@ export type AnalyticsData = {
   insights: RecommendationView[];
 };
 
-type TransactionFilters = ReturnType<typeof transactionFilterSchema.parse>;
-
-const frequencyMonthlyFactor: Record<RecurrenceFrequency, number> = {
-  WEEKLY: 4.33,
-  MONTHLY: 1,
-  YEARLY: 1 / 12
-};
-
-// Debt payments are obligations just like templates, so they count towards the
-// planning summary — otherwise the monthly load understates what has to be paid.
-function buildRecurringSummary(
-  rows: RecurringTransactionRow[],
-  debtPayments: PlannedDebtPayment[] = []
-) {
-  const service = new RecurringTransactionService();
-  const activeRows = rows.filter((row) => row.isActive);
-  const dueDebts = debtPayments.filter((payment) => payment.isDue);
-  const nextSevenDaysAmount =
-    activeRows
-      .filter((row) => service.isUpcomingSoon(new Date(row.nextDate)) || row.isDue)
-      .reduce((sum, row) => sum + row.amount, 0) +
-    debtPayments
-      .filter((payment) => payment.isDue || payment.daysUntilNext <= 7)
-      .reduce((sum, payment) => sum + payment.amount, 0);
-  const monthlyAmount = (type: TransactionType) =>
-    activeRows
-      .filter((row) => row.type === type)
-      .reduce((sum, row) => sum + row.amount * frequencyMonthlyFactor[row.frequency], 0);
-
-  return {
-    activeCount: activeRows.length + debtPayments.length,
-    dueCount: activeRows.filter((row) => row.isDue).length + dueDebts.length,
-    nextSevenDaysAmount: roundMoney(nextSevenDaysAmount),
-    monthlyPlannedExpense: roundMoney(
-      monthlyAmount("EXPENSE") + plannedDebtMonthlyTotal(debtPayments)
-    ),
-    monthlyPlannedIncome: roundMoney(monthlyAmount("INCOME"))
-  };
-}
+// ---- Shared builders -------------------------------------------------------
 
 function buildBudgetRows(
   transactions: TransactionRow[],
@@ -352,91 +300,97 @@ function buildFinanceInput(
   };
 }
 
-function buildTrend(
-  current: number,
-  previous: number
-): { value: number; label: string } | undefined {
-  if (previous === 0) return undefined;
-  const diff = percent(current - previous, previous);
-  return { value: diff, label: "vs прошлый мес." };
-}
+function buildAnalyticsFromTransactions(
+  transactions: TransactionRow[],
+  currency: string,
+  source: DataSource,
+  locale: Locale = DEFAULT_LOCALE
+): AnalyticsData {
+  const months = [
+    subMonths(new Date(), 5),
+    subMonths(new Date(), 4),
+    subMonths(new Date(), 3),
+    subMonths(new Date(), 2),
+    subMonths(new Date(), 1),
+    new Date()
+  ];
 
-function buildDemoDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
-  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
-  const transactions = buildDemoTransactions();
-  const goals = buildDemoGoals();
-  const input = buildFinanceInput(transactions, demoAccounts, goals);
-  const service = new FinanceRecommendationService();
-  const totalBalance = demoAccounts.reduce((sum, account) => sum + account.balance, 0);
-  const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
-  const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
+  const monthlyCashflow = months.map((month) => {
+    const start = startOfMonth(month);
+    const end = endOfMonth(month);
+    const rows = transactions.filter((transaction) => {
+      const date = new Date(transaction.date);
+      return date >= start && date <= end;
+    });
+    const income = rows
+      .filter((row) => row.type === "INCOME")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const expense = rows
+      .filter((row) => row.type === "EXPENSE")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const savings = income - expense;
+    const savingsRate = income > 0 ? percent(savings, income) : 0;
+    return {
+      month: format(month, "LLL", { locale: ru }),
+      income,
+      expense,
+      savings,
+      savingsRate
+    };
+  });
+
+  const totalIncome = monthlyCashflow.reduce((sum, m) => sum + m.income, 0);
+  const totalExpense = monthlyCashflow.reduce((sum, m) => sum + m.expense, 0);
+  const nonZeroMonths = monthlyCashflow.filter((m) => m.income > 0 || m.expense > 0).length || 1;
+  const avgMonthlyIncome = roundMoney(totalIncome / nonZeroMonths);
+  const avgMonthlyExpense = roundMoney(totalExpense / nonZeroMonths);
+  const avgSavingsRate = roundMoney(
+    monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length
+  );
+
+  const bestWorst = pickBestWorstMonth(monthlyCashflow);
+
+  const categoryTotals = new Map<
+    string,
+    { categoryId: string; category: string; color: string; total: number }
+  >();
+  const sixMonthsAgo = startOfMonth(months[0]);
+  const expenseTransactions = transactions.filter(
+    (t) => t.type === "EXPENSE" && new Date(t.date) >= sixMonthsAgo
+  );
+  const totalExpenseAll = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+  for (const t of expenseTransactions) {
+    const existing = categoryTotals.get(t.category.id) ?? {
+      categoryId: t.category.id,
+      category: t.category.label,
+      color: t.category.color,
+      total: 0
+    };
+    existing.total += t.amount;
+    categoryTotals.set(t.category.id, existing);
+  }
+  const topExpenseCategories = [...categoryTotals.values()]
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6)
+    .map((item) => ({
+      ...item,
+      share: totalExpenseAll > 0 ? percent(item.total, totalExpenseAll) : 0
+    }));
+  const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories, locale);
 
   return {
-    source: "demo-fallback",
-    currency: "RUB",
-    metrics: [
-      {
-        key: "totalBalance",
-        title: t("svc.metric.totalBalance"),
-        value: formatCurrency(totalBalance),
-        detail: t("svc.metric.totalBalance.detail")
-      },
-      {
-        key: "monthIncome",
-        title: t("svc.metric.monthIncome"),
-        value: formatCurrency(input.currentMonthIncome),
-        detail: t("svc.metric.month.detail"),
-        tone: "success",
-        trend: buildTrend(currMonth.income, prevMonth?.income ?? 0),
-        spark: input.monthlyCashflow.map((month) => month.income)
-      },
-      {
-        key: "monthExpense",
-        title: t("svc.metric.monthExpense"),
-        value: formatCurrency(input.currentMonthExpense),
-        detail: t("svc.metric.month.detail"),
-        tone: "warning",
-        trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0),
-        spark: input.monthlyCashflow.map((month) => month.expense)
-      },
-      {
-        key: "freeCash",
-        title: t("svc.metric.freeCash"),
-        value: formatCurrency(input.freeCashflow),
-        detail: t("svc.metric.freeCash.detail"),
-        tone: input.freeCashflow >= 0 ? "success" : "danger",
-        trend: buildTrend(input.freeCashflow, (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0))
-      },
-      {
-        key: "savingsRate",
-        title: t("svc.metric.savingsRate"),
-        value: `${input.savingsRate.toFixed(1)}%`,
-        detail: t("svc.metric.savingsRate.detail")
-      },
-      {
-        key: "emergencyFund",
-        title: t("svc.metric.emergencyFund"),
-        value: t("svc.value.months", { months: input.emergencyFundMonths.toFixed(1) }),
-        detail: t("svc.metric.emergencyFund.detail")
-      }
-    ],
-    categoryExpenses: buildCategoryExpenses(transactions),
-    monthlyCashflow: input.monthlyCashflow,
-    recommendations: service.build(input, locale),
-    health: service.healthScore(input, locale),
-    netWorth: totalBalance,
-    liabilitiesTotal: 0,
-    netWorthBreakdown: buildNetWorthBreakdown({ totalBalance }),
-    netWorthTrend: buildNetWorthTrend({ currentNetWorth: totalBalance, transactions }),
-    emergencyFund: buildEmergencyFund({
-      savingsBalance: demoAccounts
-        .filter((account) => account.type === "SAVINGS")
-        .reduce((sum, account) => sum + account.balance, 0),
-      averageMonthlyExpense:
-        input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
-        Math.max(input.monthlyCashflow.length, 1),
-      targetMonths: 6
-    })
+    source,
+    currency,
+    monthlyCashflow,
+    topExpenseCategories,
+    avgMonthlyIncome,
+    avgMonthlyExpense,
+    avgSavingsRate,
+    bestMonth: bestWorst.best,
+    worstMonth: bestWorst.worst,
+    expenseChangePct: derived.expenseChangePct,
+    savingsRateTrend: derived.savingsRateTrend,
+    insights: derived.insights
   };
 }
 
@@ -449,50 +403,14 @@ function normalizeSearchParams(searchParams: Record<string, string | string[] | 
   );
 }
 
-async function getDefaultUser() {
-  if (!prisma) return null;
+// ---- Page data -------------------------------------------------------------
 
-  // Resolve "who" through the shared seam (lib/auth/current-user), then load the
-  // full row with the relations this module needs. P0 auth changes the seam only.
-  const current = await findCurrentUser();
-  if (!current) return null;
-
-  return prisma.user.findFirst({
-    where: { id: current.id },
-    include: { riskProfile: true }
-  });
-}
-
-async function safeData<T>(
-  fallback: () => T | Promise<T>,
-  query: () => Promise<T>,
-  staticFallback?: () => T | Promise<T>
-): Promise<T> {
-  // Desktop/mobile static export: the client LocalApiClient is the source of
-  // truth, so the baked-in server data must be EMPTY (not demo) to avoid
-  // "phantom" data and account-id mismatches in forms.
-  if (shouldUseBuildFallbackData()) return (staticFallback ?? fallback)();
-  if (!prisma) return fallback();
-
-  try {
-    return await query();
-  } catch (error) {
-    // "No user found" is the expected unauthenticated state on public pages
-    // (login / register / legal) — return the fallback without logging it as an
-    // error (avoids noise and spurious Sentry reports on every public visit).
-    const expectedNoSession = error instanceof Error && error.message.includes("No user found");
-    if (!expectedNoSession) console.error("Data layer fallback:", error);
-    return fallback();
-  }
-}
-
-// ---- Empty fallbacks for static (desktop) builds ----
-// source "database" so the SourceBanner does not flag a demo state.
-
-function emptyDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
+export async function getDashboardData(): Promise<DashboardData> {
+  const locale = DEFAULT_LOCALE;
   const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const input = buildFinanceInput([], [], []);
   const service = new FinanceRecommendationService();
+
   return {
     source: "database",
     currency: "RUB",
@@ -553,7 +471,52 @@ function emptyDashboard(locale: Locale = DEFAULT_LOCALE): DashboardData {
   };
 }
 
-function emptyForecast(locale: Locale = DEFAULT_LOCALE): ForecastPageData {
+export async function getTransactionsPageData(
+  searchParams: Record<string, string | string[] | undefined>
+): Promise<TransactionsPageData> {
+  const parsed = transactionFilterSchema.parse(normalizeSearchParams(searchParams));
+
+  return {
+    source: "database",
+    transactions: [],
+    accounts: [],
+    categories: [],
+    rules: [],
+    filters: parsed,
+    pagination: {
+      page: parsed.page,
+      limit: parsed.limit,
+      total: 0,
+      hasPreviousPage: false,
+      hasNextPage: false
+    }
+  };
+}
+
+export async function getRecurringTransactionsPageData(): Promise<RecurringTransactionsPageData> {
+  return {
+    source: "database",
+    recurringTransactions: [],
+    accounts: [],
+    categories: [],
+    budgetHints: [],
+    debtPayments: [],
+    currency: "RUB",
+    summary: {
+      activeCount: 0,
+      dueCount: 0,
+      nextSevenDaysAmount: 0,
+      monthlyPlannedExpense: 0,
+      monthlyPlannedIncome: 0
+    }
+  };
+}
+
+export async function getRulesPageData(): Promise<RulesPageData> {
+  return { source: "database", rules: [], categories: [] };
+}
+
+export async function getForecastData(): Promise<ForecastPageData> {
   return new CashflowForecastService().build(
     {
       source: "database",
@@ -562,19 +525,40 @@ function emptyForecast(locale: Locale = DEFAULT_LOCALE): ForecastPageData {
       recurringTransactions: [],
       goals: []
     },
-    locale
+    DEFAULT_LOCALE
   );
 }
 
-function emptyAnalytics(locale: Locale = DEFAULT_LOCALE): AnalyticsData {
-  return buildAnalyticsFromTransactions([], "RUB", "database", locale);
+export async function getAccountsPageData(): Promise<AccountsPageData> {
+  return { source: "database", accounts: [], totalBalance: 0, currency: "RUB" };
 }
 
-function emptyInvestments(locale: Locale = DEFAULT_LOCALE): InvestmentData {
+export async function getBudgetsPageData(month?: string): Promise<BudgetsPageData> {
+  const targetMonthDate = month ? new Date(`${month}-01`) : new Date();
+
+  return {
+    source: "database",
+    budgets: [],
+    categories: [],
+    recommendations: [],
+    currency: "RUB",
+    selectedMonth: format(startOfMonth(targetMonthDate), "yyyy-MM")
+  };
+}
+
+export async function getGoalsPageData(): Promise<GoalsPageData> {
+  return { source: "database", goals: [], currency: "RUB" };
+}
+
+export async function getLiabilitiesPageData(): Promise<LiabilitiesPageData> {
+  return { source: "database", liabilities: [], total: 0, currency: "RUB" };
+}
+
+export async function getInvestmentData(): Promise<InvestmentData> {
   return {
     source: "database",
     currency: "RUB",
-    riskProfile: translate(locale, "riskProfile.MODERATE"),
+    riskProfile: translate(DEFAULT_LOCALE, "riskProfile.MODERATE"),
     securities: [],
     watchlist: [],
     portfolio: [],
@@ -585,1509 +569,58 @@ function emptyInvestments(locale: Locale = DEFAULT_LOCALE): InvestmentData {
   };
 }
 
-function toAccountRow(account: {
-  id: string;
-  name: string;
-  type: string;
-  balance: unknown;
-  currency: string;
-}): AccountRow {
-  return {
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    balance: toNumber(account.balance),
-    currency: account.currency
-  };
-}
-
-function toCategoryOption(category: {
-  id: string;
-  name: string;
-  kind: "INCOME" | "EXPENSE";
-  color: string;
-  icon?: string | null;
-  isEssential: boolean;
-  isSubscription: boolean;
-}): CategoryOption {
-  return {
-    id: category.id,
-    label: category.name,
-    kind: category.kind,
-    color: category.color,
-    icon: category.icon ?? undefined,
-    isEssential: category.isEssential,
-    isSubscription: category.isSubscription
-  };
-}
-
-function transactionWhere(
-  userId: string,
-  filters: TransactionFilters
-): Prisma.TransactionWhereInput {
-  const categoryIds = filters.categoryId
-    ? filters.categoryId
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)
-    : [];
-  return {
-    userId,
-    ...(filters.type && filters.type !== "ALL" ? { type: filters.type } : {}),
-    ...(categoryIds.length === 1
-      ? { categoryId: categoryIds[0] }
-      : categoryIds.length > 1
-        ? { categoryId: { in: categoryIds } }
-        : {}),
-    ...(filters.accountId ? { accountId: filters.accountId } : {}),
-    ...(filters.minAmount != null || filters.maxAmount != null
-      ? {
-          amount: {
-            ...(filters.minAmount != null ? { gte: filters.minAmount } : {}),
-            ...(filters.maxAmount != null ? { lte: filters.maxAmount } : {})
-          }
-        }
-      : {}),
-    ...(filters.q
-      ? {
-          OR: [
-            { description: { contains: filters.q, mode: "insensitive" } },
-            { account: { name: { contains: filters.q, mode: "insensitive" } } },
-            { category: { name: { contains: filters.q, mode: "insensitive" } } }
-          ]
-        }
-      : {}),
-    ...(filters.from || filters.to
-      ? {
-          date: {
-            ...(filters.from ? { gte: new Date(filters.from) } : {}),
-            ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59`) } : {})
-          }
-        }
-      : {})
-  };
-}
-
-async function getDatabaseTransactions(
-  userId: string,
-  filters: TransactionFilters = transactionFilterSchema.parse({})
-) {
-  if (!prisma) return [];
-
-  const transactions = await prisma.transaction.findMany({
-    where: transactionWhere(userId, filters),
-    orderBy: { date: "desc" },
-    skip: ((filters.page ?? 1) - 1) * (filters.limit ?? 20),
-    take: filters.limit ?? 20,
-    include: {
-      account: true,
-      category: true
-    }
-  });
-
-  return transactions.map(
-    (transaction): TransactionRow => ({
-      id: transaction.id,
-      amount: toNumber(transaction.amount),
-      type: transaction.type,
-      date: transaction.date.toISOString(),
-      description: transaction.description,
-      account: { id: transaction.account.id, label: transaction.account.name },
-      category: {
-        id: transaction.category.id,
-        label: transaction.category.name,
-        color: transaction.category.color,
-        icon: transaction.category.icon ?? undefined
-      }
-    })
-  );
-}
-
-function toRecurringTransactionRow(row: {
-  id: string;
-  amount: unknown;
-  type: TransactionType;
-  frequency: RecurrenceFrequency;
-  nextDate: Date;
-  description: string | null;
-  isActive: boolean;
-  account: { id: string; name: string };
-  category: { id: string; name: string; color: string };
-}): RecurringTransactionRow {
-  const status = new RecurringTransactionService().getStatus({
-    nextDate: row.nextDate,
-    frequency: row.frequency,
-    isActive: row.isActive
-  });
-
-  return {
-    id: row.id,
-    amount: toNumber(row.amount),
-    type: row.type,
-    frequency: row.frequency,
-    nextDate: row.nextDate.toISOString(),
-    description: row.description,
-    isActive: row.isActive,
-    daysUntilNext: status.daysUntilNext,
-    isDue: status.isDue,
-    account: { id: row.account.id, label: row.account.name },
-    category: { id: row.category.id, label: row.category.name, color: row.category.color }
-  };
-}
-
-async function getDatabaseFinanceInput(userId: string, emergencyFundTargetMonths: number) {
-  if (!prisma) throw new Error("Prisma client is not configured.");
-
-  const [accounts, categories, goals, transactions] = await Promise.all([
-    prisma.account.findMany({ where: { userId, isArchived: false } }),
-    prisma.category.findMany({ where: { userId } }),
-    prisma.savingGoal.findMany({ where: { userId } }),
-    getDatabaseTransactions(userId)
-  ]);
-
-  const accountRows = accounts.map(toAccountRow);
-  const goalRows = goals.map(toGoalRow);
-  const monthlyCashflow = buildMonthlyCashflow(transactions);
-  const currentMonth = monthlyCashflow[monthlyCashflow.length - 1];
-  const averageExpense =
-    monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
-    Math.max(monthlyCashflow.length, 1);
-  const emergencyFund = accountRows
-    .filter((account) => account.type === "SAVINGS")
-    .reduce((sum, account) => sum + account.balance, 0);
-  const { start, end } = currentMonthRange();
-  const currentExpenseRows = transactions.filter((transaction) => {
-    const date = new Date(transaction.date);
-    return transaction.type === "EXPENSE" && date >= start && date <= end;
-  });
-  const categoryById = new Map(categories.map((category) => [category.id, category]));
-  const essentialExpense = currentExpenseRows
-    .filter((transaction) => categoryById.get(transaction.category.id)?.isEssential)
-    .reduce((sum, row) => sum + row.amount, 0);
-  const softExpense = currentExpenseRows
-    .filter((transaction) => {
-      const category = categoryById.get(transaction.category.id);
-      return (
-        category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.name ?? "")
-      );
-    })
-    .reduce((sum, row) => sum + row.amount, 0);
-  const budgetRows = await buildDatabaseBudgetRows(userId, categories.map(toCategoryOption));
-  const freeCashflow = currentMonth.income - currentMonth.expense;
-
-  return {
-    input: {
-      budgets: budgetRows.map((budget) => ({
-        category: budget.category,
-        limitAmount: budget.limitAmount,
-        spent: budget.spent,
-        isExceeded: budget.isExceeded,
-        isSubscription: categoryById.get(budget.categoryId)?.isSubscription
-      })),
-      monthlyCashflow,
-      currentMonthIncome: currentMonth.income,
-      currentMonthExpense: currentMonth.expense,
-      freeCashflow,
-      savingsRate: currentMonth.income > 0 ? percent(freeCashflow, currentMonth.income) : 0,
-      emergencyFundMonths: averageExpense > 0 ? emergencyFund / averageExpense : 0,
-      emergencyFundTargetMonths,
-      essentialExpenseShare:
-        currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
-      subscriptionAndEntertainmentShare:
-        currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
-      goals: goalRows.map((goal) => ({
-        title: goal.title,
-        progress: goal.progress,
-        monthlyContribution: goal.monthlyContribution
-      }))
-    },
-    accounts: accountRows,
-    transactions,
-    goals: goalRows
-  };
-}
-
-function toGoalRow(goal: {
-  id: string;
-  title: string;
-  targetAmount: unknown;
-  currentAmount: unknown;
-  deadline: Date;
-}): GoalRow {
-  const targetAmount = toNumber(goal.targetAmount);
-  const currentAmount = toNumber(goal.currentAmount);
-  const monthsLeft = Math.max(
-    1,
-    Math.ceil(
-      (startOfMonth(goal.deadline).getTime() - startOfMonth(new Date()).getTime()) /
-        (1000 * 60 * 60 * 24 * 30)
-    )
-  );
-  const remaining = Math.max(targetAmount - currentAmount, 0);
-
-  return {
-    id: goal.id,
-    title: goal.title,
-    targetAmount,
-    currentAmount,
-    deadline: goal.deadline.toISOString(),
-    progress: clamp(percent(currentAmount, targetAmount), 0, 100),
-    monthlyContribution: Math.ceil(remaining / monthsLeft)
-  };
-}
-
-async function buildDatabaseBudgetRows(
-  userId: string,
-  categories: CategoryOption[],
-  targetMonthDate?: Date
-): Promise<BudgetRow[]> {
-  if (!prisma) return [];
-
-  const monthDate = targetMonthDate ?? new Date();
-  const month = startOfMonth(monthDate);
-  const start = startOfMonth(monthDate);
-  const end = endOfMonth(monthDate);
-  const prevMonthDate = subMonths(monthDate, 1);
-  const prevMonth = startOfMonth(prevMonthDate);
-  const prevStart = startOfMonth(prevMonthDate);
-  const prevEnd = endOfMonth(prevMonthDate);
-  // History window covering the current month, the previous month (rollover) and
-  // the 3-month average used for the suggested limit. Aggregated directly from
-  // the DB so `spent` is correct regardless of how many transactions exist
-  // (the page's transaction list is paginated and must NOT be used here).
-  const windowStart = startOfMonth(subMonths(monthDate, 3));
-
-  const [budgets, prevBudgets, expenseRows] = await Promise.all([
-    prisma.budget.findMany({ where: { userId, month } }),
-    prisma.budget.findMany({ where: { userId, month: prevMonth } }),
-    prisma.transaction.findMany({
-      where: { userId, type: "EXPENSE", date: { gte: windowStart, lte: end } },
-      select: { categoryId: true, amount: true, date: true }
-    })
-  ]);
-
-  const budgetByCategory = new Map(budgets.map((budget) => [budget.categoryId, budget]));
-  const prevLimitByCategory = new Map(
-    prevBudgets.map((budget) => [budget.categoryId, toNumber(budget.limitAmount)])
-  );
-  const spentInRange = (categoryId: string, from: Date, to: Date) =>
-    expenseRows
-      .filter((row) => row.categoryId === categoryId && row.date >= from && row.date <= to)
-      .reduce((sum, row) => sum + toNumber(row.amount), 0);
-  // Shape the rows for suggestedLimitFor (which averages the trailing months).
-  const suggestHistory = expenseRows.map((row) => ({
-    category: { id: row.categoryId },
-    type: "EXPENSE" as const,
-    date: row.date,
-    amount: toNumber(row.amount)
-  }));
-
-  return categories
-    .filter((category) => category.kind === "EXPENSE")
-    .map((category) => {
-      const budget = budgetByCategory.get(category.id);
-      const limitAmount = budget ? toNumber(budget.limitAmount) : 0;
-      const spent = spentInRange(category.id, start, end);
-      const rollover = budget?.rollover ?? false;
-      const carried = rolloverCarry(
-        rollover,
-        prevLimitByCategory.get(category.id) ?? 0,
-        spentInRange(category.id, prevStart, prevEnd)
-      );
-      const effective = effectiveLimit(limitAmount, carried);
-
-      return {
-        id: budget?.id ?? `new-${category.id}`,
-        categoryId: category.id,
-        category: category.label,
-        color: category.color,
-        limitAmount,
-        spent,
-        rollover,
-        rolloverAmount: carried,
-        progress: effective > 0 ? clamp(percent(spent, effective), 0, 140) : 0,
-        isExceeded: effective > 0 && spent > effective,
-        suggestedLimit: suggestedLimitFor(category.id, suggestHistory, { now: monthDate })
-      };
-    });
-}
-
-export async function getDashboardData(): Promise<DashboardData> {
-  const locale = await getServerLocale();
-  return safeData<DashboardData>(
-    () => buildDemoDashboard(locale),
-    async () => {
-      const user = await getDefaultUser();
-      if (!user) return buildDemoDashboard(locale);
-
-      const t = (key: string, vars?: Record<string, string | number>) =>
-        translate(locale, key, vars);
-      const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
-      const service = new FinanceRecommendationService();
-      const totalBalance = finance.accounts.reduce((sum, account) => sum + account.balance, 0);
-      const input = finance.input;
-
-      // Net worth = accounts + current portfolio value + goal savings (parity with desktop).
-      const investments = await getInvestmentData();
-      const portfolioValue = investments.portfolio.reduce(
-        (sum, position) => sum + position.currentValue,
-        0
-      );
-      const goalSavings = finance.goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
-      const liabilities = prisma
-        ? (await prisma.liability.findMany({ where: { userId: user.id } })).map(toLiabilityRow)
-        : [];
-      const liabilitiesTotal = roundMoney(liabilities.reduce((sum, item) => sum + item.balance, 0));
-      const monthlyDebtPayments = liabilities.reduce((sum, item) => sum + item.minPayment, 0);
-      const healthInput = { ...input, monthlyDebtPayments };
-      const netWorth = computeNetWorth({
-        totalBalance,
-        portfolioValue,
-        goalSavings,
-        liabilitiesTotal
-      });
-
-      const savingsBalance = finance.accounts
-        .filter((account) => account.type === "SAVINGS")
-        .reduce((sum, account) => sum + account.balance, 0);
-      const averageMonthlyExpense =
-        input.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
-        Math.max(input.monthlyCashflow.length, 1);
-      const emergencyFund = buildEmergencyFund({
-        savingsBalance,
-        averageMonthlyExpense,
-        targetMonths: user.emergencyFundMonthsTarget
-      });
-
-      const prevMonth = input.monthlyCashflow[input.monthlyCashflow.length - 2];
-      const currMonth = input.monthlyCashflow[input.monthlyCashflow.length - 1];
-
-      // Captured daily net worth (plan B7) — preferred over flow-reconstruction.
-      const netWorthSnapshots = prisma
-        ? (
-            await prisma.netWorthSnapshot.findMany({
-              where: { userId: user.id },
-              orderBy: { date: "asc" },
-              select: { date: true, value: true }
-            })
-          ).map((s) => ({ date: s.date, value: Number(s.value) }))
-        : [];
-
-      return {
-        source: "database",
-        currency: user.currency,
-        metrics: [
-          {
-            key: "totalBalance",
-            title: t("svc.metric.totalBalance"),
-            value: formatCurrency(totalBalance, user.currency),
-            detail: t("svc.metric.totalBalance.detail")
-          },
-          {
-            key: "monthIncome",
-            title: t("svc.metric.monthIncome"),
-            value: formatCurrency(input.currentMonthIncome, user.currency),
-            detail: t("svc.metric.month.detail"),
-            tone: "success",
-            trend: buildTrend(currMonth.income, prevMonth?.income ?? 0),
-            spark: input.monthlyCashflow.map((month) => month.income)
-          },
-          {
-            key: "monthExpense",
-            title: t("svc.metric.monthExpense"),
-            value: formatCurrency(input.currentMonthExpense, user.currency),
-            detail: t("svc.metric.month.detail"),
-            tone: "warning",
-            trend: buildTrend(currMonth.expense, prevMonth?.expense ?? 0),
-            spark: input.monthlyCashflow.map((month) => month.expense)
-          },
-          {
-            key: "freeCash",
-            title: t("svc.metric.freeCash"),
-            value: formatCurrency(input.freeCashflow, user.currency),
-            detail: t("svc.metric.freeCash.detail"),
-            tone: input.freeCashflow >= 0 ? "success" : "danger",
-            trend: buildTrend(
-              input.freeCashflow,
-              (prevMonth?.income ?? 0) - (prevMonth?.expense ?? 0)
-            )
-          },
-          {
-            key: "savingsRate",
-            title: t("svc.metric.savingsRate"),
-            value: `${input.savingsRate.toFixed(1)}%`,
-            detail: t("svc.metric.savingsRate.detail")
-          },
-          {
-            key: "emergencyFund",
-            title: t("svc.metric.emergencyFund"),
-            value: t("svc.value.months", { months: input.emergencyFundMonths.toFixed(1) }),
-            detail: t("svc.metric.emergencyFund.detail")
-          }
-        ],
-        categoryExpenses: buildCategoryExpenses(finance.transactions),
-        monthlyCashflow: input.monthlyCashflow,
-        recommendations: service.build(healthInput, locale),
-        health: service.healthScore(healthInput, locale),
-        netWorth,
-        liabilitiesTotal,
-        netWorthBreakdown: buildNetWorthBreakdown({
-          totalBalance,
-          portfolioValue,
-          goalSavings,
-          liabilitiesTotal
-        }),
-        netWorthTrend: buildNetWorthTrend({
-          currentNetWorth: netWorth,
-          snapshots: netWorthSnapshots,
-          transactions: finance.transactions
-        }),
-        emergencyFund
-      };
-    },
-    () => emptyDashboard(locale)
-  );
-}
-
-export async function getTransactionsPageData(
-  searchParams: Record<string, string | string[] | undefined>
-): Promise<TransactionsPageData> {
-  const parsed = transactionFilterSchema.parse(normalizeSearchParams(searchParams));
-
-  return safeData<TransactionsPageData>(
-    () => {
-      const demoCriteria = {
-        from: parsed.from,
-        to: parsed.to,
-        type: parsed.type,
-        categoryIds: parsed.categoryId
-          ? parsed.categoryId
-              .split(",")
-              .map((value) => value.trim())
-              .filter(Boolean)
-          : [],
-        accountId: parsed.accountId,
-        q: parsed.q,
-        minAmount: parsed.minAmount,
-        maxAmount: parsed.maxAmount
-      };
-      const filteredTransactions = buildDemoTransactions().filter((transaction) =>
-        matchesCriteria(transaction, demoCriteria)
-      );
-      const start = (parsed.page - 1) * parsed.limit;
-      const transactions = filteredTransactions.slice(start, start + parsed.limit);
-
-      return {
-        source: "demo-fallback",
-        transactions,
-        accounts: demoAccounts,
-        categories: demoCategories,
-        rules: [],
-        filters: parsed,
-        pagination: {
-          page: parsed.page,
-          limit: parsed.limit,
-          total: filteredTransactions.length,
-          hasPreviousPage: parsed.page > 1,
-          hasNextPage: start + parsed.limit < filteredTransactions.length
-        }
-      };
-    },
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const [transactions, total, accounts, categories, rules] = await Promise.all([
-        getDatabaseTransactions(user.id, parsed),
-        prisma.transaction.count({ where: transactionWhere(user.id, parsed) }),
-        prisma.account.findMany({
-          where: { userId: user.id, isArchived: false },
-          orderBy: { createdAt: "asc" }
-        }),
-        prisma.category.findMany({
-          where: { userId: user.id },
-          orderBy: [{ kind: "asc" }, { name: "asc" }]
-        }),
-        prisma.rule.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } })
-      ]);
-      const start = (parsed.page - 1) * parsed.limit;
-
-      return {
-        source: "database",
-        transactions,
-        accounts: accounts.map(toAccountRow),
-        categories: categories.map(toCategoryOption),
-        rules: rules.map((rule) => ({
-          id: rule.id,
-          match: rule.match,
-          categoryId: rule.categoryId
-        })),
-        filters: parsed,
-        pagination: {
-          page: parsed.page,
-          limit: parsed.limit,
-          total,
-          hasPreviousPage: parsed.page > 1,
-          hasNextPage: start + parsed.limit < total
-        }
-      };
-    },
-    () => ({
-      source: "database",
-      transactions: [],
-      accounts: [],
-      categories: [],
-      rules: [],
-      filters: parsed,
-      pagination: {
-        page: parsed.page,
-        limit: parsed.limit,
-        total: 0,
-        hasPreviousPage: false,
-        hasNextPage: false
-      }
-    })
-  );
-}
-
-export async function getRecurringTransactionsPageData(): Promise<RecurringTransactionsPageData> {
-  return safeData<RecurringTransactionsPageData>(
-    () => {
-      const recurringTransactions = buildDemoRecurringTransactions();
-
-      return {
-        source: "demo-fallback",
-        recurringTransactions,
-        accounts: demoAccounts,
-        categories: demoCategories,
-        budgetHints: [],
-        debtPayments: [],
-        currency: "RUB",
-        summary: buildRecurringSummary(recurringTransactions)
-      };
-    },
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const service = new RecurringTransactionService();
-      const [recurringRows, accounts, categories, budgets, liabilities] = await Promise.all([
-        prisma.recurringTransaction.findMany({
-          where: { userId: user.id },
-          orderBy: [{ isActive: "desc" }, { nextDate: "asc" }],
-          include: { account: true, category: true }
-        }),
-        prisma.account.findMany({
-          where: { userId: user.id, isArchived: false },
-          orderBy: { createdAt: "asc" }
-        }),
-        prisma.category.findMany({
-          where: { userId: user.id },
-          orderBy: [{ kind: "asc" }, { name: "asc" }]
-        }),
-        prisma.budget.findMany({
-          where: { userId: user.id, month: startOfMonth(new Date()) }
-        }),
-        prisma.liability.findMany({ where: { userId: user.id }, orderBy: { name: "asc" } })
-      ]);
-      const recurringTransactions = service.sortUpcoming(
-        recurringRows.map(toRecurringTransactionRow)
-      );
-      const debtPayments = plannedDebtPayments(
-        liabilities.map((liability) => ({
-          id: liability.id,
-          name: liability.name,
-          balance: toNumber(liability.balance),
-          minPayment: toNumber(liability.minPayment),
-          dueDay: liability.dueDay ?? undefined
-        }))
-      );
-
-      return {
-        source: "database",
-        recurringTransactions,
-        accounts: accounts.map(toAccountRow),
-        categories: categories.map(toCategoryOption),
-        budgetHints: budgets.map((budget) => ({
-          categoryId: budget.categoryId,
-          amount: toNumber(budget.limitAmount)
-        })),
-        debtPayments,
-        currency: user.currency,
-        summary: buildRecurringSummary(recurringTransactions, debtPayments)
-      };
-    },
-    () => ({
-      source: "database",
-      recurringTransactions: [],
-      accounts: [],
-      categories: [],
-      budgetHints: [],
-      debtPayments: [],
-      currency: "RUB",
-      summary: {
-        activeCount: 0,
-        dueCount: 0,
-        nextSevenDaysAmount: 0,
-        monthlyPlannedExpense: 0,
-        monthlyPlannedIncome: 0
-      }
-    })
-  );
-}
-
-export async function getRulesPageData(): Promise<RulesPageData> {
-  return safeData<RulesPageData>(
-    () => ({
-      source: "demo-fallback",
-      rules: [],
-      categories: demoCategories.map((category) => ({
-        id: category.id,
-        label: category.label,
-        kind: category.kind
-      }))
-    }),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const [rules, categories] = await Promise.all([
-        prisma.rule.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }),
-        prisma.category.findMany({
-          where: { userId: user.id },
-          orderBy: [{ kind: "asc" }, { name: "asc" }]
-        })
-      ]);
-
-      return {
-        source: "database",
-        rules: rules.map((rule) => ({
-          id: rule.id,
-          match: rule.match,
-          categoryId: rule.categoryId
-        })),
-        categories: categories.map((category) => ({
-          id: category.id,
-          label: category.name,
-          kind: category.kind
-        }))
-      };
-    },
-    () => ({ source: "database", rules: [], categories: [] })
-  );
-}
-
-export async function getForecastData(): Promise<ForecastPageData> {
-  const locale = await getServerLocale();
-  return safeData<ForecastPageData>(
-    () => {
-      const recurringTransactions = buildDemoRecurringTransactions();
-      const goals = buildDemoGoals();
-
-      return new CashflowForecastService().build(
-        {
-          source: "demo-fallback",
-          currency: "RUB",
-          accounts: demoAccounts,
-          recurringTransactions,
-          goals
-        },
-        locale
-      );
-    },
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const [accounts, recurringRows, goals] = await Promise.all([
-        prisma.account.findMany({
-          where: { userId: user.id, isArchived: false },
-          orderBy: { createdAt: "asc" }
-        }),
-        prisma.recurringTransaction.findMany({
-          where: { userId: user.id },
-          orderBy: [{ isActive: "desc" }, { nextDate: "asc" }],
-          include: { account: true, category: true }
-        }),
-        prisma.savingGoal.findMany({ where: { userId: user.id }, orderBy: { deadline: "asc" } })
-      ]);
-
-      return new CashflowForecastService().build(
-        {
-          source: "database",
-          currency: user.currency,
-          accounts: accounts.map(toAccountRow),
-          recurringTransactions: recurringRows.map(toRecurringTransactionRow),
-          goals: goals.map(toGoalRow)
-        },
-        locale
-      );
-    },
-    () => emptyForecast(locale)
-  );
-}
-
-export async function getAccountsPageData(): Promise<AccountsPageData> {
-  return safeData<AccountsPageData>(
-    () => ({
-      source: "demo-fallback",
-      accounts: demoAccounts,
-      totalBalance: demoAccounts.reduce((sum, account) => sum + account.balance, 0),
-      currency: "RUB"
-    }),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const accounts = (
-        await prisma.account.findMany({
-          where: { userId: user.id, isArchived: false },
-          orderBy: { createdAt: "asc" }
-        })
-      ).map(toAccountRow);
-
-      return {
-        source: "database",
-        accounts,
-        totalBalance: accounts.reduce((sum, account) => sum + account.balance, 0),
-        currency: user.currency
-      };
-    },
-    () => ({ source: "database", accounts: [], totalBalance: 0, currency: "RUB" })
-  );
-}
-
-export async function getBudgetsPageData(month?: string): Promise<BudgetsPageData> {
-  const targetMonthDate = month ? new Date(`${month}-01`) : new Date();
-  const selectedMonth = format(startOfMonth(targetMonthDate), "yyyy-MM");
-  const locale = await getServerLocale();
-
-  return safeData<BudgetsPageData>(
-    () => {
-      const transactions = buildDemoTransactions();
-      const goals = buildDemoGoals();
-      const input = buildFinanceInput(transactions, demoAccounts, goals);
-      const service = new FinanceRecommendationService();
-
-      return {
-        source: "demo-fallback",
-        budgets: buildBudgetRows(transactions, demoCategories, targetMonthDate),
-        categories: demoCategories,
-        recommendations: service
-          .build(input, locale)
-          .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
-        currency: "RUB",
-        selectedMonth
-      };
-    },
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const categories = await prisma.category.findMany({
-        where: { userId: user.id },
-        orderBy: [{ kind: "asc" }, { name: "asc" }]
-      });
-      const categoryOptions = categories.map(toCategoryOption);
-      const budgets = await buildDatabaseBudgetRows(user.id, categoryOptions, targetMonthDate);
-      const finance = await getDatabaseFinanceInput(user.id, user.emergencyFundMonthsTarget);
-      const recommendations = new FinanceRecommendationService()
-        .build(finance.input, locale)
-        .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity));
-
-      return {
-        source: "database",
-        budgets,
-        categories: categoryOptions,
-        recommendations,
-        currency: user.currency,
-        selectedMonth
-      };
-    },
-    () => ({
-      source: "database",
-      budgets: [],
-      categories: [],
-      recommendations: [],
-      currency: "RUB",
-      selectedMonth
-    })
-  );
-}
-
-export async function getGoalsPageData(): Promise<GoalsPageData> {
-  return safeData<GoalsPageData>(
-    () => ({
-      source: "demo-fallback",
-      goals: buildDemoGoals(),
-      currency: "RUB"
-    }),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const goals = await prisma.savingGoal.findMany({
-        where: { userId: user.id },
-        orderBy: { deadline: "asc" }
-      });
-
-      return {
-        source: "database",
-        goals: goals.map(toGoalRow),
-        currency: user.currency
-      };
-    },
-    () => ({ source: "database", goals: [], currency: "RUB" })
-  );
-}
-
-function toLiabilityRow(row: {
-  id: string;
-  name: string;
-  kind: string;
-  balance: unknown;
-  originalAmount: unknown;
-  interestRate: unknown;
-  minPayment: unknown;
-  dueDay: number | null;
-  currency: string;
-}): LiabilityRow {
-  const balance = toNumber(row.balance);
-  const originalAmount = toNumber(row.originalAmount);
-  const repaid = Math.max(originalAmount - balance, 0);
-  return {
-    id: row.id,
-    name: row.name,
-    kind: row.kind as LiabilityRow["kind"],
-    balance,
-    originalAmount,
-    interestRate: toNumber(row.interestRate),
-    minPayment: toNumber(row.minPayment),
-    ...(row.dueDay != null ? { dueDay: row.dueDay } : {}),
-    currency: row.currency,
-    progress: originalAmount > 0 ? clamp(percent(repaid, originalAmount), 0, 100) : 0
-  };
-}
-
-export async function getLiabilitiesPageData(): Promise<LiabilitiesPageData> {
-  return safeData<LiabilitiesPageData>(
-    () => ({ source: "demo-fallback", liabilities: [], total: 0, currency: "RUB" }),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const liabilities = await prisma.liability.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "asc" }
-      });
-      const rows = liabilities.map(toLiabilityRow);
-      return {
-        source: "database",
-        liabilities: rows,
-        total: roundMoney(rows.reduce((sum, item) => sum + item.balance, 0)),
-        currency: user.currency
-      };
-    },
-    () => ({ source: "database", liabilities: [], total: 0, currency: "RUB" })
-  );
-}
-
-export async function getInvestmentData(): Promise<InvestmentData> {
-  const locale = await getServerLocale();
-  return safeData<InvestmentData>(
-    () => buildDemoInvestmentData(locale),
-    async (): Promise<InvestmentData> => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-
-      const watchlistItems = await prisma.watchlistItem.findMany({
-        where: { userId: user.id },
-        include: {
-          security: {
-            include: {
-              prices: { orderBy: { date: "desc" }, take: 31 }
-            }
-          }
-        },
-        orderBy: { createdAt: "asc" }
-      });
-
-      const securities = await prisma.security.findMany({
-        include: {
-          prices: { orderBy: { date: "desc" }, take: 1 }
-        },
-        orderBy: { ticker: "asc" }
-      });
-
-      const portfolio = await prisma.portfolio.findFirst({
-        where: { userId: user.id },
-        include: {
-          positions: {
-            include: {
-              security: {
-                include: {
-                  prices: { orderBy: { date: "desc" }, take: 45 }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      const watchlist = watchlistItems.map((item) => {
-        const latest = item.security.prices[0];
-        return {
-          ticker: item.security.ticker,
-          name: item.security.name,
-          sector: item.security.sector,
-          price: latest ? toNumber(latest.price) : 0,
-          changeDay: latest ? toNumber(latest.changeDay) : 0,
-          change30d: latest ? toNumber(latest.change30d) : 0,
-          risk: item.security.risk,
-          comment: item.security.comment
-        };
-      });
-      const securityRows = securities.map((security) => {
-        const latest = security.prices[0];
-        return {
-          ticker: security.ticker,
-          name: security.name,
-          sector: security.sector,
-          price: latest ? toNumber(latest.price) : 0,
-          changeDay: latest ? toNumber(latest.changeDay) : 0,
-          change30d: latest ? toNumber(latest.change30d) : 0,
-          risk: security.risk,
-          comment: security.comment
-        };
-      });
-
-      const rowsWithoutShare =
-        portfolio?.positions.map((position) => {
-          const latest = position.security.prices[0];
-          const currentPrice = latest ? toNumber(latest.price) : 0;
-          const quantity = toNumber(position.quantity);
-          const averageBuyPrice = toNumber(position.averageBuyPrice);
-          const currentValue = roundMoney(currentPrice * quantity);
-
-          return {
-            ticker: position.security.ticker,
-            name: position.security.name,
-            sector: position.security.sector,
-            quantity,
-            averageBuyPrice,
-            currentPrice,
-            currentValue,
-            pnl: roundMoney((currentPrice - averageBuyPrice) * quantity),
-            share: 0,
-            risk: position.security.risk
-          };
-        }) ?? [];
-
-      const total = rowsWithoutShare.reduce((sum, row) => sum + row.currentValue, 0);
-      const portfolioRows = rowsWithoutShare.map((row) => ({
-        ...row,
-        share: total > 0 ? percent(row.currentValue, total) : 0
-      }));
-      const historical: Record<string, number[]> = {};
-      for (const position of portfolio?.positions ?? []) {
-        historical[position.security.ticker] = [...position.security.prices]
-          .reverse()
-          .map((priceRow) => toNumber(priceRow.price));
-      }
-      const riskCode = user.riskProfile?.code ?? "MODERATE";
-      const analysis = new InvestmentAnalysisService().analyze(
-        portfolioRows,
-        riskCode,
-        historical,
-        locale
-      );
-
-      return {
-        source: "database",
-        currency: user.currency,
-        riskProfile: translate(locale, `riskProfile.${riskCode}`),
-        securities: securityRows,
-        watchlist,
-        portfolio: portfolioRows,
-        structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),
-        sectorStructure: buildSectorStructure(portfolioRows),
-        risks: analysis.risks,
-        education: analysis.education
-      };
-    },
-    () => emptyInvestments(locale)
-  );
-}
-
-async function buildDemoInvestmentData(locale: Locale = DEFAULT_LOCALE): Promise<InvestmentData> {
-  const provider = createMarketDataProvider();
-  const securities = await provider.getSecurities();
-  const positionConfig = [
-    ["SBER", 350, 287],
-    ["LKOH", 18, 6950],
-    ["YDEX", 22, 3780],
-    ["MOEX", 520, 214],
-    ["T", 28, 2860],
-    ["GAZP", 480, 154]
-  ] as const;
-  // Skip any demo ticker the market provider doesn't currently list (e.g. after a
-  // delisting/rename) rather than crashing the whole investments page on a `.find`.
-  const rowsWithoutShare = positionConfig.flatMap(([ticker, quantity, averageBuyPrice]) => {
-    const security = securities.find((item) => item.ticker === ticker);
-    if (!security) return [];
-    const currentValue = roundMoney(security.price * quantity);
-
-    return [
-      {
-        ticker,
-        name: security.name,
-        sector: security.sector,
-        quantity,
-        averageBuyPrice,
-        currentPrice: security.price,
-        currentValue,
-        pnl: roundMoney((security.price - averageBuyPrice) * quantity),
-        share: 0,
-        risk: security.risk
-      }
-    ];
-  });
-  const total = rowsWithoutShare.reduce((sum, row) => sum + row.currentValue, 0);
-  const portfolioRows = rowsWithoutShare.map((row) => ({
-    ...row,
-    share: total > 0 ? percent(row.currentValue, total) : 0
-  }));
-  const historical: Record<string, number[]> = {};
-  for (const row of portfolioRows) {
-    historical[row.ticker] = (
-      await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())
-    ).map((item) => item.price);
-  }
-  const analysis = new InvestmentAnalysisService().analyze(
-    portfolioRows,
-    "MODERATE",
-    historical,
-    locale
-  );
-
-  return {
-    source: "demo-fallback",
-    currency: "RUB",
-    riskProfile: translate(locale, "riskProfile.MODERATE"),
-    securities,
-    watchlist: securities,
-    portfolio: portfolioRows,
-    structure: portfolioRows.map((row) => ({ name: row.ticker, value: row.share })),
-    sectorStructure: buildSectorStructure(portfolioRows),
-    risks: analysis.risks,
-    education: analysis.education
-  };
-}
-
 export async function getSettingsPageData(): Promise<SettingsPageData> {
-  return safeData<SettingsPageData>(
-    () => ({
-      source: "demo-fallback",
-      currency: "RUB",
-      demoMode: true,
-      emergencyFundMonthsTarget: 6,
-      riskProfileCode: "MODERATE",
-      theme: "system",
-      density: "comfortable",
-      defaultTransactionType: "EXPENSE" as const,
-      autoMaterializeRecurring: false,
-      paymentReminders: false,
-      aiEnabled: false,
-      riskProfiles: [
-        {
-          id: "risk-conservative",
-          code: "CONSERVATIVE",
-          title: RISK_PROFILE_LABELS.CONSERVATIVE,
-          description: "Стабильность и контроль просадки."
-        },
-        {
-          id: "risk-moderate",
-          code: "MODERATE",
-          title: RISK_PROFILE_LABELS.MODERATE,
-          description: "Баланс роста и риска."
-        },
-        {
-          id: "risk-aggressive",
-          code: "AGGRESSIVE",
-          title: RISK_PROFILE_LABELS.AGGRESSIVE,
-          description: "Готовность к заметной волатильности."
-        }
-      ]
-    }),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const riskProfiles = await prisma.riskProfile.findMany({ orderBy: { code: "asc" } });
-
-      return {
-        source: "database",
-        currency: user.currency,
-        demoMode: user.demoMode,
-        emergencyFundMonthsTarget: user.emergencyFundMonthsTarget,
-        riskProfileCode: user.riskProfile?.code ?? "MODERATE",
-        theme: user.theme as "light" | "dark" | "system",
-        density: user.density as "comfortable" | "compact",
-        defaultTransactionType: user.defaultTransactionType,
-        autoMaterializeRecurring: user.autoMaterializeRecurring,
-        paymentReminders: user.paymentReminders,
-        aiEnabled: user.aiEnabled,
-        riskProfiles: riskProfiles.map((profile) => ({
-          id: profile.id,
-          code: profile.code,
-          title: profile.title,
-          description: profile.description
-        }))
-      };
-    },
-    () => ({
-      source: "database",
-      currency: "RUB",
-      demoMode: false,
-      emergencyFundMonthsTarget: 6,
-      riskProfileCode: "MODERATE",
-      theme: "system",
-      density: "comfortable",
-      defaultTransactionType: "EXPENSE" as const,
-      autoMaterializeRecurring: false,
-      paymentReminders: false,
-      aiEnabled: false,
-      riskProfiles: [
-        {
-          id: "risk-conservative",
-          code: "CONSERVATIVE",
-          title: RISK_PROFILE_LABELS.CONSERVATIVE,
-          description: "Стабильность и контроль просадки."
-        },
-        {
-          id: "risk-moderate",
-          code: "MODERATE",
-          title: RISK_PROFILE_LABELS.MODERATE,
-          description: "Баланс роста и риска."
-        },
-        {
-          id: "risk-aggressive",
-          code: "AGGRESSIVE",
-          title: RISK_PROFILE_LABELS.AGGRESSIVE,
-          description: "Готовность к заметной волатильности."
-        }
-      ]
-    })
-  );
+  return {
+    source: "database",
+    currency: "RUB",
+    demoMode: false,
+    emergencyFundMonthsTarget: 6,
+    riskProfileCode: "MODERATE",
+    theme: "system",
+    density: "comfortable",
+    defaultTransactionType: "EXPENSE",
+    autoMaterializeRecurring: false,
+    paymentReminders: false,
+    aiEnabled: false,
+    riskProfiles: [
+      {
+        id: "risk-conservative",
+        code: "CONSERVATIVE",
+        title: RISK_PROFILE_LABELS.CONSERVATIVE,
+        description: "Стабильность и контроль просадки."
+      },
+      {
+        id: "risk-moderate",
+        code: "MODERATE",
+        title: RISK_PROFILE_LABELS.MODERATE,
+        description: "Баланс роста и риска."
+      },
+      {
+        id: "risk-aggressive",
+        code: "AGGRESSIVE",
+        title: RISK_PROFILE_LABELS.AGGRESSIVE,
+        description: "Готовность к заметной волатильности."
+      }
+    ]
+  };
 }
 
 export async function getImportPageData(): Promise<ImportPageData> {
-  return safeData<ImportPageData>(
-    () => ({
-      source: "demo-fallback",
-      accounts: demoAccounts,
-      categories: demoCategories,
-      lastBackupAt: null,
-      backupReminderDue: true
-    }),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const [accounts, categories] = await Promise.all([
-        prisma.account.findMany({
-          where: { userId: user.id, isArchived: false },
-          orderBy: { createdAt: "asc" }
-        }),
-        prisma.category.findMany({
-          where: { userId: user.id },
-          orderBy: [{ kind: "asc" }, { name: "asc" }]
-        })
-      ]);
-
-      return {
-        source: "database",
-        accounts: accounts.map(toAccountRow),
-        categories: categories.map(toCategoryOption),
-        lastBackupAt: null,
-        backupReminderDue: false
-      };
-    },
-    () => ({
-      source: "database",
-      accounts: [],
-      categories: [],
-      lastBackupAt: null,
-      backupReminderDue: true
-    })
-  );
-}
-
-function buildAnalyticsFromTransactions(
-  transactions: TransactionRow[],
-  currency: string,
-  source: DataSource,
-  locale: Locale = DEFAULT_LOCALE
-): AnalyticsData {
-  const months = [
-    subMonths(new Date(), 5),
-    subMonths(new Date(), 4),
-    subMonths(new Date(), 3),
-    subMonths(new Date(), 2),
-    subMonths(new Date(), 1),
-    new Date()
-  ];
-
-  const monthlyCashflow = months.map((month) => {
-    const start = startOfMonth(month);
-    const end = endOfMonth(month);
-    const rows = transactions.filter((transaction) => {
-      const date = new Date(transaction.date);
-      return date >= start && date <= end;
-    });
-    const income = rows
-      .filter((row) => row.type === "INCOME")
-      .reduce((sum, row) => sum + row.amount, 0);
-    const expense = rows
-      .filter((row) => row.type === "EXPENSE")
-      .reduce((sum, row) => sum + row.amount, 0);
-    const savings = income - expense;
-    const savingsRate = income > 0 ? percent(savings, income) : 0;
-    return {
-      month: format(month, "LLL", { locale: ru }),
-      income,
-      expense,
-      savings,
-      savingsRate
-    };
-  });
-
-  const totalIncome = monthlyCashflow.reduce((sum, m) => sum + m.income, 0);
-  const totalExpense = monthlyCashflow.reduce((sum, m) => sum + m.expense, 0);
-  const nonZeroMonths = monthlyCashflow.filter((m) => m.income > 0 || m.expense > 0).length || 1;
-  const avgMonthlyIncome = roundMoney(totalIncome / nonZeroMonths);
-  const avgMonthlyExpense = roundMoney(totalExpense / nonZeroMonths);
-  const avgSavingsRate = roundMoney(
-    monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length
-  );
-
-  const bestWorst = pickBestWorstMonth(monthlyCashflow);
-
-  // Top expense categories (last 6 months)
-  const categoryTotals = new Map<
-    string,
-    { categoryId: string; category: string; color: string; total: number }
-  >();
-  const sixMonthsAgo = startOfMonth(months[0]);
-  const expenseTransactions = transactions.filter(
-    (t) => t.type === "EXPENSE" && new Date(t.date) >= sixMonthsAgo
-  );
-  const totalExpenseAll = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
-  for (const t of expenseTransactions) {
-    const existing = categoryTotals.get(t.category.id) ?? {
-      categoryId: t.category.id,
-      category: t.category.label,
-      color: t.category.color,
-      total: 0
-    };
-    existing.total += t.amount;
-    categoryTotals.set(t.category.id, existing);
-  }
-  const topExpenseCategories = [...categoryTotals.values()]
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 6)
-    .map((item) => ({
-      ...item,
-      share: totalExpenseAll > 0 ? percent(item.total, totalExpenseAll) : 0
-    }));
-  const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories, locale);
-
   return {
-    source,
-    currency,
-    monthlyCashflow,
-    topExpenseCategories,
-    avgMonthlyIncome,
-    avgMonthlyExpense,
-    avgSavingsRate,
-    bestMonth: bestWorst.best,
-    worstMonth: bestWorst.worst,
-    expenseChangePct: derived.expenseChangePct,
-    savingsRateTrend: derived.savingsRateTrend,
-    insights: derived.insights
-  };
-}
-
-function buildDemoAnalytics(locale: Locale = DEFAULT_LOCALE): AnalyticsData {
-  const transactions = buildDemoTransactions();
-  const result = buildAnalyticsFromTransactions(transactions, "RUB", "demo-fallback");
-
-  // Supplement with more realistic 6-month demo data if we don't have 6 months of real demo data
-  // (demo only has 3 months). Patch months with no data to have realistic values.
-  const patchedCashflow = result.monthlyCashflow.map((m, index) => {
-    if (m.income === 0 && m.expense === 0) {
-      const baseIncome = 145000 + index * 5000;
-      const baseExpense = 108000 + index * 2000;
-      const savings = baseIncome - baseExpense;
-      return {
-        month: m.month,
-        income: baseIncome,
-        expense: baseExpense,
-        savings,
-        savingsRate: percent(savings, baseIncome)
-      };
-    }
-    return m;
-  });
-
-  const patchedTotals = patchedCashflow.reduce(
-    (acc, m) => ({ income: acc.income + m.income, expense: acc.expense + m.expense }),
-    { income: 0, expense: 0 }
-  );
-  const avgMonthlyIncome = roundMoney(patchedTotals.income / 6);
-  const avgMonthlyExpense = roundMoney(patchedTotals.expense / 6);
-  const avgSavingsRate = roundMoney(patchedCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / 6);
-  const patchedBestWorst = pickBestWorstMonth(patchedCashflow);
-  const bestMonth = patchedBestWorst.best;
-  const worstMonth = patchedBestWorst.worst;
-
-  const topExpenseCategories =
-    result.topExpenseCategories.length > 0
-      ? result.topExpenseCategories
-      : [
-          {
-            categoryId: "cat-food",
-            category: "Продукты",
-            color: "#f97316",
-            total: 260000,
-            share: 28
-          },
-          {
-            categoryId: "cat-utilities",
-            category: "ЖКХ",
-            color: "#7c3aed",
-            total: 115000,
-            share: 12
-          },
-          {
-            categoryId: "cat-entertainment",
-            category: "Развлечения",
-            color: "#eab308",
-            total: 130000,
-            share: 14
-          },
-          {
-            categoryId: "cat-transport",
-            category: "Транспорт",
-            color: "#2563eb",
-            total: 68000,
-            share: 7
-          },
-          {
-            categoryId: "cat-restaurants",
-            category: "Рестораны",
-            color: "#ea580c",
-            total: 95000,
-            share: 10
-          },
-          {
-            categoryId: "cat-health",
-            category: "Здоровье",
-            color: "#dc2626",
-            total: 55000,
-            share: 6
-          }
-        ];
-  const derived = buildAnalyticsDerived(patchedCashflow, topExpenseCategories, locale);
-
-  return {
-    source: "demo-fallback",
-    currency: "RUB",
-    monthlyCashflow: patchedCashflow,
-    topExpenseCategories,
-    avgMonthlyIncome,
-    avgMonthlyExpense,
-    avgSavingsRate,
-    bestMonth,
-    worstMonth,
-    expenseChangePct: derived.expenseChangePct,
-    savingsRateTrend: derived.savingsRateTrend,
-    insights: derived.insights
+    source: "database",
+    accounts: [],
+    categories: [],
+    lastBackupAt: null,
+    backupReminderDue: true
   };
 }
 
 export async function getCategoriesPageData(): Promise<CategoriesPageData> {
-  return safeData<CategoriesPageData>(
-    () => ({
-      source: "demo-fallback",
-      categories: demoCategories.map((cat) => ({
-        id: cat.id,
-        name: cat.label,
-        kind: cat.kind,
-        color: cat.color,
-        isEssential: cat.isEssential ?? false,
-        isSubscription: cat.isSubscription ?? false,
-        transactionCount: buildDemoTransactions().filter((t) => t.category.id === cat.id).length
-      }))
-    }),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-      const categories = await prisma.category.findMany({
-        where: { userId: user.id },
-        orderBy: [{ kind: "asc" }, { name: "asc" }],
-        include: { _count: { select: { transactions: true } } }
-      });
-
-      return {
-        source: "database",
-        categories: categories.map((cat) => ({
-          id: cat.id,
-          name: cat.name,
-          kind: cat.kind,
-          color: cat.color,
-          isEssential: cat.isEssential,
-          isSubscription: cat.isSubscription,
-          transactionCount: cat._count.transactions
-        }))
-      };
-    },
-    () => ({ source: "database", categories: [] })
-  );
+  return { source: "database", categories: [] };
 }
 
 export async function getAnalyticsData(): Promise<AnalyticsData> {
-  const locale = await getServerLocale();
-  return safeData<AnalyticsData>(
-    () => buildDemoAnalytics(locale),
-    async () => {
-      if (!prisma) throw new Error("Prisma client is not configured.");
-      const user = await getDefaultUser();
-      if (!user) throw new Error("No user found.");
-
-      const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-      const transactions = await prisma.transaction.findMany({
-        where: { userId: user.id, date: { gte: sixMonthsAgo } },
-        include: { category: true },
-        orderBy: { date: "desc" }
-      });
-
-      const transactionRows: TransactionRow[] = transactions.map((t) => ({
-        id: t.id,
-        amount: toNumber(t.amount),
-        type: t.type,
-        date: t.date.toISOString(),
-        description: t.description,
-        account: { id: t.accountId, label: "" },
-        category: { id: t.category.id, label: t.category.name, color: t.category.color }
-      }));
-
-      return buildAnalyticsFromTransactions(transactionRows, user.currency, "database", locale);
-    },
-    () => emptyAnalytics(locale)
-  );
+  return buildAnalyticsFromTransactions([], "RUB", "database", DEFAULT_LOCALE);
 }
 
 export function dateInputValue(value: string | Date) {

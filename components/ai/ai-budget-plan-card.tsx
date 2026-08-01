@@ -5,7 +5,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import type { AnalyticsData } from "@/lib/data";
 import type { AiProvider } from "@/lib/ai/models";
 import type { BudgetSuggestion, BudgetCategoryInput } from "@/lib/ai/budget-plan";
@@ -49,33 +48,22 @@ export function AiBudgetPlanCard() {
     try {
       setLoading(true);
       setSuggestions(null);
-      let result: BudgetSuggestion[];
-      if (isLocalDesktopMode) {
-        const apiKey = settings?.aiApiKey ?? "";
-        if (!apiKey) {
-          toast.error(t("ai.err.noKey"));
-          return;
-        }
-        const { requestBudgetPlan } = await import("@/services/ai/AiAssistantService");
-        result = await requestBudgetPlan({
-          categories,
-          avgMonthlyIncome: analytics.avgMonthlyIncome,
-          currency: analytics.currency || "RUB",
-          locale: locale === "en" ? "en" : "ru",
-          apiKey,
-          model: settings?.aiModel || undefined,
-          provider: (settings?.aiProvider as AiProvider) || undefined,
-          effort: settings?.aiEffort || undefined
-        });
-      } else {
-        const res = await apiClient.post<{ suggestions: BudgetSuggestion[] }>("/ai/budgets", {
-          categories,
-          avgMonthlyIncome: analytics.avgMonthlyIncome,
-          currency: analytics.currency || "RUB",
-          locale
-        });
-        result = res.suggestions;
+      const apiKey = settings?.aiApiKey ?? "";
+      if (!apiKey) {
+        toast.error(t("ai.err.noKey"));
+        return;
       }
+      const { requestBudgetPlan } = await import("@/services/ai/AiAssistantService");
+      const result = await requestBudgetPlan({
+        categories,
+        avgMonthlyIncome: analytics.avgMonthlyIncome,
+        currency: analytics.currency || "RUB",
+        locale: locale === "en" ? "en" : "ru",
+        apiKey,
+        model: settings?.aiModel || undefined,
+        provider: (settings?.aiProvider as AiProvider) || undefined,
+        effort: settings?.aiEffort || undefined
+      });
       if (result.length === 0) return toast.info(t("aibudget.empty"));
       setSuggestions(result);
     } catch (error) {

@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 
 import { ChartSkeleton } from "@/components/charts/chart-skeleton";
-import { SourceBanner } from "@/components/source-banner";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { AnalyticsData } from "@/lib/data";
 
@@ -28,7 +27,6 @@ export function AnalyticsClient({ initialData }: { initialData: AnalyticsData })
 
   return (
     <>
-      <SourceBanner source={data.source} />
       <AnalyticsView data={data} />
     </>
   );

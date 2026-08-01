@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { evaluateAlerts, tickersToFetch, type MarketAlert } from "@/lib/market/alerts";
 import { SMARTLAB_FIELDS, type SmartLabFundamentals } from "@/lib/market/smartlab";
 import { Button } from "@/components/ui/button";
@@ -38,7 +37,6 @@ export function MarketAlertsPanel() {
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLocalDesktopMode) return;
     let cancelled = false;
     apiClient
       .get<{ alerts: MarketAlert[] }>("/market/alerts")
@@ -52,8 +50,6 @@ export function MarketAlertsPanel() {
       cancelled = true;
     };
   }, []);
-
-  if (!isLocalDesktopMode) return null;
 
   async function addAlert() {
     const cleanTicker = ticker.trim().toUpperCase();

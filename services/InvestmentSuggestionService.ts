@@ -1,4 +1,4 @@
-import type { RiskProfileCode, SecurityRisk } from "@prisma/client";
+import type { RiskProfileCode, SecurityRisk } from "@/types/enums";
 
 import type { PortfolioRow, WatchlistRow } from "@/types/finance";
 import { translate, type Locale } from "@/lib/i18n/catalog";

@@ -1,0 +1,26 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Android permissions: the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation.",
+  "platforms": ["android", "iOS"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-dir",
+    "fs:allow-remove",
+    "opener:allow-open-url",
+    {
+      "identifier": "fs:scope",
+      "allow": ["$DOCUMENT/**", "$DOWNLOAD/**", "$APPDATA/**", "$APPLOCALDATA/**", "$TEMP/**"]
+    },
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://smart-lab.ru/*" }],
+      "deny": []
+    }
+  ]
+}

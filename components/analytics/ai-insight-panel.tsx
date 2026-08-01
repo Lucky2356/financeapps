@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { buildFinanceSummary } from "@/lib/ai/finance-summary";
 import { useI18n } from "@/lib/i18n/context";
 import type { AnalyticsData, SettingsPageData } from "@/lib/data";
@@ -56,15 +55,14 @@ export function AiInsightPanel() {
     try {
       setAsking(true);
       setAnswer(null);
-      let result: string;
-      if (isLocalDesktopMode) {
-        const apiKey = settings?.aiApiKey ?? "";
-        if (!apiKey) {
-          toast.error(t("ai.err.noKey"));
-          return;
-        }
-        const { requestFinancialAnswer } = await import("@/services/ai/AiAssistantService");
-        result = await requestFinancialAnswer({
+      const apiKey = settings?.aiApiKey ?? "";
+      if (!apiKey) {
+        toast.error(t("ai.err.noKey"));
+        return;
+      }
+      const { requestFinancialAnswer } = await import("@/services/ai/AiAssistantService");
+      setAnswer(
+        await requestFinancialAnswer({
           question: trimmed,
           summary,
           locale: locale === "en" ? "en" : "ru",
@@ -72,16 +70,8 @@ export function AiInsightPanel() {
           model: settings?.aiModel || undefined,
           provider: (settings?.aiProvider as "anthropic" | "openai" | "deepseek") || undefined,
           effort: settings?.aiEffort || undefined
-        });
-      } else {
-        const res = await apiClient.post<{ answer: string }>("/ai/insights", {
-          question: trimmed,
-          summary,
-          locale
-        });
-        result = res.answer;
-      }
-      setAnswer(result);
+        })
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("aiq.err.failed"));
     } finally {

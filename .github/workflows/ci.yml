@@ -10,28 +10,6 @@ jobs:
   verify:
     name: Verify app
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: financial_assistant
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d financial_assistant"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/financial_assistant?schema=public
-      NEXT_PUBLIC_APP_PLATFORM: web
-      NEXT_PUBLIC_APP_ENV: production
-      NEXT_PUBLIC_API_MODE: cloud
-      NEXT_PUBLIC_API_BASE_URL: /api
-      NEXT_PUBLIC_DESKTOP_DATA_MODE: cloud
 
     steps:
       - name: Checkout
@@ -45,15 +23,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Generate Prisma client
-        run: npm run db:generate
-
-      - name: Apply database migrations
-        run: npm run db:deploy
-
-      - name: Seed demo data
-        run: npm run db:seed
 
       - name: Typecheck
         run: npm run typecheck
@@ -64,22 +33,12 @@ jobs:
       - name: Unit tests + coverage thresholds
         run: npm run test:coverage
 
-      - name: Build web
-        run: npm run build
-
       - name: Build static shell
         run: npm run build:static
 
   e2e:
-    name: E2E (desktop static build)
+    name: E2E (static shell)
     runs-on: ubuntu-latest
-
-    env:
-      NEXT_PUBLIC_APP_PLATFORM: desktop
-      NEXT_PUBLIC_APP_ENV: production
-      NEXT_PUBLIC_API_MODE: local
-      NEXT_PUBLIC_DESKTOP_DATA_MODE: local
-      NEXT_OUTPUT: export
 
     steps:
       - name: Checkout
@@ -94,10 +53,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma client
-        run: npm run db:generate
-
-      - name: Build static desktop shell
+      - name: Build static shell
         run: npm run build:static
 
       - name: Install Playwright browser

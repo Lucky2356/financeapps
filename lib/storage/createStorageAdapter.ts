@@ -1,18 +1,10 @@
 "use client";
 
-import { BrowserStorageAdapter } from "@/lib/storage/BrowserStorageAdapter";
 import { DesktopStorageAdapter } from "@/lib/storage/DesktopStorageAdapter";
-import { IndexedDbStorageAdapter } from "@/lib/storage/IndexedDbStorageAdapter";
-import { runtimeConfig } from "@/lib/platform/env";
 
+// Windows and Android share one storage backend — the IndexedDB database named
+// `financial-assistant-desktop`. That name is historic and must stay as it is:
+// changing it would orphan the data of every already-installed copy.
 export function createStorageAdapter() {
-  if (runtimeConfig.platform === "desktop") {
-    return new DesktopStorageAdapter();
-  }
-
-  if (runtimeConfig.platform === "android") {
-    return new IndexedDbStorageAdapter("financial-assistant-mobile");
-  }
-
-  return new BrowserStorageAdapter();
+  return new DesktopStorageAdapter();
 }
