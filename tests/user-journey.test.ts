@@ -45,9 +45,27 @@ describe("new user journey", () => {
     });
 
     // 2. Record income and expenses.
-    await client.post("/transactions", { amount: "150000", type: "INCOME", accountId: card.id, categoryId: "cat-salary", date: todayInput() });
-    await client.post("/transactions", { amount: "20000", type: "EXPENSE", accountId: card.id, categoryId: "cat-food", date: todayInput() });
-    await client.post("/transactions", { amount: "8000", type: "EXPENSE", accountId: card.id, categoryId: "cat-transport", date: todayInput() });
+    await client.post("/transactions", {
+      amount: "150000",
+      type: "INCOME",
+      accountId: card.id,
+      categoryId: "cat-salary",
+      date: todayInput()
+    });
+    await client.post("/transactions", {
+      amount: "20000",
+      type: "EXPENSE",
+      accountId: card.id,
+      categoryId: "cat-food",
+      date: todayInput()
+    });
+    await client.post("/transactions", {
+      amount: "8000",
+      type: "EXPENSE",
+      accountId: card.id,
+      categoryId: "cat-transport",
+      date: todayInput()
+    });
 
     const afterTx = await client.get<DashboardData>("/dashboard");
     // Net worth = card (100000+150000-28000) + savings (120000) = 342000.
@@ -71,7 +89,12 @@ describe("new user journey", () => {
       deadline: "2027-06-01"
     });
     const beforeDeposit = await client.get<DashboardData>("/dashboard");
-    await client.post("/goals", { action: "deposit", goalId: goal.id, amount: "30000", accountId: savings.id });
+    await client.post("/goals", {
+      action: "deposit",
+      goalId: goal.id,
+      amount: "30000",
+      accountId: savings.id
+    });
     const afterDeposit = await client.get<DashboardData>("/dashboard");
     expect(afterDeposit.netWorth).toBe(beforeDeposit.netWorth);
     const goalsAfter = await client.get<GoalsPageData>("/goals");
@@ -90,8 +113,12 @@ describe("new user journey", () => {
     const forecast = await client.get<ForecastData>("/forecast");
     expect(forecast.events.length).toBeGreaterThan(0);
     expect(forecast.events.length).toBeGreaterThanOrEqual(forecast.upcomingEvents.length);
-    // The due recurring payment auto-materialized a real expense, lowering net worth.
-    const beforeInvest = await client.get<DashboardData>("/dashboard");
+    // A plan is not an operation: net worth is untouched until the payment posts…
+    let beforeInvest = await client.get<DashboardData>("/dashboard");
+    expect(beforeInvest.netWorth).toBe(afterDeposit.netWorth);
+    // …and posting the due occurrence is what actually lowers it.
+    await client.post("/recurring/materialize-all", {});
+    beforeInvest = await client.get<DashboardData>("/dashboard");
     expect(beforeInvest.netWorth).toBeLessThan(afterDeposit.netWorth);
 
     // 6. Investments: add a position by ticker; it lifts net worth.

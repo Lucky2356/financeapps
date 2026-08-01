@@ -22,6 +22,7 @@ import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/hel
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
+import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
@@ -120,7 +121,14 @@ type LocalState = {
   budgets: BudgetsPageData["budgets"];
   goals: GoalsPageData["goals"];
   recurringTransactions: Array<
-    RecurringTransactionsPageData["recurringTransactions"][number] & { lastTransactionId?: string }
+    RecurringTransactionsPageData["recurringTransactions"][number] & {
+      /**
+       * Legacy: up to 1.4.0 a template posted its first operation immediately and
+       * kept the link here. Nothing writes or reads it any more — kept so states
+       * saved by older versions still validate.
+       */
+      lastTransactionId?: string;
+    }
   >;
   investments: InvestmentData;
   importBatches?: Array<{
@@ -420,11 +428,8 @@ export class LocalApiClient implements ApiClient {
     } else if (pathname === "/rules" && itemId) {
       state.rules = state.rules.filter((rule) => rule.id !== itemId);
     } else if (pathname === "/recurring" && itemId) {
-      const existing = state.recurringTransactions.find((item) => item.id === itemId);
-      // Remove the linked materialized transaction so balances/budgets stay correct
-      if (existing?.lastTransactionId) {
-        this.deleteTransaction(state, existing.lastTransactionId);
-      }
+      // Deleting a plan only removes the plan — operations already posted from it
+      // stay in the ledger (they describe money that actually moved).
       state.recurringTransactions = state.recurringTransactions.filter(
         (item) => item.id !== itemId
       );
@@ -859,28 +864,8 @@ export class LocalApiClient implements ApiClient {
     const nextDateInput = new Date(input.nextDate);
 
     if (method === "PUT" && input.id) {
-      const existing = state.recurringTransactions.find((item) => item.id === input.id);
-      // Keep the already-created transaction in sync so budgets/balances reflect edits
-      if (
-        existing?.lastTransactionId &&
-        state.transactions.some((item) => item.id === existing.lastTransactionId)
-      ) {
-        const linked = state.transactions.find((item) => item.id === existing.lastTransactionId)!;
-        this.upsertTransaction(
-          state,
-          {
-            id: linked.id,
-            amount: String(amount),
-            type,
-            accountId: account.id,
-            categoryId: category.id,
-            date: linked.date,
-            description: description ?? category.label
-          },
-          "PUT",
-          existing.id
-        );
-      }
+      // A template is a plan, not a record: editing it never rewrites operations
+      // that were already posted — those are facts about money that moved.
       const status = service.getStatus({ nextDate: nextDateInput, frequency, isActive });
       const row: LocalState["recurringTransactions"][number] = {
         id: input.id,
@@ -893,8 +878,7 @@ export class LocalApiClient implements ApiClient {
         daysUntilNext: status.daysUntilNext,
         isDue: status.isDue,
         account: accountRef,
-        category: categoryRef,
-        lastTransactionId: existing?.lastTransactionId
+        category: categoryRef
       };
       state.recurringTransactions = state.recurringTransactions.map((item) =>
         item.id === row.id ? row : item
@@ -902,42 +886,23 @@ export class LocalApiClient implements ApiClient {
       return row;
     }
 
-    // POST — create the template AND immediately materialize the first occurrence,
-    // so the planned payment counts right away without an extra confirm click.
+    // POST — create the template only. Planning stays separate from bookkeeping:
+    // the operation appears in "Учёт" when the due date arrives (auto-posting or
+    // the confirm button), never at the moment the plan is written down.
     const newId = id("recurring");
-    let lastTransactionId: string | undefined;
-    if (isActive) {
-      const created = this.upsertTransaction(
-        state,
-        {
-          amount: String(amount),
-          type,
-          accountId: account.id,
-          categoryId: category.id,
-          date: nextDateInput.toISOString(),
-          description: description ?? category.label
-        },
-        "POST",
-        newId
-      );
-      lastTransactionId = created.id;
-    }
-    // Advance the schedule past the occurrence we just created.
-    const advancedNext = isActive ? service.getNextDate(nextDateInput, frequency) : nextDateInput;
-    const status = service.getStatus({ nextDate: advancedNext, frequency, isActive });
+    const status = service.getStatus({ nextDate: nextDateInput, frequency, isActive });
     const row: LocalState["recurringTransactions"][number] = {
       id: newId,
       amount,
       type,
       frequency,
-      nextDate: advancedNext.toISOString(),
+      nextDate: nextDateInput.toISOString(),
       description,
       isActive,
       daysUntilNext: status.daysUntilNext,
       isDue: status.isDue,
       account: accountRef,
-      category: categoryRef,
-      lastTransactionId
+      category: categoryRef
     };
     state.recurringTransactions = [...state.recurringTransactions, row];
     return row;
@@ -1655,22 +1620,37 @@ export class LocalApiClient implements ApiClient {
               (row.frequency === "WEEKLY" ? 4.33 : row.frequency === "YEARLY" ? 1 / 12 : 1),
           0
         );
+    // Debts with a due day are scheduled obligations — they belong here too,
+    // otherwise the due day entered on the debts page has no visible effect.
+    const debtPayments = plannedDebtPayments(state.liabilities ?? []);
     return {
       source: "database",
       recurringTransactions: rows,
       accounts: this.accounts(state).accounts,
       categories: state.categories,
+      budgetHints: state.budgets.map((budget) => ({
+        categoryId: budget.categoryId,
+        amount: budget.limitAmount
+      })),
+      debtPayments,
       currency: state.currency,
       summary: {
-        activeCount: active.length,
-        dueCount: active.filter((row) => row.isDue).length,
+        activeCount: active.length + debtPayments.length,
+        dueCount:
+          active.filter((row) => row.isDue).length +
+          debtPayments.filter((payment) => payment.isDue).length,
         nextSevenDaysAmount: roundMoney(
           active
             .filter((row) => row.isDue || row.daysUntilNext <= 7)
-            .reduce((sum, row) => sum + row.amount, 0)
+            .reduce((sum, row) => sum + row.amount, 0) +
+            debtPayments
+              .filter((payment) => payment.isDue || payment.daysUntilNext <= 7)
+              .reduce((sum, payment) => sum + payment.amount, 0)
         ),
         monthlyPlannedIncome: roundMoney(monthly("INCOME")),
-        monthlyPlannedExpense: roundMoney(monthly("EXPENSE"))
+        monthlyPlannedExpense: roundMoney(
+          monthly("EXPENSE") + plannedDebtMonthlyTotal(debtPayments)
+        )
       }
     };
   }
