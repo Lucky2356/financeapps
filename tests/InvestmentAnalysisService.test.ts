@@ -69,9 +69,15 @@ describe("InvestmentAnalysisService", () => {
     });
 
     expect(analysis.risks.map((item) => item.id)).toEqual(
-      expect.arrayContaining(["single-position-concentration", "high-risk-share", "diversification"])
+      expect.arrayContaining([
+        "single-position-concentration",
+        "high-risk-share",
+        "diversification"
+      ])
     );
-    expect(analysis.risks.find((item) => item.id === "single-position-concentration")?.severity).toBe("CRITICAL");
+    expect(
+      analysis.risks.find((item) => item.id === "single-position-concentration")?.severity
+    ).toBe("CRITICAL");
   });
 
   it("flags sector concentration when one sector dominates the portfolio", () => {

@@ -8,7 +8,8 @@ import {
   RefreshCw,
   ShieldAlert,
   Star,
-  Store
+  Store,
+  Trash2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -52,7 +53,8 @@ import {
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatInputDate } from "@/lib/format";
+import { isUsableLot, summarizeLots } from "@/lib/investments/lots";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import {
@@ -82,6 +84,10 @@ const TABS = [
   { id: "analytics", labelKey: "inv.tab.analytics", icon: PieChart }
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
+
+// A purchase row while it is being typed: the numbers stay strings so a
+// half-entered "1." does not fight the input on every keystroke.
+type LotDraft = { date: string; quantity: string; price: string };
 
 export function InvestmentsView({ data: initialData }: { data: InvestmentData }) {
   const router = useRouter();
@@ -636,6 +642,33 @@ function PositionDialog({
   const [chosen, setChosen] = useState<{ ticker: string; name: string } | null>(null);
   const ticker = position?.ticker ?? chosen?.ticker;
 
+  // Two ways to state what a position cost. "По покупкам" is the default: the
+  // user lists what they actually bought and the app derives the weighted
+  // average. A position saved before this existed opens in "средняя вручную",
+  // so its typed-in average is not silently thrown away.
+  const [byLots, setByLots] = useState(!position || (position.lots?.length ?? 0) > 0);
+  const [lots, setLots] = useState<LotDraft[]>(() =>
+    position?.lots?.length
+      ? position.lots.map((lot) => ({
+          date: lot.date,
+          quantity: String(lot.quantity),
+          price: String(lot.price)
+        }))
+      : [{ date: formatInputDate(new Date()), quantity: "", price: "" }]
+  );
+
+  const parsedLots = lots.map((lot) => ({
+    date: lot.date,
+    quantity: Number(lot.quantity),
+    price: Number(lot.price)
+  }));
+  const summary = summarizeLots(parsedLots);
+  const usableLots = parsedLots.filter((lot) => lot.date !== "" && isUsableLot(lot));
+
+  function updateLot(index: number, patch: Partial<LotDraft>) {
+    setLots((prev) => prev.map((lot, i) => (i === index ? { ...lot, ...patch } : lot)));
+  }
+
   return (
     <DialogContent>
       <DialogHeader>
@@ -667,35 +700,142 @@ function PositionDialog({
             />
           )}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>{t("inv.quantity")}</Label>
-            <Input
-              name="quantity"
-              type="number"
-              min="0"
-              step="0.000001"
-              defaultValue={position?.quantity ?? ""}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>{t("inv.avgPrice")}</Label>
-            <Input
-              name="averageBuyPrice"
-              type="number"
-              min="0"
-              step="0.0001"
-              defaultValue={position?.averageBuyPrice ?? ""}
-              required
-            />
-          </div>
+        <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1">
+          {[
+            { id: "lots", label: t("inv.lots.mode.lots") },
+            { id: "manual", label: t("inv.lots.mode.manual") }
+          ].map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => setByLots(mode.id === "lots")}
+              className={cn(
+                "min-w-0 grow basis-[calc(50%-0.125rem)] rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                byLots === (mode.id === "lots")
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {mode.label}
+            </button>
+          ))}
         </div>
+
+        {byLots ? (
+          <div className="space-y-2">
+            {/* The list is submitted as one JSON field; the server recomputes the
+                average from it so the stored figure can never drift from the
+                purchases it is supposed to summarize. */}
+            <input type="hidden" name="lots" value={JSON.stringify(usableLots)} />
+            <Label>{t("inv.lots.title")}</Label>
+            {lots.map((lot, index) => (
+              <div key={index} className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[8rem] grow basis-[calc(50%-0.25rem)] space-y-1">
+                  <span className="text-xs text-muted-foreground">{t("inv.lots.date")}</span>
+                  <Input
+                    type="date"
+                    value={lot.date}
+                    onChange={(event) => updateLot(index, { date: event.target.value })}
+                  />
+                </div>
+                <div className="min-w-[6rem] grow basis-[calc(25%-0.25rem)] space-y-1">
+                  <span className="text-xs text-muted-foreground">{t("inv.quantity")}</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.000001"
+                    inputMode="decimal"
+                    value={lot.quantity}
+                    onChange={(event) => updateLot(index, { quantity: event.target.value })}
+                  />
+                </div>
+                <div className="min-w-[6rem] grow basis-[calc(25%-0.25rem)] space-y-1">
+                  <span className="text-xs text-muted-foreground">{t("inv.lots.price")}</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    inputMode="decimal"
+                    value={lot.price}
+                    onChange={(event) => updateLot(index, { price: event.target.value })}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("inv.lots.remove")}
+                  disabled={lots.length === 1}
+                  onClick={() => setLots((prev) => prev.filter((_, i) => i !== index))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setLots((prev) => [
+                  ...prev,
+                  { date: formatInputDate(new Date()), quantity: "", price: "" }
+                ])
+              }
+            >
+              <Plus className="size-3.5" />
+              {t("inv.lots.add")}
+            </Button>
+            <p className="text-sm">
+              {usableLots.length === 0 ? (
+                <span className="text-muted-foreground">{t("inv.lots.empty")}</span>
+              ) : (
+                <span className="font-medium tabular-nums">
+                  {t("inv.lots.summary", {
+                    n: summary.quantity,
+                    avg: formatCurrency(summary.averageBuyPrice, currency),
+                    total: formatCurrency(summary.totalCost, currency)
+                  })}
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground">{t("inv.lots.hint")}</p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t("inv.quantity")}</Label>
+              <Input
+                name="quantity"
+                type="number"
+                min="0"
+                step="0.000001"
+                inputMode="decimal"
+                defaultValue={position?.quantity ?? ""}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("inv.avgPrice")}</Label>
+              <Input
+                name="averageBuyPrice"
+                type="number"
+                min="0"
+                step="0.0001"
+                inputMode="decimal"
+                defaultValue={position?.averageBuyPrice ?? ""}
+                required
+              />
+            </div>
+          </div>
+        )}
         <div className="rounded-lg border border-info/30 bg-info/12 p-3 text-sm text-muted-foreground">
           {t("inv.positionNote")}
         </div>
         <DialogFooter>
-          <Button type="submit">{t("inv.savePosition")}</Button>
+          <Button type="submit" disabled={byLots && usableLots.length === 0}>
+            {t("inv.savePosition")}
+          </Button>
         </DialogFooter>
       </form>
     </DialogContent>

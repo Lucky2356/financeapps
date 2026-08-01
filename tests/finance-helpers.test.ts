@@ -19,21 +19,32 @@ describe("suggestedLimitFor", () => {
   });
 
   it("ignores other categories and income", () => {
-    const history = [tx("2026-06-01", 5000, "cat-transport"), { ...tx("2026-06-01", 5000), type: "INCOME" }];
+    const history = [
+      tx("2026-06-01", 5000, "cat-transport"),
+      { ...tx("2026-06-01", 5000), type: "INCOME" }
+    ];
     expect(suggestedLimitFor("cat-food", history, { now })).toBe(0);
   });
 });
 
 describe("buildEmergencyFund", () => {
   it("computes months, target amount and progress", () => {
-    const fund = buildEmergencyFund({ savingsBalance: 180000, averageMonthlyExpense: 60000, targetMonths: 6 });
+    const fund = buildEmergencyFund({
+      savingsBalance: 180000,
+      averageMonthlyExpense: 60000,
+      targetMonths: 6
+    });
     expect(fund.months).toBe(3);
     expect(fund.targetAmount).toBe(360000);
     expect(fund.progress).toBe(50);
   });
 
   it("handles zero expense gracefully", () => {
-    const fund = buildEmergencyFund({ savingsBalance: 1000, averageMonthlyExpense: 0, targetMonths: 6 });
+    const fund = buildEmergencyFund({
+      savingsBalance: 1000,
+      averageMonthlyExpense: 0,
+      targetMonths: 6
+    });
     expect(fund.months).toBe(0);
     expect(fund.targetAmount).toBe(0);
     expect(fund.progress).toBe(100);

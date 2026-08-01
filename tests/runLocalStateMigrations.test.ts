@@ -64,8 +64,21 @@ describe("runLocalStateMigrations", () => {
 
   it("upgrades a v5 state to v6 (the «погашен» marker on liabilities)", () => {
     const v5: RawLocalState = { schemaVersion: 5, liabilities: [] };
-    const migrated = runLocalStateMigrations(v5);
+    const migrated = runLocalStateMigrations(v5, 6);
     expect(migrated.schemaVersion).toBe(6);
+  });
+
+  it("upgrades a v6 state to v7 (purchase lots on portfolio positions)", () => {
+    const v6: RawLocalState = {
+      schemaVersion: 6,
+      investments: { portfolio: [{ ticker: "SBER", quantity: 10, averageBuyPrice: 250 }] }
+    };
+    const migrated = runLocalStateMigrations(v6, 7);
+    expect(migrated.schemaVersion).toBe(7);
+    // A position entered before lots existed keeps the average that was typed in.
+    expect(migrated.investments).toEqual({
+      portfolio: [{ ticker: "SBER", quantity: 10, averageBuyPrice: 250 }]
+    });
   });
 
   it("defaults a missing schemaVersion to 1 and migrates from there", () => {

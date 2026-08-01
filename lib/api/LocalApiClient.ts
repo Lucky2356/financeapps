@@ -24,6 +24,7 @@ import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts } from "@/lib/debts/settled";
+import { parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
@@ -92,7 +93,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -1290,8 +1291,13 @@ export class LocalApiClient implements ApiClient {
       (await provider.getSecurityByTicker(ticker));
     if (!security) throw new Error("Security not found in the market directory.");
 
-    const quantity = Number(input.quantity);
-    const averageBuyPrice = Number(input.averageBuyPrice);
+    // The form sends EITHER a list of purchases (the app works out the weighted
+    // average) OR a quantity and an average typed in by hand. Lots win when both
+    // arrive, because they are the source the average is derived from.
+    const lots = parsePurchaseLots(input.lots);
+    const fromLots = lots.length > 0 ? summarizeLots(lots) : null;
+    const quantity = fromLots ? fromLots.quantity : Number(input.quantity);
+    const averageBuyPrice = fromLots ? fromLots.averageBuyPrice : Number(input.averageBuyPrice);
     if (!Number.isFinite(quantity) || quantity <= 0)
       throw new Error("Введите количество больше нуля.");
     if (!Number.isFinite(averageBuyPrice) || averageBuyPrice <= 0)
@@ -1303,6 +1309,7 @@ export class LocalApiClient implements ApiClient {
       sector: security.sector,
       quantity,
       averageBuyPrice,
+      ...(fromLots ? { lots: sortLots(lots) } : {}),
       currentPrice: security.price,
       currentValue: roundMoney(security.price * quantity),
       pnl: roundMoney((security.price - averageBuyPrice) * quantity),
@@ -1726,7 +1733,9 @@ export class LocalApiClient implements ApiClient {
         currentValue,
         pnl: roundMoney((price - position.averageBuyPrice) * position.quantity),
         share: 0,
-        risk: security?.risk ?? position.risk
+        risk: security?.risk ?? position.risk,
+        // The purchases the average was derived from travel with the position.
+        ...(position.lots?.length ? { lots: position.lots } : {})
       };
     });
     const total = rowsWithoutShare.reduce((sum, row) => sum + row.currentValue, 0);
