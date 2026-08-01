@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { summarizeDividendIncome, upcomingDividends } from "@/lib/investments/dividends";
 import type { ExpectedDividend, RealizedInvestmentEvent } from "@/types/finance";
 import { Button } from "@/components/ui/button";
@@ -44,11 +43,8 @@ export function DividendTracker() {
       });
 
   useEffect(() => {
-    if (!isLocalDesktopMode) return;
     void load();
   }, []);
-
-  if (!isLocalDesktopMode) return null;
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

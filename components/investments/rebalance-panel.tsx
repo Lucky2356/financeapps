@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { computeRebalance } from "@/lib/investments/rebalance";
 import type { PortfolioRow, TargetAllocation } from "@/types/finance";
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,6 @@ export function RebalancePanel({
   );
 
   useEffect(() => {
-    if (!isLocalDesktopMode) return;
     void apiClient
       .get<{ targets: TargetAllocation[] }>("/investments/targets")
       .then((data) => {
@@ -46,7 +44,7 @@ export function RebalancePanel({
       });
   }, []);
 
-  if (!isLocalDesktopMode || positions.length === 0) return null;
+  if (positions.length === 0) return null;
 
   const targetList = sectors
     .map((sector) => ({ id: sector, sector, targetPct: Number(targets[sector] ?? 0) }))

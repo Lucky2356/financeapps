@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, SettingsPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { Button } from "@/components/ui/button";
 
 // Desktop-only note showing how fresh the cached CBR exchange rates are, with a
@@ -24,7 +23,7 @@ export function FxRatesNote({ accounts }: { accounts: AccountsPageData["accounts
   const hasForeign = accounts.some((a) => a.currency && a.currency !== "RUB");
 
   useEffect(() => {
-    if (!isLocalDesktopMode || !hasForeign) return;
+    if (!hasForeign) return;
     let cancelled = false;
     apiClient
       .get<SettingsPageData>("/settings")
@@ -39,7 +38,7 @@ export function FxRatesNote({ accounts }: { accounts: AccountsPageData["accounts
     };
   }, [hasForeign]);
 
-  if (!isLocalDesktopMode || !hasForeign) return null;
+  if (!hasForeign) return null;
 
   async function refresh() {
     setRefreshing(true);

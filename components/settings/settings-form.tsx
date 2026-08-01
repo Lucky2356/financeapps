@@ -7,7 +7,6 @@ import {
   GraduationCap,
   Info,
   Keyboard,
-  KeyRound,
   Loader2,
   Monitor,
   Moon,
@@ -27,15 +26,12 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
-import { isLocalDesktopMode } from "@/lib/platform/env";
+import { isAndroidShell } from "@/lib/platform/device";
 import { ACCENTS, type Accent } from "@/lib/appearance";
 import { useAppearance } from "@/hooks/use-appearance";
 import { applyDensity } from "@/components/app-settings-sync";
-import { AccountSection } from "@/components/settings/account-section";
 import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
 import { LocalModePanel } from "@/components/settings/local-mode-panel";
-import { ProfileSection } from "@/components/settings/profile-section";
-import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
@@ -218,8 +214,15 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   // checks GitHub for a newer release and installs it in place; otherwise the
   // button opens the releases page.
   async function checkForUpdates() {
-    if (!isLocalDesktopMode) {
-      window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
+    // Android has no updater plugin — a new version arrives as an APK the owner
+    // installs, so send them straight to the releases page.
+    if (isAndroidShell()) {
+      try {
+        const { openUrl } = await import("@tauri-apps/plugin-opener");
+        await openUrl(RELEASES_URL);
+      } catch {
+        window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
+      }
       return;
     }
     try {
@@ -508,96 +511,94 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           />
           {settings.aiEnabled && (
             <>
-              {isLocalDesktopMode &&
-                (() => {
-                  const activeProvider = providerInfo(settings.aiProvider);
-                  return (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-provider">{t("set.ai.provider")}</Label>
-                        <Select
-                          value={activeProvider.id}
-                          onValueChange={(value) => {
-                            // Switching provider resets the model to that
-                            // provider's default (empty = its default model).
-                            void persist({ aiProvider: value as AiProvider, aiModel: "" });
-                          }}
-                        >
-                          <SelectTrigger id="ai-provider">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {AI_PROVIDERS.map((provider) => (
-                              <SelectItem key={provider.id} value={provider.id}>
-                                {provider.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">{t("set.ai.provider.hint")}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-key">{t("set.ai.key")}</Label>
-                        <Input
-                          id="ai-key"
-                          type="password"
-                          autoComplete="off"
-                          value={settings.aiApiKey}
-                          onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })}
-                          onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
-                          placeholder={activeProvider.id === "anthropic" ? "sk-ant-..." : "sk-..."}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          {t(activeProvider.keyHintKey)}
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
-                        <Select
-                          value={settings.aiModel || ALL_OPTION}
-                          onValueChange={(value) =>
-                            void persist({ aiModel: value === ALL_OPTION ? "" : value })
-                          }
-                        >
-                          <SelectTrigger id="ai-model">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
-                            {activeProvider.models.map((model) => (
-                              <SelectItem key={model.id} value={model.id}>
-                                {model.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="ai-effort">{t("set.ai.effort")}</Label>
-                        <Select
-                          value={settings.aiEffort || "medium"}
-                          onValueChange={(value) => void persist({ aiEffort: value })}
-                        >
-                          <SelectTrigger id="ai-effort">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {AI_EFFORTS.map((effort) => (
-                              <SelectItem key={effort} value={effort}>
-                                {t(`set.ai.effort.${effort}`)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">{t("set.ai.effort.hint")}</p>
-                      </div>
-                    </>
-                  );
-                })()}
+              {(() => {
+                const activeProvider = providerInfo(settings.aiProvider);
+                return (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-provider">{t("set.ai.provider")}</Label>
+                      <Select
+                        value={activeProvider.id}
+                        onValueChange={(value) => {
+                          // Switching provider resets the model to that
+                          // provider's default (empty = its default model).
+                          void persist({ aiProvider: value as AiProvider, aiModel: "" });
+                        }}
+                      >
+                        <SelectTrigger id="ai-provider">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AI_PROVIDERS.map((provider) => (
+                            <SelectItem key={provider.id} value={provider.id}>
+                              {provider.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">{t("set.ai.provider.hint")}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-key">{t("set.ai.key")}</Label>
+                      <Input
+                        id="ai-key"
+                        type="password"
+                        autoComplete="off"
+                        value={settings.aiApiKey}
+                        onChange={(e) => setSettings({ ...settings, aiApiKey: e.target.value })}
+                        onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
+                        placeholder={activeProvider.id === "anthropic" ? "sk-ant-..." : "sk-..."}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {t(activeProvider.keyHintKey)}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
+                      <Select
+                        value={settings.aiModel || ALL_OPTION}
+                        onValueChange={(value) =>
+                          void persist({ aiModel: value === ALL_OPTION ? "" : value })
+                        }
+                      >
+                        <SelectTrigger id="ai-model">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
+                          {activeProvider.models.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-effort">{t("set.ai.effort")}</Label>
+                      <Select
+                        value={settings.aiEffort || "medium"}
+                        onValueChange={(value) => void persist({ aiEffort: value })}
+                      >
+                        <SelectTrigger id="ai-effort">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AI_EFFORTS.map((effort) => (
+                            <SelectItem key={effort} value={effort}>
+                              {t(`set.ai.effort.${effort}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">{t("set.ai.effort.hint")}</p>
+                    </div>
+                  </>
+                );
+              })()}
               <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
                 {t("set.ai.warning")}
-                {!isLocalDesktopMode && t("set.ai.warning.web")}
               </div>
             </>
           )}
@@ -660,24 +661,6 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </SectionCard>
       )
     });
-
-    // Account (web only): change password / delete account.
-    if (!isLocalDesktopMode) {
-      list.push({
-        id: "account",
-        label: t("set.section.account"),
-        icon: KeyRound,
-        keywords:
-          "аккаунт account профиль profile имя name email почта пароль password сменить change удалить delete безопасность security выход logout 2fa двухфакторная two-factor totp",
-        node: (
-          <div className="space-y-5">
-            <ProfileSection />
-            <AccountSection />
-            <TwoFactorSection />
-          </div>
-        )
-      });
-    }
 
     list.push({
       id: "data",

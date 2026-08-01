@@ -1,23 +1,20 @@
-import type { ApiMode, AppEnvironment, AppPlatform, DesktopDataMode, RuntimeConfig } from "@/types/platform";
+import type { RuntimeConfig } from "@/types/platform";
 
-function oneOf<T extends string>(value: string | undefined, allowed: readonly T[], fallback: T): T {
-  return allowed.includes(value as T) ? (value as T) : fallback;
+// The app has exactly one mode: a static bundle whose data lives on the device
+// (IndexedDB), wrapped in Tauri on Windows and on Android. There is no server,
+// no account and no cloud API any more, so nothing here is switchable by env
+// vars — `npm run dev` in a browser exercises the very same code path as the
+// shipped builds.
+export const runtimeConfig: RuntimeConfig = {
+  environment: process.env.NODE_ENV === "production" ? "production" : "development",
+  isStaticExport: process.env.NEXT_OUTPUT === "export"
+};
+
+/**
+ * True when the webview is hosted by Tauri — the Windows or the Android build.
+ * Plain `npm run dev` in a browser is false: there the native plugins are
+ * unavailable and the browser fallbacks (download / file input) take over.
+ */
+export function isTauriShell(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
-
-export function getRuntimeConfig(): RuntimeConfig {
-  return {
-    platform: oneOf<AppPlatform>(process.env.NEXT_PUBLIC_APP_PLATFORM, ["web", "android", "desktop"], "web"),
-    environment: oneOf<AppEnvironment>(process.env.NEXT_PUBLIC_APP_ENV, ["development", "production"], "development"),
-    apiMode: oneOf<ApiMode>(process.env.NEXT_PUBLIC_API_MODE, ["cloud", "local", "mock"], "cloud"),
-    apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || "/api",
-    desktopDataMode: oneOf<DesktopDataMode>(process.env.NEXT_PUBLIC_DESKTOP_DATA_MODE, ["cloud", "local"], "cloud"),
-    isStaticExport: process.env.NEXT_OUTPUT === "export"
-  };
-}
-
-export const runtimeConfig = getRuntimeConfig();
-
-// True when running as the desktop app with local (IndexedDB) data — used to
-// gate desktop-only features like profiles and local settings persistence.
-export const isLocalDesktopMode =
-  runtimeConfig.platform === "desktop" && runtimeConfig.desktopDataMode === "local";

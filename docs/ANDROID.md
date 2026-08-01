@@ -1,0 +1,123 @@
+# Android-версия
+
+Телефонная версия — это тот же самый интерфейс, что и на Windows: один и тот же
+статический бандл (`npm run build:static`), локальные данные в IndexedDB, все
+экраны и функции без исключений. Отличается только оболочка: вместо WebView2 под
+Windows — системный Android WebView, запущенный тем же ядром Tauri 2.
+
+Чего на Android нет и не будет:
+
+- **встроенного авто-обновления** (плагин `updater` не поддерживает мобильные
+  платформы) — кнопка «Проверить обновления» открывает страницу релизов, новую
+  версию ставим APK поверх старой;
+- **запоминания размера окна** (плагин `window-state`) — на телефоне нечего
+  запоминать.
+
+Оба плагина исключены из мобильной сборки на уровне `Cargo.toml`
+(`[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]`)
+и `src-tauri/src/lib.rs` (`#[cfg(desktop)]`), а разрешения разведены по двум
+файлам: `capabilities/default.json` (десктоп) и `capabilities/mobile.json`.
+
+## Что нужно на машине для сборки
+
+| Компонент | Версия | Где взять |
+| --- | --- | --- |
+| JDK | 17+ | идёт с Android Studio: `C:\Program Files\Android\Android Studio\jbr` |
+| Android SDK | platform 34+ | Android Studio → SDK Manager |
+| Android NDK | 28.x | SDK Manager → SDK Tools → NDK (Side by side) |
+| Rust targets | — | `rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android` |
+
+Переменные окружения на время сборки:
+
+```bash
+export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"
+export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
+export NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+## Сборка
+
+```bash
+npm run android:build
+```
+
+APK окажется в
+`src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`.
+
+Отладочная сборка (быстрее, ставится без ключа подписи):
+
+```bash
+npm run android:build:debug
+```
+
+## Ключ подписи
+
+Android не устанавливает неподписанный APK. Ключ создаётся **один раз** и потом
+не меняется: если подписать новую версию другим ключом, система откажется
+ставить её поверх старой, и придётся удалять приложение вместе с данными.
+
+Ключ и пароли **никогда не попадают в репозиторий** — `*.jks`, `*.keystore` и
+`keystore.properties` перечислены в `.gitignore`.
+
+### 1. Создать хранилище ключей
+
+```bash
+keytool -genkeypair -v -keystore financeapps-release.jks -alias financeapps -keyalg RSA -keysize 4096 -validity 10000
+```
+
+`keytool` лежит в `$JAVA_HOME/bin`. Команда спросит пароль (задайте свой,
+запомните — восстановить его невозможно) и данные владельца; на вопросы про
+подразделение и город можно отвечать пустой строкой.
+
+Файл `financeapps-release.jks` положите **вне репозитория** — например в
+`C:\Users\<вы>\keys\`. Сделайте резервную копию: потеря ключа означает, что
+обновления поверх установленного приложения больше не поставить.
+
+### 2. Прописать путь и пароли для сборки
+
+Создайте `src-tauri/gen/android/keystore.properties`:
+
+```properties
+storeFile=C:/Users/<вы>/keys/financeapps-release.jks
+storePassword=<ваш пароль>
+keyPassword=<ваш пароль>
+keyAlias=financeapps
+```
+
+Файл git игнорирует. Если его нет — релизный APK соберётся **без подписи** и на
+телефон не встанет; отладочный (`android:build:debug`) при этом работает.
+
+### 3. Установка на телефон
+
+Скопируйте APK на телефон (кабель, облако, мессенджер) и откройте его. Android
+спросит разрешение «Установка неизвестных приложений» для того приложения, из
+которого вы открыли файл — это нормально для установки мимо Google Play.
+
+## Перенос данных между ПК и телефоном
+
+Данные лежат локально на каждом устройстве и **не** синхронизируются сами —
+общего сервера у приложения нет. Перенос делается файлом резервной копии:
+
+1. На устройстве-источнике: **Импорт/Экспорт → Резервная копия → Выгрузить**.
+   Получится `financial-assistant-backup-YYYY-MM-DD.json` со всеми счетами,
+   операциями, бюджетами, целями, долгами, планами и портфелем.
+2. Перенесите файл на второе устройство любым способом.
+3. Там: **Импорт/Экспорт → Резервная копия → Восстановить**, выберите файл,
+   проверьте сводку (сколько счетов/операций внутри) и подтвердите.
+
+Восстановление **заменяет** данные устройства целиком, а не дополняет их — так
+что переносить надо в одну сторону за раз, с того устройства, где данные свежее.
+
+## Пересоздание gradle-проекта
+
+`src-tauri/gen/android` лежит в репозитории (в нём наши правки: конфигурация
+подписи). Если он всё-таки испортится:
+
+```bash
+rm -rf src-tauri/gen/android
+npx tauri android init
+```
+
+После этого придётся заново внести блок `signingConfigs` в
+`src-tauri/gen/android/app/build.gradle.kts` — сверьтесь с историей git.

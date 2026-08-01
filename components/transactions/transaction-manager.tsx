@@ -27,7 +27,6 @@ import { apiClient } from "@/lib/api/client";
 import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import type { AiProvider } from "@/lib/ai/models";
 import { useAiSettings } from "@/hooks/use-ai-settings";
 import { useI18n } from "@/lib/i18n/context";
@@ -395,30 +394,21 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
 
     setBulkPending(true);
     try {
-      let suggestions: { id: string; categoryId: string }[];
-      if (isLocalDesktopMode) {
-        const apiKey = aiSettings?.aiApiKey ?? "";
-        if (!apiKey) {
-          toast.error(t("ai.err.noKey"));
-          return;
-        }
-        const { requestBatchCategorization } = await import("@/services/ai/AiAssistantService");
-        suggestions = await requestBatchCategorization({
-          items,
-          categories,
-          locale: locale === "en" ? "en" : "ru",
-          apiKey,
-          model: aiSettings?.aiModel || undefined,
-          provider: (aiSettings?.aiProvider as AiProvider) || undefined,
-          effort: aiSettings?.aiEffort || undefined
-        });
-      } else {
-        const res = await apiClient.post<{ suggestions: { id: string; categoryId: string }[] }>(
-          "/ai/categorize",
-          { items, categories, locale }
-        );
-        suggestions = res.suggestions;
+      const apiKey = aiSettings?.aiApiKey ?? "";
+      if (!apiKey) {
+        toast.error(t("ai.err.noKey"));
+        return;
       }
+      const { requestBatchCategorization } = await import("@/services/ai/AiAssistantService");
+      const suggestions = await requestBatchCategorization({
+        items,
+        categories,
+        locale: locale === "en" ? "en" : "ru",
+        apiKey,
+        model: aiSettings?.aiModel || undefined,
+        provider: (aiSettings?.aiProvider as AiProvider) || undefined,
+        effort: aiSettings?.aiEffort || undefined
+      });
 
       const byId = new Map(targets.map((tx) => [tx.id, tx]));
       let applied = 0;

@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
 import { formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
@@ -84,26 +83,22 @@ export function AiQuickAdd() {
 
     try {
       setParsing(true);
-      let result: AiTransactionDraft;
-      if (isLocalDesktopMode) {
-        const apiKey = settings?.aiApiKey ?? "";
-        if (!apiKey) {
-          toast.error(t("ai.err.noKey"));
-          return;
-        }
-        const { requestTransactionDraft } = await import("@/services/ai/AiAssistantService");
-        result = await requestTransactionDraft({
+      const apiKey = settings?.aiApiKey ?? "";
+      if (!apiKey) {
+        toast.error(t("ai.err.noKey"));
+        return;
+      }
+      const { requestTransactionDraft } = await import("@/services/ai/AiAssistantService");
+      setDraft(
+        await requestTransactionDraft({
           text,
           context,
           apiKey,
           model: settings?.aiModel || undefined,
           provider: (settings?.aiProvider as "anthropic" | "openai" | "deepseek") || undefined,
           effort: settings?.aiEffort || undefined
-        });
-      } else {
-        result = await apiClient.post<AiTransactionDraft>("/ai/parse", { text, context });
-      }
-      setDraft(result);
+        })
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("ai.err.recognise"));
     } finally {
@@ -128,30 +123,22 @@ export function AiQuickAdd() {
       const imageBase64 = dataUrl.split(",")[1] ?? "";
       const mimeType = file.type;
 
-      let result: AiTransactionDraft;
-      if (isLocalDesktopMode) {
-        const apiKey = settings?.aiApiKey ?? "";
-        if (!apiKey) {
-          toast.error(t("ai.err.noKey"));
-          return;
-        }
-        const { requestReceiptDraft } = await import("@/services/ai/AiAssistantService");
-        result = await requestReceiptDraft({
+      const apiKey = settings?.aiApiKey ?? "";
+      if (!apiKey) {
+        toast.error(t("ai.err.noKey"));
+        return;
+      }
+      const { requestReceiptDraft } = await import("@/services/ai/AiAssistantService");
+      setDraft(
+        await requestReceiptDraft({
           imageBase64,
           mimeType,
           context,
           apiKey,
           model: settings?.aiModel || undefined,
           provider: (settings?.aiProvider as "anthropic" | "openai" | "deepseek") || undefined
-        });
-      } else {
-        result = await apiClient.post<AiTransactionDraft>("/ai/receipt", {
-          imageBase64,
-          mimeType,
-          context
-        });
-      }
-      setDraft(result);
+        })
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("ai.err.recognise"));
     } finally {

@@ -1,4 +1,4 @@
-import type { TransactionType } from "@prisma/client";
+import type { TransactionType } from "@/types/enums";
 import { subMonths } from "date-fns";
 
 import { clamp, percent } from "@/lib/utils";

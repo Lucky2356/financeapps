@@ -1,5 +1,13 @@
-import type { RecurrenceFrequency } from "@prisma/client";
-import { addMonths, addWeeks, addYears, differenceInCalendarDays, isAfter, isBefore, startOfDay } from "date-fns";
+import type { RecurrenceFrequency } from "@/types/enums";
+import {
+  addMonths,
+  addWeeks,
+  addYears,
+  differenceInCalendarDays,
+  isAfter,
+  isBefore,
+  startOfDay
+} from "date-fns";
 
 export type RecurringScheduleInput = {
   nextDate: Date;
@@ -24,17 +32,27 @@ export class RecurringTransactionService {
   getStatus(input: RecurringScheduleInput, today = new Date()): RecurringScheduleStatus {
     const normalizedToday = startOfDay(today);
     const normalizedNext = startOfDay(input.nextDate);
-    const dueDates = input.isActive ? this.getDueDates(normalizedNext, input.frequency, normalizedToday) : [];
+    const dueDates = input.isActive
+      ? this.getDueDates(normalizedNext, input.frequency, normalizedToday)
+      : [];
 
     return {
       daysUntilNext: differenceInCalendarDays(normalizedNext, normalizedToday),
       isDue: dueDates.length > 0,
       dueDates,
-      nextDateAfterRun: dueDates.length > 0 ? this.getNextDate(dueDates[dueDates.length - 1], input.frequency) : normalizedNext
+      nextDateAfterRun:
+        dueDates.length > 0
+          ? this.getNextDate(dueDates[dueDates.length - 1], input.frequency)
+          : normalizedNext
     };
   }
 
-  getDueDates(nextDate: Date, frequency: RecurrenceFrequency, until = new Date(), maxOccurrences = 24) {
+  getDueDates(
+    nextDate: Date,
+    frequency: RecurrenceFrequency,
+    until = new Date(),
+    maxOccurrences = 24
+  ) {
     const dates: Date[] = [];
     let cursor = startOfDay(nextDate);
     const end = startOfDay(until);

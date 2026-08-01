@@ -10,13 +10,10 @@ import {
   Sparkles,
   Wallet
 } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { isLocalDesktopMode } from "@/lib/platform/env";
-import { isPublicPath } from "@/lib/public-paths";
 import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,7 +27,7 @@ import {
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 
 const STEPS = [
-  { icon: CircleDollarSign, titleKey: "ob.step0.title", descKey: "ob.step0.descWeb" },
+  { icon: CircleDollarSign, titleKey: "ob.step0.title", descKey: "ob.step0.descDesktop" },
   { icon: Wallet, titleKey: "ob.step1.title", descKey: "ob.step1.desc" },
   { icon: CircleDollarSign, titleKey: "ob.step2.title", descKey: "ob.step2.desc" },
   { icon: BarChart3, titleKey: "ob.step3.title", descKey: "ob.step3.desc" },
@@ -45,7 +42,6 @@ export function OnboardingTour() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [loadingSample, setLoadingSample] = useState(false);
-  const pathname = usePathname();
 
   async function loadSample() {
     setLoadingSample(true);
@@ -60,9 +56,6 @@ export function OnboardingTour() {
   }
 
   useEffect(() => {
-    // Never auto-open on public auth pages (login / register / legal) — onboarding
-    // belongs inside the app, after sign-in.
-    if (isPublicPath(pathname)) return;
     // localStorage is only available on the client, so this first-run check must
     // run in an effect rather than during render.
     try {
@@ -71,7 +64,7 @@ export function OnboardingTour() {
     } catch {
       /* localStorage unavailable — skip onboarding */
     }
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     function replayOnboarding() {
@@ -99,11 +92,7 @@ export function OnboardingTour() {
   const current = STEPS[step];
   const Icon = current.icon;
   const isLast = step === STEPS.length - 1;
-  // Step 0 has device-specific copy (local-only vs account-backed).
-  const description =
-    step === 0
-      ? t(isLocalDesktopMode ? "ob.step0.descDesktop" : "ob.step0.descWeb")
-      : t(current.descKey);
+  const description = t(current.descKey);
 
   return (
     <Dialog

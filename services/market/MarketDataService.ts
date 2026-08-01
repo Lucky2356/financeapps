@@ -1,4 +1,4 @@
-import type { SecurityRisk } from "@prisma/client";
+import type { SecurityRisk } from "@/types/enums";
 
 export type MarketSecurity = {
   ticker: string;

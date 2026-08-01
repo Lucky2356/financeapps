@@ -19,7 +19,6 @@ import { apiClient } from "@/lib/api/client";
 import type { ImportPageData, TransactionsPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
-import { runtimeConfig } from "@/lib/platform/env";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -145,10 +144,6 @@ export function ImportExportPanel({
   const [undoPending, setUndoPending] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2 | 3>(1);
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
-  // Undo is available on the web (Rule/importBatchId in Postgres) and on the
-  // desktop in local-data mode (importBatches in local state).
-  const supportsImportUndo =
-    runtimeConfig.platform !== "desktop" || runtimeConfig.desktopDataMode === "local";
   const mapper = useMemo(() => new CsvImportMapper(), []);
   const importPresets = useMemo(() => mapper.presets(), [mapper]);
   const validation = useMemo(
@@ -296,8 +291,6 @@ export function ImportExportPanel({
   }
 
   async function undoLastImport() {
-    if (!supportsImportUndo) return;
-
     try {
       setUndoPending(true);
       const result = await apiClient.post<{ removed: number }>("/import/undo", {});
@@ -416,18 +409,16 @@ export function ImportExportPanel({
                 </ul>
               </div>
 
-              {supportsImportUndo && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={undoLastImport}
-                  disabled={undoPending}
-                >
-                  <RotateCcw className="size-4" />
-                  {undoPending ? t("imp.undoing") : t("imp.undo")}
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={undoLastImport}
+                disabled={undoPending}
+              >
+                <RotateCcw className="size-4" />
+                {undoPending ? t("imp.undoing") : t("imp.undo")}
+              </Button>
             </div>
           )}
 

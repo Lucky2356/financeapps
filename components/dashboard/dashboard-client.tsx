@@ -11,7 +11,6 @@ import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
 import { NetWorthBreakdownCard } from "@/components/dashboard/net-worth-breakdown";
 import { MetricCard } from "@/components/metric-card";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
-import { SourceBanner } from "@/components/source-banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -142,7 +141,6 @@ export function DashboardClient({
 
   return (
     <>
-      <SourceBanner source={data.source} />
       <SetupChecklist />
 
       <div className="flex justify-end">
