@@ -2,11 +2,9 @@
 
 ## Preflight
 
-- Confirm `.env` is present locally and secrets are not committed.
 - Run `npm ci` after dependency changes.
-- Run `npm run db:generate`.
-- Run `npm run db:deploy` against the target database.
-- Run `npm run db:seed` only for demo or fresh MVP environments.
+- Confirm no secrets are committed: the updater key (`financeapps-updater.key`) and the
+  Android keystore (`*.jks`, `src-tauri/gen/android/keystore.properties`) stay out of git.
 
 ## Verification
 
@@ -14,47 +12,45 @@
 npm run typecheck
 npm run lint
 npm run test
-npm run test:smoke
 npm run test:coverage
-npm run build
 npm run build:static
-npm audit
+npm audit --omit=dev
 ```
 
 ## Runtime Checks
 
-- Open `/api/health` and confirm `ok: true`, `database: "ok"` and `seeded: true`.
-  - Note: `/api/health` is a build-time snapshot (`force-static`) required for NEXT_OUTPUT=export compatibility.
-    For live DB monitoring in web-only deployments, change `dynamic` in `app/api/health/route.ts` to `"force-dynamic"`.
-    In that case, skip `npm run build:static` or maintain a separate branch for the desktop shell.
 - Open `/` and verify dashboard metrics, charts and recommendations render.
 - Open `/transactions` and add, edit and delete a test operation.
 - Open `/import` and verify CSV preview, backup export and backup restore.
 - Try restoring an invalid JSON backup and verify the app rejects it without replacing local data.
 - Open `/investments` and verify the disclaimer, watchlist, portfolio, sector structure and market refresh.
 
-## Web Deploy
+## Version bump
 
-- Set `NEXT_PUBLIC_APP_PLATFORM=web`.
-- Set `NEXT_PUBLIC_API_MODE=cloud`.
-- Set `NEXT_PUBLIC_API_BASE_URL=/api` or the deployed API URL.
-- Run database migrations before routing traffic to the new build.
+Four files must agree: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`
+and the `financial-assistant` entry in `src-tauri/Cargo.lock`. Regenerate `package-lock.json`
+with `npm install --package-lock-only`, add the CHANGELOG section, commit, then
+`git tag -a vX.Y.Z` and push the tag.
 
-## Android Shell
+## Windows
 
-- Run `npm run build:static`.
-- Run `npm run cap:sync`.
-- Build APK from Android Studio or Gradle.
-- Use cloud API mode for production Android until local sync is implemented.
-
-## Windows Desktop Shell
-
-- Run `npm run build:static`.
-- Run `npm run tauri:build`.
-- Find installers in `src-tauri/target/release/bundle/`.
-- Default desktop builds use local mode for core personal finance, CSV import, backup/restore, forecast and investment tracking.
-- For release automation, run the `Windows Desktop Release` workflow manually or push a `v*` tag.
+- Run `npm run tauri:build`; installers land in `src-tauri/target/release/bundle/`.
+- For release automation, run the `Windows Desktop Release` workflow manually or push a `v*` tag —
+  it publishes the GitHub Release with the signed installer and `latest.json`.
 - After installing the NSIS package, follow the smoke test in `docs/DESKTOP_LOCAL_MODE.md`.
+
+## Android
+
+- Have `src-tauri/gen/android/keystore.properties` in place (see `docs/ANDROID.md`), then
+  run `npm run android:build`.
+- The APK lands in
+  `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`;
+  rename it to `financial-assistant_<version>_universal.apk` before uploading.
+- Attach it to the Release the Windows workflow created:
+  `gh release upload v<version> <apk>`.
+- Install it on a phone and check: the header clears the status bar, the bottom bar clears the
+  gesture area, a backup exported on the PC restores here, and a backup exported here restores
+  on the PC.
 
 ## Security
 

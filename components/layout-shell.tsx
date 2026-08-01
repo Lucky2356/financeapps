@@ -19,7 +19,9 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
       <AppSidebar />
       <MobileTopBar />
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-[1760px] px-4 pb-24 pt-5 sm:px-6 md:pb-6 lg:px-8 2xl:px-12">
+        {/* Bottom padding clears the fixed mobile bar plus the gesture-navigation
+            inset, so the last row of any list stays tappable on a phone. */}
+        <div className="mx-auto w-full max-w-[1760px] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 md:pb-6 lg:px-8 2xl:px-12">
           <HubTabs />
           {children}
         </div>

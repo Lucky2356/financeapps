@@ -20,11 +20,6 @@ jobs:
     runs-on: windows-latest
 
     env:
-      NEXT_PUBLIC_APP_PLATFORM: desktop
-      NEXT_PUBLIC_APP_ENV: production
-      NEXT_PUBLIC_API_MODE: local
-      NEXT_PUBLIC_DESKTOP_DATA_MODE: local
-      NEXT_OUTPUT: export
       # True only when an updater signing key secret is configured. Gates the
       # signed-build + manifest path so the workflow still produces a plain
       # installer before keys are set up. Accepts either the standard
@@ -74,9 +69,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Generate Prisma client
-        run: npm run db:generate
 
       - name: Typecheck
         run: npm run typecheck
