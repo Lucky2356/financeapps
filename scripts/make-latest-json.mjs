@@ -44,9 +44,15 @@ const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(
 
 // The Android APK is built and uploaded separately (its signing keystore never
 // leaves the owner's machine), but its asset name is fixed by the build, so the
-// manifest can point at it before it is uploaded. The Android app has no
-// updater plugin and only reads the URL — there is no minisign signature to
-// verify, because the APK's own signing key is what Android checks on install.
+// manifest can point at it before it is uploaded.
+//
+// The `signature` below is deliberately EMPTY, and it must still be present:
+// tauri-plugin-updater deserializes `platforms` into a map of
+// `{ url, signature }` where signature is a required String, so ONE entry
+// without it makes the plugin reject the WHOLE manifest — including the Windows
+// entry. That is exactly how 1.6.0 broke desktop auto-update. Nothing ever reads
+// this value: the plugin only looks up the signature of its own target, and on
+// Android the APK's own signing key is what the system verifies on install.
 const apkName = `financial-assistant_${version}_universal.apk`;
 const apkUrl = `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${apkName}`;
 
@@ -55,9 +61,23 @@ const manifest = {
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": { signature, url },
-    "android-universal": { url: apkUrl }
+    "android-universal": { signature: "", url: apkUrl }
   }
 };
+
+// Fail loudly rather than publish a manifest the updater cannot parse. A broken
+// manifest is invisible until a user clicks "check for updates" and is told
+// updates are unavailable — by which time it is already on the release page.
+for (const [platform, entry] of Object.entries(manifest.platforms)) {
+  const missing = ["url", "signature"].filter((field) => typeof entry[field] !== "string");
+  if (missing.length > 0) {
+    console.error(
+      `latest.json: платформа "${platform}" без обязательных полей: ${missing.join(", ")}. ` +
+        "tauri-plugin-updater отвергнет весь манифест целиком."
+    );
+    process.exit(1);
+  }
+}
 
 const outPath = join(bundleDir, "latest.json");
 writeFileSync(outPath, JSON.stringify(manifest, null, 2), "utf8");
