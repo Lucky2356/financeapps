@@ -15,6 +15,7 @@ import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { AiGoalPlanButton } from "@/components/ai/ai-goal-plan-button";
 import { EmptyState } from "@/components/empty-state";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -325,13 +326,12 @@ function DepositDialog({
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="space-y-2">
             <Label>{t("goal.deposit.amount")}</Label>
-            <Input
-              type="number"
+            <AmountInput
               min="1"
               max={remaining > 0 ? remaining : undefined}
-              step="100"
+              step="0.01"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onValueChange={setAmount}
               placeholder={t("goal.deposit.placeholder")}
               required
             />
@@ -406,11 +406,10 @@ function GoalDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>{t("goal.dialog.target")}</Label>
-            <Input
+            <AmountInput
               name="targetAmount"
-              type="number"
               min="0"
-              step="100"
+              step="0.01"
               defaultValue={goal?.targetAmount ?? ""}
               required
             />
@@ -418,11 +417,10 @@ function GoalDialog({
           {goal ? (
             <div className="space-y-2">
               <Label>{t("goal.saved")}</Label>
-              <Input
+              <AmountInput
                 name="currentAmount"
-                type="number"
                 min="0"
-                step="100"
+                step="0.01"
                 defaultValue={goal.currentAmount}
                 required
               />
@@ -462,11 +460,10 @@ function GoalDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("goal.dialog.planned")}</Label>
-            <Input
+            <AmountInput
               name="plannedContribution"
-              type="number"
               min="0"
-              step="100"
+              step="0.01"
               defaultValue={goal?.plannedContribution ?? ""}
               placeholder="0"
             />

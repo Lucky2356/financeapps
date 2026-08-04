@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -599,15 +600,14 @@ function RecurringDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>{t("common.amount")}</Label>
-            <Input
+            <AmountInput
               name="amount"
-              type="number"
               inputMode="decimal"
               min="0"
               step="0.01"
               value={amount}
-              onChange={(event) => {
-                setAmount(event.target.value);
+              onValueChange={(next) => {
+                setAmount(next);
                 setAmountEdited(true);
               }}
               required

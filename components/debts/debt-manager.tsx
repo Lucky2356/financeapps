@@ -12,6 +12,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { EmptyState } from "@/components/empty-state";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { activeDebts, settledDebts } from "@/lib/debts/settled";
@@ -361,9 +362,8 @@ function DebtDialog({
             <Label>{t("debt.dialog.balance")}</Label>
             {/* step="0.01" (not 100): a coarse step makes the browser reject any
                 real-world amount that isn't a round hundred ("281285"). */}
-            <Input
+            <AmountInput
               name="balance"
-              type="number"
               min="0"
               step="0.01"
               inputMode="decimal"
@@ -373,9 +373,8 @@ function DebtDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("debt.dialog.original")}</Label>
-            <Input
+            <AmountInput
               name="originalAmount"
-              type="number"
               min="0"
               step="0.01"
               inputMode="decimal"
@@ -395,9 +394,8 @@ function DebtDialog({
           </div>
           <div className="space-y-2">
             <Label>{t("debt.dialog.payment")}</Label>
-            <Input
+            <AmountInput
               name="minPayment"
-              type="number"
               min="0"
               step="0.01"
               inputMode="decimal"

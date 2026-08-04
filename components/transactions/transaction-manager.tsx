@@ -37,6 +37,7 @@ import type { TransactionsPageData } from "@/lib/data";
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { EmptyState } from "@/components/empty-state";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -1247,7 +1248,7 @@ function TransferDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>{t("common.amount")}</Label>
-            <Input name="amount" type="number" min="0" step="0.01" required />
+            <AmountInput name="amount" min="0" step="0.01" required />
           </div>
           <div className="space-y-2">
             <Label>{t("common.date")}</Label>
@@ -1598,10 +1599,9 @@ function TransactionDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={`${transaction?.id ?? "new"}-amount`}>{t("common.amount")}</Label>
-            <Input
+            <AmountInput
               id={`${transaction?.id ?? "new"}-amount`}
               name="amount"
-              type="number"
               min="0"
               step="0.01"
               defaultValue={transaction?.amount ?? ""}

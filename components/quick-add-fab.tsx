@@ -12,6 +12,7 @@ import { formatCurrency, formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
+import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -225,10 +226,9 @@ export function QuickAddFab({
 
             <div className="space-y-2">
               <Label htmlFor="fab-amount">{t("common.amount")}</Label>
-              <Input
+              <AmountInput
                 id="fab-amount"
                 name="amount"
-                type="number"
                 step="0.01"
                 min="0.01"
                 placeholder="0.00"
