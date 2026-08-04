@@ -17,11 +17,11 @@ import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { CategoryDialog } from "@/components/categories/category-dialog";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -418,14 +418,13 @@ function BudgetForm({
   return (
     <div className="space-y-1">
       <div className="flex gap-2">
-        <Input
+        <AmountInput
           name="limitAmount"
-          type="number"
           min="0"
-          step="100"
+          step="0.01"
           value={value}
           placeholder={t("bud.noLimit")}
-          onChange={(e) => handleChange(e.target.value)}
+          onValueChange={handleChange}
           onBlur={() => {
             if (timer.current) clearTimeout(timer.current);
             commit(value);
