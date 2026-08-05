@@ -1,59 +1,106 @@
 "use client";
 
+import { Plus, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { ThemeToggle } from "@/components/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
-import { activeNavHref, MOBILE_PRIMARY } from "@/lib/navigation";
+import { activeNavHref, findHub, MAIN_NAV, MOBILE_PRIMARY } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 const primaryItems = MOBILE_PRIMARY;
 
-export function MobileTopBar() {
+/** The label of the screen the user is on, for the header's second line. */
+function useScreenTitle(pathname: string): string {
   const { t } = useI18n();
+  const tab = findHub(pathname)?.tabs.find((item) => item.href === pathname);
+  if (tab) return t(tab.labelKey);
+  const main = MAIN_NAV.find((item) => item.href === pathname);
+  if (main) return t(main.labelKey);
+  return t("shell.subtitle");
+}
+
+// Header per the design: the product name with the current screen underneath,
+// and two icon buttons. Search opens the command palette the app already has.
+export function MobileTopBar() {
+  const pathname = usePathname();
+  const { t } = useI18n();
+  const screenTitle = useScreenTitle(pathname);
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-card/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] shadow-soft backdrop-blur md:hidden">
+    <header className="sticky top-0 z-40 bg-background/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur md:hidden">
       <div className="flex items-center justify-between gap-3">
         <Link href="/" className="min-w-0">
-          <span className="block truncate text-sm font-semibold">{APP_NAME}</span>
-          <span className="block text-xs text-muted-foreground">{t("shell.subtitle")}</span>
+          <span className="block truncate text-base font-medium">{APP_NAME}</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">{screenTitle}</span>
         </Link>
-        <ThemeToggle />
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            aria-label={t("shell.search")}
+            onClick={() => window.dispatchEvent(new Event("command-palette-open"))}
+            className="flex size-9 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-foreground/[0.07]"
+          >
+            <Search className="size-[17px]" />
+          </button>
+          <Link
+            href="/settings"
+            aria-label={t("nav.settings")}
+            className="flex size-9 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-foreground/[0.07]"
+          >
+            <Settings className="size-[17px]" />
+          </Link>
+        </div>
       </div>
     </header>
   );
 }
 
+// Four destinations with the round add button between the second and third —
+// the layout from the design. The button reuses the existing quick-add dialog
+// via the same event the setup checklist fires, so there is one add flow.
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { t } = useI18n();
   const activeHref = activeNavHref(pathname);
 
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur md:hidden">
-      <div className="grid grid-cols-6 gap-1">
-        {primaryItems.map((item) => {
-          const active = activeHref === item.href;
-          const Icon = item.icon;
+  function navItem(item: (typeof primaryItems)[number]) {
+    const active = activeHref === item.href;
+    const Icon = item.icon;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "flex min-h-12 flex-1 flex-col items-center justify-center gap-[5px] px-0.5 py-2 text-[11.5px] font-medium transition-colors",
+          active ? "text-primary" : "text-muted-foreground"
+        )}
+      >
+        <Icon className="size-[23px]" strokeWidth={1.6} />
+        <span className="max-w-full truncate">{t(item.labelKey)}</span>
+      </Link>
+    );
+  }
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md text-[10px] font-medium text-muted-foreground",
-                active && "bg-secondary text-foreground"
-              )}
-            >
-              <Icon className="size-4" />
-              <span className="max-w-full truncate">{t(item.labelKey)}</span>
-            </Link>
-          );
-        })}
-      </div>
+  return (
+    <nav
+      aria-label={t("set.sections")}
+      className="fixed inset-x-0 bottom-0 z-50 flex items-center border-t bg-background px-1 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-2.5 md:hidden"
+    >
+      {primaryItems.slice(0, 2).map(navItem)}
+      <button
+        type="button"
+        aria-label={t("qa.fabAria")}
+        onClick={() => window.dispatchEvent(new Event("quick-add-open"))}
+        // Lifted out of the bar so it reads as the one primary action; this is
+        // the only solid accent fill in the whole system.
+        className="-mt-8 flex size-[54px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-soft transition-[filter] hover:brightness-110"
+      >
+        <Plus className="size-6" strokeWidth={2} />
+      </button>
+      {primaryItems.slice(2).map(navItem)}
     </nav>
   );
 }

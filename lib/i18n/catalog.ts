@@ -21,6 +21,8 @@ export type Messages = Record<string, string>;
 const ru: Messages = {
   // App shell
   "shell.subtitle": "Личные финансы",
+  "nav.short.planning": "Планы",
+  "nav.short.investments": "Инвест.",
   "shell.search": "Поиск…",
   "shell.themeAndNotifications": "Тема и уведомления",
   // Navigation sections
@@ -1579,6 +1581,8 @@ const ru: Messages = {
 const en: Messages = {
   // App shell
   "shell.subtitle": "Personal finance",
+  "nav.short.planning": "Plans",
+  "nav.short.investments": "Invest.",
   "shell.search": "Search…",
   "shell.themeAndNotifications": "Theme and notifications",
   // Navigation sections

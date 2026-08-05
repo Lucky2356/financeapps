@@ -110,6 +110,20 @@
     --density-row-y: 0.4rem;
   }
 
+  /* The hub tab strip: snap-scrolled sideways with no visible scrollbar, per
+     the design. Tailwind has no utility for the vendor scrollbar pseudo-element. */
+  .fa-hubstrip {
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .fa-hubstrip::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
   * {
     @apply border-border;
     letter-spacing: 0;

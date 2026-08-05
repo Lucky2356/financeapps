@@ -6,7 +6,9 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("rounded-lg border bg-card text-card-foreground shadow-soft", className)}
+      // Nocturne cards: the surface, the medium radius, and a hairline ring as the
+      // whole of their elevation — no drop shadow at rest.
+      className={cn("rounded-md bg-card text-card-foreground shadow-soft-sm", className)}
       {...props}
     />
   )

@@ -187,7 +187,9 @@ export function QuickAddFab({
     <>
       <Button
         size="icon"
-        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 size-14 rounded-full shadow-lg md:bottom-6 md:right-6"
+        // Hidden on a phone: the bottom bar carries the round add button there, and
+        // two of them would compete. Desktop has no bottom bar, so it stays.
+        className="fixed bottom-6 right-6 z-40 hidden size-14 rounded-full shadow-soft md:flex"
         onClick={() => void openDialog()}
         aria-label={t("qa.fabAria")}
       >

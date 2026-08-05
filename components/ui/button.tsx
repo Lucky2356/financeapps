@@ -8,20 +8,25 @@ const buttonVariants = cva(
   "inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
+      // Nocturne buttons are OUTLINES, not fills — even the primary one. The
+      // system paints with the ground and reserves solid accent for the one
+      // floating action button, so a page of filled buttons would out-shout it.
       variant: {
-        default:
-          "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-soft-sm hover:brightness-110 hover:-translate-y-px active:translate-y-0",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background/80 hover:bg-secondary",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-primary/10 hover:text-primary",
-        link: "text-primary underline-offset-4 hover:underline"
+        default: "border border-primary text-primary hover:bg-primary/12 active:bg-primary/[0.22]",
+        destructive:
+          "border border-destructive text-destructive hover:bg-destructive/12 active:bg-destructive/20",
+        outline: "border border-border hover:bg-foreground/[0.07] active:bg-foreground/[0.14]",
+        secondary: "border border-border hover:bg-foreground/[0.07] active:bg-foreground/[0.14]",
+        ghost: "text-primary hover:bg-primary/10 active:bg-primary/[0.18]",
+        link: "text-primary underline-offset-4 hover:underline",
+        // The one solid control in the system: the round add button.
+        accent: "bg-primary text-primary-foreground shadow-soft hover:brightness-110"
       },
       size: {
         default: "h-10 px-4 py-2",
         sm: "h-9 px-3",
         lg: "h-11 px-6",
-        icon: "h-10 w-10"
+        icon: "h-9 w-9"
       }
     },
     defaultVariants: {
