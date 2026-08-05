@@ -79,8 +79,15 @@ export function HealthGauge({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="stat text-3xl leading-none">{Math.round(animated)}</span>
-        <span className="mt-0.5 text-[11px] text-muted-foreground">/ 100</span>
+        {/* The figure scales with the gauge so the same component works both as
+            the large dashboard dial and as a tile-sized badge; the "/ 100"
+            suffix only fits on the large one. */}
+        <span className="stat leading-none" style={{ fontSize: Math.round(size * 0.23) }}>
+          {Math.round(animated)}
+        </span>
+        {size >= 96 ? (
+          <span className="mt-0.5 text-[11px] text-muted-foreground">/ 100</span>
+        ) : null}
       </div>
     </div>
   );

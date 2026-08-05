@@ -43,6 +43,11 @@
     --border: 233 30% 88%; /* neutral-300 #cfd3e5 */
     --input: 233 30% 88%;
     --ring: 249 45% 45%;
+    /* The hero card's two gradient stops. Kept as their own tokens because the
+       card carries white text at every point of the sweep, so both ends have to
+       stay dark enough for it — a rule the plain --primary cannot express. */
+    --hero-from: 249 48% 38%;
+    --hero-to: 252 52% 56%;
     --success: 168 52% 32%;
     --success-foreground: 0 0% 100%;
     --warning: 36 78% 42%;
@@ -82,6 +87,8 @@
        ledger has to separate money in from money out, so the three statuses
        keep their own hues — pulled to the system's lightness band and low
        chroma so they read as part of it, not as bootstrap colours. */
+    --hero-from: 252 44% 46%;
+    --hero-to: 249 56% 66%;
     --destructive: 352 58% 66%;
     --destructive-foreground: 232 27% 12%;
     --border: 227 10% 27%; /* neutral-800 — the hairline in --shadow-sm */
@@ -124,6 +131,14 @@
     height: 0;
   }
 
+  /* The headline card: one accent-filled panel at the top of the home screen,
+     the single place in the app that is painted rather than outlined. The
+     background-color is what shows if the gradient is ever unsupported. */
+  .fa-hero {
+    background-color: hsl(var(--hero-from));
+    background-image: linear-gradient(135deg, hsl(var(--hero-from)) 0%, hsl(var(--hero-to)) 100%);
+  }
+
   * {
     @apply border-border;
     letter-spacing: 0;
@@ -140,19 +155,9 @@
       BlinkMacSystemFont,
       "Segoe UI",
       sans-serif;
-    background-image:
-      linear-gradient(
-        180deg,
-        hsl(var(--background)) 0%,
-        hsl(var(--muted) / 0.42) 42%,
-        hsl(var(--background)) 100%
-      ),
-      linear-gradient(
-        135deg,
-        hsl(var(--primary) / 0.06) 0%,
-        transparent 32%,
-        hsl(var(--accent) / 0.08) 100%
-      );
+    /* Nocturne's ground is flat: the only gradient in the system is the hero
+       card below, and it only reads as a highlight because nothing else on the
+       page is shaded. */
   }
 
   html {

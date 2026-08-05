@@ -12,17 +12,22 @@ export default async function DashboardPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader
-        titleKey="page.home.title"
-        descriptionKey="page.home.desc"
-        actions={
-          <>
-            <QuickAddButton />
-            <ImportLinkButton />
-            <PrintButton />
-          </>
-        }
-      />
+      {/* On a phone the greeting header in the app bar already names the screen
+          and the round button in the bottom bar covers "add" — a second title
+          row with the same actions would only push the headline card down. */}
+      <div className="hidden md:block">
+        <PageHeader
+          titleKey="page.home.title"
+          descriptionKey="page.home.desc"
+          actions={
+            <>
+              <QuickAddButton />
+              <ImportLinkButton />
+              <PrintButton />
+            </>
+          }
+        />
+      </div>
       <DashboardClient initialData={data} initialForecast={forecast} />
     </div>
   );

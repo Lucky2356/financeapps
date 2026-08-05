@@ -3,11 +3,14 @@
 import { Plus, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
+import { apiClient } from "@/lib/api/client";
 import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 import { activeNavHref, findHub, MAIN_NAV, MOBILE_PRIMARY } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+import type { ProfileList, UserProfile } from "@/types/profiles";
 
 const primaryItems = MOBILE_PRIMARY;
 
@@ -21,12 +24,92 @@ function useScreenTitle(pathname: string): string {
   return t("shell.subtitle");
 }
 
+/** Morning / day / evening / night, by the clock on the device. */
+function greetingKey(hour: number): string {
+  if (hour < 5) return "home.greeting.night";
+  if (hour < 12) return "home.greeting.morning";
+  if (hour < 18) return "home.greeting.day";
+  return "home.greeting.evening";
+}
+
+// The home screen opens with a greeting and the profile avatar instead of the
+// generic title row — the phone layout the owner asked for. The hour is read
+// after mount: the page is prerendered at build time, so deciding "morning" on
+// the server would bake a stale greeting into the export.
+function GreetingHeading() {
+  const { t } = useI18n();
+  const [hour, setHour] = useState<number | null>(null);
+  const profile = useActiveProfile();
+
+  useEffect(() => {
+    // Deferred a microtask past the effect so the greeting lands in its own
+    // render pass rather than cascading out of this one.
+    void Promise.resolve().then(() => setHour(new Date().getHours()));
+  }, []);
+
+  return (
+    <div className="min-w-0">
+      <span className="block h-4 truncate text-xs text-muted-foreground">
+        {hour === null ? "" : t(greetingKey(hour))}
+      </span>
+      <span className="mt-0.5 block truncate text-lg font-semibold">
+        {profile?.name ?? APP_NAME}
+      </span>
+    </div>
+  );
+}
+
+/** The active profile, or null while loading (or if profiles are unavailable). */
+function useActiveProfile(): UserProfile | null {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<ProfileList>("/profiles")
+      .then((list) => {
+        if (cancelled) return;
+        const active =
+          list.profiles.find((item) => item.id === list.activeProfileId) ?? list.profiles[0];
+        setProfile(active ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return profile;
+}
+
 // Header per the design: the product name with the current screen underneath,
 // and two icon buttons. Search opens the command palette the app already has.
+// On the home screen the left side becomes the greeting and the right side a
+// single avatar, matching the reference layout.
 export function MobileTopBar() {
   const pathname = usePathname();
   const { t } = useI18n();
   const screenTitle = useScreenTitle(pathname);
+  const home = pathname === "/";
+  const profile = useActiveProfile();
+
+  if (home) {
+    return (
+      <header className="sticky top-0 z-40 bg-background/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur md:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <GreetingHeading />
+          <Link
+            href="/settings"
+            aria-label={t("nav.settings")}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+            style={{ backgroundColor: profile?.color ?? "hsl(var(--primary))" }}
+          >
+            {profile ? profile.name.charAt(0).toUpperCase() : ""}
+          </Link>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-background/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur md:hidden">

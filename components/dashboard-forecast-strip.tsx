@@ -1,72 +1,107 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, CalendarClock, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
-import type { ForecastData } from "@/types/finance";
+import { cn } from "@/lib/utils";
+import type { ForecastData, ForecastEvent } from "@/types/finance";
 
+const MAX_ROWS = 5;
+
+// The home screen's list block: what is coming up, newest first, with the
+// 30-day totals underneath. Replaces the three-column strip — the same numbers
+// are here, but the payments themselves lead, which is what the screen is
+// actually asked about.
 export function DashboardForecastStrip({ forecast }: { forecast: ForecastData }) {
   const { t } = useI18n();
   const net30 = forecast.plannedIncome30d - forecast.plannedExpense30d;
-  const hasCritical = forecast.warnings.some((warning) => warning.severity === "CRITICAL");
-  const TrendIcon =
-    forecast.forecast30dBalance >= forecast.startingBalance ? TrendingUp : TrendingDown;
+  const events = forecast.upcomingEvents.slice(0, MAX_ROWS);
+  const warning =
+    forecast.warnings.find((item) => item.severity === "CRITICAL") ?? forecast.warnings[0];
 
   return (
-    <section className="grid gap-4 rounded-lg border bg-card p-5 shadow-soft xl:grid-cols-[minmax(0,1fr)_auto]">
-      <div className="grid gap-4 md:grid-cols-3">
+    <section className="rounded-lg border bg-card p-5 shadow-soft">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">{t("dfs.upcoming")}</h2>
+        <Link
+          href="/forecast"
+          className="shrink-0 text-sm font-medium text-primary transition-opacity hover:opacity-80"
+        >
+          {t("dfs.viewAll")}
+        </Link>
+      </div>
+
+      {events.length > 0 ? (
+        <ul className="mt-2 divide-y">
+          {events.map((event) => (
+            <EventRow key={event.id} event={event} currency={forecast.currency} />
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">{t("dfs.noUpcoming")}</p>
+      )}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 border-t pt-4">
         <div>
-          <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <CalendarClock className="size-4 text-primary" />
-            {t("dfs.forecast30")}
-          </p>
-          <p className="mt-2 text-2xl font-semibold">
+          <p className="text-xs text-muted-foreground">{t("dfs.forecast30")}</p>
+          <p className="num mt-1 truncate text-base font-semibold">
             {formatCurrency(forecast.forecast30dBalance, forecast.currency)}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">{t("dfs.expectedBalance")}</p>
         </div>
         <div>
-          <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <TrendIcon className="size-4 text-primary" />
-            {t("dfs.plannedFlow")}
-          </p>
+          <p className="text-xs text-muted-foreground">{t("dfs.plannedFlow")}</p>
           <p
-            className={
-              net30 >= 0
-                ? "mt-2 text-2xl font-semibold text-success-foreground"
-                : "mt-2 text-2xl font-semibold text-destructive"
-            }
+            className={cn(
+              "num mt-1 truncate text-base font-semibold",
+              net30 >= 0 ? "text-success" : "text-destructive"
+            )}
           >
             {formatCurrency(net30, forecast.currency)}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">{t("dfs.incomeMinusExpense")}</p>
-        </div>
-        <div>
-          <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <AlertTriangle
-              className={hasCritical ? "size-4 text-destructive" : "size-4 text-primary"}
-            />
-            {t("dfs.risks")}
-          </p>
-          <p className="mt-2 text-lg font-semibold">
-            {forecast.warnings[0]?.title ?? t("dfs.noWarnings")}
-          </p>
-          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-            {forecast.warnings[0]?.description ?? t("dfs.stable")}
-          </p>
         </div>
       </div>
-      <div className="flex items-center xl:justify-end">
-        <Button asChild variant="outline">
-          <Link href="/forecast">
-            {t("dfs.open")}
-            <ArrowRight className="size-4" />
-          </Link>
-        </Button>
-      </div>
+
+      {warning ? (
+        <p className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
+          <AlertTriangle
+            className={cn(
+              "mt-px size-3.5 shrink-0",
+              warning.severity === "CRITICAL" ? "text-destructive" : "text-warning"
+            )}
+          />
+          <span className="line-clamp-2">{warning.title}</span>
+        </p>
+      ) : null}
     </section>
+  );
+}
+
+function EventRow({ event, currency }: { event: ForecastEvent; currency: string }) {
+  const income = event.type === "INCOME";
+  const Icon = income ? ArrowDownLeft : ArrowUpRight;
+
+  return (
+    <li className="flex items-center gap-3 py-2.5">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+        <Icon className="size-4" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{event.title}</span>
+        <span className="block truncate text-xs text-muted-foreground">{event.category}</span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className={cn("num block text-sm font-semibold", income && "text-success")}>
+          {income ? "+" : "−"}
+          {formatCurrency(Math.abs(event.amount), currency)}
+        </span>
+        <span className="block text-xs text-muted-foreground">{formatDate(event.date)}</span>
+      </span>
+      <span
+        aria-hidden
+        className={cn("size-2 shrink-0 rounded-full", income ? "bg-success" : "bg-primary")}
+      />
+    </li>
   );
 }
