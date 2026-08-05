@@ -102,6 +102,7 @@ async function findOverflow(page: import("@playwright/test").Page, width: number
 // Section tabs must be readable at a glance on a phone: none may sit off the
 // right edge behind a sideways scroll, and no label may be cut mid-word (1.5.1
 // shipped a strip where the active tab read "ерации" instead of "Операции").
+// The strip may scroll; a label may never be cut.
 async function findUnreadableTabs(page: import("@playwright/test").Page) {
   return page.evaluate(() => {
     const problems: string[] = [];
@@ -109,8 +110,8 @@ async function findUnreadableTabs(page: import("@playwright/test").Page) {
       '[data-testid="hub-tabs"], [data-testid="section-tabs"]'
     );
     for (const bar of Array.from(bars)) {
-      if (bar.scrollWidth > bar.clientWidth + 1)
-        problems.push(`лента прокручивается вбок (${bar.scrollWidth} > ${bar.clientWidth})`);
+      // The hub strip scrolls sideways by design (the owner chose the mockup's
+      // behaviour), so width alone is not a defect — a CLIPPED LABEL is.
       for (const tab of Array.from(bar.querySelectorAll("a, button"))) {
         const label = (tab.textContent ?? "").trim();
         // The label lives in its own span when it can truncate; otherwise the

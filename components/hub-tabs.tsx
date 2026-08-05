@@ -16,40 +16,29 @@ export function HubTabs() {
   const hub = findHub(pathname);
   if (!hub) return null;
 
-  // On a phone (and on a tablet, where the sidebar already eats 16rem) the tabs
-  // WRAP into rows instead of scrolling sideways: a hidden tab off the right
-  // edge — and a clipped active one — was the single worst part of the mobile
-  // layout. Four tabs wrap 2+2, five wrap 3+2, and `grow` stretches the last row
-  // so every row looks deliberate. Only from `lg` is the content column wide
-  // enough to seat every tab in one row without cutting a label.
-  const twoPerRow = hub.tabs.length === 4;
-
   return (
     <div
       data-testid="hub-tabs"
-      className="mb-5 flex flex-wrap gap-1 rounded-xl border bg-muted/40 p-1 shadow-soft"
+      // The design's strip: pills on the ground (no card, no border), scrolling
+      // sideways with proximity snap and no visible scrollbar. The owner chose
+      // this over the wrapping rows the app had.
+      className="fa-hubstrip -mx-1 mb-5 flex gap-1.5 overflow-x-auto px-1 pb-1"
     >
       {hub.tabs.map((tab) => {
         const active = pathname === tab.href;
-        const Icon = tab.icon;
         return (
           <Link
             key={tab.href}
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              // Stacked in a narrow cell so the full label fits ("Transactions"
-              // would otherwise be clipped next to the icon).
-              "flex min-w-0 grow flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-xs font-medium transition-all duration-150",
-              "lg:basis-0 lg:flex-row lg:gap-2 lg:px-3 lg:py-2 lg:text-sm",
-              twoPerRow ? "basis-[calc(50%-0.125rem)]" : "basis-[calc(33.333%-0.167rem)]",
+              "shrink-0 snap-start whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
               active
-                ? "bg-background text-primary shadow-sm ring-1 ring-primary/10"
-                : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                ? "bg-secondary text-primary"
+                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
             )}
           >
-            <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "opacity-70")} />
-            <span className="truncate">{t(tab.labelKey)}</span>
+            {t(tab.labelKey)}
           </Link>
         );
       })}

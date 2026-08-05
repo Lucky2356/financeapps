@@ -38,7 +38,13 @@ export const HUB_GROUPS: HubGroup[] = [
       { href: "/accounts", label: "Счета", labelKey: "nav.accounts", icon: WalletCards },
       { href: "/debts", label: "Долги", labelKey: "nav.debts", icon: CreditCard },
       { href: "/categories", label: "Категории", labelKey: "nav.categories", icon: Tag },
-      { href: "/import", label: "Импорт", labelKey: "nav.import", icon: Download }
+      { href: "/import", label: "Импорт", labelKey: "nav.import", icon: Download },
+      // The design folds the read-only screens into the same hub: they answer
+      // questions about the ledger, so they belong beside it rather than behind
+      // a bottom-bar slot of their own.
+      { href: "/analytics", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp },
+      { href: "/forecast", label: "Прогноз", labelKey: "nav.forecast", icon: LineChart },
+      { href: "/reports", label: "Отчёты", labelKey: "nav.reports", icon: FileText }
     ]
   },
   {
@@ -49,14 +55,6 @@ export const HUB_GROUPS: HubGroup[] = [
       { href: "/recurring", label: "Плановые", labelKey: "nav.recurring", icon: CalendarClock },
       { href: "/subscriptions", label: "Подписки", labelKey: "nav.subscriptions", icon: Repeat }
     ]
-  },
-  {
-    landing: "/analytics",
-    tabs: [
-      { href: "/analytics", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp },
-      { href: "/forecast", label: "Прогноз", labelKey: "nav.forecast", icon: LineChart },
-      { href: "/reports", label: "Отчёты", labelKey: "nav.reports", icon: FileText }
-    ]
   }
 ];
 
@@ -66,7 +64,6 @@ export const MAIN_NAV: NavItem[] = [
   { href: "/", label: "Главная", labelKey: "nav.home", icon: LayoutDashboard },
   { href: "/transactions", label: "Учёт", labelKey: "section.accounting", icon: ArrowDownUp },
   { href: "/budgets", label: "Планирование", labelKey: "section.planning", icon: Gauge },
-  { href: "/analytics", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp },
   { href: "/investments", label: "Инвестиции", labelKey: "nav.investments", icon: BarChart3 },
   { href: "/settings", label: "Настройки", labelKey: "nav.settings", icon: Settings }
 ];
@@ -82,5 +79,13 @@ export function activeNavHref(pathname: string): string {
   return findHub(pathname)?.landing ?? pathname;
 }
 
-// Mobile bottom bar mirrors the sidebar; the hub tab bar handles sub-navigation.
-export const MOBILE_PRIMARY: NavItem[] = MAIN_NAV;
+// The phone bar carries FOUR destinations plus the round add button in the
+// middle (rendered by MobileBottomNav, not listed here). Settings moved to the
+// header icon, and Analytics is now a tab inside the accounting hub — that is
+// what frees the two slots the add button needs.
+export const MOBILE_PRIMARY: NavItem[] = [
+  { href: "/", label: "Главная", labelKey: "nav.home", icon: LayoutDashboard },
+  { href: "/transactions", label: "Учёт", labelKey: "section.accounting", icon: ArrowDownUp },
+  { href: "/budgets", label: "Планы", labelKey: "nav.short.planning", icon: Gauge },
+  { href: "/investments", label: "Инвест.", labelKey: "nav.short.investments", icon: BarChart3 }
+];
