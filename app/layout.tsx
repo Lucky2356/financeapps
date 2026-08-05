@@ -5,7 +5,7 @@ import "@/app/globals.css";
 import { LayoutShell } from "@/components/layout-shell";
 import { Providers } from "@/components/providers";
 import { APP_NAME } from "@/lib/constants";
-import { APPEARANCE_FOUC_SCRIPT } from "@/lib/appearance";
+import { DENSITY_FOUC_SCRIPT } from "@/lib/appearance";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"], display: "swap" });
 
@@ -52,7 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ru" suppressHydrationWarning>
       <head>
         {/* Stamp accent/density onto <html> before first paint (no flash). */}
-        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_FOUC_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: DENSITY_FOUC_SCRIPT }} />
       </head>
       <body className={inter.className}>
         <Providers>

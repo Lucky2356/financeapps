@@ -1,39 +1,10 @@
-// Accent colour preference — an app-wide colour theme layered on top of the
-// light/dark theme (next-themes) and interface density (persisted in settings,
-// see app-settings-sync). The accent lives entirely on the client: persisted in
-// localStorage and reflected as data-accent on <html>. Works identically in the
-// web (SSR) and desktop (static export) builds because it never touches the
-// server.
+// Interface density preference — persisted in settings (see app-settings-sync)
+// and reflected as data-density on <html>.
+//
+// The accent picker that used to live here is gone: Nocturne defines ONE accent
+// (the blurple #9184d9), and it is load-bearing — charts, positive amounts,
+// selected tabs and the FAB all key off it, and a swappable hue would have to
+// re-derive that whole set per choice. The colour now lives only in
+// app/globals.css.
 
-export const ACCENTS = ["emerald", "blue", "violet", "amber"] as const;
-export type Accent = (typeof ACCENTS)[number];
-export const DEFAULT_ACCENT: Accent = "emerald";
-
-export const ACCENT_STORAGE_KEY = "ui-accent";
-
-function isAccent(value: unknown): value is Accent {
-  return typeof value === "string" && (ACCENTS as readonly string[]).includes(value);
-}
-
-/** Reflect the chosen accent on <html> (emerald = default, so no attribute). */
-export function applyAccent(accent: Accent): void {
-  const root = document.documentElement;
-  if (accent === DEFAULT_ACCENT) root.removeAttribute("data-accent");
-  else root.setAttribute("data-accent", accent);
-}
-
-export function readStoredAccent(): Accent {
-  try {
-    const value = window.localStorage.getItem(ACCENT_STORAGE_KEY);
-    return isAccent(value) ? value : DEFAULT_ACCENT;
-  } catch {
-    return DEFAULT_ACCENT;
-  }
-}
-
-// Inline script injected into <head> so the accent is stamped on <html> before
-// first paint — mirrors how next-themes avoids a flash of the default theme.
-// Kept dependency-free and self-contained (it runs before any bundle).
-export const APPEARANCE_FOUC_SCRIPT = `(function(){try{var a=localStorage.getItem("${ACCENT_STORAGE_KEY}");if(a&&a!=="${DEFAULT_ACCENT}"&&${JSON.stringify(
-  ACCENTS as readonly string[]
-)}.indexOf(a)>-1)document.documentElement.setAttribute("data-accent",a);}catch(e){}})();`;
+export const DENSITY_FOUC_SCRIPT = `(function(){try{var d=localStorage.getItem("ui-density");if(d==="compact")document.documentElement.setAttribute("data-density","compact");}catch(e){}})();`;

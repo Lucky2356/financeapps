@@ -2,119 +2,99 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Nocturne — the palette from the "Mobile app design plan" design system.
+   Values are the system's own hexes converted to the HSL triples Tailwind
+   consumes; the source of truth is the design project's styles.css.
+
+     ground   #161826   surface #232532   text #e9e9ed
+     accent   #9184d9 (blurple, ramp 100…900)
+     neutrals #f3f5fe … #292b31 on one shared lightness scale
+
+   Nocturne is a DARK system: `.dark` below is the literal transcription. The
+   light theme is derived with the same logic — the neutral ramp read from the
+   other end, the accent darkened to hold its contrast on a light ground — so
+   both themes share one hue family and one set of relationships.
+   ══════════════════════════════════════════════════════════════════════════ */
 @layer base {
   :root {
     /* Make native controls (the <select> dropdown popup, its arrow, date
        pickers, scrollbars) follow the app theme. Without this they render in the
        OS light scheme — a jarring white list inside the dark app. */
     color-scheme: light;
-    --background: 210 30% 97%;
-    --foreground: 224 28% 14%;
+    --background: 240 60% 98%; /* neutral-100 #f3f5fe */
+    --foreground: 232 27% 12%; /* the dark ground, used as ink */
     --card: 0 0% 100%;
-    --card-foreground: 224 28% 14%;
+    --card-foreground: 232 27% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 28% 14%;
-    --primary: 161 72% 28%;
+    --popover-foreground: 232 27% 12%;
+    /* The accent darkened to L 45% so it clears AA as text and as a border on
+       a light ground, keeping the blurple hue and chroma proportion. */
+    --primary: 249 45% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 94%;
-    --secondary-foreground: 224 28% 16%;
-    --muted: 210 20% 92%;
-    /* Darkened from 42% → 38% L so secondary text clears WCAG AA (4.5:1) on the
-       light background/muted surfaces. */
-    --muted-foreground: 220 12% 38%;
-    --accent: 35 95% 50%;
-    --accent-foreground: 28 44% 14%;
-    --destructive: 0 74% 50%;
+    --secondary: 240 33% 94%; /* neutral-200 #e4e7f5 */
+    --secondary-foreground: 232 27% 16%;
+    --muted: 240 33% 94%;
+    --muted-foreground: 230 12% 42%; /* neutral-600 range, AA on light */
+    --accent: 249 45% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 352 62% 46%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 86%;
-    --input: 214 20% 86%;
-    --ring: 161 72% 28%;
-    --success: 152 70% 42%;
-    --success-foreground: 153 76% 12%;
-    --warning: 37 92% 55%;
-    --warning-foreground: 28 44% 14%;
-    --info: 199 89% 48%;
-    --info-foreground: 204 80% 16%;
-    --radius: 0.75rem;
-    /* Sidebar — always dark regardless of theme */
-    --sidebar: 220 35% 10%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-muted: 218 14% 52%;
-    --sidebar-border: 220 18% 18%;
-    --sidebar-accent: 161 68% 42%;
+    --border: 233 30% 88%; /* neutral-300 #cfd3e5 */
+    --input: 233 30% 88%;
+    --ring: 249 45% 45%;
+    --success: 168 52% 32%;
+    --success-foreground: 0 0% 100%;
+    --warning: 36 78% 42%;
+    --warning-foreground: 0 0% 100%;
+    --info: 249 45% 45%;
+    --info-foreground: 0 0% 100%;
+    /* Nocturne radii: sm 4 · md 8 · lg 14. --radius is the lg step; the
+       Tailwind scale below derives md and sm from it explicitly. */
+    --radius: 0.875rem;
+    /* Sidebar — always the dark ground regardless of theme */
+    --sidebar: 232 27% 12%;
+    --sidebar-foreground: 240 10% 92%;
+    --sidebar-muted: 230 13% 62%; /* neutral-500 #9397ab */
+    --sidebar-border: 227 10% 27%; /* neutral-800 #3f424d */
+    --sidebar-accent: 245 92% 90%; /* accent-300 #d2cefd */
   }
 
   .dark {
     color-scheme: dark;
-    --background: 222 28% 9%;
-    --foreground: 210 24% 93%;
-    --card: 220 24% 13%;
-    --card-foreground: 210 24% 93%;
-    --popover: 220 24% 13%;
-    --popover-foreground: 210 24% 93%;
-    --primary: 161 68% 42%;
-    --primary-foreground: 160 32% 8%;
-    --secondary: 218 20% 18%;
-    --secondary-foreground: 210 24% 92%;
-    --muted: 220 20% 16%;
-    --muted-foreground: 218 12% 68%;
-    --accent: 39 92% 58%;
-    --accent-foreground: 30 44% 12%;
-    --destructive: 0 72% 56%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 18% 22%;
-    --input: 220 18% 22%;
-    --ring: 161 68% 42%;
-    --success: 150 70% 45%;
-    --success-foreground: 150 74% 82%;
-    --warning: 39 92% 58%;
-    --warning-foreground: 40 96% 82%;
-    --info: 199 89% 56%;
-    --info-foreground: 199 92% 84%;
-    /* Slightly darker sidebar in full-dark mode */
-    --sidebar: 218 34% 8%;
-    --sidebar-border: 220 18% 14%;
-  }
-
-  /* ── Accent themes ───────────────────────────────────────────────────────
-     The default (emerald) lives in :root/.dark above. Selecting another accent
-     stamps data-accent on <html> (see AppearanceProvider + the anti-FOUC inline
-     script in layout.tsx) and only re-points the primary/ring/sidebar-accent
-     hues — the rest of the palette is untouched. Light blocks first, then the
-     matching .dark blocks, so equal-specificity dark rules win by source order. */
-  :root[data-accent="blue"] {
-    --primary: 217 91% 45%;
-    --ring: 217 91% 45%;
-    --sidebar-accent: 213 90% 58%;
-  }
-  :root[data-accent="violet"] {
-    --primary: 262 70% 52%;
-    --ring: 262 70% 52%;
-    --sidebar-accent: 263 75% 62%;
-  }
-  :root[data-accent="amber"] {
-    --primary: 32 90% 45%;
-    --primary-foreground: 30 46% 12%;
-    --ring: 32 90% 45%;
-    --sidebar-accent: 38 92% 55%;
-  }
-  .dark[data-accent="blue"] {
-    --primary: 213 90% 62%;
-    --primary-foreground: 220 44% 10%;
-    --ring: 213 90% 62%;
-    --sidebar-accent: 213 90% 62%;
-  }
-  .dark[data-accent="violet"] {
-    --primary: 263 78% 68%;
-    --primary-foreground: 264 44% 12%;
-    --ring: 263 78% 68%;
-    --sidebar-accent: 263 78% 68%;
-  }
-  .dark[data-accent="amber"] {
-    --primary: 38 92% 56%;
-    --primary-foreground: 30 46% 12%;
-    --ring: 38 92% 56%;
-    --sidebar-accent: 38 92% 56%;
+    /* Literal Nocturne: every value below is the system's own token. */
+    --background: 232 27% 12%; /* --color-bg #161826 */
+    --foreground: 240 10% 92%; /* --color-text #e9e9ed */
+    --card: 232 18% 17%; /* --color-surface #232532 */
+    --card-foreground: 240 10% 92%;
+    --popover: 232 18% 17%;
+    --popover-foreground: 240 10% 92%;
+    --primary: 249 53% 68%; /* --color-accent #9184d9 */
+    --primary-foreground: 232 27% 12%;
+    --secondary: 227 10% 27%; /* neutral-800 #3f424d */
+    --secondary-foreground: 240 10% 92%;
+    --muted: 225 9% 18%; /* neutral-900 #292b31 */
+    --muted-foreground: 230 18% 75%; /* neutral-400 #b2b6ca */
+    --accent: 245 92% 90%; /* accent-300 #d2cefd — the "positive" tint */
+    --accent-foreground: 232 27% 12%;
+    /* Nocturne carries no semantic colours: the mockup marks income and
+       breached budgets with the accent and leaves everything else as text. A
+       ledger has to separate money in from money out, so the three statuses
+       keep their own hues — pulled to the system's lightness band and low
+       chroma so they read as part of it, not as bootstrap colours. */
+    --destructive: 352 58% 66%;
+    --destructive-foreground: 232 27% 12%;
+    --border: 227 10% 27%; /* neutral-800 — the hairline in --shadow-sm */
+    --input: 227 10% 27%;
+    --ring: 249 53% 68%;
+    --success: 168 44% 62%;
+    --success-foreground: 232 27% 12%;
+    --warning: 36 70% 66%;
+    --warning-foreground: 232 27% 12%;
+    --info: 245 92% 90%;
+    --info-foreground: 232 27% 12%;
+    --sidebar: 232 27% 12%;
+    --sidebar-border: 227 10% 27%;
   }
 
   /* ── Interface density ───────────────────────────────────────────────────

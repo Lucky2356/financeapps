@@ -74,14 +74,20 @@ const config: Config = {
           foreground: "hsl(var(--info-foreground))"
         }
       },
+      // Nocturne's radii are three fixed steps (4 · 8 · 14), not one base with
+      // arithmetic — md is 8px whatever lg is.
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)"
+        md: "0.5rem",
+        sm: "0.25rem"
       },
+      // Nocturne's elevation: a hairline edge first, ambient darkness second.
+      // The ring is painted from --border so it holds in both themes instead of
+      // being a hard-coded dark-theme grey.
       boxShadow: {
-        soft: "0 14px 40px -28px rgb(15 23 42 / 0.45)",
-        "soft-sm": "0 4px 16px -8px rgb(15 23 42 / 0.3)",
+        soft: "0 0 0 1px hsl(var(--border)), 0 6px 18px -6px rgb(0 0 0 / 0.55)",
+        "soft-sm": "0 0 0 1px hsl(var(--border))",
+        "soft-lg": "0 0 0 1px hsl(var(--border)), 0 16px 40px -12px rgb(0 0 0 / 0.65)",
         "glow-primary": "0 0 24px -4px hsl(var(--primary) / 0.35)"
       }
     }
