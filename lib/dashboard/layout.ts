@@ -19,9 +19,13 @@ export type DashboardLayout = {
   hidden: DashboardWidget[];
 };
 
+// "metrics" is off by default: the overview grid at the top of the screen shows
+// the same four figures, and two copies of the same numbers on one screen is
+// noise. It stays one tap away in "Настроить" for anyone who wants the larger
+// cards with their sparklines back.
 export const DEFAULT_LAYOUT: DashboardLayout = {
   order: [...DASHBOARD_WIDGETS],
-  hidden: []
+  hidden: ["metrics"]
 };
 
 function isWidget(value: unknown): value is DashboardWidget {

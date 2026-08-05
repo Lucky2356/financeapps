@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Plus, Sparkles, X } from "lucide-react";
+import { ArrowRight, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -16,7 +16,6 @@ import type {
 } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "setup-checklist-dismissed-v1";
 
@@ -160,31 +159,24 @@ export function SetupChecklist() {
           </Button>
         </div>
       </div>
+      {/* Only what is still open is listed: a finished step has nothing left to
+          do, and five rows of mostly struck-through text used to fill the whole
+          phone screen ahead of the balance. The count above keeps the progress. */}
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {steps.map((step, index) => (
-          <div
-            key={index}
-            className={cn(
-              "flex items-center gap-3 rounded-lg border bg-card p-3 text-sm",
-              step.done && "opacity-60"
-            )}
-          >
-            <span
-              className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                step.done
-                  ? "bg-success/20 text-success-foreground"
-                  : "bg-primary text-primary-foreground"
-              )}
+        {steps.map((step, index) =>
+          step.done ? null : (
+            <div
+              key={index}
+              className="flex items-center gap-3 rounded-lg border bg-card p-3 text-sm"
             >
-              {step.done ? <Check className="size-3.5" /> : index + 1}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className={cn("font-medium", step.done && "line-through")}>{step.title}</p>
-              <p className="truncate text-xs text-muted-foreground">{step.desc}</p>
-            </div>
-            {!step.done ? (
-              step.action === "quick-add" ? (
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{step.title}</p>
+                <p className="truncate text-xs text-muted-foreground">{step.desc}</p>
+              </div>
+              {step.action === "quick-add" ? (
                 <Button
                   size="sm"
                   variant="outline"
@@ -200,10 +192,10 @@ export function SetupChecklist() {
                     <ArrowRight className="size-3.5" />
                   </Link>
                 </Button>
-              )
-            ) : null}
-          </div>
-        ))}
+              )}
+            </div>
+          )
+        )}
       </div>
     </div>
   );
