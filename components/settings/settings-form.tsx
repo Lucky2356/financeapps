@@ -270,11 +270,16 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch (error) {
-      // Log the real reason (visible in desktop devtools) instead of swallowing
-      // it, then open the releases page via the opener plugin — window.open is
-      // blocked by the desktop webview CSP, so it silently did nothing before.
+      // SHOW the real reason, do not just log it: devtools are not available in
+      // a packaged build, so "обновления недоступны" on its own left no way to
+      // tell a network problem from a broken manifest — which cost a whole
+      // debugging round after 1.6.0.
+      const reason = error instanceof Error ? error.message : String(error);
       console.error("[updater]", error);
-      toast.message(t("set.update.unavailable"));
+      toast.message(t("set.update.unavailable"), {
+        description: reason,
+        duration: 12_000
+      });
       try {
         const { openUrl } = await import("@tauri-apps/plugin-opener");
         await openUrl(RELEASES_URL);

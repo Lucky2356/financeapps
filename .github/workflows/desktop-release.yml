@@ -148,6 +148,16 @@ jobs:
         shell: bash
         run: node scripts/make-latest-json.mjs "${{ steps.rel.outputs.tag }}"
 
+      # GATE: the manifest is what every installed client reads. One platform
+      # entry missing `signature` makes the updater plugin reject the WHOLE file
+      # — including the Windows entry — and every install reports "обновления
+      # недоступны" (this is exactly what shipped in 1.6.0). Fail here, before
+      # the release page ever sees it.
+      - name: Verify updater manifest
+        if: steps.rel.outputs.publish == 'true' && env.HAS_SIGNING_KEY == 'true'
+        shell: bash
+        run: node scripts/verify-latest-json.mjs src-tauri/target/release/bundle/nsis/latest.json "${{ steps.rel.outputs.tag }}"
+
       # Curated "what's new" for the Release page, pulled from the matching
       # CHANGELOG section (single source of truth). Falls back to an empty body —
       # so the release still publishes with just the auto-generated commit list —
