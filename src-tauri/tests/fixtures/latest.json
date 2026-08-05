@@ -1,0 +1,14 @@
+{
+  "version": "1.6.1",
+  "pub_date": "2026-08-05T06:42:15.455Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTV3RTNHljc2xhOTQwQ2E1bThETjZXK1VybmpMZ0U4c2h5QzBLUHRpVThkWDQzR2ZGZElwdWFHTXhWUU9BYS8yYlk1dHVaZlJINFZLVitCaGhZK0dlNEM0bUlud045cFFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg1OTEyMTMyCWZpbGU60KTQuNC90LDQvdGB0L7QstGL0Lkg0L/QvtC80L7RidC90LjQul8xLjYuMV94NjQtc2V0dXAuZXhlCktmYmdEaW0zRk44SXgwMmx0SVp6OHg4NzRub0I3NmNQMXR0ZWpUbVNRNmZiTkZoSktNb1ZoeEZFYzdnbHlkM2V4Rk96ZGRDa1l5R1hlQWhTYjVBRkFnPT0K",
+      "url": "https://github.com/Lucky2356/financeapps/releases/download/v1.6.1/financial-assistant_1.6.1_x64-setup.exe"
+    },
+    "android-universal": {
+      "signature": "",
+      "url": "https://github.com/Lucky2356/financeapps/releases/download/v1.6.1/financial-assistant_1.6.1_universal.apk"
+    }
+  }
+}
