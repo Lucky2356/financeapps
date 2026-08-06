@@ -2,7 +2,6 @@
 
 import { ArrowRight, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -30,7 +29,6 @@ type Counts = {
 // Tracks the first-setup progress from real data and guides the next action.
 // Auto-hides once every step is done (or when dismissed).
 export function SetupChecklist() {
-  const router = useRouter();
   const { t } = useI18n();
   const [counts, setCounts] = useState<Counts | null>(null);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -71,11 +69,14 @@ export function SetupChecklist() {
     try {
       await apiClient.post("/sample");
       toast.success(t("set.toast.sampleLoaded"));
-      await loadCounts();
-      router.refresh();
+      // Reload rather than router.refresh(): the desktop build is a static
+      // export, so refresh() re-renders the same empty server shell and every
+      // screen keeps showing zeroes until the app is restarted. This is the same
+      // thing the Settings screen does after loading the sample.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      window.location.reload();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("set.toast.sampleError"));
-    } finally {
       setLoadingSample(false);
     }
   }

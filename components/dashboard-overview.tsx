@@ -1,6 +1,7 @@
 "use client";
 
 import { PiggyBank, TrendingDown, TrendingUp, WalletCards, type LucideIcon } from "lucide-react";
+import Link from "next/link";
 
 import { HealthGauge } from "@/components/charts/health-gauge";
 import { HeroCard } from "@/components/ui/hero-card";
@@ -16,6 +17,15 @@ const METRIC_ICON: Record<string, LucideIcon | undefined> = {
   monthIncome: TrendingUp,
   monthExpense: TrendingDown,
   freeCash: PiggyBank
+};
+
+// Every figure on the overview grid comes from somewhere the owner can open —
+// tapping the number is the fastest way to ask "made of what?".
+const METRIC_HREF: Record<string, string | undefined> = {
+  totalBalance: "/accounts",
+  monthIncome: "/transactions?type=INCOME",
+  monthExpense: "/transactions?type=EXPENSE",
+  freeCash: "/transactions"
 };
 
 export function DashboardOverview({ data }: { data: DashboardData }) {
@@ -72,20 +82,25 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
             caption={tile.detail}
             icon={tile.icon}
             tone={toTone(tile.tone)}
+            href={METRIC_HREF[tile.key ?? ""]}
           />
         ))}
       </StatGrid>
 
       {/* Health keeps its dial: the score is a judgement, not a figure, and the
-          sentence under it is what makes it actionable. */}
-      <div className="flex items-center gap-4 rounded-lg border bg-card p-4 shadow-soft sm:p-5">
+          sentence under it is what makes it actionable. Tapping it opens the
+          analysis the sentence is drawn from. */}
+      <Link
+        href="/analytics"
+        className="flex items-center gap-4 rounded-lg border bg-card p-4 shadow-soft transition-colors hover:border-primary/40 hover:bg-foreground/[0.03] sm:p-5"
+      >
         <HealthGauge score={data.health.score} tone={healthTone} size={92} strokeWidth={8} />
         <div className="min-w-0">
           <p className="text-[13px] text-muted-foreground">{t("dash.health")}</p>
           <p className="mt-0.5 text-base font-semibold">{healthLabel}</p>
           <p className="mt-1 text-sm text-muted-foreground">{data.health.summary}</p>
         </div>
-      </div>
+      </Link>
     </section>
   );
 }

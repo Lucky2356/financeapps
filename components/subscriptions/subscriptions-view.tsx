@@ -159,11 +159,16 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
             />
           </StatGrid>
 
-          <SectionCard title={t("sub.list.title")}>
+          <SectionCard
+            title={t("sub.list.title")}
+            action={t("common.viewAll")}
+            actionHref="/recurring"
+          >
             <ListRows>
               {summary.items.map((item) => (
                 <ListRow
                   key={item.id}
+                  href="/recurring"
                   icon={Repeat}
                   title={item.description || item.category.label}
                   subtitle={t("sub.metaLine", {

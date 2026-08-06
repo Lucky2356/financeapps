@@ -30,6 +30,7 @@ export function DashboardForecastStrip({ forecast }: { forecast: ForecastData })
             return (
               <ListRow
                 key={event.id}
+                href="/forecast"
                 icon={income ? ArrowDownLeft : ArrowUpRight}
                 title={event.title}
                 subtitle={event.category}

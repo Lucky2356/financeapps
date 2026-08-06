@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 
 import { apiClient } from "@/lib/api/client";
 import type { SettingsPageData } from "@/lib/data";
+import { themeChosenThisSession } from "@/lib/theme-preference";
 
 // Applies interface density globally by scaling the root font size.
 // Tailwind spacing/typography is rem-based, so this proportionally tightens
@@ -27,7 +28,11 @@ export function AppSettingsSync() {
       .get<SettingsPageData>("/settings")
       .then((settings) => {
         if (cancelled) return;
-        if (settings.theme) setTheme(settings.theme);
+        // Never overwrite a choice the user made while this read was in flight:
+        // reading IndexedDB takes long enough that someone can open Settings and
+        // pick a theme first, and applying the stored value here used to snap it
+        // straight back.
+        if (settings.theme && !themeChosenThisSession()) setTheme(settings.theme);
         applyDensity(settings.density ?? "comfortable");
       })
       .catch(() => {

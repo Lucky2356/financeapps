@@ -38,6 +38,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
           value={formatCurrency(data.startingBalance, data.currency)}
           caption={t("fc.tile.nowCaption")}
           icon={WalletCards}
+          href="/accounts"
         />
         <StatTile
           label={t("fc.flow30")}

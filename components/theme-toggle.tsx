@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
+import { markThemeChosen } from "@/lib/theme-preference";
 
 export function ThemeToggle() {
   // resolvedTheme reflects what is actually on screen (resolving "system"),
@@ -17,6 +18,7 @@ export function ThemeToggle() {
 
   function toggle() {
     const next = isDark ? "light" : "dark";
+    markThemeChosen();
     setTheme(next);
     // Persist so AppSettingsSync doesn't revert it from IndexedDB on reload.
     void apiClient.put("/settings", { theme: next }).catch(() => {});
