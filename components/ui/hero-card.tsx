@@ -19,6 +19,7 @@ export function HeroCard({
   changeLabel,
   trend,
   progress,
+  higherIsBetter = true,
   variant = "plain",
   className
 }: {
@@ -33,12 +34,19 @@ export function HeroCard({
   trend?: number[];
   /** 0…1 — drawn as a bar under the caption instead of a wave. */
   progress?: number | null;
+  /**
+   * Whether growth is good news. False on spending screens, where a month that
+   * is 5% up is a warning, not a success — the arrow still follows the
+   * direction, only the colour follows the meaning.
+   */
+  higherIsBetter?: boolean;
   variant?: "accent" | "plain";
   className?: string;
 }) {
   const accent = variant === "accent";
   const hasChange = typeof changePercent === "number" && Number.isFinite(changePercent);
   const positive = hasChange && changePercent >= 0;
+  const goodChange = higherIsBetter ? positive : !positive;
   const ChangeIcon = positive ? TrendingUp : TrendingDown;
   const badge = changeLabel ?? null;
 
@@ -69,7 +77,7 @@ export function HeroCard({
               "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
               accent
                 ? "bg-white/20"
-                : positive
+                : goodChange
                   ? "bg-success/15 text-success"
                   : "bg-destructive/12 text-destructive"
             )}

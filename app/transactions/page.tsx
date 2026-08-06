@@ -4,6 +4,7 @@ import { AiQuickAdd } from "@/components/ai/ai-quick-add";
 import { LoadingCard } from "@/components/loading-card";
 import { PageHeader } from "@/components/page-header";
 import { TransactionManager } from "@/components/transactions/transaction-manager";
+import { TransactionsSummary } from "@/components/transactions/transactions-summary";
 import { TransactionsAnalytics } from "@/components/transactions/transactions-analytics";
 import { getTransactionsPageData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
@@ -14,7 +15,10 @@ export default async function TransactionsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.transactions.title" descriptionKey="page.transactions.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.transactions.title" descriptionKey="page.transactions.desc" />
+      </div>
+      <TransactionsSummary />
       <AiQuickAdd />
       <TransactionsAnalytics />
       <Suspense fallback={<LoadingCard messageKey="loading.transactions" />}>

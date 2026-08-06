@@ -9,7 +9,9 @@ export default async function SubscriptionsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.subscriptions.title" descriptionKey="page.subscriptions.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.subscriptions.title" descriptionKey="page.subscriptions.desc" />
+      </div>
       <SubscriptionsView data={data} />
     </div>
   );

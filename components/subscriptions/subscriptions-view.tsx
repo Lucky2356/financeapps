@@ -1,6 +1,6 @@
 "use client";
 
-import { Repeat, Sparkles } from "lucide-react";
+import { CalendarClock, Crown, Repeat, Sparkles } from "lucide-react";
 import { addDays, addMonths, addYears } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 
@@ -19,6 +19,11 @@ import { useApiMutation } from "@/hooks/use-api-mutation";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HeroCard } from "@/components/ui/hero-card";
+import { ListRow, ListRows } from "@/components/ui/list-row";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatGrid } from "@/components/ui/stat-grid";
+import { StatTile } from "@/components/ui/stat-tile";
 
 function nextDateAfter(lastIso: string, frequency: DetectedSubscription["frequency"]): string {
   const last = new Date(lastIso);
@@ -107,6 +112,10 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
     );
   }
 
+  // The list is already sorted by monthly cost, so the first item is the one
+  // that costs the most.
+  const priciest = summary.items[0];
+
   if (summary.items.length === 0 && detected.length === 0) {
     return (
       <EmptyState icon={Repeat} title={t("sub.empty.title")} description={t("sub.empty.desc")} />
@@ -117,60 +126,61 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
     <div className="space-y-5">
       {summary.items.length > 0 ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{t("sub.perMonth")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">
-                  {formatCurrency(summary.totalMonthly, pageData.currency)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">{t("sub.perYear")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold">
-                  {formatCurrency(summary.totalAnnual, pageData.currency)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          <HeroCard
+            label={t("sub.perMonth")}
+            value={formatCurrency(summary.totalMonthly, pageData.currency)}
+            caption={t("sub.hero.caption", { count: summary.items.length })}
+          />
+          <StatGrid title={t("dash.widget.overview")}>
+            <StatTile
+              label={t("sub.perYear")}
+              value={formatCurrency(summary.totalAnnual, pageData.currency)}
+              caption={t("sub.tile.yearCaption")}
+              icon={CalendarClock}
+            />
+            <StatTile
+              label={t("sub.tile.count")}
+              value={String(summary.items.length)}
+              caption={t("sub.tile.countCaption")}
+              icon={Repeat}
+            />
+            <StatTile
+              label={t("sub.tile.priciest")}
+              value={priciest ? formatCurrency(priciest.monthlyEquivalent, pageData.currency) : "—"}
+              caption={priciest ? priciest.description || priciest.category.label : "—"}
+              icon={Crown}
+            />
+            <StatTile
+              label={t("sub.tile.detected")}
+              value={String(detected.length)}
+              caption={t("sub.tile.detectedCaption")}
+              icon={Sparkles}
+              tone={detected.length > 0 ? "warning" : "default"}
+            />
+          </StatGrid>
 
-          <div className="grid gap-3">
-            {summary.items.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-start justify-between gap-3 rounded-lg border bg-card p-4 shadow-soft"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{item.description || item.category.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("sub.metaLine", {
-                      freq: t(`freq.${item.frequency}`),
-                      category: item.category.label,
-                      date: formatDate(item.nextDate)
-                    })}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="font-semibold">
-                    {t("sub.monthly", {
-                      amount: formatCurrency(item.monthlyEquivalent, pageData.currency)
-                    })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("sub.annual", {
-                      amount: formatCurrency(item.annualCost, pageData.currency)
-                    })}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <SectionCard title={t("sub.list.title")}>
+            <ListRows>
+              {summary.items.map((item) => (
+                <ListRow
+                  key={item.id}
+                  icon={Repeat}
+                  title={item.description || item.category.label}
+                  subtitle={t("sub.metaLine", {
+                    freq: t(`freq.${item.frequency}`),
+                    category: item.category.label,
+                    date: formatDate(item.nextDate)
+                  })}
+                  value={t("sub.monthly", {
+                    amount: formatCurrency(item.monthlyEquivalent, pageData.currency)
+                  })}
+                  valueCaption={t("sub.annual", {
+                    amount: formatCurrency(item.annualCost, pageData.currency)
+                  })}
+                />
+              ))}
+            </ListRows>
+          </SectionCard>
         </>
       ) : null}
 
