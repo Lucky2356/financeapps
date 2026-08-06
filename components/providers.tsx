@@ -16,7 +16,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <I18nProvider>
       <NextThemesProvider
         attribute="class"
-        defaultTheme="system"
+        // Nocturne is a dark system; the light theme is its derivative, so a
+        // fresh install opens dark unless the owner says otherwise.
+        defaultTheme="dark"
         enableSystem
         disableTransitionOnChange
       >

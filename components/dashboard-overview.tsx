@@ -94,10 +94,20 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         href="/analytics"
         className="flex items-center gap-4 rounded-lg border bg-card p-4 shadow-soft transition-colors hover:border-primary/40 hover:bg-foreground/[0.03] sm:p-5"
       >
-        <HealthGauge score={data.health.score} tone={healthTone} size={92} strokeWidth={8} />
+        {data.health.noData ? (
+          // Nothing to score yet: a dash is honest, a full dial saying "100 —
+          // stable" for an empty ledger is not.
+          <span className="flex size-[92px] shrink-0 items-center justify-center rounded-full border border-dashed text-2xl text-muted-foreground">
+            —
+          </span>
+        ) : (
+          <HealthGauge score={data.health.score} tone={healthTone} size={92} strokeWidth={8} />
+        )}
         <div className="min-w-0">
           <p className="text-[13px] text-muted-foreground">{t("dash.health")}</p>
-          <p className="mt-0.5 text-base font-semibold">{healthLabel}</p>
+          <p className="mt-0.5 text-base font-semibold">
+            {data.health.noData ? t("dash.health.noData") : healthLabel}
+          </p>
           <p className="mt-1 text-sm text-muted-foreground">{data.health.summary}</p>
         </div>
       </Link>

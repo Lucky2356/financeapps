@@ -304,26 +304,36 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       {/* ── Overview — value, today's move, trend, allocation, holdings ─────── */}
       {activeTab === "overview" ? (
         data.portfolio.length === 0 ? (
-          <Card>
-            <CardContent className="py-10">
-              <EmptyState
-                icon={LineChart}
-                title={t("inv.overviewEmpty.title")}
-                description={t("inv.overviewEmpty.desc")}
-                action={
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <Button onClick={() => setAddPositionOpen(true)}>
-                      <Plus className="size-4" />
-                      {t("inv.overviewEmpty.cta")}
-                    </Button>
-                    <Button variant="outline" onClick={() => selectTab("market")}>
-                      {t("inv.overviewEmpty.toMarket")}
-                    </Button>
-                  </div>
-                }
-              />
-            </CardContent>
-          </Card>
+          // The head of the screen stays put when the portfolio is empty: the
+          // card reads zero instead of vanishing, so adding a first position
+          // does not rebuild the layout under the owner's finger.
+          <div className="space-y-5">
+            <PortfolioHero
+              portfolio={data.portfolio}
+              currency={data.currency}
+              dayChangeByTicker={dayChangeByTicker}
+            />
+            <Card>
+              <CardContent className="py-10">
+                <EmptyState
+                  icon={LineChart}
+                  title={t("inv.overviewEmpty.title")}
+                  description={t("inv.overviewEmpty.desc")}
+                  action={
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Button onClick={() => setAddPositionOpen(true)}>
+                        <Plus className="size-4" />
+                        {t("inv.overviewEmpty.cta")}
+                      </Button>
+                      <Button variant="outline" onClick={() => selectTab("market")}>
+                        {t("inv.overviewEmpty.toMarket")}
+                      </Button>
+                    </div>
+                  }
+                />
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           <div className="space-y-5">
             <PortfolioHero

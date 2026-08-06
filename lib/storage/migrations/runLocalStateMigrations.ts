@@ -6,6 +6,8 @@
 // defaults are handled by the Zod schema at parse time; migrations only carry
 // version-specific structural changes.
 
+import { LEGACY_CATEGORY_COLORS } from "@/lib/categories/palette";
+
 export type RawLocalState = Record<string, unknown> & { schemaVersion?: number };
 
 export type LocalStateMigration = {
@@ -14,7 +16,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 8;
+export const LATEST_LOCAL_STATE_VERSION = 9;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -74,6 +76,28 @@ export const localStateMigrations: LocalStateMigration[] = [
     // is capitalised). An account without them earns nothing, which is exactly
     // the pre-v8 behaviour, so the migration only stamps the version.
     migrate: (state) => ({ ...state, schemaVersion: 8 })
+  },
+  {
+    from: 8,
+    to: 9,
+    // v9 repaints the seeded categories into the Nocturne palette. A category
+    // whose colour was changed by hand keeps it: only the exact stock colours
+    // the app shipped with are rewritten.
+    migrate: (state) => {
+      const categories = Array.isArray(state.categories) ? state.categories : null;
+      if (!categories) return { ...state, schemaVersion: 9 };
+      return {
+        ...state,
+        schemaVersion: 9,
+        categories: categories.map((category) => {
+          if (!category || typeof category !== "object") return category;
+          const row = category as Record<string, unknown>;
+          const color = typeof row.color === "string" ? row.color.toLowerCase() : null;
+          const next = color ? LEGACY_CATEGORY_COLORS[color] : undefined;
+          return next ? { ...row, color: next } : row;
+        })
+      };
+    }
   }
 ];
 

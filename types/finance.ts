@@ -59,6 +59,8 @@ export type HealthFactor = {
 export type HealthScore = {
   score: number;
   summary: string;
+  /** True when there is nothing to assess yet — show a dash, not a perfect 100. */
+  noData?: boolean;
   checks: Array<{
     label: string;
     value: string;

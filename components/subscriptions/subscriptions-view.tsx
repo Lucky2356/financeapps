@@ -117,8 +117,17 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
   const priciest = summary.items[0];
 
   if (summary.items.length === 0 && detected.length === 0) {
+    // Same head as the filled screen, reading zero — the layout does not jump
+    // when the first subscription appears.
     return (
-      <EmptyState icon={Repeat} title={t("sub.empty.title")} description={t("sub.empty.desc")} />
+      <div className="space-y-5">
+        <HeroCard
+          label={t("sub.perMonth")}
+          value={formatCurrency(0, pageData.currency)}
+          caption={t("sub.hero.caption", { count: 0 })}
+        />
+        <EmptyState icon={Repeat} title={t("sub.empty.title")} description={t("sub.empty.desc")} />
+      </div>
     );
   }
 

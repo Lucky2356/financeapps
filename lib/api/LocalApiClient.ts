@@ -49,6 +49,7 @@ import { clamp, percent, roundMoney } from "@/lib/utils";
 import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
+import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
@@ -94,7 +95,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -143,20 +144,20 @@ type LocalState = {
 };
 
 const defaultCategories: CategoryOption[] = [
-  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#16a34a" },
-  { id: "cat-other-income", label: "Прочие доходы", kind: "INCOME", color: "#0d9488" },
-  { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#f97316", isEssential: true },
-  { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#2563eb", isEssential: true },
-  { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#7c3aed", isEssential: true },
+  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7" },
+  { id: "cat-other-income", label: "Прочие доходы", kind: "INCOME", color: "#6fb2d2" },
+  { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#9184d9", isEssential: true },
+  { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#7f8fd8", isEssential: true },
+  { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#b3a7ea", isEssential: true },
   {
     id: "cat-subscriptions",
     label: "Подписки",
     kind: "EXPENSE",
-    color: "#db2777",
+    color: "#a89bc9",
     isSubscription: true
   },
-  { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#ea580c" },
-  { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#dc2626", isEssential: true }
+  { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#e2b26e" },
+  { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#e2788a", isEssential: true }
 ];
 
 function recomputeGoal(
@@ -209,7 +210,7 @@ function createInitialState(): LocalState {
     demoMode: false,
     emergencyFundMonthsTarget: 6,
     riskProfileCode: "MODERATE",
-    theme: "system",
+    theme: "dark",
     density: "comfortable",
     defaultTransactionType: "EXPENSE",
     lastBackupAt: null,
@@ -249,7 +250,7 @@ function createBlankState(): LocalState {
     demoMode: false,
     emergencyFundMonthsTarget: 6,
     riskProfileCode: "MODERATE",
-    theme: "system",
+    theme: "dark",
     density: "comfortable",
     defaultTransactionType: "EXPENSE",
     lastBackupAt: null,
@@ -1168,7 +1169,7 @@ export class LocalApiClient implements ApiClient {
       id: id("cat"),
       label,
       kind,
-      color: kind === "INCOME" ? "#16a34a" : "#64748b"
+      color: kind === "INCOME" ? "#7ed6b7" : DEFAULT_CATEGORY_COLOR
     } satisfies CategoryOption;
     state.categories = [...state.categories, category];
     return category;

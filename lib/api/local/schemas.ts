@@ -268,7 +268,8 @@ export const localStateSchema = z.object({
     z.literal(5),
     z.literal(6),
     z.literal(7),
-    z.literal(8)
+    z.literal(8),
+    z.literal(9)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
