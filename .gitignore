@@ -26,3 +26,5 @@ blob-report
 *.jks
 *.keystore
 keystore.properties
+emu-*.png
+shots/
