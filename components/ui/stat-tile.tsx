@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -20,7 +21,8 @@ export function StatTile({
   caption,
   icon: Icon,
   tone = "default",
-  visual
+  visual,
+  href
 }: {
   label: string;
   value: string;
@@ -29,9 +31,11 @@ export function StatTile({
   tone?: StatTone;
   /** Rendered in place of the icon chip — used for the health gauge. */
   visual?: ReactNode;
+  /** Where the figure comes from. Given one, the whole tile is a link. */
+  href?: string;
 }) {
-  return (
-    <div className="rounded-lg border bg-card p-4 shadow-soft">
+  const body = (
+    <>
       {/* Caption and chip share the top line; the figure below gets the full
           width of the tile, because a truncated amount is worthless. */}
       <div className="flex items-start justify-between gap-2">
@@ -55,6 +59,24 @@ export function StatTile({
       </div>
       <p className="stat num mt-2 truncate text-lg sm:text-xl">{value}</p>
       {caption ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{caption}</p> : null}
-    </div>
+    </>
   );
+
+  const surface = "rounded-lg border bg-card p-4 shadow-soft";
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cn(
+          surface,
+          "block transition-colors hover:border-primary/40 hover:bg-foreground/[0.03]"
+        )}
+      >
+        {body}
+      </Link>
+    );
+  }
+
+  return <div className={surface}>{body}</div>;
 }

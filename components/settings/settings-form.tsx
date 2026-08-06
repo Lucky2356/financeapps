@@ -59,6 +59,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { markThemeChosen } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
 
 const shortcuts = [
@@ -140,7 +141,10 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   async function persist(patch: Partial<EditableSettings>) {
     const next = { ...settings, ...patch };
     setSettings(next);
-    if (patch.theme) setTheme(patch.theme);
+    if (patch.theme) {
+      markThemeChosen();
+      setTheme(patch.theme);
+    }
     if (patch.density) applyDensity(patch.density);
 
     try {

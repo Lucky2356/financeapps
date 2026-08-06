@@ -25,30 +25,41 @@ export function AccountsSummary({ data }: { data: AccountsPageData }) {
       .filter((account) => types.includes(account.type))
       .reduce((sum, account) => sum + account.balance, 0);
 
+  // Each tile opens the operations of the accounts it sums, so a surprising
+  // figure is one tap from its history.
+  const linkFor = (types: string[]) => {
+    const match = pageData.accounts.find((account) => types.includes(account.type));
+    return match ? `/transactions?accountId=${encodeURIComponent(match.id)}` : undefined;
+  };
+
   const tiles = [
     {
       key: "cash",
       label: t("accountType.CASH"),
       value: formatCurrency(sumOf(["CASH"]), currency),
-      icon: Banknote
+      icon: Banknote,
+      href: linkFor(["CASH"])
     },
     {
       key: "cards",
       label: t("accountType.DEBIT_CARD"),
       value: formatCurrency(sumOf(["DEBIT_CARD"]), currency),
-      icon: CreditCard
+      icon: CreditCard,
+      href: linkFor(["DEBIT_CARD"])
     },
     {
       key: "savings",
       label: t("accountType.SAVINGS"),
       value: formatCurrency(sumOf(["SAVINGS"]), currency),
-      icon: PiggyBank
+      icon: PiggyBank,
+      href: linkFor(["SAVINGS"])
     },
     {
       key: "brokerage",
       label: t("accountType.BROKERAGE"),
       value: formatCurrency(sumOf(["BROKERAGE"]), currency),
-      icon: LineChart
+      icon: LineChart,
+      href: "/investments"
     }
   ];
 
@@ -61,7 +72,13 @@ export function AccountsSummary({ data }: { data: AccountsPageData }) {
       />
       <StatGrid title={t("dash.widget.overview")}>
         {tiles.map((tile) => (
-          <StatTile key={tile.key} label={tile.label} value={tile.value} icon={tile.icon} />
+          <StatTile
+            key={tile.key}
+            label={tile.label}
+            value={tile.value}
+            icon={tile.icon}
+            href={tile.href}
+          />
         ))}
       </StatGrid>
     </>

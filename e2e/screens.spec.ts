@@ -29,11 +29,13 @@ for (const screen of SCREENS) {
     await expect(page.getByRole("heading", { name: "Обзор" })).toBeVisible();
 
     // The grid always carries four tiles — a half-filled row reads as a bug.
+    // Counted as "children of the grid", because a tile is a link when the
+    // figure has somewhere to open and a plain box when it does not.
     const tiles = await page.evaluate(() => {
       const heading = Array.from(document.querySelectorAll("h2")).find(
         (node) => node.textContent?.trim() === "Обзор"
       );
-      return heading?.parentElement?.querySelectorAll(":scope > div > div").length ?? 0;
+      return heading?.nextElementSibling?.children.length ?? 0;
     });
     expect(tiles, `Плиток в сетке на ${screen.route}`).toBe(4);
 

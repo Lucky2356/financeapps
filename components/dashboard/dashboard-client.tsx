@@ -141,8 +141,6 @@ export function DashboardClient({
 
   return (
     <>
-      <SetupChecklist />
-
       {layout.order.map((widget) => {
         if (isHidden(layout, widget)) return null;
         const content = widgets[widget];
@@ -154,8 +152,10 @@ export function DashboardClient({
         <DistributeCashflow freeCashflowLabel={freeCash.value} />
       ) : null}
 
-      {/* Layout controls sit after the content: on a phone the top of the screen
-          belongs to the greeting and the headline card. */}
+      {/* Setup hints and layout controls sit after the content: the top of the
+          screen belongs to the money, not to a checklist. */}
+      <SetupChecklist />
+
       <div className="flex justify-end">
         <CustomizeDialog layout={layout} onChange={persist} />
       </div>
