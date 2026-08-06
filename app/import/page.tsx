@@ -12,7 +12,9 @@ export default async function ImportPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.import.title" descriptionKey="page.import.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.import.title" descriptionKey="page.import.desc" />
+      </div>
       <ImportExportPanel data={data} transactions={transactions.transactions} />
     </div>
   );

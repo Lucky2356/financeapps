@@ -17,7 +17,9 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.analytics.title" descriptionKey="page.analytics.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.analytics.title" descriptionKey="page.analytics.desc" />
+      </div>
       <AiInsightPanel />
       <AiReviewCard />
       <AnalyticsClient initialData={data} />

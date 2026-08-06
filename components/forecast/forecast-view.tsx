@@ -8,6 +8,9 @@ import { ForecastEventsCard } from "@/components/forecast/forecast-events-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { HeroCard } from "@/components/ui/hero-card";
+import { StatGrid } from "@/components/ui/stat-grid";
+import { StatTile } from "@/components/ui/stat-tile";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { ForecastData, ForecastWarning } from "@/types/finance";
@@ -16,31 +19,50 @@ export function ForecastView({ data }: { data: ForecastData }) {
   const { t } = useI18n();
   return (
     <div className="space-y-5">
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Metric
+      {/* Same head as every other screen: the number the screen is about, then
+          the four supporting ones. */}
+      <HeroCard
+        label={t("fc.forecast30")}
+        value={formatCurrency(data.forecast30dBalance, data.currency)}
+        caption={t("fc.hero.caption")}
+        changePercent={
+          data.startingBalance > 0
+            ? ((data.forecast30dBalance - data.startingBalance) / data.startingBalance) * 100
+            : null
+        }
+        trend={data.points.map((point) => point.balance)}
+      />
+      <StatGrid title={t("dash.widget.overview")}>
+        <StatTile
           label={t("fc.availableNow")}
           value={formatCurrency(data.startingBalance, data.currency)}
+          caption={t("fc.tile.nowCaption")}
           icon={WalletCards}
         />
-        <Metric
-          label={t("fc.forecast30")}
-          value={formatCurrency(data.forecast30dBalance, data.currency)}
-          icon={data.forecast30dBalance >= data.startingBalance ? TrendingUp : TrendingDown}
-          tone={data.forecast30dBalance >= 0 ? "default" : "danger"}
-        />
-        <Metric
+        <StatTile
           label={t("fc.flow30")}
           value={formatCurrency(data.plannedIncome30d - data.plannedExpense30d, data.currency)}
+          caption={t("fc.tile.flowCaption")}
           icon={CalendarClock}
           tone={data.plannedIncome30d >= data.plannedExpense30d ? "success" : "warning"}
         />
-        <Metric
+        <StatTile
           label={t("fc.forecast90")}
           value={formatCurrency(data.forecast90dBalance, data.currency)}
+          caption={t("fc.tile.horizonCaption")}
           icon={data.forecast90dBalance >= data.startingBalance ? TrendingUp : TrendingDown}
           tone={data.forecast90dBalance >= 0 ? "default" : "danger"}
         />
-      </section>
+        <StatTile
+          label={t("fc.warnings")}
+          value={String(data.warnings.length)}
+          caption={data.warnings[0]?.title ?? t("dfs.noWarnings")}
+          icon={AlertTriangle}
+          tone={
+            data.warnings.some((warning) => warning.severity === "CRITICAL") ? "danger" : "default"
+          }
+        />
+      </StatGrid>
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
         <Card>
@@ -108,37 +130,6 @@ export function ForecastView({ data }: { data: ForecastData }) {
           currency={data.currency}
         />
       </section>
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  icon: Icon,
-  tone = "default"
-}: {
-  label: string;
-  value: string;
-  icon: typeof WalletCards;
-  tone?: "default" | "success" | "warning" | "danger";
-}) {
-  const color =
-    tone === "success"
-      ? "text-success-foreground"
-      : tone === "warning"
-        ? "text-warning-foreground"
-        : tone === "danger"
-          ? "text-destructive"
-          : "text-foreground";
-
-  return (
-    <div className="rounded-lg border bg-card p-4 shadow-soft">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-        <Icon className="size-4 text-primary" />
-      </div>
-      <p className={`mt-3 text-xl font-semibold ${color}`}>{value}</p>
     </div>
   );
 }
