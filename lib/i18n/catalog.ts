@@ -160,6 +160,10 @@ const ru: Messages = {
   "common.transactions": "Операции",
   "common.add": "Добавить",
   // Account types
+  "fc.hero.caption": "Ожидаемый остаток через 30 дней",
+  "fc.tile.nowCaption": "Доступно сейчас",
+  "fc.tile.flowCaption": "Доходы минус расходы",
+  "fc.tile.horizonCaption": "Через 90 дней",
   "tx.hero.label": "Расходы за месяц",
   "tx.hero.caption": "Текущий календарный месяц",
   "tx.tile.income": "Доход",
@@ -1776,6 +1780,10 @@ const en: Messages = {
   "common.transactions": "Transactions",
   "common.add": "Add",
   // Account types
+  "fc.hero.caption": "Expected balance in 30 days",
+  "fc.tile.nowCaption": "Available now",
+  "fc.tile.flowCaption": "Income minus expenses",
+  "fc.tile.horizonCaption": "In 90 days",
   "tx.hero.label": "Spending this month",
   "tx.hero.caption": "Current calendar month",
   "tx.tile.income": "Income",

@@ -10,7 +10,9 @@ export default async function ForecastPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.forecast.title" descriptionKey="page.forecast.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.forecast.title" descriptionKey="page.forecast.desc" />
+      </div>
       <ForecastClient initialData={data} />
       <ScenarioPanel />
     </div>

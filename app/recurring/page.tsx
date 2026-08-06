@@ -9,7 +9,9 @@ export default async function RecurringPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.recurring.title" descriptionKey="page.recurring.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.recurring.title" descriptionKey="page.recurring.desc" />
+      </div>
       <RecurringManager data={data} />
     </div>
   );

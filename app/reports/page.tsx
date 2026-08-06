@@ -9,7 +9,9 @@ export default async function ReportsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.reports.title" descriptionKey="page.reports.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.reports.title" descriptionKey="page.reports.desc" />
+      </div>
       <ReportView analytics={analytics} netWorth={dashboard.netWorth} />
     </div>
   );

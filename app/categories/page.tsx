@@ -16,7 +16,9 @@ export default async function CategoriesPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.categories.title" descriptionKey="page.categories.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.categories.title" descriptionKey="page.categories.desc" />
+      </div>
       <CategoryManager data={data} />
       <RulesManager />
     </div>

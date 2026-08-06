@@ -9,7 +9,9 @@ export default async function SettingsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.settings.title" descriptionKey="page.settings.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.settings.title" descriptionKey="page.settings.desc" />
+      </div>
       <SettingsForm data={data} />
     </div>
   );
