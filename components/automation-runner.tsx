@@ -59,16 +59,25 @@ async function runAutomation() {
   }
 
   // Android has no in-place updater, so the app looks for a newer release
-  // itself — once a day — and says so. Installing stays a deliberate act: the
-  // toast opens the APK, and Android's own installer asks for confirmation.
+  // itself and says so. Installing stays a deliberate act: the toast opens the
+  // APK, and Android's own installer asks for confirmation.
   if (isAndroidShell()) {
     try {
-      const { checkAndroidUpdate, markCheckedToday, shouldCheckToday, startAndroidUpdate } =
-        await import("@/lib/updates/android");
-      if (shouldCheckToday()) {
-        markCheckedToday();
+      const {
+        checkAndroidUpdate,
+        markAnnounced,
+        markChecked,
+        shouldAnnounce,
+        shouldCheckNow,
+        startAndroidUpdate
+      } = await import("@/lib/updates/android");
+      if (shouldCheckNow()) {
         const update = await checkAndroidUpdate();
-        if (update) {
+        // Marked only after the request came back: a failed check used to cost
+        // a whole day of silence.
+        markChecked();
+        if (update && shouldAnnounce(update.version)) {
+          markAnnounced(update.version);
           const locale = getClientLocale();
           toast.message(translate(locale, "set.update.available", { version: update.version }), {
             duration: 15_000,

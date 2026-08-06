@@ -213,10 +213,10 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     if (isAndroidShell()) {
       try {
         setCheckingUpdate(true);
-        const { checkAndroidUpdate, markCheckedToday, startAndroidUpdate } =
+        const { checkAndroidUpdate, markChecked, startAndroidUpdate } =
           await import("@/lib/updates/android");
-        markCheckedToday();
         const update = await checkAndroidUpdate();
+        markChecked();
         if (!update) {
           toast.success(t("set.update.current"));
           return;
