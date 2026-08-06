@@ -54,7 +54,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
           tone={data.forecast90dBalance >= 0 ? "default" : "danger"}
         />
         <StatTile
-          label={t("fc.warnings")}
+          label={t("fc.tile.risks")}
           value={String(data.warnings.length)}
           caption={data.warnings[0]?.title ?? t("dfs.noWarnings")}
           icon={AlertTriangle}
