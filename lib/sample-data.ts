@@ -46,21 +46,21 @@ export const SAMPLE_ACCOUNTS: SampleAccount[] = [
 ];
 
 export const SAMPLE_CATEGORIES: SampleCategory[] = [
-  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#16a34a" },
-  { id: "cat-freelance", label: "Подработка", kind: "INCOME", color: "#0d9488" },
-  { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#f97316", isEssential: true },
-  { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#2563eb", isEssential: true },
-  { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#7c3aed", isEssential: true },
+  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7" },
+  { id: "cat-freelance", label: "Подработка", kind: "INCOME", color: "#6fb2d2" },
+  { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#9184d9", isEssential: true },
+  { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#7f8fd8", isEssential: true },
+  { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#b3a7ea", isEssential: true },
   {
     id: "cat-subscriptions",
     label: "Подписки",
     kind: "EXPENSE",
-    color: "#db2777",
+    color: "#a89bc9",
     isSubscription: true
   },
-  { id: "cat-entertainment", label: "Развлечения", kind: "EXPENSE", color: "#eab308" },
-  { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#ea580c" },
-  { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#dc2626", isEssential: true }
+  { id: "cat-entertainment", label: "Развлечения", kind: "EXPENSE", color: "#c9a2d8" },
+  { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#e2b26e" },
+  { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#e2788a", isEssential: true }
 ];
 
 export const SAMPLE_TRANSACTIONS: SampleTransaction[] = [

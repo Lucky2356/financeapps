@@ -14,7 +14,9 @@ export const CATEGORY_COLORS = [
   "#7ed6b7", // mint (the theme's "good")
   "#e2b26e", // amber (the theme's "watch out")
   "#e2788a", // rose (the theme's "bad")
-  "#a89bc9" // lavender grey
+  "#a89bc9", // lavender grey
+  "#c9a2d8", // orchid
+  "#8fa3c4" // steel blue
 ] as const;
 
 /** Colour for a category the user creates without picking one. */
@@ -31,10 +33,9 @@ export const LEGACY_CATEGORY_COLORS: Record<string, string> = {
   "#7c3aed": "#b3a7ea", // ЖКХ
   "#db2777": "#a89bc9", // Подписки
   "#ea580c": "#e2b26e", // Рестораны
-  "#dc2626": "#e2788a" // Здоровье
+  "#dc2626": "#e2788a", // Здоровье
+  // Only present in the built-in example, not in a fresh install.
+  "#eab308": "#c9a2d8", // Развлечения
+  "#0891b2": "#8fa3c4", // Образование
+  "#0284c7": "#6fb2d2" // Путешествия
 };
-
-/** The Nocturne colour for a legacy seed colour, or the colour itself. */
-export function modernizeCategoryColor(color: string): string {
-  return LEGACY_CATEGORY_COLORS[color.toLowerCase()] ?? color;
-}
