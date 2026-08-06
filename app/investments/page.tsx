@@ -9,7 +9,9 @@ export default async function InvestmentsPage() {
 
   return (
     <div className="page-grid">
-      <PageHeader titleKey="page.investments.title" descriptionKey="page.investments.desc" />
+      <div className="hidden md:block">
+        <PageHeader titleKey="page.investments.title" descriptionKey="page.investments.desc" />
+      </div>
       <InvestmentsView data={data} />
     </div>
   );

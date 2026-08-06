@@ -89,14 +89,12 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
 
   return (
     <div className="space-y-5">
+      {/* The total lives in the headline card at the top of the screen now, and
+          the "add" button moved onto the list's own header — one card, one
+          number, no repetition. */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>{t("acc.totalBalance")}</CardTitle>
-            <p className="mt-2 text-3xl font-semibold">
-              {formatCurrency(pageData.totalBalance, pageData.currency)}
-            </p>
-          </div>
+          <CardTitle>{t("acc.title")}</CardTitle>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -109,12 +107,6 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
               onSubmit={(event) => submitAccount(event, "POST")}
             />
           </Dialog>
-        </CardHeader>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("acc.title")}</CardTitle>
         </CardHeader>
         <CardContent>
           {pageData.accounts.length === 0 ? (
