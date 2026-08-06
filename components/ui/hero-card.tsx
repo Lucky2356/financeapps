@@ -145,8 +145,10 @@ function Wave({ values, accent }: { values: number[]; accent: boolean }) {
   return (
     <svg
       className={cn(
-        "pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full",
-        accent ? "text-white" : "text-primary"
+        // Lower and fainter on the plain card: without the painted background to
+        // sit against, a tall wave reads as a smudge behind the figure.
+        "pointer-events-none absolute inset-x-0 bottom-0 w-full",
+        accent ? "h-24 text-white" : "h-14 text-primary"
       )}
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
@@ -156,12 +158,12 @@ function Wave({ values, accent }: { values: number[]; accent: boolean }) {
       <path
         d={`${path} L${width},${height} L0,${height} Z`}
         fill="currentColor"
-        fillOpacity={accent ? 0.1 : 0.08}
+        fillOpacity={accent ? 0.1 : 0.06}
       />
       <path
         d={path}
         stroke="currentColor"
-        strokeOpacity={accent ? 0.65 : 0.5}
+        strokeOpacity={accent ? 0.65 : 0.4}
         strokeWidth={0.8}
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
