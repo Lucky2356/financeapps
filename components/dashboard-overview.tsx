@@ -3,8 +3,9 @@
 import { PiggyBank, TrendingDown, TrendingUp, WalletCards, type LucideIcon } from "lucide-react";
 
 import { HealthGauge } from "@/components/charts/health-gauge";
-import { HeroCard } from "@/components/dashboard/hero-card";
-import { StatTile, type StatTone } from "@/components/dashboard/stat-tile";
+import { HeroCard } from "@/components/ui/hero-card";
+import { StatGrid } from "@/components/ui/stat-grid";
+import { StatTile, type StatTone } from "@/components/ui/stat-tile";
 import type { DashboardData } from "@/types/finance";
 import { useCountUp } from "@/hooks/use-count-up";
 import { formatCurrency } from "@/lib/format";
@@ -52,7 +53,9 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
 
   return (
     <section className="space-y-5">
+      {/* The one painted card in the app — the home screen's privilege. */}
       <HeroCard
+        variant="accent"
         label={t("dash.netWorth")}
         value={formatCurrency(Math.round(netWorthValue), data.currency)}
         caption={t("dash.netWorthDesc")}
@@ -60,21 +63,18 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         trend={trend}
       />
 
-      <div>
-        <h2 className="mb-3 text-base font-semibold">{t("dash.widget.overview")}</h2>
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-          {tiles.map((tile) => (
-            <StatTile
-              key={tile.title}
-              label={tile.title}
-              value={tile.value}
-              caption={tile.detail}
-              icon={tile.icon}
-              tone={toTone(tile.tone)}
-            />
-          ))}
-        </div>
-      </div>
+      <StatGrid title={t("dash.widget.overview")}>
+        {tiles.map((tile) => (
+          <StatTile
+            key={tile.title}
+            label={tile.title}
+            value={tile.value}
+            caption={tile.detail}
+            icon={tile.icon}
+            tone={toTone(tile.tone)}
+          />
+        ))}
+      </StatGrid>
 
       {/* Health keeps its dial: the score is a judgement, not a figure, and the
           sentence under it is what makes it actionable. */}

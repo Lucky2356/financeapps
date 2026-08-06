@@ -21,10 +21,6 @@ export type Messages = Record<string, string>;
 const ru: Messages = {
   // App shell
   "shell.subtitle": "Личные финансы",
-  "home.greeting.morning": "Доброе утро,",
-  "home.greeting.day": "Добрый день,",
-  "home.greeting.evening": "Добрый вечер,",
-  "home.greeting.night": "Доброй ночи,",
   "nav.short.planning": "Планы",
   "nav.short.investments": "Инвест.",
   "shell.search": "Поиск…",
@@ -149,6 +145,7 @@ const ru: Messages = {
   "common.themeToggle": "Переключить тему",
   "common.edit": "Изменить",
   "common.editAria": "Редактировать",
+  "common.viewAll": "Все",
   "common.delete": "Удалить",
   "common.archive": "Архив",
   "common.name": "Название",
@@ -761,7 +758,6 @@ const ru: Messages = {
   "dfs.stable": "Плановые платежи выглядят устойчиво.",
   "dfs.open": "Открыть прогноз",
   "dfs.upcoming": "Ближайшие платежи",
-  "dfs.viewAll": "Все",
   "dfs.noUpcoming": "Запланированных платежей пока нет.",
   "dc.free": "Свободный остаток: {label}",
   "dc.hint": "Отложите часть на цель, пока деньги не разошлись.",
@@ -1589,10 +1585,6 @@ const ru: Messages = {
 const en: Messages = {
   // App shell
   "shell.subtitle": "Personal finance",
-  "home.greeting.morning": "Good morning,",
-  "home.greeting.day": "Good afternoon,",
-  "home.greeting.evening": "Good evening,",
-  "home.greeting.night": "Good night,",
   "nav.short.planning": "Plans",
   "nav.short.investments": "Invest.",
   "shell.search": "Search…",
@@ -1713,6 +1705,7 @@ const en: Messages = {
   "common.themeToggle": "Toggle theme",
   "common.edit": "Edit",
   "common.editAria": "Edit",
+  "common.viewAll": "View all",
   "common.delete": "Delete",
   "common.archive": "Archive",
   "common.name": "Name",
@@ -2322,7 +2315,6 @@ const en: Messages = {
   "dfs.stable": "Scheduled payments look stable.",
   "dfs.open": "Open forecast",
   "dfs.upcoming": "Upcoming payments",
-  "dfs.viewAll": "View all",
   "dfs.noUpcoming": "No scheduled payments yet.",
   "dc.free": "Free balance: {label}",
   "dc.hint": "Set part aside toward a goal before the money is gone.",

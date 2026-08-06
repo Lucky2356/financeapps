@@ -14,10 +14,10 @@ test.beforeEach(async ({ page }) => {
   if (await skip.isVisible().catch(() => false)) await skip.click();
 });
 
-test("шапка приветствует по времени суток", async ({ page }) => {
+test("шапка называет экран и даёт поиск с настройками", async ({ page }) => {
   const header = page.locator("header").first();
-  await expect(header).toContainText(/Доброе утро|Добрый день|Добрый вечер|Доброй ночи/);
-  // The avatar links to settings — the only right-hand control on this screen.
+  await expect(header.getByRole("heading", { name: "Главная" })).toBeVisible();
+  await expect(header.getByRole("button", { name: "Поиск…" })).toBeVisible();
   await expect(header.getByRole("link", { name: "Настройки" })).toBeVisible();
 });
 
