@@ -127,7 +127,10 @@ export class FinanceRecommendationService {
       input.emergencyFundMonths > 0;
     if (!hasActivity) {
       return {
-        score: 100,
+        // The score is unusable here — `noData` tells the interface to print a
+        // dash instead of a flattering, meaningless 100.
+        score: 0,
+        noData: true,
         summary: t("svc.health.noData"),
         checks: [
           { label: t("svc.health.check.freeCash"), value: "—", status: "good" },

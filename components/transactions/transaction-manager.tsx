@@ -892,7 +892,15 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         onChange={() => toggleSelect(transaction.id)}
                         aria-label={t("tx.bulk.selectRow")}
                       />
-                      <div className="min-w-0 flex-1">
+                      {/* The body of the row opens the editor — correcting an
+                          amount is the most common thing done here, and hunting
+                          for a pencil on a phone is a poor way to start it. */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingTransaction(transaction)}
+                        aria-label={t("common.edit")}
+                        className="min-w-0 flex-1 text-left"
+                      >
                         <p className="text-sm font-semibold">{transaction.category.label}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {formatDate(transaction.date)} · {transaction.account.label}
@@ -917,7 +925,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                             ))}
                           </span>
                         )}
-                      </div>
+                      </button>
                       <p
                         className={
                           transaction.type === "INCOME"

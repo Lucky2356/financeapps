@@ -25,10 +25,13 @@ describe("new user journey", () => {
   it("walks from empty state through accounts, transactions, budgets, goals, recurring and investments", async () => {
     const client = new LocalApiClient(new MemoryStorageAdapter());
 
-    // 0. Fresh install — empty and a neutral health score (not a phantom 60).
+    // 0. Fresh install — empty, and health explicitly says there is nothing to
+    // score yet rather than inventing a number (neither a phantom 60 nor a
+    // flattering 100).
     const emptyDashboard = await client.get<DashboardData>("/dashboard");
     expect(emptyDashboard.netWorth).toBe(0);
-    expect(emptyDashboard.health.score).toBe(100);
+    expect(emptyDashboard.health.noData).toBe(true);
+    expect(emptyDashboard.health.score).toBe(0);
     const emptyAccounts = await client.get<AccountsPageData>("/accounts");
     expect(emptyAccounts.accounts).toHaveLength(0);
 
@@ -138,7 +141,7 @@ describe("new user journey", () => {
     await client.delete("/storage/clear");
     const cleared = await client.get<DashboardData>("/dashboard");
     expect(cleared.netWorth).toBe(0);
-    expect(cleared.health.score).toBe(100);
+    expect(cleared.health.noData).toBe(true);
     const clearedRecurring = await client.get<RecurringTransactionsPageData>("/recurring");
     expect(clearedRecurring.recurringTransactions).toHaveLength(0);
   });

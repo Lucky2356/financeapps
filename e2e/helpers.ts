@@ -7,11 +7,26 @@ export async function seedExampleData(page: Page) {
   await page.goto("/");
   const loadExample = page.getByRole("button", { name: "Загрузить пример" });
   await loadExample.waitFor({ state: "visible", timeout: 30_000 });
+
+  // Stamp the window before clicking: the app reloads itself once the example is
+  // written to IndexedDB, and a reload wipes the stamp. Waiting for it to vanish
+  // is the only signal that tells "the reload already happened" apart from "the
+  // reload is about to happen" — and navigating in that gap used to land the
+  // next test on the home screen instead of the route it asked for.
+  await page.evaluate(() => {
+    (window as unknown as Record<string, unknown>).__seedMark = true;
+  });
   await loadExample.click();
-  // The app reloads itself once the example is written to IndexedDB. Waiting for
-  // the button to disappear is the honest signal — `networkidle` never settles
-  // here, because the market-data pages keep polling MOEX in the background.
   await expect(loadExample).toBeHidden({ timeout: 30_000 });
+  await expect
+    .poll(
+      () =>
+        page
+          .evaluate(() => (window as unknown as Record<string, unknown>).__seedMark ?? null)
+          .catch(() => null),
+      { timeout: 30_000 }
+    )
+    .toBeNull();
 }
 
 // Seeding ends with the app reloading ITSELF, and that reload lands whenever it

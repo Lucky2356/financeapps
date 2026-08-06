@@ -149,11 +149,9 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {t("debt.total")}{" "}
-          <span className="font-semibold">{formatCurrency(pageData.total, pageData.currency)}</span>
-        </p>
+      {/* The total is the headline card at the top of the screen; printing it a
+          second time here only competed with it. */}
+      <div className="flex items-center justify-end gap-3">
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button>
