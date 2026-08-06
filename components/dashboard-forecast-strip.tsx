@@ -1,19 +1,19 @@
 "use client";
 
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import Link from "next/link";
 
+import { ListRow, ListRows } from "@/components/ui/list-row";
+import { SectionCard } from "@/components/ui/section-card";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
-import type { ForecastData, ForecastEvent } from "@/types/finance";
+import type { ForecastData } from "@/types/finance";
 
 const MAX_ROWS = 5;
 
-// The home screen's list block: what is coming up, newest first, with the
-// 30-day totals underneath. Replaces the three-column strip — the same numbers
-// are here, but the payments themselves lead, which is what the screen is
-// actually asked about.
+// The home screen's list block: what is coming up, with the 30-day totals
+// underneath. Replaces the three-column strip — the same numbers are here, but
+// the payments themselves lead, which is what the screen is actually asked about.
 export function DashboardForecastStrip({ forecast }: { forecast: ForecastData }) {
   const { t } = useI18n();
   const net30 = forecast.plannedIncome30d - forecast.plannedExpense30d;
@@ -22,23 +22,25 @@ export function DashboardForecastStrip({ forecast }: { forecast: ForecastData })
     forecast.warnings.find((item) => item.severity === "CRITICAL") ?? forecast.warnings[0];
 
   return (
-    <section className="rounded-lg border bg-card p-5 shadow-soft">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">{t("dfs.upcoming")}</h2>
-        <Link
-          href="/forecast"
-          className="shrink-0 text-sm font-medium text-primary transition-opacity hover:opacity-80"
-        >
-          {t("dfs.viewAll")}
-        </Link>
-      </div>
-
+    <SectionCard title={t("dfs.upcoming")} action={t("common.viewAll")} actionHref="/forecast">
       {events.length > 0 ? (
-        <ul className="mt-2 divide-y">
-          {events.map((event) => (
-            <EventRow key={event.id} event={event} currency={forecast.currency} />
-          ))}
-        </ul>
+        <ListRows>
+          {events.map((event) => {
+            const income = event.type === "INCOME";
+            return (
+              <ListRow
+                key={event.id}
+                icon={income ? ArrowDownLeft : ArrowUpRight}
+                title={event.title}
+                subtitle={event.category}
+                value={`${income ? "+" : "−"}${formatCurrency(Math.abs(event.amount), forecast.currency)}`}
+                valueCaption={formatDate(event.date)}
+                valueTone={income ? "success" : "default"}
+                tone={income ? "success" : "default"}
+              />
+            );
+          })}
+        </ListRows>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">{t("dfs.noUpcoming")}</p>
       )}
@@ -74,34 +76,6 @@ export function DashboardForecastStrip({ forecast }: { forecast: ForecastData })
           <span className="line-clamp-2">{warning.title}</span>
         </p>
       ) : null}
-    </section>
-  );
-}
-
-function EventRow({ event, currency }: { event: ForecastEvent; currency: string }) {
-  const income = event.type === "INCOME";
-  const Icon = income ? ArrowDownLeft : ArrowUpRight;
-
-  return (
-    <li className="flex items-center gap-3 py-2.5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{event.title}</span>
-        <span className="block truncate text-xs text-muted-foreground">{event.category}</span>
-      </span>
-      <span className="shrink-0 text-right">
-        <span className={cn("num block text-sm font-semibold", income && "text-success")}>
-          {income ? "+" : "−"}
-          {formatCurrency(Math.abs(event.amount), currency)}
-        </span>
-        <span className="block text-xs text-muted-foreground">{formatDate(event.date)}</span>
-      </span>
-      <span
-        aria-hidden
-        className={cn("size-2 shrink-0 rounded-full", income ? "bg-success" : "bg-primary")}
-      />
-    </li>
+    </SectionCard>
   );
 }
