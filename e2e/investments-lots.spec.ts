@@ -7,6 +7,11 @@ import { openSettled, seedExampleData } from "./helpers";
 // prices, and check that the position is stored with the WEIGHTED average
 // (10 × 100 + 30 × 200 = 7000 for 40 shares → 175, not the naive 150).
 test("считает среднюю цену покупки по списку покупок", async ({ page }) => {
+  // Saving a position asks MOEX for the security's current price, so this test
+  // is bounded by a live network call. Under a full parallel run those calls
+  // queue up and the default 30s budget runs out on waiting, not on failing —
+  // the arithmetic under test is instant.
+  test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
 
   await seedExampleData(page);
@@ -32,9 +37,14 @@ test("считает среднюю цену покупки по списку п
   await expect(dialog.getByText(/Итого 40/)).toBeVisible();
 
   await dialog.getByRole("button", { name: "Сохранить позицию" }).click();
-  await expect(dialog).toBeHidden({ timeout: 15_000 });
+  // Saving a position fetches the security's current price from MOEX, so this
+  // step is bounded by a live network call — under a full parallel run 15s was
+  // not enough and the suite failed on timing, not on behaviour.
+  await expect(dialog).toBeHidden({ timeout: 45_000 });
 
-  // 40 shares at an average of 175 ₽ — "вложено" is 7 000 ₽.
-  await expect(page.getByText("SBER").first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/7\s?000/).first()).toBeVisible({ timeout: 15_000 });
+  // 40 shares at an average of 175 ₽ — "вложено" is 7 000 ₽. Same live-price
+  // round-trip as above: generous, because what is under test is the arithmetic,
+  // not how fast MOEX answers while the rest of the suite runs beside it.
+  await expect(page.getByText("SBER").first()).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByText(/7\s?000/).first()).toBeVisible({ timeout: 45_000 });
 });
