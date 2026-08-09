@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Android permissions: the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation.",
+  "description": "Android permissions: the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation. The opener scope is pinned to this project's releases: granting the command alone opens nothing — the plugin also checks the URL against this list, and a bare `opener:allow-open-url` blocked the update download.",
   "platforms": ["android", "iOS"],
   "windows": ["main"],
   "permissions": [
@@ -12,7 +12,17 @@
     "fs:allow-write-text-file",
     "fs:allow-read-dir",
     "fs:allow-remove",
-    "opener:allow-open-url",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/Lucky2356/financeapps/releases"
+        },
+        {
+          "url": "https://github.com/Lucky2356/financeapps/releases/**"
+        }
+      ]
+    },
     {
       "identifier": "fs:scope",
       "allow": ["$DOCUMENT/**", "$DOWNLOAD/**", "$APPDATA/**", "$APPLOCALDATA/**", "$TEMP/**"]
@@ -20,10 +30,18 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://smart-lab.ru/*" },
-        { "url": "https://github.com/Lucky2356/financeapps/releases/*" },
-        { "url": "https://api.github.com/repos/Lucky2356/financeapps/releases/*" },
-        { "url": "https://objects.githubusercontent.com/*" }
+        {
+          "url": "https://smart-lab.ru/*"
+        },
+        {
+          "url": "https://github.com/Lucky2356/financeapps/releases/*"
+        },
+        {
+          "url": "https://api.github.com/repos/Lucky2356/financeapps/releases/*"
+        },
+        {
+          "url": "https://objects.githubusercontent.com/*"
+        }
       ],
       "deny": []
     }
