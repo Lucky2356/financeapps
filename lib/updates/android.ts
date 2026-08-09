@@ -17,25 +17,59 @@ import { APP_VERSION } from "@/lib/constants";
 import {
   ANDROID_PLATFORM,
   LATEST_MANIFEST_URL,
+  RELEASE_API_URL,
   findUpdate,
+  parseReleaseApi,
   parseReleaseManifest,
-  type AvailableUpdate
+  type AvailableUpdate,
+  type ReleaseManifest
 } from "@/lib/updates/latest";
 
 const LAST_CHECK_KEY = "android-update-last-check";
 const NOTIFIED_VERSION_KEY = "android-update-notified-version";
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
-/** Fetches the manifest and returns the newer Android build, or null. */
+function reason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Fetches the newer Android build, or null when this one is current.
+ *
+ * Two sources, tried in order. `latest.json` sits on GitHub's release-asset CDN
+ * (`release-assets.githubusercontent.com`), which some networks cannot reach
+ * even though github.com itself answers; `api.github.com` is a different host
+ * carrying the same facts. Throws only when BOTH fail, and the message names
+ * both failures — on a phone there are no devtools, so the error text shown to
+ * the owner is the only diagnosis available.
+ */
 export async function checkAndroidUpdate(): Promise<AvailableUpdate | null> {
   const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
-  const response = await tauriFetch(LATEST_MANIFEST_URL, {
-    method: "GET",
-    headers: { accept: "application/json" }
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const payload: unknown = await response.json();
-  return findUpdate(parseReleaseManifest(payload), APP_VERSION, ANDROID_PLATFORM);
+
+  async function read(
+    url: string,
+    parse: (payload: unknown) => ReleaseManifest | null
+  ): Promise<AvailableUpdate | null> {
+    // Without a connect timeout a black-holed route leaves the button spinning
+    // for minutes with nothing to show for it.
+    const response = await tauriFetch(url, {
+      method: "GET",
+      headers: { accept: "application/json" },
+      connectTimeout: 15_000
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return findUpdate(parse(await response.json()), APP_VERSION, ANDROID_PLATFORM);
+  }
+
+  try {
+    return await read(LATEST_MANIFEST_URL, parseReleaseManifest);
+  } catch (manifestError) {
+    try {
+      return await read(RELEASE_API_URL, parseReleaseApi);
+    } catch (apiError) {
+      throw new Error(`latest.json: ${reason(manifestError)} / api: ${reason(apiError)}`);
+    }
+  }
 }
 
 /** Opens the APK link; Android downloads it and offers to install. */

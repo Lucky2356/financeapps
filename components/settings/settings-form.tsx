@@ -229,8 +229,12 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         if (!confirmed) return;
         await startAndroidUpdate(update);
       } catch (error) {
+        // Same reasoning as the desktop branch below: a phone has no devtools,
+        // so a bare "недоступно" leaves the owner (and me) with nothing to go
+        // on. The text names which source failed and why.
+        const detail = error instanceof Error ? error.message : String(error);
         console.error("[updater:android]", error);
-        toast.message(t("set.update.unavailable"));
+        toast.message(t("set.update.unavailable"), { description: detail, duration: 15_000 });
         try {
           const { openUrl } = await import("@tauri-apps/plugin-opener");
           await openUrl(RELEASES_URL);
