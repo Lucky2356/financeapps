@@ -5,6 +5,8 @@ import { join, resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { ANDROID_PLATFORM, findUpdate, parseReleaseManifest } from "@/lib/updates/latest";
+
 // Runs the real release script against a fake bundle directory.
 //
 // The manifest it writes is the ONLY thing standing between a release and every
@@ -59,5 +61,20 @@ describe("make-latest-json", () => {
     expect(manifest.platforms["android-universal"].url).toBe(
       `https://github.com/Lucky2356/financeapps/releases/download/v${VERSION}/financial-assistant_${VERSION}_universal.apk`
     );
+  });
+
+  // Two sides, one file: the script writes it, the phone reads it. They are
+  // edited months apart, and when they drift the phone goes quiet — it cannot
+  // report "the manifest I got does not look like a manifest", it just finds no
+  // update. So the reader is pointed at the writer's real output here, download
+  // links included: a link the reader refuses to trust is a silent phone.
+  it("produces a manifest the phone actually accepts", () => {
+    const update = findUpdate(parseReleaseManifest(runScript()), "1.0.0", ANDROID_PLATFORM);
+
+    expect(update).toEqual({
+      version: VERSION,
+      url: `https://github.com/Lucky2356/financeapps/releases/download/v${VERSION}/financial-assistant_${VERSION}_universal.apk`,
+      notes: undefined
+    });
   });
 });
