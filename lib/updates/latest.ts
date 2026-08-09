@@ -13,8 +13,25 @@ export const RELEASES_URL = "https://github.com/Lucky2356/financeapps/releases";
 export const LATEST_MANIFEST_URL =
   "https://github.com/Lucky2356/financeapps/releases/latest/download/latest.json";
 
+/** The GitHub API for the same release — a second source when the CDN that
+ * serves release assets is unreachable but api.github.com is not. */
+export const RELEASE_API_URL = "https://api.github.com/repos/Lucky2356/financeapps/releases/latest";
+
 /** The manifest key the Android build looks under. */
 export const ANDROID_PLATFORM = "android-universal";
+export const WINDOWS_PLATFORM = "windows-x86_64";
+
+/**
+ * Download links must live under this project's own releases. The manifest
+ * arrives over the network, so "https" alone is not enough: pinning the prefix
+ * means a tampered or mistaken manifest cannot point the phone at an APK from
+ * somewhere else.
+ */
+const DOWNLOAD_PREFIX = `${RELEASES_URL}/download/`;
+
+function trustedDownload(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith(DOWNLOAD_PREFIX);
+}
 
 export type ReleaseManifest = {
   version: string;
@@ -63,9 +80,7 @@ export function parseReleaseManifest(payload: unknown): ReleaseManifest | null {
   if (record.platforms && typeof record.platforms === "object") {
     for (const [key, value] of Object.entries(record.platforms as Record<string, unknown>)) {
       const url = (value as { url?: unknown })?.url;
-      // Only https links: the manifest must never be able to point the app at a
-      // plain-http download or a custom scheme.
-      if (typeof url === "string" && /^https:\/\//i.test(url)) platforms[key] = { url };
+      if (trustedDownload(url)) platforms[key] = { url };
     }
   }
 
@@ -73,6 +88,37 @@ export function parseReleaseManifest(payload: unknown): ReleaseManifest | null {
     version,
     pubDate: typeof record.pub_date === "string" ? record.pub_date : undefined,
     notes: typeof record.notes === "string" ? record.notes : undefined,
+    platforms
+  };
+}
+
+/**
+ * Reads GitHub's own release JSON into the same shape as the manifest, so the
+ * caller can treat the two sources interchangeably. Used as a fallback: the
+ * manifest lives on the release-asset CDN, and a network that cannot reach that
+ * CDN can often still reach api.github.com.
+ */
+export function parseReleaseApi(payload: unknown): ReleaseManifest | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const version = (typeof record.tag_name === "string" ? record.tag_name : "")
+    .trim()
+    .replace(/^v/i, "");
+  if (!version) return null;
+
+  const platforms: ReleaseManifest["platforms"] = {};
+  const assets = Array.isArray(record.assets) ? record.assets : [];
+  for (const asset of assets) {
+    const { name, browser_download_url: url } = (asset ?? {}) as Record<string, unknown>;
+    if (typeof name !== "string" || !trustedDownload(url)) continue;
+    if (/\.apk$/i.test(name)) platforms[ANDROID_PLATFORM] = { url };
+    else if (/\.exe$/i.test(name)) platforms[WINDOWS_PLATFORM] = { url };
+  }
+
+  return {
+    version,
+    pubDate: typeof record.published_at === "string" ? record.published_at : undefined,
+    notes: typeof record.body === "string" ? record.body : undefined,
     platforms
   };
 }
