@@ -101,29 +101,23 @@ export function DashboardClient({
         </section>
       ),
       charts: (
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("dash.categoryExpenses")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ExpenseCategoryChart data={data.categoryExpenses} />
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {data.categoryExpenses.slice(0, 6).map((item) => (
-                  <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: item.fill }}
-                      />
-                      <span className="truncate">{item.name}</span>
-                    </span>
-                    <span className="font-medium">{formatCurrency(item.value, data.currency)}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <section className="space-y-5">
+          {/* Two halves of the same month, side by side: what came in and what
+              went out. Reading one without the other only tells half a story. */}
+          <div className="grid gap-5 xl:grid-cols-2">
+            <CategoryBreakdownCard
+              title={t("dash.categoryIncome")}
+              empty={t("dash.categoryIncome.empty")}
+              data={data.categoryIncome}
+              currency={data.currency}
+            />
+            <CategoryBreakdownCard
+              title={t("dash.categoryExpenses")}
+              empty={t("dash.categoryExpenses.empty")}
+              data={data.categoryExpenses}
+              currency={data.currency}
+            />
+          </div>
 
           <Card>
             <CardHeader>
@@ -160,6 +154,51 @@ export function DashboardClient({
         <CustomizeDialog layout={layout} onChange={persist} />
       </div>
     </>
+  );
+}
+
+// A pie plus its legend — the same block for income and for spending, so the
+// two read as one comparison rather than two unrelated charts.
+function CategoryBreakdownCard({
+  title,
+  empty,
+  data,
+  currency
+}: {
+  title: string;
+  empty: string;
+  data: DashboardData["categoryExpenses"];
+  currency: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {data.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">{empty}</p>
+        ) : (
+          <>
+            <ExpenseCategoryChart data={data} />
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {data.slice(0, 6).map((item) => (
+                <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.fill }}
+                    />
+                    <span className="truncate">{item.name}</span>
+                  </span>
+                  <span className="num font-medium">{formatCurrency(item.value, currency)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

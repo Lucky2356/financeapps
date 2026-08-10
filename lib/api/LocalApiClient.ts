@@ -50,6 +50,7 @@ import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
+import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
@@ -1937,6 +1938,13 @@ export class LocalApiClient implements ApiClient {
       categoryExpenses: this.budgetRows(state)
         .filter((budget) => budget.spent > 0)
         .map((budget) => ({ name: budget.category, value: budget.spent, fill: budget.color })),
+      // Where the money came from, alongside where it went. Expenses are read
+      // off the budget rows; income has no budgets, so it is summed directly.
+      categoryIncome: categoryBreakdown(state.transactions, {
+        type: "INCOME",
+        month: monthKeyOf(new Date()),
+        colorOf: (categoryId) => state.categories.find((item) => item.id === categoryId)?.color
+      }),
       monthlyCashflow: finance.monthlyCashflow,
       recommendations: recommendationService.build(finance, locale),
       health: recommendationService.healthScore(finance, locale),
@@ -2103,12 +2111,20 @@ export class LocalApiClient implements ApiClient {
         share: totalExpense > 0 ? Math.round((item.total / totalExpense) * 1000) / 10 : 0
       }));
     const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories, getClientLocale());
+    // Income has no budgets to read totals off, so it is ranked straight from
+    // the operations over the same six months.
+    const topIncomeCategories = topCategories(state.transactions, {
+      type: "INCOME",
+      since: sixMonthsAgoKey,
+      colorOf: (categoryId) => state.categories.find((item) => item.id === categoryId)?.color
+    });
 
     return {
       source: "database",
       currency: state.currency,
       monthlyCashflow,
       topExpenseCategories,
+      topIncomeCategories,
       avgMonthlyIncome,
       avgMonthlyExpense,
       avgSavingsRate,

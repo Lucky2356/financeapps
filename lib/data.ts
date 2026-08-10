@@ -7,6 +7,7 @@ import { formatCurrency, formatInputDate, formatMonth } from "@/lib/format";
 import { pickBestWorstMonth } from "@/lib/analytics/best-month";
 import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
+import { topCategories, type RankedCategory } from "@/lib/categories/breakdown";
 import { type InterestAccrual } from "@/lib/accounts/interest";
 import { type PlannedDebtPayment } from "@/lib/debts/planned";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
@@ -189,6 +190,8 @@ export type AnalyticsData = {
     total: number;
     share: number;
   }>;
+  /** Same ranking for money coming in — the other half of the picture. */
+  topIncomeCategories: RankedCategory[];
   avgMonthlyIncome: number;
   avgMonthlyExpense: number;
   avgSavingsRate: number;
@@ -380,12 +383,18 @@ function buildAnalyticsFromTransactions(
       share: totalExpenseAll > 0 ? percent(item.total, totalExpenseAll) : 0
     }));
   const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories, locale);
+  const topIncomeCategories = topCategories(transactions, {
+    type: "INCOME",
+    since: formatInputDate(sixMonthsAgo),
+    colorOf: (categoryId) => transactions.find((t) => t.category.id === categoryId)?.category.color
+  });
 
   return {
     source,
     currency,
     monthlyCashflow,
     topExpenseCategories,
+    topIncomeCategories,
     avgMonthlyIncome,
     avgMonthlyExpense,
     avgSavingsRate,
@@ -459,6 +468,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       }
     ],
     categoryExpenses: [],
+    categoryIncome: [],
     monthlyCashflow: input.monthlyCashflow,
     recommendations: [],
     health: service.healthScore(input, locale),
