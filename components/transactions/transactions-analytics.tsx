@@ -4,6 +4,7 @@ import { BarChart3, ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
+import { onDataChanged } from "@/lib/api/data-events";
 import type { AnalyticsData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
@@ -14,6 +15,12 @@ import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "transactions-analytics-open";
 
+// The ranked lists carry a share and an id the pie does not need; this is the
+// shape the chart draws.
+function toSlices(items: AnalyticsData["topExpenseCategories"]) {
+  return items.map((item) => ({ name: item.category, value: item.total, fill: item.color }));
+}
+
 // The numbers people look up while going through their operations — average
 // income and spend, savings rate, where the money went — without a round trip
 // to the dashboard. Collapsed by default so the operations list stays the
@@ -22,7 +29,10 @@ export function TransactionsAnalytics() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(false);
+  // "idle" is not "failed". The panel used to have only data-or-nothing, so a
+  // panel that had never loaded looked exactly like one whose calculation had
+  // broken — and it said so, which was simply untrue.
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
 
   useEffect(() => {
     try {
@@ -34,22 +44,36 @@ export function TransactionsAnalytics() {
   }, []);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setState("loading");
     try {
       setData(await apiClient.get<AnalyticsData>("/analytics"));
+      setState("ready");
     } catch {
       setData(null);
-    } finally {
-      setLoading(false);
+      setState("error");
     }
   }, []);
+
+  // Load whenever the panel is open and has nothing to show — on the first
+  // click, and again after coming back to this screen with the panel remembered
+  // as open. Previously only the click loaded, so returning to the screen left
+  // the panel open, empty, and blaming a failure that never happened.
+  useEffect(() => {
+    // Deferred a microtask so the first state change lands after the render
+    // that scheduled it, matching how the rest of the app kicks off loads.
+    if (open && state === "idle") void Promise.resolve().then(load);
+  }, [open, state, load]);
+
+  // Recompute when anything writes: this panel is a summary of the very list
+  // being edited above it.
+  useEffect(
+    () => onDataChanged(() => setState((current) => (current === "loading" ? current : "idle"))),
+    []
+  );
 
   function toggle() {
     const next = !open;
     setOpen(next);
-    // Fetch only when the panel is actually opened — a collapsed block should
-    // cost nothing on a phone.
-    if (next && !data && !loading) void load();
     try {
       localStorage.setItem(STORAGE_KEY, String(next));
     } catch {
@@ -87,7 +111,7 @@ export function TransactionsAnalytics() {
 
       {open ? (
         <CardContent className={cn("space-y-5 border-t pt-5")}>
-          {loading && !data ? (
+          {!data && state !== "error" ? (
             <p className="text-sm text-muted-foreground">{t("txa.loading")}</p>
           ) : !data ? (
             <div className="space-y-3">
@@ -114,14 +138,14 @@ export function TransactionsAnalytics() {
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-medium">{t("txa.byCategory")}</p>
-                  <ExpenseCategoryChart
-                    data={data.topExpenseCategories.map((item) => ({
-                      name: item.category,
-                      value: item.total,
-                      fill: item.color
-                    }))}
-                  />
+                  <ExpenseCategoryChart data={toSlices(data.topExpenseCategories)} />
                 </div>
+                {data.topIncomeCategories.length > 0 ? (
+                  <div>
+                    <p className="mb-2 text-sm font-medium">{t("txa.incomeByCategory")}</p>
+                    <ExpenseCategoryChart data={toSlices(data.topIncomeCategories)} />
+                  </div>
+                ) : null}
               </div>
             </>
           )}
