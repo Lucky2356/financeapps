@@ -36,6 +36,8 @@ type CategoryOption = ImportPageData["categories"][number];
 
 const LAST_ACCOUNT_KEY = "quick-add-last-account";
 
+type QuickAddType = "INCOME" | "EXPENSE" | "TRANSFER";
+
 const ACCOUNT_TYPES = [
   { value: "DEBIT_CARD", labelKey: "tx.acctType.DEBIT_CARD" },
   { value: "CASH", labelKey: "tx.acctType.CASH" },
@@ -53,8 +55,13 @@ export function QuickAddFab({
   const router = useRouter();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
+  // A transfer is the third thing people actually record here: money moving
+  // between their own accounts. It is not income and not spending, and having
+  // to open the operations screen for it made the quick form only two-thirds
+  // useful.
+  const [type, setType] = useState<QuickAddType>("EXPENSE");
   const [accountId, setAccountId] = useState("");
+  const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   // Inline creation state
   const [newAccountName, setNewAccountName] = useState("");
@@ -144,9 +151,11 @@ export function QuickAddFab({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+    if (type === "TRANSFER") return submitTransfer(payload);
     if (!accountId) return toast.error(t("qa.err.account"));
     if (!categoryId) return toast.error(t("qa.err.category"));
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
     try {
       const result = await apiClient.post<{ budgetWarning?: BudgetWarning }>("/transactions", {
@@ -177,9 +186,33 @@ export function QuickAddFab({
     }
   }
 
-  function changeType(next: "INCOME" | "EXPENSE") {
+  // Same endpoint and payload the operations screen uses for a transfer, so
+  // both entry points create exactly the same pair of records.
+  async function submitTransfer(payload: Record<string, FormDataEntryValue>) {
+    if (!accountId || !toAccountId) return toast.error(t("qa.err.account"));
+    if (accountId === toAccountId) return toast.error(t("qa.err.sameAccount"));
+
+    try {
+      await apiClient.post("/transactions", {
+        action: "transfer",
+        amount: payload.amount,
+        date: payload.date,
+        description: payload.description,
+        fromAccountId: accountId,
+        toAccountId
+      });
+      toast.success(t("tx.toast.transferCreated"));
+      setOpen(false);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("tx.toast.transferError"));
+    }
+  }
+
+  function changeType(next: QuickAddType) {
     setType(next);
     setCategoryId(""); // categories are type-specific
+    setToAccountId("");
     setShowNewCategory(false);
   }
 
@@ -223,6 +256,17 @@ export function QuickAddFab({
                 >
                   {t("tx.type.income")}
                 </Button>
+                <Button
+                  type="button"
+                  variant={type === "TRANSFER" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => changeType("TRANSFER")}
+                  disabled={activeAccounts.length < 2}
+                  title={activeAccounts.length < 2 ? t("qa.transfer.needTwo") : undefined}
+                >
+                  {t("tx.transfer")}
+                </Button>
               </div>
             </div>
 
@@ -239,8 +283,9 @@ export function QuickAddFab({
               />
             </div>
 
-            {/* Category with inline creation */}
-            <div className="space-y-2">
+            {/* Category with inline creation — a transfer has none: the money
+                does not leave the household, it changes pocket. */}
+            <div className={type === "TRANSFER" ? "hidden" : "space-y-2"}>
               <div className="flex items-center justify-between">
                 <Label htmlFor="fab-category">{t("common.category")}</Label>
                 <button
@@ -285,7 +330,9 @@ export function QuickAddFab({
             {/* Account with inline creation */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="fab-account">{t("common.account")}</Label>
+                <Label htmlFor="fab-account">
+                  {type === "TRANSFER" ? t("tx.transfer.from") : t("common.account")}
+                </Label>
                 <button
                   type="button"
                   className="text-xs text-primary hover:underline"
@@ -332,6 +379,26 @@ export function QuickAddFab({
                 </Select>
               )}
             </div>
+
+            {type === "TRANSFER" ? (
+              <div className="space-y-2">
+                <Label htmlFor="fab-to-account">{t("tx.transfer.to")}</Label>
+                <Select value={toAccountId || undefined} onValueChange={setToAccountId}>
+                  <SelectTrigger id="fab-to-account">
+                    <SelectValue placeholder={t("ai.selectAccount")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeAccounts
+                      .filter((a) => a.id !== accountId)
+                      .map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="fab-date">{t("common.date")}</Label>
