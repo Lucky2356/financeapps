@@ -97,7 +97,7 @@ export function ForecastEventsCard({
                 <p
                   className={
                     event.type === "INCOME"
-                      ? "shrink-0 font-semibold text-success-foreground"
+                      ? "shrink-0 font-semibold text-success"
                       : "shrink-0 font-semibold text-destructive"
                   }
                 >

@@ -173,7 +173,7 @@ function FlowBox({
       <p
         className={
           tone === "success"
-            ? "mt-2 text-2xl font-semibold text-success-foreground"
+            ? "mt-2 text-2xl font-semibold text-success"
             : "mt-2 text-2xl font-semibold text-destructive"
         }
       >

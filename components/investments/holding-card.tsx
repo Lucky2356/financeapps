@@ -36,8 +36,7 @@ export function HoldingCard({
   const pnlPositive = position.pnl >= 0;
   const dayKnown = dayChange !== undefined;
   const dayPositive = (dayChange ?? 0) >= 0;
-  const toneClass = (positive: boolean) =>
-    positive ? "text-success-foreground" : "text-destructive";
+  const toneClass = (positive: boolean) => (positive ? "text-success" : "text-destructive");
 
   return (
     <div className={cn("rounded-xl border bg-card", expanded && "ring-1 ring-primary/30")}>

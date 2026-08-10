@@ -33,8 +33,7 @@ export function WatchlistCard({
   onRemove: () => void;
 }) {
   const { t } = useI18n();
-  const toneClass = (positive: boolean) =>
-    positive ? "text-success-foreground" : "text-destructive";
+  const toneClass = (positive: boolean) => (positive ? "text-success" : "text-destructive");
 
   return (
     <div className={cn("rounded-xl border bg-card", expanded && "ring-1 ring-primary/30")}>

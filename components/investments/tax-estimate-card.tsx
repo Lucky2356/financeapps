@@ -49,7 +49,7 @@ export function TaxEstimateCard({
             </div>
           ))}
         </dl>
-        <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
+        <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
           {t("inv.tax.disclaimer")}
         </p>
       </CardContent>

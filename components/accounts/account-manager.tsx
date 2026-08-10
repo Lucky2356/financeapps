@@ -277,7 +277,7 @@ function InterestNote({ account }: { account: AccountsPageData["accounts"][numbe
   const { t } = useI18n();
   if (!earnsInterest(account)) return null;
   return (
-    <p className="mt-1 text-xs text-success-foreground">
+    <p className="mt-1 text-xs text-success">
       {t("acc.interest.year", {
         rate: account.interestRate ?? 0,
         total: formatCurrency(
