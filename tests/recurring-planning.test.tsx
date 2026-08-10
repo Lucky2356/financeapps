@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithConfirm } from "./ui-helpers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RecurringTransactionsPageData } from "@/lib/data";
@@ -60,7 +61,7 @@ beforeEach(() => {
 
 describe("planning screen", () => {
   it("lists debt payments coming from the debts page", async () => {
-    render(<RecurringManager data={baseData} />);
+    renderWithConfirm(<RecurringManager data={baseData} />);
 
     expect(await screen.findByText("Платежи по долгам")).toBeInTheDocument();
     expect(screen.getByText("Ипотека")).toBeInTheDocument();
@@ -72,7 +73,7 @@ describe("planning screen", () => {
   it("hides the debts block when no liability has a due day", async () => {
     const withoutDebts = { ...baseData, debtPayments: [] };
     apiClientMock.get.mockResolvedValue(withoutDebts);
-    render(<RecurringManager data={withoutDebts} />);
+    renderWithConfirm(<RecurringManager data={withoutDebts} />);
 
     expect(await screen.findByText("Плановые операции")).toBeInTheDocument();
     expect(screen.queryByText("Платежи по долгам")).not.toBeInTheDocument();
@@ -80,7 +81,7 @@ describe("planning screen", () => {
 
   it("prefills the template amount from the category budget", async () => {
     const user = (await import("@testing-library/user-event")).default.setup();
-    render(<RecurringManager data={baseData} />);
+    renderWithConfirm(<RecurringManager data={baseData} />);
 
     await user.click(await screen.findByRole("button", { name: /Добавить шаблон/ }));
 
@@ -92,7 +93,7 @@ describe("planning screen", () => {
 
   it("never overwrites an amount the user typed", async () => {
     const user = (await import("@testing-library/user-event")).default.setup();
-    render(<RecurringManager data={baseData} />);
+    renderWithConfirm(<RecurringManager data={baseData} />);
 
     await user.click(await screen.findByRole("button", { name: /Добавить шаблон/ }));
     const amount = screen.getByRole("spinbutton");

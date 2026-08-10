@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import { renderWithConfirm } from "./ui-helpers";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,7 +32,7 @@ beforeEach(() => {
 describe("CategoryManager", () => {
   it("creates a category through the add dialog", async () => {
     const user = userEvent.setup();
-    render(<CategoryManager data={emptyData} />);
+    renderWithConfirm(<CategoryManager data={emptyData} />);
 
     const addButtons = await screen.findAllByRole("button", { name: "Добавить" });
     await user.click(addButtons[0]);

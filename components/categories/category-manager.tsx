@@ -9,6 +9,7 @@ import type { CategoriesPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
   const { t } = useI18n();
   const { data: pageData, reload } = useApiPageData(data, "/categories");
   const { run } = useApiMutation();
+  const confirm = useConfirm();
   // Which "add" dialog is open (by kind), and which category is being edited
   const [addKind, setAddKind] = useState<"INCOME" | "EXPENSE" | null>(null);
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(null);
@@ -64,6 +66,21 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
   }
 
   async function handleDelete(id: string) {
+    // Naming the category and its operation count matters here: deleting one
+    // that is still in use is not the same decision as dropping an unused label.
+    const category = pageData.categories.find((item) => item.id === id);
+    const ok = await confirm({
+      title: t("cat.delete.title"),
+      description: category?.transactionCount
+        ? t("cat.delete.descUsed", {
+            name: category.name,
+            count: String(category.transactionCount)
+          })
+        : t("cat.delete.desc", { name: category?.name ?? "" }),
+      destructive: true,
+      confirmLabel: t("common.delete")
+    });
+    if (!ok) return;
     await run(() => apiClient.delete(`/categories?id=${encodeURIComponent(id)}`), {
       success: t("cat.toast.deleted"),
       error: t("cat.toast.deleteError"),
