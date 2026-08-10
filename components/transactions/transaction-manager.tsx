@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { onDataChanged } from "@/lib/api/data-events";
 import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
@@ -179,6 +180,11 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     };
   }, [data, paramsString]);
 
+  // This screen keeps its own copy of the list (filters live in the URL), so it
+  // subscribes to writes itself: an operation added from the quick-add button
+  // must appear here without a manual reload.
+  useEffect(() => onDataChanged(() => void loadTransactions(true)), [loadTransactions]);
+
   const visibleTransactions = pageData.transactions.filter((transaction) =>
     matchesCriteria(transaction, criteria)
   );
@@ -249,8 +255,22 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     );
   }
 
-  async function removeTransaction(id: string) {
-    await run(() => apiClient.delete(`/transactions?id=${encodeURIComponent(id)}`), {
+  // Deleting one operation asks first, exactly as deleting several already did.
+  // A mis-tap next to the edit pencil used to wipe a record with no way back —
+  // the dialog names the operation so it is clear WHICH one is about to go.
+  async function removeTransaction(transaction: TransactionsPageData["transactions"][number]) {
+    const ok = await confirm({
+      title: t("tx.delete.title"),
+      description: t("tx.delete.desc", {
+        category: transaction.category.label,
+        amount: formatCurrency(transaction.amount),
+        date: formatDate(transaction.date)
+      }),
+      destructive: true,
+      confirmLabel: t("common.delete")
+    });
+    if (!ok) return;
+    await run(() => apiClient.delete(`/transactions?id=${encodeURIComponent(transaction.id)}`), {
       success: t("tx.toast.deleted"),
       error: t("tx.toast.deleteError"),
       onSuccess: refresh
@@ -838,7 +858,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         <TableCell
                           className={
                             transaction.type === "INCOME"
-                              ? "text-right font-semibold text-success-foreground"
+                              ? "text-right font-semibold text-success"
                               : "text-right font-semibold"
                           }
                         >
@@ -859,7 +879,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                             <form
                               onSubmit={(event) => {
                                 event.preventDefault();
-                                void removeTransaction(transaction.id);
+                                void removeTransaction(transaction);
                               }}
                             >
                               <Button
@@ -929,7 +949,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                       <p
                         className={
                           transaction.type === "INCOME"
-                            ? "shrink-0 font-semibold text-success-foreground"
+                            ? "shrink-0 font-semibold text-success"
                             : "shrink-0 font-semibold"
                         }
                       >
@@ -949,7 +969,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                       <form
                         onSubmit={(event) => {
                           event.preventDefault();
-                          void removeTransaction(transaction.id);
+                          void removeTransaction(transaction);
                         }}
                       >
                         <Button type="submit" variant="outline" size="sm" disabled={isMutating}>
@@ -1222,7 +1242,7 @@ function SummaryTile({
       <p
         className={
           tone === "success"
-            ? "mt-2 text-xl font-semibold text-success-foreground"
+            ? "mt-2 text-xl font-semibold text-success"
             : "mt-2 text-xl font-semibold text-destructive"
         }
       >
