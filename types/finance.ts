@@ -80,6 +80,8 @@ export type DashboardData = {
   currency: string;
   metrics: MetricCard[];
   categoryExpenses: ChartDatum[];
+  /** Where this month's money came from, mirroring categoryExpenses. */
+  categoryIncome: ChartDatum[];
   monthlyCashflow: MonthlyCashflowDatum[];
   recommendations: RecommendationView[];
   health: HealthScore;

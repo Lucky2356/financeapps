@@ -11,6 +11,7 @@ const analytics: AnalyticsData = {
     { month: "2026-05", income: 100000, expense: 70000, savings: 30000, savingsRate: 30 },
     { month: "2026-06", income: 100000, expense: 80000, savings: 20000, savingsRate: 20 }
   ],
+  topIncomeCategories: [],
   topExpenseCategories: [
     { categoryId: "c1", category: "Продукты", color: "#111", total: 40000, share: 50 },
     { categoryId: "c2", category: "Кафе", color: "#222", total: 20000, share: 25 }

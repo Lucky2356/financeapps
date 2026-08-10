@@ -231,61 +231,95 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("an.structure")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.topExpenseCategories.length > 0 ? (
-              <div className="flex items-center gap-4">
-                <div className="h-52 w-52 shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={data.topExpenseCategories}
-                        dataKey="share"
-                        nameKey="category"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={48}
-                        outerRadius={90}
-                        strokeWidth={2}
-                      >
-                        {data.topExpenseCategories.map((entry) => (
-                          <Cell key={entry.category} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        {...chartTooltipProps}
-                        formatter={(value) => [`${Number(value).toFixed(1)}%`, t("an.share")]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  {data.topExpenseCategories.map((cat) => (
-                    <div key={cat.category} className="flex items-center gap-2 text-sm">
-                      <span
-                        className="inline-block size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: cat.color }}
-                      />
-                      <span className="truncate">{cat.category}</span>
-                      <span className="ml-auto shrink-0 text-muted-foreground">
-                        {cat.share.toFixed(0)}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">{t("an.noData")}</p>
-            )}
-          </CardContent>
-        </Card>
+        <StructureCard
+          title={t("an.structure")}
+          slices={data.topExpenseCategories}
+          shareLabel={t("an.share")}
+          empty={t("an.noData")}
+        />
+      </div>
+
+      {/* The same structure for money coming in. Spending alone says how it was
+          used; this says what there was to use. */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <StructureCard
+          title={t("an.structureIncome")}
+          slices={data.topIncomeCategories}
+          shareLabel={t("an.share")}
+          empty={t("an.noIncome6m")}
+        />
       </div>
 
       <CategoryTrendsSection currency={data.currency} />
     </div>
+  );
+}
+
+// One pie plus its legend. Used twice — for spending and for income — so the
+// two structures are read the same way and cannot drift apart visually.
+function StructureCard({
+  title,
+  slices,
+  shareLabel,
+  empty
+}: {
+  title: string;
+  slices: AnalyticsData["topExpenseCategories"];
+  shareLabel: string;
+  empty: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {slices.length > 0 ? (
+          <div className="flex items-center gap-4">
+            <div className="h-52 w-52 shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={slices}
+                    dataKey="share"
+                    nameKey="category"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={90}
+                    strokeWidth={2}
+                  >
+                    {slices.map((entry) => (
+                      <Cell key={entry.category} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    {...chartTooltipProps}
+                    formatter={(value) => [`${Number(value).toFixed(1)}%`, shareLabel]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              {slices.map((cat) => (
+                <div key={cat.category} className="flex items-center gap-2 text-sm">
+                  <span
+                    className="inline-block size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  <span className="truncate">{cat.category}</span>
+                  <span className="ml-auto shrink-0 text-muted-foreground">
+                    {cat.share.toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="py-8 text-center text-sm text-muted-foreground">{empty}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
