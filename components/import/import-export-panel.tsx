@@ -555,7 +555,7 @@ export function ImportExportPanel({
                     className={cn(
                       "flex size-10 items-center justify-center rounded-full shrink-0",
                       validation.validRows > 0
-                        ? "bg-success/15 text-success-foreground"
+                        ? "bg-success/15 text-success"
                         : "bg-destructive/15 text-destructive"
                     )}
                   >
@@ -686,9 +686,9 @@ export function ImportExportPanel({
             >
               <div className="flex items-start gap-3">
                 {pageData.backupReminderDue ? (
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-foreground" />
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
                 ) : (
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success-foreground" />
+                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
                 )}
                 <div>
                   <p className="font-medium">

@@ -72,7 +72,7 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
           <div
             className={cn(
               "mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium",
-              trendPositive && "bg-success/12 text-success-foreground",
+              trendPositive && "bg-success/12 text-success",
               trendNegative && "bg-destructive/10 text-destructive",
               !trendPositive && !trendNegative && "bg-secondary text-secondary-foreground"
             )}

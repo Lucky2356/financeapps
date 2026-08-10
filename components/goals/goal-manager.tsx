@@ -193,7 +193,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                           pace.isOverdue
                             ? "text-xs text-destructive"
                             : pace.isComplete
-                              ? "text-xs text-success-foreground"
+                              ? "text-xs text-success"
                               : "text-xs text-muted-foreground"
                         }
                       >

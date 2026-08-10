@@ -205,7 +205,7 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
                         <CheckCircle2
                           className={cn(
                             "size-4",
-                            liability.settledAt ? "text-success-foreground" : "opacity-60"
+                            liability.settledAt ? "text-success" : "opacity-60"
                           )}
                         />
                       </Button>
@@ -262,7 +262,7 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
                     </p>
                   ) : null}
                   {liability.settledAt ? (
-                    <p className="mt-1 text-xs text-success-foreground">{t("debt.settled.note")}</p>
+                    <p className="mt-1 text-xs text-success">{t("debt.settled.note")}</p>
                   ) : null}
                 </CardContent>
               </Card>

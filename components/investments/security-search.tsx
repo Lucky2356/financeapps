@@ -91,9 +91,7 @@ export function SecuritySearch({
                   </span>
                   <span
                     className={
-                      security.changeDay >= 0
-                        ? "text-xs text-success-foreground"
-                        : "text-xs text-destructive"
+                      security.changeDay >= 0 ? "text-xs text-success" : "text-xs text-destructive"
                     }
                   >
                     {security.changeDay >= 0 ? "+" : ""}

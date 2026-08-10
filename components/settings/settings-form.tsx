@@ -588,7 +588,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                   </>
                 );
               })()}
-              <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning-foreground">
+              <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                 {t("set.ai.warning")}
               </div>
             </>

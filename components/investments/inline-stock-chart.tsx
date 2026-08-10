@@ -29,7 +29,7 @@ const RANGES: { id: string; labelKey: string }[] = [
 function ChangeBadge({ value, suffix }: { value: number; suffix: string }) {
   const up = value >= 0;
   return (
-    <span className={up ? "text-success-foreground" : "text-destructive"}>
+    <span className={up ? "text-success" : "text-destructive"}>
       {up ? "+" : ""}
       {value.toFixed(2)}% <span className="text-xs text-muted-foreground">{suffix}</span>
     </span>

@@ -38,8 +38,8 @@ export const RECURRENCE_FREQUENCY_LABELS = {
 } as const;
 
 export const SEVERITY_STYLES = {
-  INFO: "bg-info/12 text-info-foreground border-info/30",
-  SUCCESS: "bg-success/12 text-success-foreground border-success/30",
-  WARNING: "bg-warning/15 text-warning-foreground border-warning/30",
+  INFO: "bg-info/12 text-info border-info/30",
+  SUCCESS: "bg-success/12 text-success border-success/30",
+  WARNING: "bg-warning/15 text-warning border-warning/30",
   CRITICAL: "bg-destructive/12 text-destructive border-destructive/30"
 } as const;

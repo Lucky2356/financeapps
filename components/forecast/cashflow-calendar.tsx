@@ -144,7 +144,7 @@ export function CashflowCalendar({
                   {format(day, "d")}
                 </span>
                 {bucket?.income ? (
-                  <span className="truncate rounded bg-success/15 px-1 text-[10px] font-medium text-success-foreground">
+                  <span className="truncate rounded bg-success/15 px-1 text-[10px] font-medium text-success">
                     +{compact(bucket.income, t("cal.thousand"))}
                   </span>
                 ) : null}
@@ -204,7 +204,7 @@ export function CashflowCalendar({
                 <span
                   className={
                     event.type === "INCOME"
-                      ? "shrink-0 font-medium text-success-foreground"
+                      ? "shrink-0 font-medium text-success"
                       : "shrink-0 font-medium text-destructive"
                   }
                 >
