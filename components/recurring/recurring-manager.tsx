@@ -54,6 +54,7 @@ import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const FREQUENCY_VALUES = ["WEEKLY", "MONTHLY", "YEARLY"] as const;
 
@@ -62,6 +63,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
   const { t } = useI18n();
   const { data: pageData, reload } = useApiPageData(data, "/recurring");
   const { run } = useApiMutation();
+  const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState<
     RecurringTransactionsPageData["recurringTransactions"][number] | null
@@ -94,6 +96,19 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
   }
 
   async function removeTemplate(id: string) {
+    // A template is a standing instruction, not a single record: deleting one
+    // silently stops future postings, so it asks first and says which one.
+    const template = pageData.recurringTransactions.find((item) => item.id === id);
+    const ok = await confirm({
+      title: t("rec.delete.title"),
+      description: t("rec.delete.desc", {
+        name: template?.description?.trim() || (template?.category.label ?? ""),
+        amount: template ? formatCurrency(template.amount, pageData.currency) : ""
+      }),
+      destructive: true,
+      confirmLabel: t("common.delete")
+    });
+    if (!ok) return;
     await run(() => apiClient.delete(`/recurring?id=${encodeURIComponent(id)}`), {
       success: t("rec.toast.deleted"),
       error: t("rec.toast.deleteError"),
@@ -215,7 +230,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                         <TableCell
                           className={
                             item.type === "INCOME"
-                              ? "text-right font-semibold text-success-foreground"
+                              ? "text-right font-semibold text-success"
                               : "text-right font-semibold"
                           }
                         >
@@ -250,7 +265,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                               size="icon"
                               title={t("common.delete")}
                               aria-label={t("rec.deleteAria")}
-                              onClick={() => removeTemplate(item.id)}
+                              onClick={() => void removeTemplate(item.id)}
                             >
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
@@ -279,7 +294,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                       <p
                         className={
                           item.type === "INCOME"
-                            ? "shrink-0 font-semibold text-success-foreground"
+                            ? "shrink-0 font-semibold text-success"
                             : "shrink-0 font-semibold"
                         }
                       >
@@ -310,7 +325,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => removeTemplate(item.id)}
+                          onClick={() => void removeTemplate(item.id)}
                         >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
@@ -373,16 +388,16 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant="outline"
-                    className={payment.autoPay ? "border-success/30 text-success-foreground" : ""}
+                    className={payment.autoPay ? "border-success/30 text-success" : ""}
                   >
                     {payment.autoPay ? t("rec.debts.auto") : t("rec.debts.manual")}
                   </Badge>
                   {payment.isDue ? (
-                    <Badge className="border-warning/30 bg-warning/15 text-warning-foreground">
+                    <Badge className="border-warning/30 bg-warning/15 text-warning">
                       {t("rec.status.due")}
                     </Badge>
                   ) : payment.daysUntilNext <= 7 ? (
-                    <Badge className="border-info/30 bg-info/12 text-info-foreground">
+                    <Badge className="border-info/30 bg-info/12 text-info">
                       {t("rec.status.soon")}
                     </Badge>
                   ) : (
@@ -438,7 +453,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                     })}
                   </p>
                 </div>
-                <p className="font-semibold text-success-foreground">
+                <p className="font-semibold text-success">
                   +{formatCurrency(accrual.amount, pageData.currency)}
                 </p>
               </div>
@@ -454,7 +469,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="rounded-lg border bg-muted/20 p-4">
             <p className="font-medium">{t("rec.load.income")}</p>
-            <p className="mt-2 text-2xl font-semibold text-success-foreground">
+            <p className="mt-2 text-2xl font-semibold text-success">
               {formatCurrency(pageData.summary.monthlyPlannedIncome, pageData.currency)}
             </p>
           </div>
@@ -481,9 +496,9 @@ function SummaryTile({
 }) {
   const color =
     tone === "success"
-      ? "text-success-foreground"
+      ? "text-success"
       : tone === "warning"
-        ? "text-warning-foreground"
+        ? "text-warning"
         : tone === "danger"
           ? "text-destructive"
           : "text-foreground";
@@ -513,18 +528,12 @@ function StatusBadge({
 
   if (item.isDue) {
     return (
-      <Badge className="border-warning/30 bg-warning/15 text-warning-foreground">
-        {t("rec.status.due")}
-      </Badge>
+      <Badge className="border-warning/30 bg-warning/15 text-warning">{t("rec.status.due")}</Badge>
     );
   }
 
   if (item.daysUntilNext <= 7) {
-    return (
-      <Badge className="border-info/30 bg-info/12 text-info-foreground">
-        {t("rec.status.soon")}
-      </Badge>
-    );
+    return <Badge className="border-info/30 bg-info/12 text-info">{t("rec.status.soon")}</Badge>;
   }
 
   return <Badge variant="outline">{t("rec.status.scheduled")}</Badge>;

@@ -79,7 +79,7 @@ describe("manager smoke tests", () => {
   });
 
   it("RecurringManager renders an empty state", async () => {
-    render(<RecurringManager data={recurringData} />);
+    renderWithConfirm(<RecurringManager data={recurringData} />);
     expect(await screen.findByText("Плановых операций пока нет")).toBeInTheDocument();
   });
 
