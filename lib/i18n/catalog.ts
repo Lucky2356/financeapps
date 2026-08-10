@@ -263,6 +263,10 @@ const ru: Messages = {
   "cat.toast.added": "Категория добавлена",
   "cat.toast.updated": "Категория обновлена",
   "cat.toast.saveError": "Не удалось сохранить категорию",
+  "cat.delete.title": "Удалить категорию?",
+  "cat.delete.desc": "Категория «{name}» будет удалена. Действие необратимо.",
+  "cat.delete.descUsed":
+    "Категория «{name}» используется в операциях: {count}. Действие необратимо.",
   "cat.toast.deleted": "Категория удалена",
   "cat.toast.deleteError": "Не удалось удалить категорию",
   // Budgets manager
@@ -386,6 +390,8 @@ const ru: Messages = {
   "tx.bulk.selectRow": "Выбрать операцию",
   "tx.bulk.deleteTitle": "Удалить выбранные операции?",
   "tx.bulk.deleteDesc": "Будет удалено операций: {count}. Действие необратимо.",
+  "tx.delete.title": "Удалить операцию?",
+  "tx.delete.desc": "{category} — {amount} от {date}. Действие необратимо.",
   "tx.bulk.deleted": "Удалено операций: {count}",
   "tx.bulk.categorized": "Обновлено: {applied}, пропущено: {skipped}",
   "tx.bulk.rulesApplied": "Правила применены к операциям: {count}",
@@ -491,6 +497,7 @@ const ru: Messages = {
   "txa.bestMonth": "Лучший месяц",
   "txa.cashflow": "Доходы и расходы по месяцам",
   "txa.byCategory": "Расходы по категориям",
+  "txa.incomeByCategory": "Доходы по категориям",
   "debt.settled.title": "Погашен",
   "debt.settled.desc":
     "Долг выплачен полностью. Он останется в списке как история, но перестанет учитываться в капитале, оценке финансов и плановых платежах.",
@@ -556,6 +563,9 @@ const ru: Messages = {
   "rec.toast.created": "Плановый платеж создан",
   "rec.toast.updated": "Плановый платеж обновлен",
   "rec.toast.saveError": "Не удалось сохранить шаблон",
+  "rec.delete.title": "Удалить регулярный платёж?",
+  "rec.delete.desc":
+    "«{name}» — {amount}. Платёж перестанет создаваться автоматически. Действие необратимо.",
   "rec.toast.deleted": "Шаблон удален",
   "rec.toast.deleteError": "Не удалось удалить шаблон",
   "rec.toast.materializeError": "Не удалось создать операции",
@@ -725,6 +735,8 @@ const ru: Messages = {
   "an.thousand": "тыс.",
   "an.topCategories": "Топ категорий расходов",
   "an.structure": "Структура расходов",
+  "an.structureIncome": "Структура доходов",
+  "an.noIncome6m": "Нет доходов за последние 6 месяцев",
   "an.noData6m": "Нет данных за последние 6 месяцев",
   "an.noData": "Нет данных",
   // Import / export
@@ -862,6 +874,9 @@ const ru: Messages = {
   "dash.widget.metrics": "Ключевые метрики",
   "dash.widget.charts": "Графики расходов и потоков",
   "dash.categoryExpenses": "Расходы по категориям",
+  "dash.categoryExpenses.empty": "В этом месяце расходов пока нет.",
+  "dash.categoryIncome": "Доходы по категориям",
+  "dash.categoryIncome.empty": "В этом месяце доходов пока нет.",
   "dash.incomeExpenseByMonth": "Доходы и расходы по месяцам",
   "dash.netWorth": "Чистый капитал",
   "dash.netWorthDesc": "Счета, инвестиции и накопления по целям.",
@@ -973,6 +988,8 @@ const ru: Messages = {
   "qa.descLabel": "Описание (необязательно)",
   "qa.descPlaceholder": "Например: продукты",
   "qa.err.account": "Выберите или создайте счёт",
+  "qa.err.sameAccount": "Счета списания и зачисления должны быть разными",
+  "qa.transfer.needTwo": "Для перевода нужно минимум два счёта",
   "qa.err.category": "Выберите или создайте категорию",
   // Misc chrome
   "menu.logout": "Выйти",
@@ -1885,6 +1902,10 @@ const en: Messages = {
   "cat.toast.added": "Category added",
   "cat.toast.updated": "Category updated",
   "cat.toast.saveError": "Failed to save category",
+  "cat.delete.title": "Delete category?",
+  "cat.delete.desc": "Category “{name}” will be deleted. This cannot be undone.",
+  "cat.delete.descUsed":
+    "Category “{name}” is used in {count} transaction(s). This cannot be undone.",
   "cat.toast.deleted": "Category deleted",
   "cat.toast.deleteError": "Failed to delete category",
   // Budgets manager
@@ -2008,6 +2029,8 @@ const en: Messages = {
   "tx.bulk.selectRow": "Select transaction",
   "tx.bulk.deleteTitle": "Delete selected transactions?",
   "tx.bulk.deleteDesc": "{count} transaction(s) will be deleted. This cannot be undone.",
+  "tx.delete.title": "Delete transaction?",
+  "tx.delete.desc": "{category} — {amount} on {date}. This cannot be undone.",
   "tx.bulk.deleted": "Transactions deleted: {count}",
   "tx.bulk.categorized": "Updated: {applied}, skipped: {skipped}",
   "tx.bulk.rulesApplied": "Rules applied to transactions: {count}",
@@ -2113,6 +2136,7 @@ const en: Messages = {
   "txa.bestMonth": "Best month",
   "txa.cashflow": "Income and spending by month",
   "txa.byCategory": "Spending by category",
+  "txa.incomeByCategory": "Income by category",
   "debt.settled.title": "Repaid",
   "debt.settled.desc":
     "The debt is paid off. It stays in the list as history but stops counting towards your capital, health score and planned payments.",
@@ -2177,6 +2201,9 @@ const en: Messages = {
   "rec.toast.created": "Scheduled payment created",
   "rec.toast.updated": "Scheduled payment updated",
   "rec.toast.saveError": "Failed to save template",
+  "rec.delete.title": "Delete recurring payment?",
+  "rec.delete.desc":
+    "“{name}” — {amount}. It will stop posting automatically. This cannot be undone.",
   "rec.toast.deleted": "Template deleted",
   "rec.toast.deleteError": "Failed to delete template",
   "rec.toast.materializeError": "Failed to create transactions",
@@ -2346,6 +2373,8 @@ const en: Messages = {
   "an.thousand": "k",
   "an.topCategories": "Top expense categories",
   "an.structure": "Spending structure",
+  "an.structureIncome": "Income structure",
+  "an.noIncome6m": "No income in the last 6 months",
   "an.noData6m": "No data for the last 6 months",
   "an.noData": "No data",
   // Import / export
@@ -2481,6 +2510,9 @@ const en: Messages = {
   "dash.widget.metrics": "Key metrics",
   "dash.widget.charts": "Spending & cashflow charts",
   "dash.categoryExpenses": "Expenses by category",
+  "dash.categoryExpenses.empty": "No spending this month yet.",
+  "dash.categoryIncome": "Income by category",
+  "dash.categoryIncome.empty": "No income this month yet.",
   "dash.incomeExpenseByMonth": "Income and expenses by month",
   "dash.netWorth": "Net worth",
   "dash.netWorthDesc": "Accounts, investments and goal savings.",
@@ -2592,6 +2624,8 @@ const en: Messages = {
   "qa.descLabel": "Description (optional)",
   "qa.descPlaceholder": "E.g. groceries",
   "qa.err.account": "Select or create an account",
+  "qa.err.sameAccount": "Pick two different accounts for a transfer",
+  "qa.transfer.needTwo": "A transfer needs at least two accounts",
   "qa.err.category": "Select or create a category",
   // Misc chrome
   "menu.logout": "Sign out",
