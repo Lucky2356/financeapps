@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
+import { onDataChanged } from "@/lib/api/data-events";
 
 // The server-rendered shell is always empty (see lib/data.ts), so every screen
 // loads its real numbers here, from the device's IndexedDB through
@@ -42,6 +43,12 @@ export function useApiPageData<T>(initialData: T, path: string) {
       cancelled = true;
     };
   }, [path]);
+
+  // Re-read whenever anything writes to storage. Without this a screen only
+  // learns about a change by being unmounted and mounted again, so adding an
+  // operation from the quick-add button left the totals and charts on screen
+  // showing the figures from before the write.
+  useEffect(() => onDataChanged(() => void reload()), [reload]);
 
   return { data, reload, setData };
 }
