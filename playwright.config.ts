@@ -7,6 +7,9 @@ const PORT = 4173;
 
 export default defineConfig({
   testDir: "e2e",
+  // shots.spec.ts is a camera, not a check: it writes PNGs and is run by hand
+  // (`npx playwright test e2e/shots.spec.ts`), so it stays out of the suite.
+  testIgnore: "**/shots.spec.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

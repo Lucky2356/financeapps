@@ -28,3 +28,6 @@ blob-report
 keystore.properties
 emu-*.png
 shots/
+
+# Screenshots produced by e2e/shots.spec.ts on demand
+/shots/
