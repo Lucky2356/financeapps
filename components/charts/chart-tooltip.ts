@@ -4,7 +4,12 @@
 // alongside any chart-specific `formatter`/`labelFormatter`, which keep working
 // because we style the default tooltip rather than replacing its content.
 export const chartTooltipProps = {
-  allowEscapeViewBox: { x: true, y: true },
+  // Keep the box inside the chart. Letting it escape sideways meant that
+  // hovering the last month — the one people actually look at — pushed the
+  // explanation past the right edge of the window, where it was simply cut
+  // off. Inside the view box recharts flips the tooltip to the other side of
+  // the cursor instead, so it stays whole and readable everywhere.
+  allowEscapeViewBox: { x: false, y: false },
   wrapperStyle: {
     outline: "none",
     pointerEvents: "none" as const,
