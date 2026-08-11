@@ -157,7 +157,7 @@ function CategoryColumn({
 }) {
   const { t } = useI18n();
   return (
-    <Card>
+    <Card data-testid={`category-column-${kind}`}>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className={headerClass}>{title}</CardTitle>
         <Dialog open={addOpen} onOpenChange={onAddOpenChange}>
