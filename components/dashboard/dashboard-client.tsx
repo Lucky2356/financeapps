@@ -181,8 +181,12 @@ function CategoryBreakdownCard({
         ) : (
           <>
             <ExpenseCategoryChart data={data} />
+            {/* Every slice drawn gets a line here. The legend used to stop at
+                six, so a category could sit in the ring — with its own colour
+                and its own share of the money — and be nowhere in the list
+                explaining what the colours mean. */}
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {data.slice(0, 6).map((item) => (
+              {data.map((item) => (
                 <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
                   <span className="flex min-w-0 items-center gap-2">
                     <span
