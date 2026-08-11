@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { CategoryDialog } from "@/components/categories/category-dialog";
+import { CategoryIcon } from "@/components/category-icon";
 import { EmptyState } from "@/components/empty-state";
 import {
   Table,
@@ -236,10 +237,15 @@ function CategoryTableRow({
     <TableRow>
       <TableCell>
         <div className="flex items-center gap-2">
+          {/* The colour was the only mark a category carried, so two spending
+              categories of a similar shade looked alike everywhere. The chosen
+              picture sits inside it. */}
           <span
-            className="inline-block size-3.5 shrink-0 rounded-full border"
+            className="flex size-5 shrink-0 items-center justify-center rounded-full text-white"
             style={{ backgroundColor: category.color }}
-          />
+          >
+            <CategoryIcon name={category.icon} className="size-3" />
+          </span>
           <span className="font-medium">{category.name}</span>
         </div>
       </TableCell>
@@ -308,9 +314,11 @@ function CategoryCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span
-            className="inline-block size-4 shrink-0 rounded-full border"
+            className="flex size-6 shrink-0 items-center justify-center rounded-full text-white"
             style={{ backgroundColor: category.color }}
-          />
+          >
+            <CategoryIcon name={category.icon} className="size-3.5" />
+          </span>
           <p className="font-semibold">{category.name}</p>
         </div>
         <span className="text-sm text-muted-foreground">

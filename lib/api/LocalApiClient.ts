@@ -96,7 +96,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -145,20 +145,61 @@ type LocalState = {
 };
 
 const defaultCategories: CategoryOption[] = [
-  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7" },
-  { id: "cat-other-income", label: "Прочие доходы", kind: "INCOME", color: "#6fb2d2" },
-  { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#9184d9", isEssential: true },
-  { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#7f8fd8", isEssential: true },
-  { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#b3a7ea", isEssential: true },
+  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7", icon: "Banknote" },
+  {
+    id: "cat-other-income",
+    label: "Прочие доходы",
+    kind: "INCOME",
+    color: "#6fb2d2",
+    icon: "Coins"
+  },
+  {
+    id: "cat-food",
+    label: "Продукты",
+    kind: "EXPENSE",
+    color: "#9184d9",
+    icon: "ShoppingCart",
+    isEssential: true
+  },
+  {
+    id: "cat-transport",
+    label: "Транспорт",
+    kind: "EXPENSE",
+    color: "#7f8fd8",
+    icon: "Bus",
+    isEssential: true
+  },
+  {
+    id: "cat-utilities",
+    label: "ЖКХ",
+    kind: "EXPENSE",
+    color: "#b3a7ea",
+    icon: "Zap",
+    isEssential: true
+  },
   {
     id: "cat-subscriptions",
     label: "Подписки",
     kind: "EXPENSE",
     color: "#a89bc9",
+    icon: "Repeat",
     isSubscription: true
   },
-  { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#e2b26e" },
-  { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#e2788a", isEssential: true }
+  {
+    id: "cat-restaurants",
+    label: "Рестораны",
+    kind: "EXPENSE",
+    color: "#e2b26e",
+    icon: "Utensils"
+  },
+  {
+    id: "cat-health",
+    label: "Здоровье",
+    kind: "EXPENSE",
+    color: "#e2788a",
+    icon: "Stethoscope",
+    isEssential: true
+  }
 ];
 
 function recomputeGoal(
@@ -2032,6 +2073,7 @@ export class LocalApiClient implements ApiClient {
       name: cat.label,
       kind: cat.kind,
       color: cat.color,
+      icon: cat.icon,
       isEssential: cat.isEssential ?? false,
       isSubscription: cat.isSubscription ?? false,
       transactionCount: state.transactions.filter((t) => t.category.id === cat.id).length
@@ -2141,6 +2183,9 @@ export class LocalApiClient implements ApiClient {
     const name = (input.name ?? "").trim();
     const kind = (input.kind ?? "EXPENSE") as "INCOME" | "EXPENSE";
     const color = input.color ?? "#64748b";
+    // The picture travels with the category into every screen that lists it,
+    // including operations already recorded under it.
+    const icon = input.icon?.trim() || undefined;
     const isEssential = input.isEssential === "true" || input.isEssential === "on";
     const isSubscription = input.isSubscription === "true" || input.isSubscription === "on";
 
@@ -2160,13 +2205,16 @@ export class LocalApiClient implements ApiClient {
         label: name,
         kind,
         color,
+        icon,
         isEssential,
         isSubscription
       };
       state.categories = state.categories.map((c) => (c.id === input.id ? updated : c));
-      // Update category label/color in existing transactions
+      // Update category label/colour/icon in existing transactions
       state.transactions = state.transactions.map((t) =>
-        t.category.id === input.id ? { ...t, category: { ...t.category, label: name, color } } : t
+        t.category.id === input.id
+          ? { ...t, category: { ...t.category, label: name, color, icon } }
+          : t
       );
       return updated;
     }
@@ -2182,6 +2230,7 @@ export class LocalApiClient implements ApiClient {
       label: name,
       kind,
       color,
+      icon,
       isEssential,
       isSubscription
     };

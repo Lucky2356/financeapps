@@ -6,6 +6,7 @@
 // defaults are handled by the Zod schema at parse time; migrations only carry
 // version-specific structural changes.
 
+import { SEED_CATEGORY_ICONS } from "@/lib/categories/icons";
 import { LEGACY_CATEGORY_COLORS } from "@/lib/categories/palette";
 
 export type RawLocalState = Record<string, unknown> & { schemaVersion?: number };
@@ -16,7 +17,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 9;
+export const LATEST_LOCAL_STATE_VERSION = 10;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -95,6 +96,30 @@ export const localStateMigrations: LocalStateMigration[] = [
           const color = typeof row.color === "string" ? row.color.toLowerCase() : null;
           const next = color ? LEGACY_CATEGORY_COLORS[color] : undefined;
           return next ? { ...row, color: next } : row;
+        })
+      };
+    }
+  },
+  {
+    from: 9,
+    to: 10,
+    // v10 gave categories a picture as well as a colour. The ones the app
+    // created for you get theirs here, so an install made before the picker
+    // existed looks the same as a fresh one; anything the owner added stays
+    // blank until they choose, because guessing from a name would be wrong
+    // about as often as it was right.
+    migrate: (state) => {
+      const categories = Array.isArray(state.categories) ? state.categories : null;
+      if (!categories) return { ...state, schemaVersion: 10 };
+      return {
+        ...state,
+        schemaVersion: 10,
+        categories: categories.map((category) => {
+          if (!category || typeof category !== "object") return category;
+          const row = category as Record<string, unknown>;
+          if (typeof row.icon === "string" && row.icon) return row;
+          const seeded = typeof row.id === "string" ? SEED_CATEGORY_ICONS[row.id] : undefined;
+          return seeded ? { ...row, icon: seeded } : row;
         })
       };
     }

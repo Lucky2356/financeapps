@@ -53,23 +53,70 @@ export const demoAccounts: AccountRow[] = [
 ];
 
 export const demoCategories: CategoryOption[] = [
-  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7" },
-  { id: "cat-freelance", label: "Фриланс", kind: "INCOME", color: "#6fb2d2" },
-  { id: "cat-food", label: "Продукты", kind: "EXPENSE", color: "#9184d9", isEssential: true },
-  { id: "cat-transport", label: "Транспорт", kind: "EXPENSE", color: "#7f8fd8", isEssential: true },
-  { id: "cat-utilities", label: "ЖКХ", kind: "EXPENSE", color: "#b3a7ea", isEssential: true },
+  { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7", icon: "Banknote" },
+  { id: "cat-freelance", label: "Фриланс", kind: "INCOME", color: "#6fb2d2", icon: "Briefcase" },
+  {
+    id: "cat-food",
+    label: "Продукты",
+    kind: "EXPENSE",
+    color: "#9184d9",
+    icon: "ShoppingCart",
+    isEssential: true
+  },
+  {
+    id: "cat-transport",
+    label: "Транспорт",
+    kind: "EXPENSE",
+    color: "#7f8fd8",
+    icon: "Bus",
+    isEssential: true
+  },
+  {
+    id: "cat-utilities",
+    label: "ЖКХ",
+    kind: "EXPENSE",
+    color: "#b3a7ea",
+    icon: "Zap",
+    isEssential: true
+  },
   {
     id: "cat-subscriptions",
     label: "Подписки",
     kind: "EXPENSE",
     color: "#a89bc9",
+    icon: "Repeat",
     isSubscription: true
   },
-  { id: "cat-entertainment", label: "Развлечения", kind: "EXPENSE", color: "#c9a2d8" },
-  { id: "cat-health", label: "Здоровье", kind: "EXPENSE", color: "#e2788a", isEssential: true },
-  { id: "cat-education", label: "Образование", kind: "EXPENSE", color: "#8fa3c4" },
-  { id: "cat-restaurants", label: "Рестораны", kind: "EXPENSE", color: "#e2b26e" },
-  { id: "cat-travel", label: "Путешествия", kind: "EXPENSE", color: "#6fb2d2" }
+  {
+    id: "cat-entertainment",
+    label: "Развлечения",
+    kind: "EXPENSE",
+    color: "#c9a2d8",
+    icon: "Popcorn"
+  },
+  {
+    id: "cat-health",
+    label: "Здоровье",
+    kind: "EXPENSE",
+    color: "#e2788a",
+    icon: "Stethoscope",
+    isEssential: true
+  },
+  {
+    id: "cat-education",
+    label: "Образование",
+    kind: "EXPENSE",
+    color: "#8fa3c4",
+    icon: "GraduationCap"
+  },
+  {
+    id: "cat-restaurants",
+    label: "Рестораны",
+    kind: "EXPENSE",
+    color: "#e2b26e",
+    icon: "Utensils"
+  },
+  { id: "cat-travel", label: "Путешествия", kind: "EXPENSE", color: "#6fb2d2", icon: "TreePalm" }
 ];
 
 export const budgetLimits = new Map([
