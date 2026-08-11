@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/page-header";
-import { ReportView } from "@/components/reports/report-view";
+import { ReportClient } from "@/components/reports/report-client";
 import { getAnalyticsData, getDashboardData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
 
@@ -12,7 +12,7 @@ export default async function ReportsPage() {
       <div className="hidden md:block">
         <PageHeader titleKey="page.reports.title" descriptionKey="page.reports.desc" />
       </div>
-      <ReportView analytics={analytics} netWorth={dashboard.netWorth} />
+      <ReportClient analytics={analytics} dashboard={dashboard} />
     </div>
   );
 }

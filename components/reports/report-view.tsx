@@ -181,10 +181,20 @@ function ExtendedReport({ currency }: { currency: string }) {
     void (async () => {
       try {
         const since = formatInputDate(addMonths(new Date(), -25));
-        const result = await apiClient.get<TransactionsPageData>(
-          `/transactions?limit=100&from=${since}`
-        );
-        if (!cancelled) setTransactions(result.transactions);
+        // One page holds a hundred operations at most, so a busy year used to
+        // be reported from its hundred most recent rows and quietly understate
+        // every total. Walk the pages instead, with a ceiling so a bad
+        // `hasNextPage` can never spin here forever.
+        const collected: TransactionsPageData["transactions"] = [];
+        for (let page = 1; page <= 60; page += 1) {
+          const result = await apiClient.get<TransactionsPageData>(
+            `/transactions?limit=100&page=${page}&from=${since}`
+          );
+          if (cancelled) return;
+          collected.push(...result.transactions);
+          if (!result.pagination.hasNextPage) break;
+        }
+        if (!cancelled) setTransactions(collected);
       } catch {
         /* offline / unavailable */
       }
