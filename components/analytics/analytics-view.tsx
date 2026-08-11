@@ -235,6 +235,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
           title={t("an.structure")}
           slices={data.topExpenseCategories}
           shareLabel={t("an.share")}
+          otherLabel={t("section.other")}
           empty={t("an.noData")}
         />
       </div>
@@ -246,6 +247,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
           title={t("an.structureIncome")}
           slices={data.topIncomeCategories}
           shareLabel={t("an.share")}
+          otherLabel={t("section.other")}
           empty={t("an.noIncome6m")}
         />
       </div>
@@ -261,26 +263,49 @@ function StructureCard({
   title,
   slices,
   shareLabel,
+  otherLabel,
   empty
 }: {
   title: string;
   slices: AnalyticsData["topExpenseCategories"];
   shareLabel: string;
+  otherLabel: string;
   empty: string;
 }) {
+  // The ranking keeps the six biggest categories, so the ring was drawn from a
+  // part of the period while its percentages counted the whole of it — the
+  // slices looked bigger than they were and the rest of the money was nowhere.
+  // Everything outside the top six comes back as one quiet slice, which keeps
+  // the ring whole and the legend a complete key to it.
+  const listedShare = slices.reduce((sum, item) => sum + item.share, 0);
+  const restShare = Math.round((100 - listedShare) * 10) / 10;
+  const shown =
+    restShare >= 0.5
+      ? [
+          ...slices,
+          {
+            categoryId: "__rest__",
+            category: otherLabel,
+            color: "hsl(var(--muted-foreground))",
+            total: 0,
+            share: restShare
+          }
+        ]
+      : slices;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        {slices.length > 0 ? (
+        {shown.length > 0 ? (
           <div className="flex items-center gap-4">
             <div className="h-52 w-52 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={slices}
+                    data={shown}
                     dataKey="share"
                     nameKey="category"
                     cx="50%"
@@ -289,7 +314,7 @@ function StructureCard({
                     outerRadius={90}
                     strokeWidth={2}
                   >
-                    {slices.map((entry) => (
+                    {shown.map((entry) => (
                       <Cell key={entry.category} fill={entry.color} />
                     ))}
                   </Pie>
@@ -301,7 +326,7 @@ function StructureCard({
               </ResponsiveContainer>
             </div>
             <div className="min-w-0 flex-1 space-y-1.5">
-              {slices.map((cat) => (
+              {shown.map((cat) => (
                 <div key={cat.category} className="flex items-center gap-2 text-sm">
                   <span
                     className="inline-block size-2.5 shrink-0 rounded-full"
