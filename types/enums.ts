@@ -12,6 +12,16 @@ export type RecommendationSeverity = "INFO" | "SUCCESS" | "WARNING" | "CRITICAL"
 
 export type SecurityRisk = "LOW" | "MEDIUM" | "HIGH";
 
+/**
+ * What kind of thing a holding is. Shares, bonds, funds and metal behave
+ * differently enough — in how they are priced and in how much of a portfolio
+ * they should be — that lumping them together as "securities" hid the answer to
+ * the first question anyone asks about a portfolio: what is it made of.
+ */
+export type AssetKind = "STOCK" | "BOND" | "FUND" | "GOLD" | "OTHER";
+
+export const ASSET_KINDS: AssetKind[] = ["STOCK", "BOND", "FUND", "GOLD", "OTHER"];
+
 export type RiskProfileCode = "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE";
 
 export type RecurrenceFrequency = "WEEKLY" | "MONTHLY" | "YEARLY";

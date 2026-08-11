@@ -4,6 +4,7 @@ import { subMonths } from "date-fns";
 import { z } from "zod";
 
 import type { ApiClient } from "@/lib/api/ApiClient";
+import { ASSET_KINDS, type AssetKind } from "@/types/enums";
 import type {
   AccountsPageData,
   AnalyticsData,
@@ -27,7 +28,7 @@ import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planne
 import { activeDebts } from "@/lib/debts/settled";
 import { parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
 import type { MarketAlert } from "@/lib/market/alerts";
-import { buildSectorStructure } from "@/lib/data/derive";
+import { buildAssetKindStructure, buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
 import {
   DEFAULT_CURRENCY_RATES,
@@ -237,6 +238,7 @@ function emptyInvestmentData(): InvestmentData {
     portfolio: [],
     structure: [],
     sectorStructure: [],
+    assetStructure: [],
     risks: [],
     education: []
   };
@@ -380,9 +382,13 @@ export class LocalApiClient implements ApiClient {
       return (await this.backup(state)) as T;
     }
     if (pathname === "/investments/search") {
+      // `kind` narrows the search to shares, bonds, funds or metal. Without it
+      // a search for "ОФЗ" drowned in every share whose name happens to match.
+      const kind = searchParams.get("kind");
       const results = await createMarketDataProvider().searchSecurities(
         searchParams.get("q") ?? "",
-        25
+        25,
+        kind && ASSET_KINDS.includes(kind as AssetKind) ? (kind as AssetKind) : undefined
       );
       return { results } as T;
     }
@@ -411,7 +417,8 @@ export class LocalApiClient implements ApiClient {
         watchlist: invData.watchlist,
         portfolio: invData.portfolio,
         structure: invData.structure,
-        sectorStructure: invData.sectorStructure
+        sectorStructure: invData.sectorStructure,
+        assetStructure: invData.assetStructure
       };
       await this.save(state);
       return invData as T;
@@ -1360,6 +1367,7 @@ export class LocalApiClient implements ApiClient {
     const position = {
       ticker: security.ticker,
       name: security.name,
+      assetKind: security.assetKind,
       sector: security.sector,
       quantity,
       averageBuyPrice,
@@ -1786,6 +1794,9 @@ export class LocalApiClient implements ApiClient {
       return {
         ticker: position.ticker,
         name: security?.name ?? position.name,
+        // Kind comes from the market when it can be resolved, and from what was
+        // stored when it cannot — so an offline portfolio keeps its grouping.
+        assetKind: security?.assetKind ?? position.assetKind ?? "STOCK",
         sector: security?.sector ?? position.sector,
         quantity: position.quantity,
         averageBuyPrice: position.averageBuyPrice,
@@ -1825,6 +1836,9 @@ export class LocalApiClient implements ApiClient {
       portfolio,
       structure: portfolio.map((row) => ({ name: row.ticker, value: row.share })),
       sectorStructure: buildSectorStructure(portfolio),
+      assetStructure: buildAssetKindStructure(portfolio, (kind) =>
+        translate(getClientLocale(), `inv.kind.${kind}`)
+      ),
       risks: analysis.risks,
       education: analysis.education
     };

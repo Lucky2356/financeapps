@@ -557,6 +557,19 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                 <p className="mt-2 text-sm text-muted-foreground">{t("inv.sectorDesc")}</p>
               </CardContent>
             </Card>
+
+            {/* Sectors answer "which industries"; this answers "shares or
+                bonds", and a portfolio can be beautifully spread across
+                industries while sitting entirely in one kind of asset. */}
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("inv.assetTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PortfolioStructureChart data={data.assetStructure} />
+                <p className="mt-2 text-sm text-muted-foreground">{t("inv.assetDesc")}</p>
+              </CardContent>
+            </Card>
           </section>
 
           {data.portfolio.length > 0 && (

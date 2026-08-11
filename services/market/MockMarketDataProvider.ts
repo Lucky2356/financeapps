@@ -1,9 +1,12 @@
 import { addDays, startOfDay, subDays } from "date-fns";
 
+import type { AssetKind } from "@/types/enums";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 
+// The stand-in universe is blue chips only, so the kind is stamped on when a
+// security is handed out rather than repeated on every row here.
 const securities: Array<
-  Omit<MarketSecurity, "price" | "changeDay" | "change30d"> & {
+  Omit<MarketSecurity, "price" | "changeDay" | "change30d" | "assetKind"> & {
     basePrice: number;
     volatility: number;
   }
@@ -191,6 +194,9 @@ export class MockMarketDataProvider implements MarketDataService {
       return {
         ticker: security.ticker,
         name: security.name,
+        // The offline stand-in carries blue chips only; anything it answers
+        // with is a share.
+        assetKind: "STOCK" as const,
         sector: security.sector,
         risk: security.risk,
         comment: security.comment,
@@ -237,9 +243,12 @@ export class MockMarketDataProvider implements MarketDataService {
     await this.getHistoricalPrices("SBER", subDays(new Date(), 1), new Date());
   }
 
-  async searchSecurities(query: string, limit = 20): Promise<MarketSecurity[]> {
+  async searchSecurities(query: string, limit = 20, kind?: AssetKind): Promise<MarketSecurity[]> {
     const q = query.trim().toUpperCase();
     if (!q) return [];
+    // Everything here is a share, so asking for anything else honestly returns
+    // nothing rather than shares wearing the wrong label.
+    if (kind && kind !== "STOCK") return [];
     const all = await this.getSecurities();
     return all
       .filter((s) => s.ticker.includes(q) || s.name.toUpperCase().includes(q))

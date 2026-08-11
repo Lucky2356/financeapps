@@ -133,6 +133,7 @@ export const watchlistRowSchema = z.object({
     .max(16)
     .transform((value) => value.toUpperCase()),
   name: z.string().trim().min(1).max(120),
+  assetKind: z.enum(["STOCK", "BOND", "FUND", "GOLD", "OTHER"]).default("STOCK"),
   sector: z.string().trim().min(1).max(80),
   price: z.coerce.number().finite().min(0),
   changeDay: z.coerce.number().finite(),
@@ -155,6 +156,9 @@ export const portfolioRowSchema = z.object({
     .max(16)
     .transform((value) => value.toUpperCase()),
   name: z.string().trim().min(1).max(120),
+  // What the holding is. Absent on positions saved before the app knew about
+  // anything but shares; readers treat that as a share.
+  assetKind: z.enum(["STOCK", "BOND", "FUND", "GOLD", "OTHER"]).optional(),
   sector: z.string().trim().min(1).max(80),
   quantity: z.coerce.number().finite().positive(),
   averageBuyPrice: z.coerce.number().finite().positive(),
@@ -326,6 +330,7 @@ export const localStateSchema = z.object({
     portfolio: [],
     structure: [],
     sectorStructure: [],
+    assetStructure: [],
     risks: [],
     education: []
   })),

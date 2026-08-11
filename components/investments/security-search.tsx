@@ -8,8 +8,12 @@ import type { MarketSecurity } from "@/services/market/MarketDataService";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { cn } from "@/lib/utils";
+import { ASSET_KINDS, type AssetKind } from "@/types/enums";
 
-// Live search over the whole MOEX universe so the user can add ANY listed stock.
+// Live search over the whole MOEX universe so the user can add ANY listed
+// security. It used to look at the shares board alone, which is why a bond
+// could not be found at all — the app was searching a list it was never on.
 export function SecuritySearch({
   currency,
   onSelect,
@@ -21,6 +25,7 @@ export function SecuritySearch({
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<AssetKind | null>(null);
   const [results, setResults] = useState<MarketSecurity[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +40,7 @@ export function SecuritySearch({
       void (async () => {
         try {
           const data = await apiClient.get<{ results: MarketSecurity[] }>(
-            `/investments/search?q=${encodeURIComponent(q)}`
+            `/investments/search?q=${encodeURIComponent(q)}${kind ? `&kind=${kind}` : ""}`
           );
           if (!cancelled) setResults(data.results ?? []);
         } catch {
@@ -49,7 +54,7 @@ export function SecuritySearch({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, kind]);
 
   return (
     <div className="space-y-2">
@@ -62,6 +67,32 @@ export function SecuritySearch({
           className="pl-9"
           autoFocus
         />
+      </div>
+      {/* Narrowing by kind matters most where the list is longest: there are
+          thousands of bonds, and a plain text search over all of them buries
+          the one you hold. */}
+      <div
+        className="flex flex-wrap gap-1.5"
+        role="group"
+        aria-label={t("inv.kind.label")}
+        data-testid="asset-kind-filter"
+      >
+        {[null, ...ASSET_KINDS.filter((item) => item !== "OTHER")].map((item) => (
+          <button
+            key={item ?? "all"}
+            type="button"
+            aria-pressed={kind === item}
+            onClick={() => setKind(item)}
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+              kind === item
+                ? "bg-secondary text-primary"
+                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+            )}
+          >
+            {item ? t(`inv.kind.${item}`) : t("inv.kind.all")}
+          </button>
+        ))}
       </div>
       {query.trim().length >= 1 ? (
         <div className="max-h-64 overflow-y-auto rounded-md border">
@@ -84,6 +115,9 @@ export function SecuritySearch({
                 <span className="min-w-0">
                   <span className="font-semibold">{security.ticker}</span>{" "}
                   <span className="text-muted-foreground">{security.name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t(`inv.kind.${security.assetKind}`)}
+                  </span>
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block font-medium">
