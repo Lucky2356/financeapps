@@ -2,8 +2,8 @@ import { test } from "@playwright/test";
 
 import { openSettled, seedExampleData } from "./helpers";
 
-// Not a check — a camera. Captures the screens the owner reported, in both
-// themes, so the fixes can be judged by eye. Run on demand:
+// Not a check — a camera. Captures the screens the owner reported, so the fixes
+// can be judged by eye. Run on demand:
 //   npx playwright test e2e/shots.spec.ts
 // Screenshots land in the folder given by SHOTS_DIR (default "shots/").
 const DIR = process.env.SHOTS_DIR ?? "shots";
@@ -36,7 +36,7 @@ test.describe("скриншоты", () => {
   test.use({ colorScheme: "light", viewport: { width: 1360, height: 2800 } });
 
   test("тёмная тема", async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await seedExampleData(page);
     await setTheme(page, "Тёмная");
 
@@ -52,22 +52,31 @@ test.describe("скриншоты", () => {
     await chartsPainted(page, "path.recharts-sector");
     await page.screenshot({ path: `${DIR}/05-аналитика-тёмная.png` });
 
-    // The delete confirmation, mid-flight.
-    await openSettled(page, "/transactions");
+    // The report — the screen that used to print a page of zeros.
+    await openSettled(page, "/reports");
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: `${DIR}/06-отчёт-тёмная.png` });
+
+    // The category dialog: icons by group, and the full colour grid.
+    await openSettled(page, "/categories");
     await page
-      .locator("tbody tr")
-      .first()
-      .getByRole("button", { name: "Удалить операцию" })
+      .getByTestId("category-column-EXPENSE")
+      .getByRole("button", { name: "Добавить" })
       .click();
     await page.waitForTimeout(600);
-    await page.screenshot({ path: `${DIR}/06-подтверждение-удаления.png` });
+    await page.screenshot({ path: `${DIR}/07-категория-иконки-и-цвета.png` });
     await page.keyboard.press("Escape");
 
-    // Quick add with the new transfer type selected.
-    await page.getByRole("button", { name: "Быстрое добавление операции" }).first().click();
-    await page.getByRole("dialog").getByRole("button", { name: "Перевод", exact: true }).click();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: `${DIR}/07-быстрое-добавление-перевод.png` });
+    // Adding a holding: the asset-type filter above the search results.
+    await openSettled(page, "/investments");
+    await page
+      .getByRole("button", { name: /Добавить (первую )?бумагу/ })
+      .first()
+      .click();
+    await page.getByRole("dialog").getByRole("button", { name: "Облигации" }).click();
+    await page.getByRole("dialog").getByRole("textbox").first().fill("ОФЗ");
+    await page.waitForTimeout(2500);
+    await page.screenshot({ path: `${DIR}/08-инвестиции-облигации.png` });
   });
 
   test("светлая тема", async ({ page }) => {
