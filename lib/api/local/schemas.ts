@@ -51,6 +51,9 @@ export const categorySchema = z.object({
   label: z.string().trim().min(1).max(100),
   kind: transactionTypeSchema,
   color: z.string().trim().min(1).max(32).default("#64748b"),
+  // The picture the owner chose. Unlisted keys are dropped on load, so a
+  // category would lose its icon on the next read without this line.
+  icon: z.string().trim().max(64).optional(),
   isEssential: z.boolean().optional(),
   isSubscription: z.boolean().optional()
 });
@@ -65,7 +68,10 @@ export const transactionRowSchema = z.object({
   date: z.string().min(1),
   description: z.string().nullable().optional().default(null),
   account: optionSchema,
-  category: optionSchema.extend({ color: z.string().trim().min(1).max(32).default("#64748b") }),
+  category: optionSchema.extend({
+    color: z.string().trim().min(1).max(32).default("#64748b"),
+    icon: z.string().trim().max(64).optional()
+  }),
   // Optional link to the recurring template that materialized this transaction
   recurringId: z.string().optional(),
   // Free-form cross-cutting labels beyond the category.
@@ -112,7 +118,10 @@ export const recurringRowSchema = z.object({
   daysUntilNext: z.coerce.number().finite().default(0),
   isDue: z.boolean().default(false),
   account: optionSchema,
-  category: optionSchema.extend({ color: z.string().trim().min(1).max(32).default("#64748b") }),
+  category: optionSchema.extend({
+    color: z.string().trim().min(1).max(32).default("#64748b"),
+    icon: z.string().trim().max(64).optional()
+  }),
   // Id of the transaction this template last created — kept in sync on edit/delete
   lastTransactionId: z.string().optional()
 });
@@ -269,7 +278,8 @@ export const localStateSchema = z.object({
     z.literal(6),
     z.literal(7),
     z.literal(8),
-    z.literal(9)
+    z.literal(9),
+    z.literal(10)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed

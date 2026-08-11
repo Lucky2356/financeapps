@@ -24,6 +24,8 @@ export type CategoryRow = {
   name: string;
   kind: "INCOME" | "EXPENSE";
   color: string;
+  /** lucide name from lib/categories/icons.ts; absent means the plain dot. */
+  icon?: string;
   isEssential: boolean;
   isSubscription: boolean;
   transactionCount: number;

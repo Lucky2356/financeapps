@@ -89,7 +89,7 @@ describe("runLocalStateMigrations", () => {
         { id: "cat-own", label: "Своя", color: "#123456" }
       ]
     };
-    const migrated = runLocalStateMigrations(state);
+    const migrated = runLocalStateMigrations(state, 9);
 
     expect(migrated.schemaVersion).toBe(9);
     const categories = migrated.categories as Array<{ id: string; color: string }>;
@@ -97,6 +97,27 @@ describe("runLocalStateMigrations", () => {
     expect(categories[0].color).toBe("#9184d9");
     // …while a colour the owner picked is left exactly as it was.
     expect(categories[1].color).toBe("#123456");
+  });
+
+  it("hands the seeded categories an icon and leaves the owner's alone (v10)", () => {
+    const state: RawLocalState = {
+      schemaVersion: 9,
+      categories: [
+        { id: "cat-food", label: "Продукты", color: "#9184d9" },
+        { id: "cat-own", label: "Своя", color: "#123456" },
+        { id: "cat-transport", label: "Транспорт", color: "#7f8fd8", icon: "Plane" }
+      ]
+    };
+    const migrated = runLocalStateMigrations(state);
+
+    expect(migrated.schemaVersion).toBe(10);
+    const categories = migrated.categories as Array<{ id: string; icon?: string }>;
+    // A category the app created gets the picture a fresh install would show…
+    expect(categories[0].icon).toBe("ShoppingCart");
+    // …one the owner added stays blank rather than being guessed at…
+    expect(categories[1].icon).toBeUndefined();
+    // …and a picture already chosen is never overwritten.
+    expect(categories[2].icon).toBe("Plane");
   });
 
   it("defaults a missing schemaVersion to 1 and migrates from there", () => {
