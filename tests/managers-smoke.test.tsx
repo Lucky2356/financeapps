@@ -56,6 +56,7 @@ const investmentData: InvestmentData = {
   portfolio: [],
   structure: [],
   sectorStructure: [],
+  assetStructure: [],
   risks: [],
   education: []
 };

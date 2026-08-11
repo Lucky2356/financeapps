@@ -578,6 +578,7 @@ export async function getInvestmentData(): Promise<InvestmentData> {
     portfolio: [],
     structure: [],
     sectorStructure: [],
+    assetStructure: [],
     risks: [],
     education: []
   };

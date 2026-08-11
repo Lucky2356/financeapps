@@ -1,4 +1,5 @@
 import type {
+  AssetKind,
   RecommendationSeverity,
   RecurrenceFrequency,
   SecurityRisk,
@@ -280,6 +281,8 @@ export type PurchaseLot = {
 export type PortfolioRow = {
   ticker: string;
   name: string;
+  /** Share, bond, fund or metal. Absent on positions saved before 1.9.0. */
+  assetKind?: AssetKind;
   sector: string;
   quantity: number;
   averageBuyPrice: number;
@@ -306,6 +309,8 @@ export type InvestmentData = {
   portfolio: PortfolioRow[];
   structure: ChartDatum[];
   sectorStructure: ChartDatum[];
+  /** Share of the portfolio by kind of asset (shares, bonds, funds, metal). */
+  assetStructure: ChartDatum[];
   risks: RecommendationView[];
   education: RecommendationView[];
 };

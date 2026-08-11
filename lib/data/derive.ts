@@ -2,6 +2,7 @@ import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ru } from "date-fns/locale";
 
 import { percent } from "@/lib/utils";
+import type { AssetKind } from "@/types/enums";
 import type {
   ChartDatum,
   MonthlyCashflowDatum,
@@ -59,6 +60,28 @@ export function buildCategoryExpenses(transactions: TransactionRow[]): ChartDatu
   }
 
   return [...byCategory.values()].sort((a, b) => b.value - a.value);
+}
+
+// What the portfolio is made of — shares, bonds, funds, metal. The sector split
+// answers "which industries", which is a different question and no substitute:
+// a portfolio can look beautifully spread across sectors and still be entirely
+// in shares.
+export function buildAssetKindStructure(
+  portfolio: PortfolioRow[],
+  labelOf: (kind: AssetKind) => string
+): ChartDatum[] {
+  const totals = new Map<AssetKind, number>();
+  const total = portfolio.reduce((sum, row) => sum + row.currentValue, 0);
+  if (total === 0) return [];
+
+  for (const row of portfolio) {
+    const kind = row.assetKind ?? "STOCK";
+    totals.set(kind, (totals.get(kind) ?? 0) + row.currentValue);
+  }
+
+  return [...totals.entries()]
+    .map(([kind, value]) => ({ name: labelOf(kind), value: percent(value, total) }))
+    .sort((left, right) => right.value - left.value);
 }
 
 export function buildSectorStructure(portfolio: PortfolioRow[]): ChartDatum[] {

@@ -54,7 +54,11 @@ export function HoldingCard({
         />
         <div className="min-w-0 flex-1">
           <p className="font-semibold leading-tight">{position.ticker}</p>
-          <p className="truncate text-xs text-muted-foreground">{position.name}</p>
+          {/* Kind before name: a bond and a share behave nothing alike, and the
+              ticker alone does not say which one you are looking at. */}
+          <p className="truncate text-xs text-muted-foreground">
+            {t(`inv.kind.${position.assetKind ?? "STOCK"}`)} · {position.name}
+          </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="font-semibold leading-tight">

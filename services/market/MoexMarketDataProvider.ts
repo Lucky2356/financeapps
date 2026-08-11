@@ -1,5 +1,6 @@
 import { format, subDays } from "date-fns";
 
+import type { AssetKind } from "@/types/enums";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 import { MockMarketDataProvider } from "./MockMarketDataProvider";
 
@@ -121,30 +122,112 @@ const STATIC_META: Record<Ticker, StaticMeta> = {
   }
 };
 
-const SECURITIES_URL =
-  "https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities.json" +
-  "?iss.meta=off&iss.only=securities,marketdata" +
-  "&securities.columns=SECID,SHORTNAME" +
-  // LAST = last trade (live during the session). LCURRENTPRICE = current price
-  // (populated intraday). MARKETPRICE = weighted average — only a last resort,
-  // because it is NOT the per-share price a user trades at (when the market is
-  // closed MOEX zeroes LAST/LCURRENTPRICE and only MARKETPRICE remains, which is
-  // why holdings used to show a wrong, lower number). TRADINGSTATUS tells us
-  // whether the live fields are trustworthy.
-  "&marketdata.columns=SECID,LAST,LCURRENTPRICE,LASTTOPREVPRICE,MARKETPRICE,TRADINGSTATUS" +
-  "&lang=ru";
+// Where the app looks for a security, and what it finds there.
+//
+// It used to look at exactly one board — Т+ shares — which is why a bond simply
+// could not be found: it is not listed there, and nothing said so. Each board
+// below answers for one kind of asset, and the kind travels with the security
+// from the search result into the saved position.
+type BoardSpec = {
+  board: string;
+  engine: string;
+  market: string;
+  /** null means "read it off SECTYPE" — one board can hold several kinds. */
+  assetKind: AssetKind | null;
+  /** Bonds are quoted as a percentage of face value, not in roubles. */
+  quotedInPercent?: boolean;
+  securityColumns: string[];
+  marketColumns: string[];
+  /** When set, only these tickers are taken (the FX board is mostly noise). */
+  only?: string[];
+};
 
-function historyUrl(ticker: string, from: string, till: string): string {
+// LAST = last trade (live during the session). LCURRENTPRICE = current price
+// (populated intraday). MARKETPRICE = weighted average — only a last resort,
+// because it is NOT the per-share price a user trades at (when the market is
+// closed MOEX zeroes LAST/LCURRENTPRICE and only MARKETPRICE remains, which is
+// why holdings used to show a wrong, lower number).
+const STOCK_MARKET_COLUMNS = ["SECID", "LAST", "LCURRENTPRICE", "LASTTOPREVPRICE", "MARKETPRICE"];
+
+export const BOARDS: BoardSpec[] = [
+  {
+    board: "TQBR",
+    engine: "stock",
+    market: "shares",
+    // Shares and exchange-traded funds share this board — SECTYPE tells them
+    // apart, so a fund is labelled a fund rather than an odd-looking share.
+    assetKind: null,
+    securityColumns: ["SECID", "SHORTNAME", "SECTYPE"],
+    marketColumns: STOCK_MARKET_COLUMNS
+  },
+  {
+    board: "TQOB",
+    engine: "stock",
+    market: "bonds",
+    assetKind: "BOND",
+    quotedInPercent: true,
+    securityColumns: ["SECID", "SHORTNAME", "FACEVALUE", "ACCRUEDINT", "FACEUNIT"],
+    marketColumns: STOCK_MARKET_COLUMNS
+  },
+  {
+    board: "TQCB",
+    engine: "stock",
+    market: "bonds",
+    assetKind: "BOND",
+    quotedInPercent: true,
+    securityColumns: ["SECID", "SHORTNAME", "FACEVALUE", "ACCRUEDINT", "FACEUNIT"],
+    marketColumns: STOCK_MARKET_COLUMNS
+  },
+  {
+    board: "CETS",
+    engine: "currency",
+    market: "selt",
+    assetKind: "GOLD",
+    // The whole FX board is thousands of instruments the app has no business
+    // offering; these two are the metals people actually hold.
+    only: ["GLDRUB_TOM", "SLVRUB_TOM"],
+    securityColumns: ["SECID", "SHORTNAME"],
+    marketColumns: ["SECID", "LAST", "LASTTOPREVPRICE", "MARKETPRICE"]
+  }
+];
+
+// MOEX security types on the shares board. Everything that is not a share or a
+// depositary receipt there is some flavour of fund (ETF, БПИФ, ПИФ).
+const SHARE_SECTYPES = new Set(["1", "2", "D"]);
+
+function securitiesUrl(spec: BoardSpec): string {
   return (
-    `https://iss.moex.com/iss/history/engines/stock/markets/shares/boards/TQBR/securities/${encodeURIComponent(ticker)}.json` +
-    `?iss.meta=off&iss.only=history&history.columns=TRADEDATE,CLOSE&from=${from}&till=${till}&lang=ru`
+    `https://iss.moex.com/iss/engines/${spec.engine}/markets/${spec.market}/boards/${spec.board}/securities.json` +
+    "?iss.meta=off&iss.only=securities,marketdata" +
+    `&securities.columns=${spec.securityColumns.join(",")}` +
+    `&marketdata.columns=${spec.marketColumns.join(",")}` +
+    "&lang=ru"
   );
 }
 
+function historyUrl(spec: BoardSpec, ticker: string, from: string, till: string): string {
+  const columns = spec.quotedInPercent ? "TRADEDATE,CLOSE,FACEVALUE,ACCINT" : "TRADEDATE,CLOSE";
+  return (
+    `https://iss.moex.com/iss/history/engines/${spec.engine}/markets/${spec.market}/boards/${spec.board}/securities/${encodeURIComponent(ticker)}.json` +
+    `?iss.meta=off&iss.only=history&history.columns=${columns}&from=${from}&till=${till}&lang=ru`
+  );
+}
+
+const SHARES_BOARD = BOARDS[0];
+
 // `live` is the trustworthy intraday price (LAST/LCURRENTPRICE), 0 when the market
 // is closed; `marketPrice` is the weighted-average last-resort. Callers prefer
-// live → last historical close → marketPrice.
-type SnapshotRow = { live: number; marketPrice: number; changeDay: number; name: string };
+// live → last historical close → marketPrice. Both are already in roubles: a
+// bond's percentage quote is converted here, once, so nothing downstream has to
+// know that bonds are priced differently from everything else.
+type SnapshotRow = {
+  live: number;
+  marketPrice: number;
+  changeDay: number;
+  name: string;
+  assetKind: AssetKind;
+  board: BoardSpec;
+};
 // Per-ticker daily stats from history: the official last close (what brokers show
 // out of hours) and the close-over-close day change.
 type HistoryStats = { lastClose: number; change30d: number; changeDay: number };
@@ -168,6 +251,28 @@ function parseMoexRows(table: { columns: string[]; data: (string | number | null
   }
   return map;
 }
+
+function numberOf(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function roundKopecks(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function kindFromSecType(secType: string): AssetKind {
+  return SHARE_SECTYPES.has(secType) ? "STOCK" : "FUND";
+}
+
+// What to show as the "sector" of a security the curated list says nothing
+// about — for a bond or a fund the kind itself is the most useful label.
+const SECTOR_BY_KIND: Record<AssetKind, string> = {
+  STOCK: "Прочее",
+  BOND: "Облигации",
+  FUND: "Фонды",
+  GOLD: "Драгоценные металлы",
+  OTHER: "Прочее"
+};
 
 // Price priority: trustworthy live price → official last close (out of hours) →
 // weighted-average market price as a final fallback.
@@ -205,6 +310,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         results.push({
           ticker,
           name: row?.name || meta.name,
+          assetKind: "STOCK",
           sector: meta.sector,
           risk: meta.risk,
           comment: meta.comment,
@@ -238,10 +344,12 @@ export class MoexMarketDataProvider implements MarketDataService {
 
   async getHistoricalPrices(ticker: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
     try {
+      const upper = ticker.toUpperCase();
       const prices = await this.fetchHistory(
-        ticker.toUpperCase(),
+        upper,
         format(from, "yyyy-MM-dd"),
-        format(to, "yyyy-MM-dd")
+        format(to, "yyyy-MM-dd"),
+        await this.boardOf(upper)
       );
       if (prices.length > 0) return prices;
       return this.fallback.getHistoricalPrices(ticker, from, to);
@@ -260,11 +368,34 @@ export class MoexMarketDataProvider implements MarketDataService {
     }
   }
 
-  // Live price + day-change snapshot (one request), cached briefly.
+  // Live price + day-change snapshot for every board the app knows, cached
+  // briefly. Boards are fetched in parallel and merged into one table, so a
+  // search or a price lookup never has to know where a security is listed.
   private async getSnapshot(): Promise<Map<string, SnapshotRow>> {
     if (snapshotCache && Date.now() - snapshotCache.ts < SNAPSHOT_TTL_MS) return snapshotCache.rows;
 
-    const response = await fetchWithTimeout(SECURITIES_URL);
+    const boards = await Promise.all(
+      BOARDS.map(async (spec) => {
+        try {
+          return await this.fetchBoard(spec);
+        } catch {
+          // One board being unreachable must not blank out the others: a broken
+          // bond feed should cost you bonds, not your shares.
+          return new Map<string, SnapshotRow>();
+        }
+      })
+    );
+
+    const rows = new Map<string, SnapshotRow>();
+    for (const board of boards) for (const [secid, row] of board) rows.set(secid, row);
+    if (rows.size === 0) throw new Error("MOEX ISS returned nothing on every board");
+
+    snapshotCache = { ts: Date.now(), rows };
+    return rows;
+  }
+
+  private async fetchBoard(spec: BoardSpec): Promise<Map<string, SnapshotRow>> {
+    const response = await fetchWithTimeout(securitiesUrl(spec));
     if (!response.ok) throw new Error(`MOEX ISS returned HTTP ${response.status}`);
     const json = (await response.json()) as {
       securities: { columns: string[]; data: (string | number | null)[][] };
@@ -277,39 +408,61 @@ export class MoexMarketDataProvider implements MarketDataService {
     // fetch backs both the curated list and full-universe search.
     const rows = new Map<string, SnapshotRow>();
     for (const [secid, md] of mdMap) {
+      if (spec.only && !spec.only.includes(secid)) continue;
+      const security = secMap.get(secid);
+      const faceValue = spec.quotedInPercent ? numberOf(security?.["FACEVALUE"]) : 0;
+      // A bond's price is a percentage of its face value, and that face value
+      // can be in dollars or yuan. Converting those would need an exchange rate
+      // per instrument, so the app offers the rouble ones rather than show a
+      // number in the wrong currency.
+      if (spec.quotedInPercent) {
+        if (String(security?.["FACEUNIT"] ?? "") !== "SUR" || faceValue <= 0) continue;
+      }
+
       const last = md["LAST"];
       const current = md["LCURRENTPRICE"];
       const market = md["MARKETPRICE"];
-      const live =
+      const quotedLive =
         typeof last === "number" && last > 0
           ? last
           : typeof current === "number" && current > 0
             ? current
             : 0;
-      const marketPrice = typeof market === "number" && market > 0 ? market : 0;
+      const quotedMarket = typeof market === "number" && market > 0 ? market : 0;
       // Keep the row if EITHER a live price or a market price exists — a closed
       // market has only marketPrice, and curated tickers will substitute the
       // historical close on top of it.
-      if (live <= 0 && marketPrice <= 0) continue;
+      if (quotedLive <= 0 && quotedMarket <= 0) continue;
+
+      // Percentage in, roubles out: the conversion happens once, here, so
+      // nothing downstream has to know that bonds are quoted differently.
+      const accrued = spec.quotedInPercent ? numberOf(security?.["ACCRUEDINT"]) : 0;
+      const toRoubles = (quote: number) =>
+        quote > 0 && spec.quotedInPercent
+          ? roundKopecks((quote / 100) * faceValue + accrued)
+          : quote;
+
       const pct = md["LASTTOPREVPRICE"]; // intraday day change in %
       rows.set(secid, {
-        live,
-        marketPrice,
+        live: toRoubles(quotedLive),
+        marketPrice: toRoubles(quotedMarket),
         changeDay: typeof pct === "number" ? Number(pct.toFixed(2)) : 0,
-        name: String(secMap.get(secid)?.["SHORTNAME"] ?? "")
+        name: String(security?.["SHORTNAME"] ?? ""),
+        assetKind: spec.assetKind ?? kindFromSecType(String(security?.["SECTYPE"] ?? "")),
+        board: spec
       });
     }
-    snapshotCache = { ts: Date.now(), rows };
     return rows;
   }
 
-  async searchSecurities(query: string, limit = 20): Promise<MarketSecurity[]> {
+  async searchSecurities(query: string, limit = 20, kind?: AssetKind): Promise<MarketSecurity[]> {
     const q = query.trim().toUpperCase();
     if (!q) return [];
     try {
       const snapshot = await this.getSnapshot();
       const matches: MarketSecurity[] = [];
       for (const [secid, row] of snapshot) {
+        if (kind && row.assetKind !== kind) continue;
         if (!secid.includes(q) && !row.name.toUpperCase().includes(q)) continue;
         const meta = STATIC_META[secid as Ticker];
         // Search spans the whole board, so we don't fetch per-ticker history here:
@@ -319,7 +472,8 @@ export class MoexMarketDataProvider implements MarketDataService {
         matches.push({
           ticker: secid,
           name: row.name || meta?.name || secid,
-          sector: meta?.sector ?? "Прочее",
+          assetKind: row.assetKind,
+          sector: meta?.sector ?? SECTOR_BY_KIND[row.assetKind],
           risk: meta?.risk ?? "MEDIUM",
           comment:
             meta?.comment ??
@@ -336,9 +490,9 @@ export class MoexMarketDataProvider implements MarketDataService {
         if (b.ticker === q) return 1;
         return a.ticker.localeCompare(b.ticker);
       });
-      return matches.length > 0 ? matches : this.fallback.searchSecurities(query, limit);
+      return matches.length > 0 ? matches : this.fallback.searchSecurities(query, limit, kind);
     } catch {
-      return this.fallback.searchSecurities(query, limit);
+      return this.fallback.searchSecurities(query, limit, kind);
     }
   }
 
@@ -356,7 +510,7 @@ export class MoexMarketDataProvider implements MarketDataService {
     await Promise.all(
       TICKERS.map(async (ticker) => {
         try {
-          const history = await this.fetchHistory(ticker, from, till);
+          const history = await this.fetchHistory(ticker, from, till, SHARES_BOARD);
           if (history.length === 0) return;
           const oldest = history[0].price;
           const lastClose = history[history.length - 1].price;
@@ -377,12 +531,23 @@ export class MoexMarketDataProvider implements MarketDataService {
     return map;
   }
 
+  // Which board a ticker trades on. An unknown ticker is assumed to be a share,
+  // which is what the app did before it knew about any other board.
+  private async boardOf(ticker: string): Promise<BoardSpec> {
+    try {
+      return (await this.getSnapshot()).get(ticker)?.board ?? SHARES_BOARD;
+    } catch {
+      return SHARES_BOARD;
+    }
+  }
+
   private async fetchHistory(
     ticker: string,
     from: string,
-    till: string
+    till: string,
+    spec: BoardSpec
   ): Promise<HistoricalPrice[]> {
-    const response = await fetchWithTimeout(historyUrl(ticker, from, till));
+    const response = await fetchWithTimeout(historyUrl(spec, ticker, from, till));
     if (!response.ok) throw new Error(`MOEX history returned HTTP ${response.status}`);
     const json = (await response.json()) as {
       history: { columns: string[]; data: (string | number | null)[][] };
@@ -391,12 +556,28 @@ export class MoexMarketDataProvider implements MarketDataService {
     const colDate = json.history.columns.indexOf("TRADEDATE");
     const colClose = json.history.columns.indexOf("CLOSE");
     if (colDate === -1 || colClose === -1) return [];
+    // History quotes a bond the same way the live feed does — as a percentage —
+    // so the same conversion happens here, per row, because face value and
+    // accrued interest travel with each trading day.
+    const colFace = json.history.columns.indexOf("FACEVALUE");
+    const colAccrued = json.history.columns.indexOf("ACCINT");
 
     const result: HistoricalPrice[] = [];
     for (const row of json.history.data) {
       const rawDate = row[colDate];
       const rawClose = row[colClose];
       if (typeof rawDate !== "string" || typeof rawClose !== "number" || rawClose <= 0) continue;
+      if (spec.quotedInPercent) {
+        const face = colFace === -1 ? 0 : numberOf(row[colFace]);
+        if (face <= 0) continue;
+        const accrued = colAccrued === -1 ? 0 : numberOf(row[colAccrued]);
+        result.push({
+          ticker,
+          date: new Date(rawDate),
+          price: roundKopecks((rawClose / 100) * face + accrued)
+        });
+        continue;
+      }
       result.push({ ticker, date: new Date(rawDate), price: rawClose });
     }
     result.sort((a, b) => a.date.getTime() - b.date.getTime());
