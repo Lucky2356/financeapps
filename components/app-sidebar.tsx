@@ -9,15 +9,17 @@ import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
-import { activeNavHref, MAIN_NAV } from "@/lib/navigation";
+import { activeNavHref, DESKTOP_NAV } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { t } = useI18n();
-  // A short list of top-level destinations keeps the app approachable; related
-  // screens live as tabs inside their hub (see HubTabs), not as sidebar buttons.
-  const activeHref = activeNavHref(pathname);
+  // The full-height sidebar has room for the screens the owner opens daily, so
+  // they are here in the open. Only what belongs together — the ledger, the
+  // plans, the reading — is still grouped, and those groups show their tabs
+  // above the page (see HubTabs).
+  const activeHref = activeNavHref(pathname, "desktop");
 
   return (
     <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
@@ -51,7 +53,7 @@ export function AppSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-        {MAIN_NAV.map((item) => {
+        {DESKTOP_NAV.map((item) => {
           const active = activeHref === item.href;
           const Icon = item.icon;
           return (

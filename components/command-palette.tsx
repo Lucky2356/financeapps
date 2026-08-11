@@ -49,7 +49,7 @@ const navCommands: Command[] = [
     icon: ReceiptText
   },
   { id: "nav-accounts", labelKey: "nav.accounts", href: "/accounts", group: "nav", icon: Wallet },
-  { id: "nav-budgets", labelKey: "nav.budgets", href: "/budgets", group: "nav", icon: CreditCard },
+  { id: "nav-budgets", labelKey: "nav.limits", href: "/budgets", group: "nav", icon: CreditCard },
   { id: "nav-goals", labelKey: "nav.goals", href: "/goals", group: "nav", icon: PiggyBank },
   {
     id: "nav-recurring",
