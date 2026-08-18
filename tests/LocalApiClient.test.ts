@@ -108,6 +108,33 @@ describe("LocalApiClient", () => {
     expect(month(withTransfers).expense).toBe(150000);
   });
 
+  it("keeps transfers off the home screen unless they are asked for", async () => {
+    const client = createClient();
+    const from = await seedAccount(client, { name: "Счёт А", balance: "100000" });
+    const to = await seedAccount(client, { name: "Счёт Б", balance: "0" });
+
+    await client.post("/transactions", {
+      action: "transfer",
+      amount: "150000",
+      fromAccountId: from.id,
+      toAccountId: to.id,
+      date: todayInput(),
+      description: "В накопления"
+    });
+
+    const plain = await client.get<DashboardData>("/dashboard");
+    const counted = await client.get<DashboardData>("/dashboard?transfers=1");
+
+    // Nothing was earned or spent, so neither ring has a slice to draw.
+    expect(plain.categoryIncome).toHaveLength(0);
+    expect(plain.categoryExpenses).toHaveLength(0);
+    // Asked for, the same pair shows up on both sides at once.
+    expect(counted.categoryIncome.some((slice) => slice.name === "Переводы")).toBe(true);
+    expect(counted.categoryExpenses.some((slice) => slice.name === "Переводы")).toBe(true);
+    // Capital is read off balances, which the transfer left where they were.
+    expect(plain.netWorth).toBe(counted.netWorth);
+  });
+
   it("reports plan against fact for a month, and the gap between them", async () => {
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта", balance: "0" });

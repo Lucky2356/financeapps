@@ -13,8 +13,12 @@ test("план вводится, факт и разница считаются",
   // an empty plan. Filling the plan must make the gap appear by itself.
   const row = page.locator("tr").filter({ hasText: "Продукты" }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });
-  const fact = Number((await row.locator("td").nth(2).innerText()).replace(/[^\d]/g, ""));
-  expect(fact).toBeGreaterThan(0);
+  // The screen renders the empty server shell first and swaps in the device's
+  // own figures a moment later; the fact column is what tells the two apart.
+  const factCell = async () =>
+    Number((await row.locator("td").nth(2).innerText()).replace(/[^\d]/g, ""));
+  await expect.poll(factCell, { timeout: 20_000 }).toBeGreaterThan(0);
+  const fact = await factCell();
 
   await row.locator("input[type=number]").fill(String(fact + 1000));
   await row.locator("input[type=number]").blur();
@@ -39,10 +43,12 @@ test("план сохраняется и месяц можно переключ�
 
   // Another month is a clean sheet, and coming back finds the figure again.
   const picker = page.getByLabel("Месяц");
+  // The picker starts out holding only the current month — the server shell
+  // knows nothing — and fills in when the device's own months arrive.
+  await expect.poll(() => picker.locator("option").count(), { timeout: 15_000 }).toBeGreaterThan(1);
   const options = await picker
     .locator("option")
     .evaluateAll((list) => list.map((option) => (option as HTMLOptionElement).value));
-  expect(options.length).toBeGreaterThan(1);
   await picker.selectOption(options[1]);
   await expect
     .poll(async () => row.locator("input[type=number]").inputValue(), { timeout: 15_000 })

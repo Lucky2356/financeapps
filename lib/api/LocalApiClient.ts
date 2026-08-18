@@ -391,7 +391,10 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/rules") return this.rulesPage(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(state) as T;
-    if (pathname === "/dashboard") return (await this.dashboard(state)) as T;
+    if (pathname === "/dashboard")
+      return (await this.dashboard(
+        this.countingState(state, searchParams.get("transfers") === "1")
+      )) as T;
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") {
@@ -1955,6 +1958,15 @@ export class LocalApiClient implements ApiClient {
       value
     );
     return { recorded: true, value };
+  }
+
+  // The same state with transfers between own accounts left out of the
+  // operations, so everything derived downstream — month totals, category
+  // breakdowns, budget spending, the health score — counts the same rows. The
+  // balances are untouched, and so is capital: a transfer never changed them.
+  private countingState(state: LocalState, includeTransfers: boolean): LocalState {
+    if (includeTransfers) return state;
+    return { ...state, transactions: countableRows(state.transactions, false) };
   }
 
   private async dashboard(state: LocalState): Promise<DashboardData> {
