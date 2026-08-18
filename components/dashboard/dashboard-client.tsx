@@ -21,6 +21,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
 import {
   DEFAULT_LAYOUT,
   isHidden,
@@ -48,7 +49,12 @@ export function DashboardClient({
   initialForecast: ForecastData;
 }) {
   const { t } = useI18n();
-  const { data } = useApiPageData(initialData, "/dashboard");
+  // The home screen follows the same choice as the reports: a transfer between
+  // own accounts is not income and not spending, so it does not get to be the
+  // largest slice of both rings at once. The checkbox itself lives in the
+  // analytics section — this screen is a summary, not a place to fiddle.
+  const [includeTransfers] = useIncludeTransfers();
+  const { data } = useApiPageData(initialData, `/dashboard${transfersQuery(includeTransfers)}`);
   const { data: forecast } = useApiPageData(initialForecast, "/forecast");
   const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT);
 
