@@ -174,6 +174,12 @@ export type TransactionRow = {
   category: Option & { color: string; icon?: string };
   tags?: string[];
   splitGroupId?: string;
+  /**
+   * Set on both halves of a transfer between the user's own accounts. Such a
+   * pair moves money without earning or spending it, so totals may leave it
+   * out — see lib/transactions/transfers.ts.
+   */
+  transferId?: string;
 };
 
 export type RecurringTransactionRow = {

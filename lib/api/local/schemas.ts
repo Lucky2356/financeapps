@@ -78,7 +78,9 @@ export const transactionRowSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(40)).default([]),
   // Shared id linking the rows of a single split (each row is a normal
   // transaction, so all existing aggregations count them without double-counting).
-  splitGroupId: z.string().optional()
+  splitGroupId: z.string().optional(),
+  // Shared id linking the two halves of a transfer between own accounts.
+  transferId: z.string().optional()
 });
 export const budgetRowSchema = z.object({
   id: z.string().min(1),

@@ -1,7 +1,9 @@
 "use client";
 
 import { ReportView } from "@/components/reports/report-view";
+import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
 import type { AnalyticsData } from "@/lib/data";
 import type { DashboardData } from "@/types/finance";
 
@@ -17,8 +19,25 @@ export function ReportClient({
   analytics: AnalyticsData;
   dashboard: DashboardData;
 }) {
-  const { data: analyticsData } = useApiPageData(analytics, "/analytics");
+  const [includeTransfers, setIncludeTransfers] = useIncludeTransfers();
+  const { data: analyticsData } = useApiPageData(
+    analytics,
+    `/analytics${transfersQuery(includeTransfers)}`
+  );
+  // Capital is read off account balances, which a transfer never changes, so
+  // the setting has nothing to say about it.
   const { data: dashboardData } = useApiPageData(dashboard, "/dashboard");
 
-  return <ReportView analytics={analyticsData} netWorth={dashboardData.netWorth} />;
+  return (
+    <div className="space-y-4">
+      <div className="no-print flex justify-end">
+        <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
+      </div>
+      <ReportView
+        analytics={analyticsData}
+        netWorth={dashboardData.netWorth}
+        includeTransfers={includeTransfers}
+      />
+    </div>
+  );
 }
