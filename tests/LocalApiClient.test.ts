@@ -14,7 +14,7 @@ import type {
   SettingsPageData,
   TransactionsPageData
 } from "@/lib/data";
-import type { DashboardData, InvestmentData } from "@/types/finance";
+import type { DashboardData, InvestmentData, PlanFactPageData } from "@/types/finance";
 
 function todayInput() {
   // Local date (matches the app's formatInputDate), so month bucketing stays
@@ -106,6 +106,85 @@ describe("LocalApiClient", () => {
     expect(month(withoutTransfers).expense).toBe(0);
     expect(month(withTransfers).income).toBe(180000);
     expect(month(withTransfers).expense).toBe(150000);
+  });
+
+  it("reports plan against fact for a month, and the gap between them", async () => {
+    const client = createClient();
+    const account = await seedAccount(client, { name: "Карта", balance: "0" });
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const salary = categories.categories.find((category) => category.kind === "INCOME");
+    const food = categories.categories.find((category) => category.name === "Продукты");
+    const month = todayInput().slice(0, 7);
+
+    await client.post("/transactions", {
+      amount: "90000",
+      type: "INCOME",
+      accountId: account.id,
+      categoryId: salary?.id,
+      date: todayInput(),
+      description: "Зарплата"
+    });
+    await client.post("/transactions", {
+      amount: "27000",
+      type: "EXPENSE",
+      accountId: account.id,
+      categoryId: food?.id,
+      date: todayInput(),
+      description: "Продукты"
+    });
+
+    await client.post("/plan", { month, categoryId: salary?.id, amount: "100000" });
+    await client.post("/plan", { month, categoryId: food?.id, amount: "25000" });
+    await client.post("/plan", { month, note: "Гасим рассрочку" });
+
+    const plan = await client.get<PlanFactPageData>(`/plan?month=${month}`);
+    const income = plan.income.find((row) => row.categoryId === salary?.id);
+    const spending = plan.expense.find((row) => row.categoryId === food?.id);
+
+    // The gap is plan − fact on both halves, so one rule reads both tables.
+    expect(income).toMatchObject({ plan: 100000, fact: 90000, diff: 10000 });
+    expect(spending).toMatchObject({ plan: 25000, fact: 27000, diff: -2000 });
+    expect(plan.totals.income).toMatchObject({ plan: 100000, fact: 90000 });
+    expect(plan.totals.expense).toMatchObject({ plan: 25000, fact: 27000 });
+    expect(plan.note).toBe("Гасим рассрочку");
+
+    // Opening balance: the account started at zero and everything since is in
+    // this month, so the month opened with nothing.
+    expect(plan.totals.opening.fact).toBe(0);
+    // opening + income − expense, on both sides.
+    expect(plan.totals.result.fact).toBe(63000);
+    expect(plan.totals.result.plan).toBe(75000);
+  });
+
+  it("clears a planned amount when it is set back to zero", async () => {
+    const client = createClient();
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const food = categories.categories.find((category) => category.name === "Продукты");
+    const month = todayInput().slice(0, 7);
+
+    await client.post("/plan", { month, categoryId: food?.id, amount: "25000" });
+    await client.post("/plan", { month, categoryId: food?.id, amount: "0" });
+
+    const plan = await client.get<PlanFactPageData>(`/plan?month=${month}`);
+    expect(plan.expense.find((row) => row.categoryId === food?.id)?.plan).toBe(0);
+    expect(plan.totals.expense.plan).toBe(0);
+  });
+
+  it("keeps each month's plan to itself", async () => {
+    const client = createClient();
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const food = categories.categories.find((category) => category.name === "Продукты");
+
+    await client.post("/plan", { month: "2026-03", categoryId: food?.id, amount: "11000" });
+    await client.post("/plan", { month: "2026-04", categoryId: food?.id, amount: "12000" });
+
+    const march = await client.get<PlanFactPageData>("/plan?month=2026-03");
+    const april = await client.get<PlanFactPageData>("/plan?month=2026-04");
+    expect(march.expense.find((row) => row.categoryId === food?.id)?.plan).toBe(11000);
+    expect(april.expense.find((row) => row.categoryId === food?.id)?.plan).toBe(12000);
+    // Both months are offered in the picker, newest first.
+    expect(march.months).toContain("2026-04");
+    expect([...march.months].sort((a, b) => b.localeCompare(a))).toEqual(march.months);
   });
 
   it("manages watchlist and portfolio positions in desktop local mode", async () => {
