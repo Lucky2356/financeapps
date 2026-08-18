@@ -632,18 +632,7 @@ export async function getImportPageData(): Promise<ImportPageData> {
 }
 
 export async function getPlanFactPageData(): Promise<PlanFactPageData> {
-  const month = new Date().toISOString().slice(0, 7);
-  const empty = { plan: 0, fact: 0, diff: 0 };
-  return {
-    source: "database",
-    currency: "RUB",
-    month,
-    months: [month],
-    income: [],
-    expense: [],
-    totals: { income: empty, expense: empty, opening: empty, result: empty },
-    note: ""
-  };
+  return { source: "database", currency: "RUB", columns: [], months: [] };
 }
 
 export async function getCategoriesPageData(): Promise<CategoriesPageData> {

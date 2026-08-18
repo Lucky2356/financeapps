@@ -163,24 +163,32 @@ describe("LocalApiClient", () => {
     await client.post("/plan", { month, categoryId: salary?.id, amount: "100000" });
     await client.post("/plan", { month, categoryId: food?.id, amount: "25000" });
     await client.post("/plan", { month, note: "Гасим рассрочку" });
+    await client.post("/plan", { month, factNote: "Саша в отпуске" });
 
-    const plan = await client.get<PlanFactPageData>(`/plan?month=${month}`);
-    const income = plan.income.find((row) => row.categoryId === salary?.id);
-    const spending = plan.expense.find((row) => row.categoryId === food?.id);
+    const plan = await client.get<PlanFactPageData>("/plan");
+    const row = plan.months.find((entry) => entry.month === month);
 
-    // The gap is plan − fact on both halves, so one rule reads both tables.
-    expect(income).toMatchObject({ plan: 100000, fact: 90000, diff: 10000 });
-    expect(spending).toMatchObject({ plan: 25000, fact: 27000, diff: -2000 });
-    expect(plan.totals.income).toMatchObject({ plan: 100000, fact: 90000 });
-    expect(plan.totals.expense).toMatchObject({ plan: 25000, fact: 27000 });
-    expect(plan.note).toBe("Гасим рассрочку");
+    // The gap is plan − fact in every cell, so the whole grid reads one way.
+    expect(row?.cells[salary?.id ?? ""]).toMatchObject({ plan: 100000, fact: 90000, diff: 10000 });
+    expect(row?.cells[food?.id ?? ""]).toMatchObject({ plan: 25000, fact: 27000, diff: -2000 });
+    expect(row?.income).toMatchObject({ plan: 100000, fact: 90000 });
+    expect(row?.expense).toMatchObject({ plan: 25000, fact: 27000 });
+    // Each band carries its own comment.
+    expect(row?.note).toBe("Гасим рассрочку");
+    expect(row?.factNote).toBe("Саша в отпуске");
 
     // Opening balance: the account started at zero and everything since is in
     // this month, so the month opened with nothing.
-    expect(plan.totals.opening.fact).toBe(0);
+    expect(row?.opening.fact).toBe(0);
     // opening + income − expense, on both sides.
-    expect(plan.totals.result.fact).toBe(63000);
-    expect(plan.totals.result.plan).toBe(75000);
+    expect(row?.result.fact).toBe(63000);
+    expect(row?.result.plan).toBe(75000);
+
+    // Income columns come before spending ones, and every category has a
+    // column of its own whether or not money went through it.
+    const kinds = plan.columns.map((column) => column.kind);
+    expect(kinds.indexOf("EXPENSE")).toBeGreaterThan(kinds.lastIndexOf("INCOME"));
+    expect(plan.columns).toHaveLength(categories.categories.length);
   });
 
   it("clears a planned amount when it is set back to zero", async () => {
@@ -192,26 +200,41 @@ describe("LocalApiClient", () => {
     await client.post("/plan", { month, categoryId: food?.id, amount: "25000" });
     await client.post("/plan", { month, categoryId: food?.id, amount: "0" });
 
-    const plan = await client.get<PlanFactPageData>(`/plan?month=${month}`);
-    expect(plan.expense.find((row) => row.categoryId === food?.id)?.plan).toBe(0);
-    expect(plan.totals.expense.plan).toBe(0);
+    const plan = await client.get<PlanFactPageData>("/plan");
+    const row = plan.months.find((entry) => entry.month === month);
+    expect(row?.cells[food?.id ?? ""]?.plan).toBe(0);
+    expect(row?.expense.plan).toBe(0);
   });
 
-  it("keeps each month's plan to itself", async () => {
+  it("keeps each month's plan to itself, newest month first", async () => {
     const client = createClient();
     const categories = await client.get<CategoriesPageData>("/categories");
     const food = categories.categories.find((category) => category.name === "Продукты");
+    const key = food?.id ?? "";
 
-    await client.post("/plan", { month: "2026-03", categoryId: food?.id, amount: "11000" });
-    await client.post("/plan", { month: "2026-04", categoryId: food?.id, amount: "12000" });
+    await client.post("/plan", { month: "2026-03", categoryId: key, amount: "11000" });
+    await client.post("/plan", { month: "2026-04", categoryId: key, amount: "12000" });
 
-    const march = await client.get<PlanFactPageData>("/plan?month=2026-03");
-    const april = await client.get<PlanFactPageData>("/plan?month=2026-04");
-    expect(march.expense.find((row) => row.categoryId === food?.id)?.plan).toBe(11000);
-    expect(april.expense.find((row) => row.categoryId === food?.id)?.plan).toBe(12000);
-    // Both months are offered in the picker, newest first.
-    expect(march.months).toContain("2026-04");
-    expect([...march.months].sort((a, b) => b.localeCompare(a))).toEqual(march.months);
+    const plan = await client.get<PlanFactPageData>("/plan");
+    const months = plan.months.map((entry) => entry.month);
+    expect(plan.months.find((entry) => entry.month === "2026-03")?.cells[key]?.plan).toBe(11000);
+    expect(plan.months.find((entry) => entry.month === "2026-04")?.cells[key]?.plan).toBe(12000);
+    expect([...months].sort((a, b) => b.localeCompare(a))).toEqual(months);
+  });
+
+  it("offers rows for months ahead only when asked to plan that far", async () => {
+    const client = createClient();
+    const current = todayInput().slice(0, 7);
+    const [year, index] = current.split("-").map(Number);
+    const next = `${new Date(year, index, 1).getFullYear()}-${String(
+      new Date(year, index, 1).getMonth() + 1
+    ).padStart(2, "0")}`;
+
+    const now = await client.get<PlanFactPageData>("/plan");
+    expect(now.months.map((entry) => entry.month)).not.toContain(next);
+
+    const ahead = await client.get<PlanFactPageData>("/plan?ahead=1");
+    expect(ahead.months[0]?.month).toBe(next);
   });
 
   it("manages watchlist and portfolio positions in desktop local mode", async () => {

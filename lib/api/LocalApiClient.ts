@@ -82,9 +82,10 @@ import type {
   ExpectedDividend,
   InvestmentData,
   LiabilityRow,
+  PlanFactCell,
+  PlanFactColumn,
+  PlanFactMonth,
   PlanFactPageData,
-  PlanFactRow,
-  PlanFactTotals,
   RealizedInvestmentEvent,
   TargetAllocation,
   TransactionRow
@@ -129,7 +130,7 @@ type LocalState = {
   marketAlerts: MarketAlert[];
   categories: CategoryOption[];
   plans: Array<{ month: string; categoryId: string; amount: number }>;
-  planNotes: Array<{ month: string; note: string }>;
+  planNotes: Array<{ month: string; note: string; factNote: string }>;
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
   goals: GoalsPageData["goals"];
@@ -353,8 +354,16 @@ function isBackupReminderDue(lastBackupAt: string | null) {
 export const OPENING_BALANCE_ID = "__opening__";
 const MONTH_KEY = /^\d{4}-\d{2}$/;
 
-function totalsOf(plan: number, fact: number): PlanFactTotals {
-  return { plan, fact, diff: roundMoney(plan - fact) };
+function cellOf(plan: number, fact: number): PlanFactCell {
+  const rounded = { plan: roundMoney(plan), fact: roundMoney(fact) };
+  return { ...rounded, diff: roundMoney(rounded.plan - rounded.fact) };
+}
+
+// "2026-08" three months on is "2026-11". Done through Date so December rolls
+// the year over on its own.
+function shiftMonth(month: string, step: number): string {
+  const [year, index] = month.split("-").map(Number);
+  return monthKeyOf(new Date(year, index - 1 + step, 1));
 }
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -462,7 +471,7 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/plan")
       return this.planFactPage(
         state,
-        searchParams.get("month") ?? undefined,
+        Number(searchParams.get("ahead") ?? 0),
         searchParams.get("transfers") === "1"
       ) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
@@ -2142,94 +2151,117 @@ export class LocalApiClient implements ApiClient {
     return { source: "database", categories };
   }
 
-  // Plan versus fact for one month: what the owner intended, what the ledger
-  // actually holds, and the gap between them. The plan is typed in by hand —
-  // nothing in the data can guess it — while fact and difference are read off
-  // the operations, so the table can never disagree with the ledger.
-  private planFactPage(
-    state: LocalState,
-    month?: string,
-    includeTransfers = false
-  ): PlanFactPageData {
-    const selected = month && MONTH_KEY.test(month) ? month : monthKeyOf(new Date());
-    const rows = countableRows(state.transactions, includeTransfers).filter((transaction) =>
-      transaction.date.startsWith(selected)
-    );
-
-    const factByCategory = new Map<string, number>();
-    for (const transaction of rows) {
-      factByCategory.set(
+  // Plan versus fact, laid out the way the owner's own spreadsheet is: every
+  // category is a column, every month a row, in three bands — what was
+  // intended, what the ledger holds, and the gap between them. Only the plan is
+  // typed in; the other two bands are read off the operations, so the grid can
+  // never disagree with the ledger.
+  private planFactPage(state: LocalState, ahead = 0, includeTransfers = false): PlanFactPageData {
+    // Both sides collected as month → category → amount, so a month row is one
+    // lookup rather than another pass over every operation.
+    const fact = new Map<string, Map<string, number>>();
+    for (const transaction of countableRows(state.transactions, includeTransfers)) {
+      const month = transaction.date.slice(0, 7);
+      const byCategory = fact.get(month) ?? new Map<string, number>();
+      byCategory.set(
         transaction.category.id,
-        (factByCategory.get(transaction.category.id) ?? 0) + transaction.amount
+        (byCategory.get(transaction.category.id) ?? 0) + transaction.amount
       );
+      fact.set(month, byCategory);
     }
-    const planByCategory = new Map(
-      state.plans
-        .filter((entry) => entry.month === selected)
-        .map((entry) => [entry.categoryId, entry.amount] as const)
+
+    const plan = new Map<string, Map<string, number>>();
+    for (const entry of state.plans) {
+      const byCategory = plan.get(entry.month) ?? new Map<string, number>();
+      byCategory.set(entry.categoryId, entry.amount);
+      plan.set(entry.month, byCategory);
+    }
+
+    const current = monthKeyOf(new Date());
+    const keys = new Set(
+      [current, ...plan.keys(), ...fact.keys()].filter((key) => MONTH_KEY.test(key))
     );
+    // A month still to come has no operations of its own; it is here only
+    // because the owner asked for a row to plan that far ahead.
+    for (let step = 1; step <= Math.min(Math.max(Math.trunc(ahead) || 0, 0), 24); step += 1)
+      keys.add(shiftMonth(current, step));
+    const monthKeys = [...keys].sort((left, right) => right.localeCompare(left));
 
-    const build = (kind: "INCOME" | "EXPENSE"): PlanFactRow[] =>
-      state.categories
-        .filter((category) => category.kind === kind)
-        .map((category) => {
-          const plan = roundMoney(planByCategory.get(category.id) ?? 0);
-          const fact = roundMoney(factByCategory.get(category.id) ?? 0);
-          return {
-            categoryId: category.id,
-            category: category.label,
-            color: category.color,
-            ...(category.icon ? { icon: category.icon } : {}),
-            plan,
-            fact,
-            diff: roundMoney(plan - fact)
-          };
-        })
-        .sort((left, right) => right.fact - left.fact || right.plan - left.plan);
-
-    const income = build("INCOME");
-    const expense = build("EXPENSE");
-    const sum = (list: PlanFactRow[], key: "plan" | "fact") =>
-      roundMoney(list.reduce((total, row) => total + row[key], 0));
-
-    // What the month started with. The plan side is the owner's own figure; the
-    // fact side is derived — today's balances minus everything that has
-    // happened since the month began.
-    const openingPlan = roundMoney(planByCategory.get(OPENING_BALANCE_ID) ?? 0);
-    const openingFact = this.openingBalance(state, selected);
-    const totals = {
-      income: totalsOf(sum(income, "plan"), sum(income, "fact")),
-      expense: totalsOf(sum(expense, "plan"), sum(expense, "fact")),
-      opening: totalsOf(openingPlan, openingFact),
-      result: totalsOf(
-        roundMoney(openingPlan + sum(income, "plan") - sum(expense, "plan")),
-        roundMoney(openingFact + sum(income, "fact") - sum(expense, "fact"))
-      )
+    // One column order for every band and every month, or the eye loses the
+    // column it was following: income first, then spending, each sorted by how
+    // much money actually passes through it.
+    const weight = (categoryId: string) => {
+      let total = 0;
+      for (const byCategory of fact.values()) total += byCategory.get(categoryId) ?? 0;
+      for (const byCategory of plan.values()) total += byCategory.get(categoryId) ?? 0;
+      return total;
     };
+    const columns: PlanFactColumn[] = state.categories
+      .map((category) => ({
+        categoryId: category.id,
+        label: category.label,
+        color: category.color,
+        ...(category.icon ? { icon: category.icon } : {}),
+        kind: category.kind
+      }))
+      .sort(
+        (left, right) =>
+          (left.kind === right.kind ? 0 : left.kind === "INCOME" ? -1 : 1) ||
+          weight(right.categoryId) - weight(left.categoryId) ||
+          left.label.localeCompare(right.label)
+      );
 
-    // Months to offer: everything that has a plan or an operation, plus the
-    // current one, newest first.
-    const months = [
-      ...new Set([
-        monthKeyOf(new Date()),
-        selected,
-        ...state.plans.map((entry) => entry.month),
-        ...state.transactions.map((transaction) => transaction.date.slice(0, 7))
-      ])
-    ]
-      .filter((key) => MONTH_KEY.test(key))
-      .sort((left, right) => right.localeCompare(left));
+    const notes = new Map(state.planNotes.map((entry) => [entry.month, entry] as const));
+    const months: PlanFactMonth[] = monthKeys.map((month) => {
+      const factOf = fact.get(month);
+      const planOf = plan.get(month);
+      const cells: Record<string, PlanFactCell> = {};
+      let incomePlan = 0;
+      let incomeFact = 0;
+      let expensePlan = 0;
+      let expenseFact = 0;
 
-    return {
-      source: "database",
-      currency: state.currency,
-      month: selected,
-      months,
-      income,
-      expense,
-      totals,
-      note: state.planNotes.find((entry) => entry.month === selected)?.note ?? ""
-    };
+      for (const column of columns) {
+        const cell = cellOf(
+          planOf?.get(column.categoryId) ?? 0,
+          factOf?.get(column.categoryId) ?? 0
+        );
+        cells[column.categoryId] = cell;
+        if (column.kind === "INCOME") {
+          incomePlan += cell.plan;
+          incomeFact += cell.fact;
+        } else {
+          expensePlan += cell.plan;
+          expenseFact += cell.fact;
+        }
+      }
+
+      // What the month started with. The plan side is the owner's own figure;
+      // the fact side is derived — today's balances wound back through
+      // everything recorded since the month began.
+      const opening = cellOf(
+        planOf?.get(OPENING_BALANCE_ID) ?? 0,
+        this.openingBalance(state, month)
+      );
+      const income = cellOf(incomePlan, incomeFact);
+      const expense = cellOf(expensePlan, expenseFact);
+
+      return {
+        month,
+        opening,
+        cells,
+        income,
+        expense,
+        result: cellOf(
+          opening.plan + income.plan - expense.plan,
+          opening.fact + income.fact - expense.fact
+        ),
+        note: notes.get(month)?.note ?? "",
+        factNote: notes.get(month)?.factNote ?? ""
+      };
+    });
+
+    return { source: "database", currency: state.currency, columns, months };
   }
 
   // Money on hand when `month` started: today's balances, wound back through
@@ -2254,13 +2286,19 @@ export class LocalApiClient implements ApiClient {
     const month = String(input.month ?? "");
     if (!MONTH_KEY.test(month)) throw new Error("Укажите месяц в виде ГГГГ-ММ.");
 
-    if (input.note !== undefined) {
-      const note = String(input.note).trim().slice(0, 500);
+    if (input.note !== undefined || input.factNote !== undefined) {
+      // Either comment can be written on its own, so the one not being edited
+      // is carried over rather than wiped.
+      const clean = (value: unknown) => String(value).trim().slice(0, 500);
+      const current = state.planNotes.find((entry) => entry.month === month);
+      const note = input.note !== undefined ? clean(input.note) : (current?.note ?? "");
+      const factNote =
+        input.factNote !== undefined ? clean(input.factNote) : (current?.factNote ?? "");
       state.planNotes = [
         ...state.planNotes.filter((entry) => entry.month !== month),
-        ...(note ? [{ month, note }] : [])
+        ...(note || factNote ? [{ month, note, factNote }] : [])
       ];
-      return { month, note };
+      return { month, note, factNote };
     }
 
     const categoryId = String(input.categoryId ?? "");

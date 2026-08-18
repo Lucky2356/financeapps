@@ -57,6 +57,12 @@ test.describe("скриншоты", () => {
     await page.waitForTimeout(1200);
     await page.screenshot({ path: `${DIR}/06-отчёт-тёмная.png` });
 
+    // Plan against fact: the grid that replaced the spreadsheet — categories
+    // across the top, months down the side, three bands.
+    await openSettled(page, "/plan");
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `${DIR}/09-план-факт-тёмная.png` });
+
     // The category dialog: icons by group, and the full colour grid.
     await openSettled(page, "/categories");
     await page
@@ -91,5 +97,9 @@ test.describe("скриншоты", () => {
     await openSettled(page, "/transactions");
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${DIR}/04-учёт-светлая.png` });
+
+    await openSettled(page, "/plan");
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `${DIR}/10-план-факт-светлая.png` });
   });
 });
