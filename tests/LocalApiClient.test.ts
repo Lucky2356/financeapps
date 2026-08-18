@@ -5,6 +5,7 @@ import { LATEST_LOCAL_STATE_VERSION } from "@/lib/storage/migrations/runLocalSta
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type {
   AccountsPageData,
+  AnalyticsData,
   BudgetsPageData,
   CategoriesPageData,
   GoalsPageData,
@@ -68,6 +69,43 @@ describe("LocalApiClient", () => {
       "EXPENSE",
       "INCOME"
     ]);
+  });
+
+  it("keeps transfers out of analytics unless they are asked for", async () => {
+    const client = createClient();
+    const from = await seedAccount(client, { name: "Счёт А", balance: "100000" });
+    const to = await seedAccount(client, { name: "Счёт Б", balance: "0" });
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const salary = categories.categories.find((category) => category.kind === "INCOME");
+
+    // One real income, and a transfer of five times as much between own
+    // accounts. Counting the transfer would make the month look like a fortune
+    // earned and a fortune spent.
+    await client.post("/transactions", {
+      amount: "30000",
+      type: "INCOME",
+      accountId: from.id,
+      categoryId: salary?.id,
+      date: todayInput(),
+      description: "Зарплата"
+    });
+    await client.post("/transactions", {
+      action: "transfer",
+      amount: "150000",
+      fromAccountId: from.id,
+      toAccountId: to.id,
+      date: todayInput(),
+      description: "В накопления"
+    });
+
+    const withoutTransfers = await client.get<AnalyticsData>("/analytics");
+    const withTransfers = await client.get<AnalyticsData>("/analytics?transfers=1");
+    const month = (data: AnalyticsData) => data.monthlyCashflow[data.monthlyCashflow.length - 1];
+
+    expect(month(withoutTransfers).income).toBe(30000);
+    expect(month(withoutTransfers).expense).toBe(0);
+    expect(month(withTransfers).income).toBe(180000);
+    expect(month(withTransfers).expense).toBe(150000);
   });
 
   it("manages watchlist and portfolio positions in desktop local mode", async () => {

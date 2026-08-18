@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { buildPeriodReport, buildYoY } from "@/lib/reports/period-report";
+import { countableRows } from "@/lib/transactions/transfers";
 import { ExportService } from "@/services/export/ExportService";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { useI18n } from "@/lib/i18n/context";
@@ -30,10 +31,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export function ReportView({
   analytics,
-  netWorth
+  netWorth,
+  includeTransfers = false
 }: {
   analytics: AnalyticsData;
   netWorth: number;
+  includeTransfers?: boolean;
 }) {
   const { t, locale } = useI18n();
   const currency = analytics.currency;
@@ -162,14 +165,20 @@ export function ReportView({
         </CardContent>
       </Card>
 
-      <ExtendedReport currency={currency} />
+      <ExtendedReport currency={currency} includeTransfers={includeTransfers} />
     </div>
   );
 }
 
 // Interactive report over an arbitrary date range with a year-over-year card and
 // CSV export. Pulls recent history client-side (works in both web and desktop).
-function ExtendedReport({ currency }: { currency: string }) {
+function ExtendedReport({
+  currency,
+  includeTransfers
+}: {
+  currency: string;
+  includeTransfers: boolean;
+}) {
   const { t } = useI18n();
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
   const [transactions, setTransactions] = useState<TransactionsPageData["transactions"]>([]);
@@ -204,8 +213,14 @@ function ExtendedReport({ currency }: { currency: string }) {
     };
   }, []);
 
-  const report = useMemo(() => buildPeriodReport(transactions, from, to), [transactions, from, to]);
-  const yoy = useMemo(() => buildYoY(transactions, Number(to.slice(0, 4))), [transactions, to]);
+  // The same choice the rest of the page follows: a transfer between own
+  // accounts is not earning and not spending.
+  const counted = useMemo(
+    () => countableRows(transactions, includeTransfers),
+    [transactions, includeTransfers]
+  );
+  const report = useMemo(() => buildPeriodReport(counted, from, to), [counted, from, to]);
+  const yoy = useMemo(() => buildYoY(counted, Number(to.slice(0, 4))), [counted, to]);
 
   async function exportCsv() {
     const csv = new ExportService().reportToCsv(report);

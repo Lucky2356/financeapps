@@ -52,6 +52,7 @@ import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
+import { countableRows } from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
@@ -436,7 +437,8 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/investments/targets")
       return { targets: state.targetAllocations ?? [], currency: state.currency } as T;
     if (pathname === "/categories") return this.categoriesPage(state) as T;
-    if (pathname === "/analytics") return this.analyticsPage(state) as T;
+    if (pathname === "/analytics")
+      return this.analyticsPage(state, searchParams.get("transfers") === "1") as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
 
     throw new Error(`Local API route is not implemented: ${pathname}`);
@@ -690,10 +692,16 @@ export class LocalApiClient implements ApiClient {
       date: new Date(input.date).toISOString(),
       description: input.description?.trim() || null,
       account: { id: account.id, label: account.name },
-      category: { id: category.id, label: category.label, color: category.color },
+      category: {
+        id: category.id,
+        label: category.label,
+        color: category.color,
+        ...(category.icon ? { icon: category.icon } : {})
+      },
       ...(linkedRecurringId ? { recurringId: linkedRecurringId } : {}),
       ...(tags.length ? { tags } : {}),
-      ...(input.splitGroupId ? { splitGroupId: String(input.splitGroupId) } : {})
+      ...(input.splitGroupId ? { splitGroupId: String(input.splitGroupId) } : {}),
+      ...(input.transferId ? { transferId: String(input.transferId) } : {})
     };
 
     state.transactions = [
@@ -757,6 +765,7 @@ export class LocalApiClient implements ApiClient {
         accountId: fromAccount.id,
         categoryId: expenseCategory.id,
         date,
+        transferId,
         description: `${description} [transfer:${transferId}]`
       },
       "POST"
@@ -769,6 +778,7 @@ export class LocalApiClient implements ApiClient {
         accountId: toAccount.id,
         categoryId: incomeCategory.id,
         date,
+        transferId,
         description: `${description} [transfer:${transferId}]`
       },
       "POST"
@@ -2095,7 +2105,12 @@ export class LocalApiClient implements ApiClient {
     return { source: "database", categories };
   }
 
-  private analyticsPage(state: LocalState): AnalyticsData {
+  // `includeTransfers` decides whether moving money between the owner's own
+  // accounts counts as income and spending. It normally does not: the pair of
+  // rows a transfer writes made "Переводы" the largest category on both sides
+  // at once, which says nothing about what was earned or spent.
+  private analyticsPage(state: LocalState, includeTransfers = false): AnalyticsData {
+    const transactions = countableRows(state.transactions, includeTransfers);
     const now = new Date();
     const months: Array<{ key: string; label: string; start: string; end: string }> = [];
     for (let i = 5; i >= 0; i--) {
@@ -2114,7 +2129,7 @@ export class LocalApiClient implements ApiClient {
     }
 
     const monthlyCashflow = months.map((m) => {
-      const rows = state.transactions.filter((t) => t.date.startsWith(m.key));
+      const rows = transactions.filter((t) => t.date.startsWith(m.key));
       const income = rows.filter((r) => r.type === "INCOME").reduce((sum, r) => sum + r.amount, 0);
       const expense = rows
         .filter((r) => r.type === "EXPENSE")
@@ -2141,7 +2156,7 @@ export class LocalApiClient implements ApiClient {
 
     // Top expense categories over 6 months
     const sixMonthsAgoKey = months[0].key;
-    const expenseTxs = state.transactions.filter(
+    const expenseTxs = transactions.filter(
       (t) => t.type === "EXPENSE" && t.date >= sixMonthsAgoKey
     );
     const totalExpense = expenseTxs.reduce((sum, t) => sum + t.amount, 0);
@@ -2169,7 +2184,7 @@ export class LocalApiClient implements ApiClient {
     const derived = buildAnalyticsDerived(monthlyCashflow, topExpenseCategories, getClientLocale());
     // Income has no budgets to read totals off, so it is ranked straight from
     // the operations over the same six months.
-    const topIncomeCategories = topCategories(state.transactions, {
+    const topIncomeCategories = topCategories(transactions, {
       type: "INCOME",
       since: sixMonthsAgoKey,
       colorOf: (categoryId) => state.categories.find((item) => item.id === categoryId)?.color
