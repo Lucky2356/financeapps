@@ -19,7 +19,7 @@ import {
 import { CategoryIcon } from "@/components/category-icon";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -34,6 +34,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { TransactionsPageData } from "@/lib/data";
+import type { CategoryOption } from "@/lib/data/demo-seed";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
@@ -1010,14 +1011,18 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   );
 }
 
-// Multi-category filter: toggleable chips that mirror the selection into a
-// hidden `categoryId` input (comma-separated) so it submits with the filter form.
-// A single `?categoryId=x` (from a drill-down link) still selects that one chip.
+// Multi-category filter. The selection is mirrored into a hidden `categoryId`
+// input (comma-separated) so it submits with the filter form; a single
+// `?categoryId=x` from a drill-down link still arrives selected.
+//
+// Income and spending are listed apart on purpose: some names exist on both
+// sides — "Переводы" most of all — and a flat list gave no way to tell which
+// one you were ticking.
 function CategoryMultiSelect({
   categories,
   initial
 }: {
-  categories: { id: string; label: string }[];
+  categories: CategoryOption[];
   initial: string[];
 }) {
   const { t } = useI18n();
@@ -1048,6 +1053,17 @@ function CategoryMultiSelect({
     };
   }, [open]);
 
+  const groups = [
+    { kind: "INCOME" as const, title: t("cat.income") },
+    { kind: "EXPENSE" as const, title: t("cat.expense") }
+  ]
+    .map((group) => ({
+      ...group,
+      items: categories.filter((category) => category.kind === group.kind)
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const allIds = categories.map((category) => category.id);
   const label =
     selected.length === 0
       ? t("tx.allCategories")
@@ -1070,43 +1086,71 @@ function CategoryMultiSelect({
         />
       </button>
       {open ? (
-        <div className="absolute z-50 mt-1 max-h-64 w-full min-w-56 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
+        <div
+          data-testid="category-filter-menu"
+          className="absolute z-50 mt-1 max-h-72 w-full min-w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+        >
           {categories.length === 0 ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("tx.allCategories")}</p>
           ) : (
             <>
-              {selected.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setSelected([])}
-                  className="mb-1 w-full rounded-sm px-2 py-1.5 text-left text-xs text-primary hover:bg-accent"
-                >
-                  {t("tx.clearCategories")}
-                </button>
-              ) : null}
-              {categories.map((category) => {
-                const active = selected.includes(category.id);
+              <div className="mb-1 flex gap-1 border-b px-1 pb-1.5">
+                <BulkButton onClick={() => setSelected(allIds)}>{t("tx.checkAll")}</BulkButton>
+                <BulkButton onClick={() => setSelected([])}>{t("tx.uncheckAll")}</BulkButton>
+              </div>
+              {groups.map((group) => {
+                const groupIds = group.items.map((category) => category.id);
+                const allPicked = groupIds.every((groupId) => selected.includes(groupId));
                 return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    onClick={() => toggle(category.id)}
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-                  >
-                    <span
-                      className={cn(
-                        "flex size-4 shrink-0 items-center justify-center rounded border",
-                        active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-input"
-                      )}
-                    >
-                      {active ? <Check className="size-3" /> : null}
-                    </span>
-                    <span className="truncate">{category.label}</span>
-                  </button>
+                  <div key={group.kind} className="mb-1 last:mb-0">
+                    <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1.5">
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {group.title}
+                      </span>
+                      <BulkButton
+                        onClick={() =>
+                          setSelected((prev) =>
+                            allPicked
+                              ? prev.filter((prevId) => !groupIds.includes(prevId))
+                              : [...new Set([...prev, ...groupIds])]
+                          )
+                        }
+                      >
+                        {allPicked ? t("tx.uncheckAll") : t("tx.checkAll")}
+                      </BulkButton>
+                    </div>
+                    {group.items.map((category) => {
+                      const active = selected.includes(category.id);
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => toggle(category.id)}
+                          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                        >
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded border",
+                              active
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-input"
+                            )}
+                          >
+                            {active ? <Check className="size-3" /> : null}
+                          </span>
+                          <span
+                            className="flex size-5 shrink-0 items-center justify-center rounded-full text-white"
+                            style={{ backgroundColor: category.color }}
+                          >
+                            <CategoryIcon name={category.icon} className="size-3" />
+                          </span>
+                          <span className="truncate">{category.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 );
               })}
             </>
@@ -1114,6 +1158,18 @@ function CategoryMultiSelect({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function BulkButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-sm px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-accent"
+    >
+      {children}
+    </button>
   );
 }
 
