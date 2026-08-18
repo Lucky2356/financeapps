@@ -17,7 +17,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 10;
+export const LATEST_LOCAL_STATE_VERSION = 11;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -123,6 +123,14 @@ export const localStateMigrations: LocalStateMigration[] = [
         })
       };
     }
+  },
+  {
+    from: 10,
+    to: 11,
+    // v11 added the plan/fact tables (planned amounts per month and a note per
+    // month). An install without them simply has no plan yet, which the Zod
+    // defaults express as empty lists, so the migration only stamps the version.
+    migrate: (state) => ({ ...state, schemaVersion: 11 })
   }
 ];
 

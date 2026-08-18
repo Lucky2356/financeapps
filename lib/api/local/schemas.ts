@@ -274,6 +274,19 @@ export const investmentSchema = z.object({
     )
     .default([])
 });
+// One planned amount for one category in one month. `categoryId` is a real
+// category, except for OPENING_BALANCE_ID which holds the money the month was
+// started with — a figure the owner sets, since no operation records it.
+export const planEntrySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  categoryId: z.string().min(1),
+  amount: z.coerce.number().finite().min(0)
+});
+export const planNoteSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  note: z.string().trim().max(500)
+});
+
 export const localStateSchema = z.object({
   schemaVersion: z.union([
     z.literal(1),
@@ -285,7 +298,8 @@ export const localStateSchema = z.object({
     z.literal(7),
     z.literal(8),
     z.literal(9),
-    z.literal(10)
+    z.literal(10),
+    z.literal(11)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
@@ -319,6 +333,9 @@ export const localStateSchema = z.object({
   riskProfileCode: z.enum(["CONSERVATIVE", "MODERATE", "AGGRESSIVE"]).default("MODERATE"),
   accounts: z.array(accountSchema),
   categories: z.array(categorySchema),
+  // Plan/fact: what the owner intends to earn and spend per month.
+  plans: z.array(planEntrySchema).default([]),
+  planNotes: z.array(planNoteSchema).default([]),
   transactions: z.array(transactionRowSchema).default([]),
   budgets: z.array(budgetRowSchema).default([]),
   goals: z.array(goalRowSchema).default([]),

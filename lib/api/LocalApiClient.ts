@@ -82,6 +82,9 @@ import type {
   ExpectedDividend,
   InvestmentData,
   LiabilityRow,
+  PlanFactPageData,
+  PlanFactRow,
+  PlanFactTotals,
   RealizedInvestmentEvent,
   TargetAllocation,
   TransactionRow
@@ -98,7 +101,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -125,6 +128,8 @@ type LocalState = {
   targetAllocations: TargetAllocation[];
   marketAlerts: MarketAlert[];
   categories: CategoryOption[];
+  plans: Array<{ month: string; categoryId: string; amount: number }>;
+  planNotes: Array<{ month: string; note: string }>;
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
   goals: GoalsPageData["goals"];
@@ -277,6 +282,8 @@ function createInitialState(): LocalState {
     targetAllocations: [],
     marketAlerts: [],
     categories: defaultCategories,
+    plans: [],
+    planNotes: [],
     transactions: [],
     budgets: [],
     goals: [],
@@ -317,6 +324,8 @@ function createBlankState(): LocalState {
     targetAllocations: [],
     marketAlerts: [],
     categories: [],
+    plans: [],
+    planNotes: [],
     transactions: [],
     budgets: [],
     goals: [],
@@ -338,6 +347,14 @@ function isBackupReminderDue(lastBackupAt: string | null) {
   const last = new Date(lastBackupAt).getTime();
   if (!Number.isFinite(last)) return true;
   return Date.now() - last > 14 * 24 * 60 * 60 * 1000;
+}
+
+// The plan row that is not a category: the money the month opened with.
+export const OPENING_BALANCE_ID = "__opening__";
+const MONTH_KEY = /^\d{4}-\d{2}$/;
+
+function totalsOf(plan: number, fact: number): PlanFactTotals {
+  return { plan, fact, diff: roundMoney(plan - fact) };
 }
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -439,6 +456,12 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/categories") return this.categoriesPage(state) as T;
     if (pathname === "/analytics")
       return this.analyticsPage(state, searchParams.get("transfers") === "1") as T;
+    if (pathname === "/plan")
+      return this.planFactPage(
+        state,
+        searchParams.get("month") ?? undefined,
+        searchParams.get("transfers") === "1"
+      ) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
 
     throw new Error(`Local API route is not implemented: ${pathname}`);
@@ -579,6 +602,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
     if (pathname === "/categories")
       return this.saveAndReturn<TResponse>(state, this.upsertCategory(state, body, method));
+    if (pathname === "/plan")
+      return this.saveAndReturn<TResponse>(state, this.savePlan(state, body));
     if (pathname === "/profiles/create") {
       const input = toFormObject(body);
       const profile = await this.createProfile(input.name ?? "Профиль", input.color ?? "#0d9488");
@@ -2103,6 +2128,145 @@ export class LocalApiClient implements ApiClient {
       transactionCount: state.transactions.filter((t) => t.category.id === cat.id).length
     }));
     return { source: "database", categories };
+  }
+
+  // Plan versus fact for one month: what the owner intended, what the ledger
+  // actually holds, and the gap between them. The plan is typed in by hand —
+  // nothing in the data can guess it — while fact and difference are read off
+  // the operations, so the table can never disagree with the ledger.
+  private planFactPage(
+    state: LocalState,
+    month?: string,
+    includeTransfers = false
+  ): PlanFactPageData {
+    const selected = month && MONTH_KEY.test(month) ? month : monthKeyOf(new Date());
+    const rows = countableRows(state.transactions, includeTransfers).filter((transaction) =>
+      transaction.date.startsWith(selected)
+    );
+
+    const factByCategory = new Map<string, number>();
+    for (const transaction of rows) {
+      factByCategory.set(
+        transaction.category.id,
+        (factByCategory.get(transaction.category.id) ?? 0) + transaction.amount
+      );
+    }
+    const planByCategory = new Map(
+      state.plans
+        .filter((entry) => entry.month === selected)
+        .map((entry) => [entry.categoryId, entry.amount] as const)
+    );
+
+    const build = (kind: "INCOME" | "EXPENSE"): PlanFactRow[] =>
+      state.categories
+        .filter((category) => category.kind === kind)
+        .map((category) => {
+          const plan = roundMoney(planByCategory.get(category.id) ?? 0);
+          const fact = roundMoney(factByCategory.get(category.id) ?? 0);
+          return {
+            categoryId: category.id,
+            category: category.label,
+            color: category.color,
+            ...(category.icon ? { icon: category.icon } : {}),
+            plan,
+            fact,
+            diff: roundMoney(plan - fact)
+          };
+        })
+        .sort((left, right) => right.fact - left.fact || right.plan - left.plan);
+
+    const income = build("INCOME");
+    const expense = build("EXPENSE");
+    const sum = (list: PlanFactRow[], key: "plan" | "fact") =>
+      roundMoney(list.reduce((total, row) => total + row[key], 0));
+
+    // What the month started with. The plan side is the owner's own figure; the
+    // fact side is derived — today's balances minus everything that has
+    // happened since the month began.
+    const openingPlan = roundMoney(planByCategory.get(OPENING_BALANCE_ID) ?? 0);
+    const openingFact = this.openingBalance(state, selected);
+    const totals = {
+      income: totalsOf(sum(income, "plan"), sum(income, "fact")),
+      expense: totalsOf(sum(expense, "plan"), sum(expense, "fact")),
+      opening: totalsOf(openingPlan, openingFact),
+      result: totalsOf(
+        roundMoney(openingPlan + sum(income, "plan") - sum(expense, "plan")),
+        roundMoney(openingFact + sum(income, "fact") - sum(expense, "fact"))
+      )
+    };
+
+    // Months to offer: everything that has a plan or an operation, plus the
+    // current one, newest first.
+    const months = [
+      ...new Set([
+        monthKeyOf(new Date()),
+        selected,
+        ...state.plans.map((entry) => entry.month),
+        ...state.transactions.map((transaction) => transaction.date.slice(0, 7))
+      ])
+    ]
+      .filter((key) => MONTH_KEY.test(key))
+      .sort((left, right) => right.localeCompare(left));
+
+    return {
+      source: "database",
+      currency: state.currency,
+      month: selected,
+      months,
+      income,
+      expense,
+      totals,
+      note: state.planNotes.find((entry) => entry.month === selected)?.note ?? ""
+    };
+  }
+
+  // Money on hand when `month` started: today's balances, wound back through
+  // everything recorded since. A transfer nets to zero here whatever the reader
+  // chose, because its two halves are ordinary rows on two accounts.
+  private openingBalance(state: LocalState, month: string): number {
+    const since = `${month}-01`;
+    const flowSince = state.transactions
+      .filter((transaction) => transaction.date >= since)
+      .reduce(
+        (total, transaction) =>
+          total + (transaction.type === "INCOME" ? transaction.amount : -transaction.amount),
+        0
+      );
+    return roundMoney(this.accounts(state).totalBalance - flowSince);
+  }
+
+  // One cell of the plan, or the month's note. An amount of zero clears the
+  // cell rather than storing a zero, so an untouched category stays untouched.
+  private savePlan(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const month = String(input.month ?? "");
+    if (!MONTH_KEY.test(month)) throw new Error("Укажите месяц в виде ГГГГ-ММ.");
+
+    if (input.note !== undefined) {
+      const note = String(input.note).trim().slice(0, 500);
+      state.planNotes = [
+        ...state.planNotes.filter((entry) => entry.month !== month),
+        ...(note ? [{ month, note }] : [])
+      ];
+      return { month, note };
+    }
+
+    const categoryId = String(input.categoryId ?? "");
+    if (!categoryId) throw new Error("Выберите категорию.");
+    if (
+      categoryId !== OPENING_BALANCE_ID &&
+      !state.categories.some((category) => category.id === categoryId)
+    )
+      throw new Error("Категория не найдена.");
+
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount < 0) throw new Error("Введите сумму от нуля.");
+
+    const rest = state.plans.filter(
+      (entry) => !(entry.month === month && entry.categoryId === categoryId)
+    );
+    state.plans = amount > 0 ? [...rest, { month, categoryId, amount: roundMoney(amount) }] : rest;
+    return { month, categoryId, amount: roundMoney(amount) };
   }
 
   // `includeTransfers` decides whether moving money between the owner's own

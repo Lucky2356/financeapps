@@ -306,6 +306,44 @@ export type PortfolioRow = {
   lots?: PurchaseLot[];
 };
 
+/** One line of the plan/fact table: what was planned, what happened, the gap. */
+export type PlanFactRow = {
+  categoryId: string;
+  category: string;
+  color: string;
+  icon?: string;
+  plan: number;
+  fact: number;
+  /**
+   * plan − fact, the way a spreadsheet does it: positive means the plan was
+   * not used up (good for spending, bad for income), negative means it was
+   * overrun. One rule for both halves, so a column is read the same way twice.
+   */
+  diff: number;
+};
+
+export type PlanFactTotals = { plan: number; fact: number; diff: number };
+
+export type PlanFactPageData = {
+  source: DataSource;
+  currency: string;
+  /** The month being shown, "YYYY-MM". */
+  month: string;
+  /** Months offered in the picker: everything with data, newest first. */
+  months: string[];
+  income: PlanFactRow[];
+  expense: PlanFactRow[];
+  totals: {
+    income: PlanFactTotals;
+    expense: PlanFactTotals;
+    /** Money on hand when the month started. */
+    opening: PlanFactTotals;
+    /** opening + income − expense. */
+    result: PlanFactTotals;
+  };
+  note: string;
+};
+
 export type InvestmentData = {
   source: DataSource;
   currency: string;

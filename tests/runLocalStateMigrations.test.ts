@@ -108,7 +108,7 @@ describe("runLocalStateMigrations", () => {
         { id: "cat-transport", label: "Транспорт", color: "#7f8fd8", icon: "Plane" }
       ]
     };
-    const migrated = runLocalStateMigrations(state);
+    const migrated = runLocalStateMigrations(state, 10);
 
     expect(migrated.schemaVersion).toBe(10);
     const categories = migrated.categories as Array<{ id: string; icon?: string }>;

@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LineChart,
   Repeat,
+  Scale,
   Settings,
   Tag,
   TrendingUp,
@@ -51,6 +52,7 @@ const TAB = {
   },
   forecast: { href: "/forecast", label: "Прогноз", labelKey: "nav.forecast", icon: LineChart },
   reports: { href: "/reports", label: "Отчёты", labelKey: "nav.reports", icon: FileText },
+  plan: { href: "/plan", label: "План/факт", labelKey: "nav.planFact", icon: Scale },
   budgets: { href: "/budgets", label: "Лимиты", labelKey: "nav.limits", icon: Gauge },
   goals: { href: "/goals", label: "Цели", labelKey: "nav.goals", icon: Flag },
   recurring: {
@@ -83,7 +85,8 @@ export const HUB_GROUPS: HubGroup[] = [
       // a bottom-bar slot of their own.
       TAB.analytics,
       TAB.forecast,
-      TAB.reports
+      TAB.reports,
+      TAB.plan
     ]
   },
   {
@@ -130,7 +133,7 @@ export const DESKTOP_HUBS: HubGroup[] = [
   // payments by another name, so they live beside the scheduled ones.
   { landing: "/recurring", tabs: [TAB.recurring, TAB.subscriptions] },
   // Reading the money rather than recording it.
-  { landing: "/analytics", tabs: [TAB.analytics, TAB.forecast, TAB.reports] }
+  { landing: "/analytics", tabs: [TAB.analytics, TAB.forecast, TAB.reports, TAB.plan] }
 ];
 
 export function hubsFor(surface: NavSurface): HubGroup[] {
