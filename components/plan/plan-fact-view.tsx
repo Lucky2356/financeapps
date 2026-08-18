@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { Plus } from "lucide-react";
+import { useState, type ReactNode, type ThHTMLAttributes } from "react";
 
-import { CategoryIcon } from "@/components/category-icon";
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
-import { AmountInput } from "@/components/ui/amount-input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CategoryIcon } from "@/components/category-icon";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
@@ -16,31 +16,35 @@ import { OPENING_BALANCE_ID } from "@/lib/api/LocalApiClient";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
-import type { PlanFactPageData, PlanFactRow, PlanFactTotals } from "@/types/finance";
+import type {
+  PlanFactCell,
+  PlanFactColumn,
+  PlanFactMonth,
+  PlanFactPageData
+} from "@/types/finance";
 
-// Plan against fact for one month. The plan column is the only thing typed in;
-// everything else is read off the ledger, so the table cannot drift from the
-// operations the way a spreadsheet kept beside the app does.
+// Plan against fact, laid out like the spreadsheet this screen replaces: every
+// category is a column, every month a row, in three bands — plan, fact and the
+// gap between them. Only the plan band is typed in; the other two are read off
+// the ledger, so the table cannot drift from the operations behind it.
 export function PlanFactView({ initialData }: { initialData: PlanFactPageData }) {
   const { t, locale } = useI18n();
   const [includeTransfers, setIncludeTransfers] = useIncludeTransfers();
-  const [month, setMonth] = useState(initialData.month);
+  // Months with operations show up on their own; planning further ahead means
+  // asking for rows that nothing in the data would produce yet.
+  const [ahead, setAhead] = useState(0);
   const { data, reload } = useApiPageData(
     initialData,
-    `/plan?month=${month}${transfersQuery(includeTransfers, "&")}`
+    `/plan?ahead=${ahead}${transfersQuery(includeTransfers, "&")}`
   );
   const { run } = useApiMutation();
 
-  async function savePlan(categoryId: string, amount: number) {
-    await run(() => apiClient.post("/plan", { month, categoryId, amount: String(amount) }), {
-      success: t("plan.saved"),
-      error: t("plan.saveError"),
-      onSuccess: reload
-    });
-  }
+  const income = data.columns.filter((column) => column.kind === "INCOME");
+  const expense = data.columns.filter((column) => column.kind === "EXPENSE");
+  const width = income.length + expense.length + 6;
 
-  async function saveNote(note: string) {
-    await run(() => apiClient.post("/plan", { month, note }), {
+  async function save(body: Record<string, string>) {
+    await run(() => apiClient.post("/plan", body), {
       success: t("plan.saved"),
       error: t("plan.saveError"),
       onSuccess: reload
@@ -55,112 +59,113 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
     });
   };
 
+  const money = (value: number) =>
+    new Intl.NumberFormat(locale === "en" ? "en-US" : "ru-RU", {
+      maximumFractionDigits: 0
+    }).format(value);
+
+  // The grid carries bare numbers — a currency sign in each of a few hundred
+  // cells is noise — so the unit is stated once, above the table.
+  const unit = formatCurrency(0, data.currency).replace(/[\d\s.,]/g, "");
+
+  if (data.columns.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+          {t("plan.empty")}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="plan-month">{t("plan.month")}</Label>
-          <select
-            id="plan-month"
-            value={data.month}
-            onChange={(event) => setMonth(event.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">{t("plan.units", { currency: unit })}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAhead((value) => Math.min(value + 1, 24))}
           >
-            {data.months.map((key) => (
-              <option key={key} value={key}>
-                {monthLabel(key)}
-              </option>
-            ))}
-          </select>
+            <Plus className="size-4" />
+            {t("plan.addMonth")}
+          </Button>
         </div>
-        <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
       </div>
 
-      <PlanSection
-        title={t("plan.income")}
-        rows={data.income}
-        totals={data.totals.income}
-        currency={data.currency}
-        month={data.month}
-        onSave={savePlan}
-        // Earning less than planned is the bad direction, so the sign that
-        // reads as "good" is the opposite of the spending table's.
-        goodWhenNegative
-        empty={t("plan.noIncome")}
-      />
-
-      <PlanSection
-        title={t("plan.expense")}
-        rows={data.expense}
-        totals={data.totals.expense}
-        currency={data.currency}
-        month={data.month}
-        onSave={savePlan}
-        empty={t("plan.noExpense")}
-      />
-
       <Card>
-        <CardHeader>
-          <CardTitle>{t("plan.result")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-sm">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto" data-testid="plan-grid">
+            <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-2">{t("plan.line")}</th>
-                  <th className="py-2 text-right">{t("plan.plan")}</th>
-                  <th className="py-2 text-right">{t("plan.fact")}</th>
-                  <th className="py-2 text-right">{t("plan.diff")}</th>
+                <tr>
+                  <Head rowSpan={2} className="sticky left-0 z-20 text-left">
+                    {t("plan.month")}
+                  </Head>
+                  <Head rowSpan={2} className="border-l text-right" title={t("plan.opening.hint")}>
+                    {t("plan.opening")}
+                  </Head>
+                  <Head colSpan={income.length + 1} className="border-l text-center">
+                    {t("plan.income")}
+                  </Head>
+                  <Head colSpan={expense.length + 1} className="border-l text-center">
+                    {t("plan.expense")}
+                  </Head>
+                  <Head rowSpan={2} className="border-l text-right">
+                    {t("plan.result")}
+                  </Head>
+                  <Head rowSpan={2} className="border-l text-left">
+                    {t("plan.note")}
+                  </Head>
+                </tr>
+                <tr>
+                  {income.map((column, index) => (
+                    <ColumnHead
+                      key={column.categoryId}
+                      column={column}
+                      className={index === 0 ? "border-l" : undefined}
+                    />
+                  ))}
+                  <Head className="text-right font-semibold">{t("plan.total")}</Head>
+                  {expense.map((column, index) => (
+                    <ColumnHead
+                      key={column.categoryId}
+                      column={column}
+                      className={index === 0 ? "border-l" : undefined}
+                    />
+                  ))}
+                  <Head className="text-right font-semibold">{t("plan.total")}</Head>
                 </tr>
               </thead>
-              <tbody>
-                <tr className="border-b">
-                  <td className="py-2">
-                    <span>{t("plan.opening")}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {t("plan.opening.hint")}
-                    </span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <PlanCell
-                      key={`${data.month}-opening`}
-                      value={data.totals.opening.plan}
-                      onSave={(amount) => savePlan(OPENING_BALANCE_ID, amount)}
-                    />
-                  </td>
-                  <td className="num py-2 text-right">
-                    {formatCurrency(data.totals.opening.fact, data.currency)}
-                  </td>
-                  <td className="num py-2 text-right text-muted-foreground">
-                    {formatCurrency(data.totals.opening.diff, data.currency)}
-                  </td>
-                </tr>
-                <TotalRow
-                  label={t("plan.income")}
-                  totals={data.totals.income}
-                  currency={data.currency}
-                  goodWhenNegative
-                />
-                <TotalRow
-                  label={t("plan.expense")}
-                  totals={data.totals.expense}
-                  currency={data.currency}
-                />
-                <TotalRow
-                  label={t("plan.result")}
-                  totals={data.totals.result}
-                  currency={data.currency}
-                  goodWhenNegative
-                  strong
-                />
-              </tbody>
-            </table>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-note">{t("plan.note")}</Label>
-            <NoteField key={data.month} initial={data.note} onSave={saveNote} />
+              {(["plan", "fact", "diff"] as const).map((band) => (
+                <tbody key={band}>
+                  <tr>
+                    <th
+                      scope="rowgroup"
+                      className="sticky left-0 z-20 whitespace-nowrap border-y bg-muted px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide"
+                    >
+                      {t(`plan.${band}`)}
+                    </th>
+                    <td className="border-y bg-muted" colSpan={width - 1} />
+                  </tr>
+                  {data.months.map((month) => (
+                    <BandRow
+                      key={`${band}-${month.month}`}
+                      band={band}
+                      month={month}
+                      income={income}
+                      expense={expense}
+                      label={monthLabel(month.month)}
+                      money={money}
+                      onSave={save}
+                    />
+                  ))}
+                </tbody>
+              ))}
+            </table>
           </div>
         </CardContent>
       </Card>
@@ -168,184 +173,283 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
   );
 }
 
-function PlanSection({
-  title,
-  rows,
-  totals,
-  currency,
-  onSave,
-  month,
-  goodWhenNegative = false,
-  empty
-}: {
-  title: string;
-  rows: PlanFactRow[];
-  totals: PlanFactTotals;
-  currency: string;
-  month: string;
-  onSave: (categoryId: string, amount: number) => Promise<void>;
-  goodWhenNegative?: boolean;
-  empty: string;
-}) {
-  const { t } = useI18n();
-
+function Head({
+  children,
+  className,
+  ...props
+}: ThHTMLAttributes<HTMLTableCellElement> & { children?: ReactNode }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{empty}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-2">{t("common.category")}</th>
-                  <th className="py-2 text-right">{t("plan.plan")}</th>
-                  <th className="py-2 text-right">{t("plan.fact")}</th>
-                  <th className="py-2 text-right">{t("plan.diff")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={`${month}-${row.categoryId}`} className="border-b last:border-0">
-                    <td className="py-2">
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="flex size-5 shrink-0 items-center justify-center rounded-full text-white"
-                          style={{ backgroundColor: row.color }}
-                        >
-                          <CategoryIcon name={row.icon} className="size-3" />
-                        </span>
-                        <span className="truncate">{row.category}</span>
-                      </span>
-                    </td>
-                    <td className="py-2 text-right">
-                      <PlanCell
-                        value={row.plan}
-                        onSave={(amount) => onSave(row.categoryId, amount)}
-                      />
-                    </td>
-                    <td className="num py-2 text-right">{formatCurrency(row.fact, currency)}</td>
-                    <td
-                      className={cn(
-                        "num py-2 text-right",
-                        diffTone(row.diff, goodWhenNegative, row.plan)
-                      )}
-                    >
-                      {formatCurrency(row.diff, currency)}
-                    </td>
-                  </tr>
-                ))}
-                <TotalRow
-                  label={t("plan.total")}
-                  totals={totals}
-                  currency={currency}
-                  goodWhenNegative={goodWhenNegative}
-                  strong
-                />
-              </tbody>
-            </table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <th
+      {...props}
+      className={cn(
+        "whitespace-nowrap border-b bg-card px-3 py-2 align-bottom text-xs font-medium text-muted-foreground",
+        className
+      )}
+    >
+      {children}
+    </th>
   );
 }
 
-function TotalRow({
-  label,
-  totals,
-  currency,
-  goodWhenNegative = false,
-  strong = false
-}: {
-  label: string;
-  totals: PlanFactTotals;
-  currency: string;
-  goodWhenNegative?: boolean;
-  strong?: boolean;
-}) {
+// A category column keeps its own colour and icon in the header — the same
+// marks it carries everywhere else, so a column is recognised without reading.
+function ColumnHead({ column, className }: { column: PlanFactColumn; className?: string }) {
   return (
-    <tr className={cn("border-t", strong && "font-semibold")}>
-      <td className="py-2">{label}</td>
-      <td className="num py-2 text-right">{formatCurrency(totals.plan, currency)}</td>
-      <td className="num py-2 text-right">{formatCurrency(totals.fact, currency)}</td>
-      <td
-        className={cn("num py-2 text-right", diffTone(totals.diff, goodWhenNegative, totals.plan))}
+    <Head
+      className={cn("text-left", className)}
+      style={{ boxShadow: `inset 0 -2px 0 ${column.color}` }}
+    >
+      <span className="flex items-center gap-1.5">
+        <span
+          className="flex size-4 shrink-0 items-center justify-center rounded-full text-white"
+          style={{ backgroundColor: column.color }}
+        >
+          <CategoryIcon name={column.icon} className="size-2.5" />
+        </span>
+        {column.label}
+      </span>
+    </Head>
+  );
+}
+
+// One month inside one band. The plan band is made of fields; fact and
+// difference are the same row read off the ledger.
+function BandRow({
+  band,
+  month,
+  income,
+  expense,
+  label,
+  money,
+  onSave
+}: {
+  band: "plan" | "fact" | "diff";
+  month: PlanFactMonth;
+  income: PlanFactColumn[];
+  expense: PlanFactColumn[];
+  label: string;
+  money: (value: number) => string;
+  onSave: (body: Record<string, string>) => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const editable = band === "plan";
+  const empty: PlanFactCell = { plan: 0, fact: 0, diff: 0 };
+
+  const categoryCell = (column: PlanFactColumn, index: number) => {
+    const figures = month.cells[column.categoryId] ?? empty;
+    return (
+      <Cell
+        key={column.categoryId}
+        column={column.label}
+        className={index === 0 ? "border-l" : undefined}
       >
-        {formatCurrency(totals.diff, currency)}
+        {editable ? (
+          <PlanCell
+            value={figures.plan}
+            money={money}
+            onSave={(amount) =>
+              onSave({ month: month.month, categoryId: column.categoryId, amount: String(amount) })
+            }
+          />
+        ) : (
+          <Figure
+            value={figures[band]}
+            money={money}
+            tone={band === "diff" ? diffTone(figures, column.kind === "INCOME") : undefined}
+          />
+        )}
+      </Cell>
+    );
+  };
+
+  return (
+    <tr className="hover:bg-muted/30" data-band={band} data-month={month.month}>
+      <th
+        scope="row"
+        className="sticky left-0 z-10 whitespace-nowrap border-b bg-card px-3 py-1.5 text-left font-medium"
+      >
+        {label}
+      </th>
+      <Cell className="border-l" column="opening">
+        {editable ? (
+          <PlanCell
+            value={month.opening.plan}
+            money={money}
+            onSave={(amount) =>
+              onSave({
+                month: month.month,
+                categoryId: OPENING_BALANCE_ID,
+                amount: String(amount)
+              })
+            }
+          />
+        ) : (
+          <Figure value={month.opening[band]} money={money} />
+        )}
+      </Cell>
+
+      {income.map(categoryCell)}
+      <Cell className="font-semibold" column="income-total">
+        <Figure
+          value={month.income[band]}
+          money={money}
+          tone={band === "diff" ? diffTone(month.income, true) : undefined}
+        />
+      </Cell>
+
+      {expense.map(categoryCell)}
+      <Cell className="font-semibold" column="expense-total">
+        <Figure
+          value={month.expense[band]}
+          money={money}
+          tone={band === "diff" ? diffTone(month.expense, false) : undefined}
+        />
+      </Cell>
+
+      <Cell className="border-l font-semibold" column="result">
+        <Figure
+          value={month.result[band]}
+          money={money}
+          tone={band === "diff" ? diffTone(month.result, true) : undefined}
+        />
+      </Cell>
+
+      <td className="border-b border-l px-3 py-1.5">
+        {band === "diff" ? null : (
+          <NoteField
+            key={`${band}-${month.month}`}
+            initial={band === "plan" ? month.note : month.factNote}
+            placeholder={t("plan.note.placeholder")}
+            onSave={(note) =>
+              onSave({ month: month.month, [band === "plan" ? "note" : "factNote"]: note })
+            }
+          />
+        )}
       </td>
     </tr>
   );
 }
 
-// A gap only means something when there was a plan to miss; without one the
-// figure is just "everything you spent", and colouring it red would be a
-// verdict on a decision never made.
-function diffTone(diff: number, goodWhenNegative: boolean, plan: number): string {
-  if (plan === 0 || diff === 0) return "text-muted-foreground";
-  const good = goodWhenNegative ? diff < 0 : diff > 0;
-  return good ? "text-success" : "text-destructive";
-}
-
-// The plan cell commits on blur (and on Enter): typing a five-digit sum should
-// not write five times, once per keystroke. The draft lives here rather than in
-// the page, so a slow save never yanks half-typed digits out from under you —
-// callers remount the cell (via `key`) when the month changes and the figure
-// underneath it is a different one.
-function PlanCell({ value, onSave }: { value: number; onSave: (amount: number) => void }) {
-  const [draft, setDraft] = useState(value ? String(value) : "");
-
-  function commit() {
-    const amount = Number(draft.replace(",", "."));
-    if (!Number.isFinite(amount) || amount < 0) {
-      setDraft(value ? String(value) : "");
-      return;
-    }
-    if (amount !== value) onSave(amount);
-  }
-
-  // The field carries its own calculator button, and that button anchors to the
-  // right edge of the field's wrapper — so the wrapper is what has to be narrow
-  // and right-aligned, or the button drifts across the table away from the box
-  // it belongs to.
+function Cell({
+  children,
+  className,
+  column
+}: {
+  children: ReactNode;
+  className?: string;
+  column?: string;
+}) {
   return (
-    <div className="ml-auto w-36">
-      <AmountInput
-        value={draft}
-        onValueChange={setDraft}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.currentTarget.blur();
-          }
-        }}
-        className="h-9 text-right"
-        placeholder="0"
-        inputMode="decimal"
-      />
-    </div>
+    <td
+      data-column={column}
+      className={cn("num whitespace-nowrap border-b px-3 py-1.5 text-right", className)}
+    >
+      {children}
+    </td>
   );
 }
 
-function NoteField({ initial, onSave }: { initial: string; onSave: (note: string) => void }) {
+// Zeros are kept rather than blanked — in a table this wide an empty cell reads
+// as a hole — but they step back so the money stands out.
+function Figure({
+  value,
+  money,
+  tone
+}: {
+  value: number;
+  money: (value: number) => string;
+  tone?: string;
+}) {
+  return (
+    <span className={cn(value === 0 ? "text-muted-foreground/50" : tone)}>{money(value)}</span>
+  );
+}
+
+// A gap only means something when there was a plan to miss; without one the
+// figure is just "everything you spent", and colouring it red would be a
+// verdict on a decision never made. Earning less than planned is the bad
+// direction, so income reads the opposite way to spending.
+function diffTone(cell: PlanFactCell, goodWhenNegative: boolean): string {
+  if (cell.plan === 0 || cell.diff === 0) return "text-muted-foreground";
+  const good = goodWhenNegative ? cell.diff < 0 : cell.diff > 0;
+  return good ? "text-success" : "text-destructive";
+}
+
+// A plan cell is a plain number until it is clicked. Hundreds of live fields
+// would be hundreds of controlled inputs on a screen that has to stay quick on
+// a phone; one at a time is all the typing anyone does anyway.
+function PlanCell({
+  value,
+  money,
+  onSave
+}: {
+  value: number;
+  money: (value: number) => string;
+  onSave: (amount: number) => void;
+}) {
   const { t } = useI18n();
+  const [draft, setDraft] = useState<string | null>(null);
+
+  function commit(next: string) {
+    setDraft(null);
+    const amount = Number(next.replace(",", "."));
+    if (!Number.isFinite(amount) || amount < 0 || amount === value) return;
+    onSave(amount);
+  }
+
+  if (draft === null)
+    return (
+      <button
+        type="button"
+        onClick={() => setDraft(value ? String(value) : "")}
+        aria-label={t("plan.plan")}
+        className={cn(
+          "num w-full rounded px-1 py-0.5 text-right underline decoration-dotted decoration-1 underline-offset-4 hover:bg-accent/10",
+          value === 0 && "text-muted-foreground/50"
+        )}
+      >
+        {money(value)}
+      </button>
+    );
+
+  return (
+    <Input
+      autoFocus
+      type="number"
+      inputMode="decimal"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={(event) => commit(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") setDraft(null);
+      }}
+      className="h-8 w-28 px-2 text-right"
+    />
+  );
+}
+
+function NoteField({
+  initial,
+  placeholder,
+  onSave
+}: {
+  initial: string;
+  placeholder: string;
+  onSave: (note: string) => void;
+}) {
   const [draft, setDraft] = useState(initial);
 
   return (
     <Input
-      id="plan-note"
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
         if (draft !== initial) onSave(draft);
       }}
-      placeholder={t("plan.note.placeholder")}
+      placeholder={placeholder}
       maxLength={500}
+      className="h-8 w-56 px-2"
     />
   );
 }

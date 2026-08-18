@@ -30,6 +30,9 @@ const ROUTES = [
   "/analytics",
   "/forecast",
   "/reports",
+  // The widest table in the app: it has to scroll inside its own box, not
+  // stretch the page.
+  "/plan",
   "/investments",
   "/settings"
 ];

@@ -282,9 +282,12 @@ export const planEntrySchema = z.object({
   categoryId: z.string().min(1),
   amount: z.coerce.number().finite().min(0)
 });
+// Two comments per month, one against each band: what the plan was for, and
+// what the month turned out to be.
 export const planNoteSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/),
-  note: z.string().trim().max(500)
+  note: z.string().trim().max(500),
+  factNote: z.string().trim().max(500).default("")
 });
 
 export const localStateSchema = z.object({
