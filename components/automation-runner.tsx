@@ -8,6 +8,7 @@ import { buildNotifications } from "@/lib/notifications";
 import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
 import { isAndroidShell } from "@/lib/platform/device";
+import { isDesktopShell } from "@/lib/updates/desktop";
 import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
 
@@ -91,6 +92,41 @@ async function runAutomation() {
     } catch {
       // Offline or GitHub unreachable — silence is right here; the owner can
       // still check by hand from Settings.
+    }
+  }
+
+  // Windows has the in-place updater, but nothing was asking it anything: the
+  // app only looked for a new build when the owner opened Settings and pressed
+  // the button. That is why a PC sat two releases behind while the phone kept
+  // itself current — the phone had this very check and the desktop did not.
+  if (isDesktopShell()) {
+    try {
+      const { checkDesktopUpdate } = await import("@/lib/updates/desktop");
+      const { markAnnounced, markChecked, shouldAnnounce, shouldCheckNow } =
+        await import("@/lib/updates/schedule");
+      if (shouldCheckNow("desktop")) {
+        const update = await checkDesktopUpdate();
+        // Marked only after the request came back, so a failed check costs the
+        // next start, not the next six hours.
+        markChecked("desktop");
+        if (update && shouldAnnounce("desktop", update.version)) {
+          markAnnounced("desktop", update.version);
+          const locale = getClientLocale();
+          toast.message(translate(locale, "set.update.available", { version: update.version }), {
+            duration: 15_000,
+            action: {
+              label: translate(locale, "set.update.confirmLabel"),
+              onClick: () => {
+                toast.info(translate(locale, "set.update.downloading"));
+                void update.install();
+              }
+            }
+          });
+        }
+      }
+    } catch {
+      // Offline or GitHub unreachable — silence is right for a check nobody
+      // asked for; the button in Settings still reports the reason out loud.
     }
   }
 
