@@ -279,6 +279,93 @@ describe("LocalApiClient", () => {
     expect(month?.savings.fact).toBe(0);
   });
 
+  it("keeps a category called «Переводы» that holds real spending", async () => {
+    const client = createClient();
+    const account = await seedAccount(client, { name: "Карта", balance: "50000" });
+    const category = await client.post<{ id: string }>("/categories", {
+      name: "Переводы",
+      kind: "EXPENSE"
+    });
+
+    await client.post("/transactions", {
+      amount: "7000",
+      type: "EXPENSE",
+      accountId: account.id,
+      categoryId: category.id,
+      date: todayInput(),
+      description: "Маме"
+    });
+
+    // The name alone is not evidence: money sent to relatives is spending, and
+    // dropping the column would take it out of the month's totals too.
+    const plan = await client.get<PlanFactPageData>("/plan");
+    expect(plan.columns.some((column) => column.categoryId === category.id)).toBe(true);
+    const month = plan.months.find((entry) => entry.month === todayInput().slice(0, 7));
+    expect(month?.cells[category.id]?.fact).toBe(7000);
+    expect(month?.expense.fact).toBe(7000);
+  });
+
+  it("leaves an archived account out of the opening balance, rows and all", async () => {
+    const client = createClient();
+    const kept = await seedAccount(client, { name: "Карта", balance: "80000" });
+    const closed = await seedAccount(client, { name: "Старый счёт", balance: "30000" });
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const food = categories.categories.find((category) => category.name === "Продукты");
+
+    await client.post("/transactions", {
+      amount: "5000",
+      type: "EXPENSE",
+      accountId: closed.id,
+      categoryId: food?.id,
+      date: todayInput(),
+      description: "Продукты"
+    });
+    await client.delete(`/accounts?id=${closed.id}`);
+
+    // The archived account is outside every other total on the screen, so its
+    // spending must not be wound back out of a balance that never held it.
+    const plan = await client.get<PlanFactPageData>("/plan");
+    const month = plan.months.find((entry) => entry.month === todayInput().slice(0, 7));
+    expect(month?.opening.fact).toBe(80000);
+    expect(kept.id).toBeTruthy();
+  });
+
+  it("winds a foreign-currency account back in the base currency", async () => {
+    const client = createClient();
+    const account = await seedAccount(client, { name: "Долларовый", balance: "1000" });
+    // Seeded in roubles first, then re-created in dollars: the helper posts the
+    // base currency, and the point here is the conversion.
+    await client.delete(`/accounts?id=${account.id}`);
+    const usd = await client.post<{ id: string }>("/accounts", {
+      name: "Долларовый",
+      type: "DEBIT_CARD",
+      balance: "1000",
+      currency: "USD"
+    });
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const food = categories.categories.find((category) => category.name === "Продукты");
+
+    await client.post("/transactions", {
+      amount: "200",
+      type: "EXPENSE",
+      accountId: usd.id,
+      categoryId: food?.id,
+      date: todayInput(),
+      description: "Продукты"
+    });
+
+    const accounts = await client.get<AccountsPageData>("/accounts");
+    const plan = await client.get<PlanFactPageData>("/plan");
+    const month = plan.months.find((entry) => entry.month === todayInput().slice(0, 7));
+
+    // 800 $ left of 1000 $, so the month opened with 1000 $ — in roubles, at
+    // the same rate the balance itself is converted with. Subtracting 200 raw
+    // dollars from a rouble total is how this went wrong.
+    const rate = accounts.totalBalance / 800;
+    expect(month?.opening.fact).toBeCloseTo(1000 * rate, 0);
+    expect(month?.opening.fact).toBeGreaterThan(accounts.totalBalance);
+  });
+
   it("offers rows for months ahead only when asked to plan that far", async () => {
     const client = createClient();
     const current = todayInput().slice(0, 7);
