@@ -391,6 +391,29 @@ export class LocalApiClient implements ApiClient {
     this.stateCache = null;
   }
 
+  /**
+   * Every change runs to completion before the next one starts.
+   *
+   * A change is read-modify-write over the WHOLE state, saved as one blob, so
+   * two of them in flight at once means the second one saves a picture taken
+   * before the first one happened — and the first is gone without a trace. It
+   * is not a theoretical race: the background runner writes a capital snapshot
+   * and refreshes rates on every load, and that is exactly when a person is
+   * loading the example or adding an operation. Losing the example that way is
+   * how it was found.
+   */
+  private pending: Promise<unknown> = Promise.resolve();
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    // The queue must survive a failed operation, so both paths continue it.
+    const next = this.pending.then(operation, operation);
+    this.pending = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return next;
+  }
+
   async get<T>(path: string): Promise<T> {
     const state = await this.state();
     const { pathname, searchParams } = normalizePath(path);
@@ -484,14 +507,18 @@ export class LocalApiClient implements ApiClient {
   }
 
   async post<TResponse, TBody = unknown>(path: string, body?: TBody): Promise<TResponse> {
-    return this.write<TResponse>(path, body, "POST");
+    return this.serialize(() => this.write<TResponse>(path, body, "POST"));
   }
 
   async put<TResponse, TBody = unknown>(path: string, body?: TBody): Promise<TResponse> {
-    return this.write<TResponse>(path, body, "PUT");
+    return this.serialize(() => this.write<TResponse>(path, body, "PUT"));
   }
 
   async delete<T>(path: string): Promise<T> {
+    return this.serialize(() => this.remove<T>(path));
+  }
+
+  private async remove<T>(path: string): Promise<T> {
     const state = await this.state();
     const { pathname, searchParams } = normalizePath(path);
     const itemId = searchParams.get("id");
@@ -2193,22 +2220,32 @@ export class LocalApiClient implements ApiClient {
 
     // One column order for every band and every month, or the eye loses the
     // column it was following: income first, then spending, each sorted by how
-    // much money actually passes through it.
-    const weight = (categoryId: string) => {
-      let total = 0;
-      for (const byCategory of fact.values()) total += byCategory.get(categoryId) ?? 0;
-      for (const byCategory of plan.values()) total += byCategory.get(categoryId) ?? 0;
-      return total;
-    };
+    // much money actually passes through it. Summed once here rather than
+    // inside the comparator, which asked the same question of every month again
+    // on every comparison.
+    const weights = new Map<string, number>();
+    for (const source of [fact, plan])
+      for (const byCategory of source.values())
+        for (const [categoryId, amount] of byCategory)
+          weights.set(categoryId, (weights.get(categoryId) ?? 0) + amount);
+    const weight = (categoryId: string) => weights.get(categoryId) ?? 0;
     // A transfer is not income and not spending, so when the reader has said so,
-    // its category has no business taking two columns of the grid either.
+    // its category has no business taking two columns of the grid either. Only
+    // a category that holds nothing BUT transfers goes: someone who files real
+    // spending under a category of their own called "Переводы" — money sent to
+    // relatives, say — must keep both the column and the money in the totals.
     const transferOnly = new Set<string>();
     if (!includeTransfers) {
+      const withTransfers = new Set<string>();
+      const withOwnRows = new Set<string>();
       for (const transaction of state.transactions)
-        if (isTransfer(transaction)) transferOnly.add(transaction.category.id);
-      for (const category of state.categories)
-        if (category.label.toLowerCase() === TRANSFER_CATEGORY_LABEL.toLowerCase())
-          transferOnly.add(category.id);
+        (isTransfer(transaction) ? withTransfers : withOwnRows).add(transaction.category.id);
+      for (const category of state.categories) {
+        const isTransferCategory =
+          withTransfers.has(category.id) ||
+          category.label.toLowerCase() === TRANSFER_CATEGORY_LABEL.toLowerCase();
+        if (isTransferCategory && !withOwnRows.has(category.id)) transferOnly.add(category.id);
+      }
     }
 
     const columns: PlanFactColumn[] = state.categories
@@ -2228,6 +2265,7 @@ export class LocalApiClient implements ApiClient {
       );
 
     const notes = new Map(state.planNotes.map((entry) => [entry.month, entry] as const));
+    const openingOf = this.openingBalances(state);
     const months: PlanFactMonth[] = monthKeys.map((month) => {
       const factOf = fact.get(month);
       const planOf = plan.get(month);
@@ -2255,14 +2293,8 @@ export class LocalApiClient implements ApiClient {
       // What the month started with, in two parts. The plan side is the owner's
       // own figure; the fact side is derived — today's balances wound back
       // through everything recorded since the month began.
-      const opening = cellOf(
-        planOf?.get(OPENING_BALANCE_ID) ?? 0,
-        this.openingBalance(state, month, false)
-      );
-      const savings = cellOf(
-        planOf?.get(SAVINGS_BALANCE_ID) ?? 0,
-        this.openingBalance(state, month, true)
-      );
+      const opening = cellOf(planOf?.get(OPENING_BALANCE_ID) ?? 0, openingOf(month, false));
+      const savings = cellOf(planOf?.get(SAVINGS_BALANCE_ID) ?? 0, openingOf(month, true));
       const income = cellOf(incomePlan, incomeFact);
       const expense = cellOf(expensePlan, expenseFact);
 
@@ -2285,30 +2317,60 @@ export class LocalApiClient implements ApiClient {
     return { source: "database", currency: state.currency, columns, months };
   }
 
-  // Money on one group of accounts when `month` started: today's balances,
-  // wound back through everything recorded on those accounts since. A transfer
-  // is an ordinary row on each side here whatever the reader chose about
-  // totals — it has to be, or moving money into savings would leave both halves
-  // of this figure wrong.
-  private openingBalance(state: LocalState, month: string, savings: boolean): number {
-    const accounts = state.accounts.filter(
-      (account) => SAVINGS_ACCOUNT_TYPES.includes(account.type) === savings
+  /**
+   * What each group of accounts held when a month started: today's balances,
+   * wound back through everything recorded on those accounts since.
+   *
+   * Returns a lookup rather than a number because the grid asks for every month
+   * twice; walking the whole ledger each time turned a page of a few hundred
+   * rows into tens of passes over it. One pass here, then arithmetic over the
+   * handful of months that exist.
+   *
+   * A transfer is an ordinary row on each side of this figure whatever the
+   * reader chose about totals — it has to be, or moving money into savings
+   * would leave both halves wrong.
+   */
+  private openingBalances(state: LocalState): (month: string, savings: boolean) => number {
+    const rates = this.rates(state);
+    // Archived accounts are outside every other total on this screen, so their
+    // rows must not be wound back out of a balance that never held them.
+    const live = state.accounts.filter((account) => !account.isArchived);
+    const group = new Map(
+      live.map((account) => [account.id, SAVINGS_ACCOUNT_TYPES.includes(account.type)] as const)
     );
-    const ids = new Set(accounts.map((account) => account.id));
-    const since = `${month}-01`;
-    const flowSince = state.transactions
-      .filter((transaction) => transaction.date >= since && ids.has(transaction.account.id))
-      .reduce(
-        (total, transaction) =>
-          total + (transaction.type === "INCOME" ? transaction.amount : -transaction.amount),
-        0
+    const currencyOf = new Map(live.map((account) => [account.id, account.currency] as const));
+
+    const now = { main: 0, savings: 0 };
+    for (const account of live) {
+      const base = toBaseAmount(account.balance, account.currency, rates);
+      if (group.get(account.id)) now.savings += base;
+      else now.main += base;
+    }
+
+    // Everything recorded since, per month and per group — in base currency, or
+    // a foreign-currency account would be wound back by raw units of its own.
+    const flow = new Map<string, { main: number; savings: number }>();
+    for (const transaction of state.transactions) {
+      const savings = group.get(transaction.account.id);
+      if (savings === undefined) continue; // archived, or an account since gone
+      const month = transaction.date.slice(0, 7);
+      const bucket = flow.get(month) ?? { main: 0, savings: 0 };
+      const signed = toBaseAmount(
+        transaction.type === "INCOME" ? transaction.amount : -transaction.amount,
+        currencyOf.get(transaction.account.id) ?? state.currency,
+        rates
       );
-    return roundMoney(
-      this.sumInBase(
-        state,
-        accounts.filter((account) => !account.isArchived)
-      ) - flowSince
-    );
+      if (savings) bucket.savings += signed;
+      else bucket.main += signed;
+      flow.set(month, bucket);
+    }
+
+    return (month, savings) => {
+      let since = 0;
+      for (const [key, bucket] of flow)
+        if (key >= month) since += savings ? bucket.savings : bucket.main;
+      return roundMoney((savings ? now.savings : now.main) - since);
+    };
   }
 
   // One cell of the plan, or the month's note. An amount of zero clears the

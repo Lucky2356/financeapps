@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useState, type ReactNode, type ThHTMLAttributes } from "react";
+import { useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
 
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { CategoryIcon } from "@/components/category-icon";
@@ -413,10 +413,21 @@ function PlanCell({
   // The calculator lives in a dialog, so opening it takes focus out of the
   // field. Without this the cell would close under its own calculator.
   const [calculating, setCalculating] = useState(false);
+  // Applying a calculator result changes the draft and closes the dialog in one
+  // handler, so the close callback still sees the value from before the sum —
+  // and committed that, throwing the result away. The ref always holds what the
+  // field holds now.
+  const latest = useRef<string | null>(null);
+
+  function edit(next: string) {
+    latest.current = next;
+    setDraft(next);
+  }
 
   function commit(next: string | null) {
     setDraft(null);
     setCalculating(false);
+    latest.current = null;
     if (next === null) return;
     const amount = Number(next.replace(",", "."));
     if (!Number.isFinite(amount) || amount < 0 || amount === value) return;
@@ -427,7 +438,7 @@ function PlanCell({
     return (
       <button
         type="button"
-        onClick={() => setDraft(value ? String(value) : "")}
+        onClick={() => edit(value ? String(value) : "")}
         aria-label={t("plan.plan")}
         className={cn(
           "num w-full rounded px-1 py-0.5 text-right underline decoration-dotted decoration-1 underline-offset-4 hover:bg-accent/10",
@@ -446,18 +457,18 @@ function PlanCell({
       onBlur={(event) => {
         if (calculating) return;
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        commit(draft);
+        commit(latest.current);
       }}
     >
       <AmountInput
         autoFocus
         value={draft}
-        onValueChange={setDraft}
+        onValueChange={edit}
         onCalculatorOpenChange={(open) => {
           setCalculating(open);
           // Closing means the result has been applied (or dismissed); either
           // way the cell is done being edited.
-          if (!open) setTimeout(() => commit(draft), 0);
+          if (!open) setTimeout(() => commit(latest.current), 0);
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();

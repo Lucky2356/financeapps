@@ -81,16 +81,32 @@ test("остаток разделён на основные счета и сбе
   expect(opening).toBeLessThan(digits(await savings.innerText()));
 });
 
-test("в ячейке плана есть калькулятор", async ({ page }) => {
+test("калькулятор в ячейке плана считает и результат сохраняется", async ({ page }) => {
   await seedExampleData(page);
   await openSettled(page, "/plan");
 
   const plan = cell(page, "plan", "Продукты");
   await expect(plan.getByRole("button")).toBeVisible({ timeout: 20_000 });
   await plan.getByRole("button").click();
-
   await expect(plan.locator("input")).toBeVisible();
-  await expect(plan.getByRole("button", { name: "Калькулятор" })).toBeVisible();
+
+  await plan.getByRole("button", { name: "Калькулятор" }).click();
+  const calculator = page.getByRole("dialog");
+  await calculator.getByLabel("Выражение").fill("12000+3000");
+  await calculator.getByRole("button", { name: "Применить" }).click();
+
+  // The result has to land in the cell AND be saved: the first version threw it
+  // away, because the cell committed the value it held before the sum.
+  await expect
+    .poll(async () => (await plan.innerText()).replace(/\s/g, ""), { timeout: 15_000 })
+    .toBe("15000");
+
+  await openSettled(page, "/plan");
+  await expect
+    .poll(async () => (await cell(page, "plan", "Продукты").innerText()).replace(/\s/g, ""), {
+      timeout: 20_000
+    })
+    .toBe("15000");
 });
 
 test("галочка переводов есть в аналитике, отчётах и плане", async ({ page }) => {

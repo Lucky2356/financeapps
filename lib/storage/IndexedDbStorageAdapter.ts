@@ -21,38 +21,39 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
   }
 
   async setItem<T>(key: string, value: T): Promise<void> {
-    const db = await this.open();
-    await new Promise<void>((resolve, reject) => {
-      const request = db
-        .transaction(this.storeName, "readwrite")
-        .objectStore(this.storeName)
-        .put({ key, value });
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+    return this.write((store) => store.put({ key, value }));
   }
 
   async removeItem(key: string): Promise<void> {
-    const db = await this.open();
-    await new Promise<void>((resolve, reject) => {
-      const request = db
-        .transaction(this.storeName, "readwrite")
-        .objectStore(this.storeName)
-        .delete(key);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+    return this.write((store) => store.delete(key));
   }
 
   async clear(): Promise<void> {
+    return this.write((store) => store.clear());
+  }
+
+  /**
+   * Runs one write and resolves when the TRANSACTION has committed — not when
+   * the request reported success.
+   *
+   * The difference is the whole point. `request.onsuccess` fires while the
+   * transaction is still open; the data reaches disk a moment later, at
+   * `transaction.oncomplete`. Resolving on the request meant every caller was
+   * told "saved" too early, and anything that tore the page down in that
+   * gap — `window.location.reload()` after loading the example or restoring a
+   * backup, switching profiles, closing the desktop window — could take the
+   * write with it. It showed up as an app that came back empty after an
+   * operation it had just confirmed.
+   */
+  private async write(run: (store: IDBObjectStore) => IDBRequest): Promise<void> {
     const db = await this.open();
     await new Promise<void>((resolve, reject) => {
-      const request = db
-        .transaction(this.storeName, "readwrite")
-        .objectStore(this.storeName)
-        .clear();
-      request.onsuccess = () => resolve();
+      const transaction = db.transaction(this.storeName, "readwrite");
+      const request = run(transaction.objectStore(this.storeName));
       request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("Запись отменена."));
     });
   }
 
