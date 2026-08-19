@@ -65,6 +65,34 @@ test("план сохраняется и месяц можно добавить 
   await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
 });
 
+test("остаток разделён на основные счета и сбережения", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/plan");
+
+  const savings = cell(page, "fact", "savings");
+  // The example keeps 260 000 on a savings account and 95 000 with a broker;
+  // neither is money on hand, and mixing them in is what made the opening
+  // figure useless.
+  await expect
+    .poll(async () => digits(await savings.innerText()), { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(260_000);
+  const opening = digits(await cell(page, "fact", "opening").innerText());
+  expect(opening).toBeGreaterThan(0);
+  expect(opening).toBeLessThan(digits(await savings.innerText()));
+});
+
+test("в ячейке плана есть калькулятор", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/plan");
+
+  const plan = cell(page, "plan", "Продукты");
+  await expect(plan.getByRole("button")).toBeVisible({ timeout: 20_000 });
+  await plan.getByRole("button").click();
+
+  await expect(plan.locator("input")).toBeVisible();
+  await expect(plan.getByRole("button", { name: "Калькулятор" })).toBeVisible();
+});
+
 test("галочка переводов есть в аналитике, отчётах и плане", async ({ page }) => {
   await seedExampleData(page);
 

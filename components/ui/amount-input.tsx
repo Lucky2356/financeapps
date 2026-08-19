@@ -16,6 +16,13 @@ type AmountInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
    * because applying a calculator result is not a DOM event.
    */
   onValueChange?: (value: string) => void;
+  /**
+   * Told whenever the calculator opens or closes. A caller that commits on blur
+   * needs this: opening the calculator moves focus out of the field, and
+   * without the warning the field would close under the calculator it just
+   * opened (the plan/fact grid, where every cell is edited in place).
+   */
+  onCalculatorOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -32,12 +39,18 @@ export function AmountInput({
   defaultValue,
   onChange,
   onValueChange,
+  onCalculatorOpenChange,
   ...props
 }: AmountInputProps) {
   const { t } = useI18n();
   const controlled = value !== undefined;
   const [internal, setInternal] = useState(defaultValue === undefined ? "" : String(defaultValue));
-  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [calculatorOpen, setCalculatorOpenState] = useState(false);
+
+  function setCalculatorOpen(open: boolean) {
+    setCalculatorOpenState(open);
+    onCalculatorOpenChange?.(open);
+  }
   const current = controlled ? String(value) : internal;
 
   function commit(next: string) {

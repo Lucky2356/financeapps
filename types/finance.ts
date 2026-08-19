@@ -331,13 +331,15 @@ export type PlanFactCell = {
 export type PlanFactMonth = {
   /** "YYYY-MM". */
   month: string;
-  /** Money on hand when the month started. */
+  /** Money on hand when the month started: cash and cards. */
   opening: PlanFactCell;
+  /** What sat on savings and brokerage accounts when the month started. */
+  savings: PlanFactCell;
   /** Per category, keyed by `PlanFactColumn.categoryId`. */
   cells: Record<string, PlanFactCell>;
   income: PlanFactCell;
   expense: PlanFactCell;
-  /** opening + income − expense. */
+  /** opening + savings + income − expense. */
   result: PlanFactCell;
   /** The owner's note against the plan band. */
   note: string;

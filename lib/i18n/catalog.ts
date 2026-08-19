@@ -24,6 +24,8 @@ const ru: Messages = {
   "nav.short.planning": "Планы",
   "nav.short.investments": "Инвест.",
   "shell.search": "Поиск…",
+  "shell.collapse": "Свернуть меню",
+  "shell.expand": "Развернуть меню",
   "shell.themeAndNotifications": "Тема и уведомления",
   // Navigation sections
   "section.accounting": "Учёт",
@@ -137,7 +139,10 @@ const ru: Messages = {
   "plan.expense": "Расходы",
   "plan.result": "Итог месяца",
   "plan.opening": "Остаток на начало",
-  "plan.opening.hint": "факт — по остаткам на счетах",
+  "plan.opening.main": "Основные",
+  "plan.opening.savings": "Сбережения",
+  "plan.opening.hint":
+    "факт берётся из остатков на счетах: основные — наличные и карты, сбережения — накопительные и брокерские",
   "plan.note": "Комментарий",
   "plan.note.placeholder": "Например: гасим рассрочку полностью",
   "plan.saved": "Сохранено",
@@ -1715,6 +1720,8 @@ const en: Messages = {
   "nav.short.planning": "Plans",
   "nav.short.investments": "Invest.",
   "shell.search": "Search…",
+  "shell.collapse": "Collapse the menu",
+  "shell.expand": "Expand the menu",
   "shell.themeAndNotifications": "Theme and notifications",
   // Navigation sections
   "section.accounting": "Accounting",
@@ -1824,7 +1831,10 @@ const en: Messages = {
   "plan.expense": "Expenses",
   "plan.result": "Month result",
   "plan.opening": "Opening balance",
-  "plan.opening.hint": "actual comes from account balances",
+  "plan.opening.main": "Everyday",
+  "plan.opening.savings": "Savings",
+  "plan.opening.hint":
+    "actual comes from account balances: everyday is cash and cards, savings is deposit and brokerage accounts",
   "plan.note": "Comment",
   "plan.note.placeholder": "E.g. paying the instalment off in full",
   "plan.saved": "Saved",

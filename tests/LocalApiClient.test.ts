@@ -222,6 +222,63 @@ describe("LocalApiClient", () => {
     expect([...months].sort((a, b) => b.localeCompare(a))).toEqual(months);
   });
 
+  it("keeps savings apart from the money on hand in plan/fact", async () => {
+    const client = createClient();
+    const card = await seedAccount(client, { name: "Карта", balance: "50000" });
+    await seedAccount(client, { name: "Накопительный", type: "SAVINGS", balance: "300000" });
+    const month = todayInput().slice(0, 7);
+
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const food = categories.categories.find((category) => category.name === "Продукты");
+    await client.post("/transactions", {
+      amount: "10000",
+      type: "EXPENSE",
+      accountId: card.id,
+      categoryId: food?.id,
+      date: todayInput(),
+      description: "Продукты"
+    });
+
+    const plan = await client.get<PlanFactPageData>("/plan");
+    const row = plan.months.find((entry) => entry.month === month);
+
+    // The month opened with 50 000 on the card (40 000 left after the spending)
+    // and 300 000 set aside — one figure of 350 000 said nothing useful.
+    expect(row?.opening.fact).toBe(50000);
+    expect(row?.savings.fact).toBe(300000);
+    // Both halves still belong to the month's result: opening − spending.
+    expect(row?.result.fact).toBe(340000);
+  });
+
+  it("leaves the transfer category out of the grid unless transfers are counted", async () => {
+    const client = createClient();
+    const from = await seedAccount(client, { name: "Счёт А", balance: "100000" });
+    const to = await seedAccount(client, { name: "Счёт Б", type: "SAVINGS", balance: "0" });
+
+    await client.post("/transactions", {
+      action: "transfer",
+      amount: "40000",
+      fromAccountId: from.id,
+      toAccountId: to.id,
+      date: todayInput(),
+      description: "В накопления"
+    });
+
+    const plain = await client.get<PlanFactPageData>("/plan");
+    const counted = await client.get<PlanFactPageData>("/plan?transfers=1");
+
+    // Nothing was earned or spent, so the column would have been two rows of a
+    // number the owner had already said not to count.
+    expect(plain.columns.some((column) => column.label === "Переводы")).toBe(false);
+    expect(counted.columns.filter((column) => column.label === "Переводы")).toHaveLength(2);
+
+    // The transfer still moved the money, whatever the reader chose about
+    // totals: it left the card and landed in savings.
+    const month = plain.months.find((entry) => entry.month === todayInput().slice(0, 7));
+    expect(month?.opening.fact).toBe(100000);
+    expect(month?.savings.fact).toBe(0);
+  });
+
   it("offers rows for months ahead only when asked to plan that far", async () => {
     const client = createClient();
     const current = todayInput().slice(0, 7);
