@@ -101,5 +101,16 @@ test.describe("скриншоты", () => {
     await openSettled(page, "/plan");
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${DIR}/10-план-факт-светлая.png` });
+
+    // The sidebar folded down to icons, and a plan cell open for editing.
+    await page.getByRole("button", { name: "Свернуть меню" }).click();
+    await page.waitForTimeout(700);
+    await page
+      .locator('tr[data-band="plan"]')
+      .first()
+      .locator('td[data-column="Продукты"] button')
+      .click();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${DIR}/11-план-факт-свёрнутое-меню.png` });
   });
 });
