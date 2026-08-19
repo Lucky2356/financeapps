@@ -248,24 +248,26 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     }
     try {
       setCheckingUpdate(true);
-      const { check } = await import("@tauri-apps/plugin-updater");
-      const update = await check();
+      // Same path the background check uses, retry included: one failed
+      // request used to be reported as "автообновление недоступно".
+      const { checkDesktopUpdate } = await import("@/lib/updates/desktop");
+      const { markChecked } = await import("@/lib/updates/schedule");
+      const update = await checkDesktopUpdate();
+      markChecked("desktop");
       if (!update) {
         toast.success(t("set.update.current"));
         return;
       }
       const confirmed = await confirm({
         title: t("set.update.available", { version: update.version }),
-        description: update.body
-          ? `${update.body}\n\n${t("set.update.downloadConfirm")}`
+        description: update.notes
+          ? `${update.notes}\n\n${t("set.update.downloadConfirm")}`
           : t("set.update.downloadConfirm"),
         confirmLabel: t("set.update.confirmLabel")
       });
       if (!confirmed) return;
       toast.info(t("set.update.downloading"));
-      await update.downloadAndInstall();
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      await relaunch();
+      await update.install();
     } catch (error) {
       // SHOW the real reason, do not just log it: devtools are not available in
       // a packaged build, so "обновления недоступны" on its own left no way to

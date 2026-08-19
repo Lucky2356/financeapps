@@ -15,6 +15,12 @@
 
 import { APP_VERSION } from "@/lib/constants";
 import {
+  markAnnounced as scheduleMarkAnnounced,
+  markChecked as scheduleMarkChecked,
+  shouldAnnounce as scheduleShouldAnnounce,
+  shouldCheckNow as scheduleShouldCheckNow
+} from "@/lib/updates/schedule";
+import {
   ANDROID_PLATFORM,
   LATEST_MANIFEST_URL,
   RELEASE_API_URL,
@@ -24,10 +30,6 @@ import {
   type AvailableUpdate,
   type ReleaseManifest
 } from "@/lib/updates/latest";
-
-const LAST_CHECK_KEY = "android-update-last-check";
-const NOTIFIED_VERSION_KEY = "android-update-notified-version";
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 function reason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -78,44 +80,9 @@ export async function startAndroidUpdate(update: AvailableUpdate): Promise<void>
   await openUrl(update.url);
 }
 
-/**
- * Whether to ask GitHub again. A day used to be the interval, and the check was
- * marked as done BEFORE the request — so a release published an hour after the
- * morning check stayed invisible until the next day, and a failed request cost
- * a whole day too. Six hours costs one small JSON request; what is throttled to
- * once per version is the *notice*, which is the part that could nag.
- */
-export function shouldCheckNow(now: Date = new Date()): boolean {
-  try {
-    const last = Number(localStorage.getItem(LAST_CHECK_KEY) ?? 0);
-    return !Number.isFinite(last) || now.getTime() - last >= CHECK_INTERVAL_MS;
-  } catch {
-    return false; // no storage → never nag
-  }
-}
-
-/** Records a check that actually completed. Call it after the request, not before. */
-export function markChecked(now: Date = new Date()): void {
-  try {
-    localStorage.setItem(LAST_CHECK_KEY, String(now.getTime()));
-  } catch {
-    /* storage unavailable — the next start simply checks again */
-  }
-}
-
-/** True the first time a given version is found; false on later checks. */
-export function shouldAnnounce(version: string): boolean {
-  try {
-    return localStorage.getItem(NOTIFIED_VERSION_KEY) !== version;
-  } catch {
-    return true;
-  }
-}
-
-export function markAnnounced(version: string): void {
-  try {
-    localStorage.setItem(NOTIFIED_VERSION_KEY, version);
-  } catch {
-    /* storage unavailable — the notice may repeat, which is the safe direction */
-  }
-}
+// Scheduling is the same decision on both platforms, so it lives in one place;
+// these keep the Android call sites reading as they did.
+export const shouldCheckNow = (now?: Date) => scheduleShouldCheckNow("android", now);
+export const markChecked = (now?: Date) => scheduleMarkChecked("android", now);
+export const shouldAnnounce = (version: string) => scheduleShouldAnnounce("android", version);
+export const markAnnounced = (version: string) => scheduleMarkAnnounced("android", version);
