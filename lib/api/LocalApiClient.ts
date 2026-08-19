@@ -52,7 +52,7 @@ import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
-import { countableRows } from "@/lib/transactions/transfers";
+import { countableRows, isTransfer, TRANSFER_CATEGORY_LABEL } from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
@@ -350,8 +350,12 @@ function isBackupReminderDue(lastBackupAt: string | null) {
   return Date.now() - last > 14 * 24 * 60 * 60 * 1000;
 }
 
-// The plan row that is not a category: the money the month opened with.
+// The plan rows that are not categories: the money the month opened with, kept
+// apart from the money set aside. A balance on a savings or brokerage account is
+// not spending money, and adding it into one "остаток" made the figure useless.
 export const OPENING_BALANCE_ID = "__opening__";
+export const SAVINGS_BALANCE_ID = "__savings__";
+const SAVINGS_ACCOUNT_TYPES = ["SAVINGS", "BROKERAGE"];
 const MONTH_KEY = /^\d{4}-\d{2}$/;
 
 function cellOf(plan: number, fact: number): PlanFactCell {
@@ -789,8 +793,8 @@ export class LocalApiClient implements ApiClient {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
 
     const transferId = id("transfer");
-    const expenseCategory = this.findOrCreateCategory(state, "Переводы", "EXPENSE");
-    const incomeCategory = this.findOrCreateCategory(state, "Переводы", "INCOME");
+    const expenseCategory = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
+    const incomeCategory = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
     const description =
       input.description?.trim() || `Перевод ${fromAccount.name} -> ${toAccount.name}`;
     const date = input.date || new Date().toISOString();
@@ -2196,7 +2200,19 @@ export class LocalApiClient implements ApiClient {
       for (const byCategory of plan.values()) total += byCategory.get(categoryId) ?? 0;
       return total;
     };
+    // A transfer is not income and not spending, so when the reader has said so,
+    // its category has no business taking two columns of the grid either.
+    const transferOnly = new Set<string>();
+    if (!includeTransfers) {
+      for (const transaction of state.transactions)
+        if (isTransfer(transaction)) transferOnly.add(transaction.category.id);
+      for (const category of state.categories)
+        if (category.label.toLowerCase() === TRANSFER_CATEGORY_LABEL.toLowerCase())
+          transferOnly.add(category.id);
+    }
+
     const columns: PlanFactColumn[] = state.categories
+      .filter((category) => !transferOnly.has(category.id))
       .map((category) => ({
         categoryId: category.id,
         label: category.label,
@@ -2236,12 +2252,16 @@ export class LocalApiClient implements ApiClient {
         }
       }
 
-      // What the month started with. The plan side is the owner's own figure;
-      // the fact side is derived — today's balances wound back through
-      // everything recorded since the month began.
+      // What the month started with, in two parts. The plan side is the owner's
+      // own figure; the fact side is derived — today's balances wound back
+      // through everything recorded since the month began.
       const opening = cellOf(
         planOf?.get(OPENING_BALANCE_ID) ?? 0,
-        this.openingBalance(state, month)
+        this.openingBalance(state, month, false)
+      );
+      const savings = cellOf(
+        planOf?.get(SAVINGS_BALANCE_ID) ?? 0,
+        this.openingBalance(state, month, true)
       );
       const income = cellOf(incomePlan, incomeFact);
       const expense = cellOf(expensePlan, expenseFact);
@@ -2249,12 +2269,13 @@ export class LocalApiClient implements ApiClient {
       return {
         month,
         opening,
+        savings,
         cells,
         income,
         expense,
         result: cellOf(
-          opening.plan + income.plan - expense.plan,
-          opening.fact + income.fact - expense.fact
+          opening.plan + savings.plan + income.plan - expense.plan,
+          opening.fact + savings.fact + income.fact - expense.fact
         ),
         note: notes.get(month)?.note ?? "",
         factNote: notes.get(month)?.factNote ?? ""
@@ -2264,19 +2285,30 @@ export class LocalApiClient implements ApiClient {
     return { source: "database", currency: state.currency, columns, months };
   }
 
-  // Money on hand when `month` started: today's balances, wound back through
-  // everything recorded since. A transfer nets to zero here whatever the reader
-  // chose, because its two halves are ordinary rows on two accounts.
-  private openingBalance(state: LocalState, month: string): number {
+  // Money on one group of accounts when `month` started: today's balances,
+  // wound back through everything recorded on those accounts since. A transfer
+  // is an ordinary row on each side here whatever the reader chose about
+  // totals — it has to be, or moving money into savings would leave both halves
+  // of this figure wrong.
+  private openingBalance(state: LocalState, month: string, savings: boolean): number {
+    const accounts = state.accounts.filter(
+      (account) => SAVINGS_ACCOUNT_TYPES.includes(account.type) === savings
+    );
+    const ids = new Set(accounts.map((account) => account.id));
     const since = `${month}-01`;
     const flowSince = state.transactions
-      .filter((transaction) => transaction.date >= since)
+      .filter((transaction) => transaction.date >= since && ids.has(transaction.account.id))
       .reduce(
         (total, transaction) =>
           total + (transaction.type === "INCOME" ? transaction.amount : -transaction.amount),
         0
       );
-    return roundMoney(this.accounts(state).totalBalance - flowSince);
+    return roundMoney(
+      this.sumInBase(
+        state,
+        accounts.filter((account) => !account.isArchived)
+      ) - flowSince
+    );
   }
 
   // One cell of the plan, or the month's note. An amount of zero clears the
@@ -2305,6 +2337,7 @@ export class LocalApiClient implements ApiClient {
     if (!categoryId) throw new Error("Выберите категорию.");
     if (
       categoryId !== OPENING_BALANCE_ID &&
+      categoryId !== SAVINGS_BALANCE_ID &&
       !state.categories.some((category) => category.id === categoryId)
     )
       throw new Error("Категория не найдена.");

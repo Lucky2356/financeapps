@@ -7,12 +7,13 @@ import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { CategoryIcon } from "@/components/category-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AmountInput } from "@/components/ui/amount-input";
 import { Input } from "@/components/ui/input";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
 import { apiClient } from "@/lib/api/client";
-import { OPENING_BALANCE_ID } from "@/lib/api/LocalApiClient";
+import { OPENING_BALANCE_ID, SAVINGS_BALANCE_ID } from "@/lib/api/LocalApiClient";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
@@ -41,7 +42,7 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
 
   const income = data.columns.filter((column) => column.kind === "INCOME");
   const expense = data.columns.filter((column) => column.kind === "EXPENSE");
-  const width = income.length + expense.length + 6;
+  const width = income.length + expense.length + 7;
 
   async function save(body: Record<string, string>) {
     await run(() => apiClient.post("/plan", body), {
@@ -104,7 +105,7 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                   <Head rowSpan={2} className="sticky left-0 z-20 text-left">
                     {t("plan.month")}
                   </Head>
-                  <Head rowSpan={2} className="border-l text-right" title={t("plan.opening.hint")}>
+                  <Head colSpan={2} className="border-l text-center" title={t("plan.opening.hint")}>
                     {t("plan.opening")}
                   </Head>
                   <Head colSpan={income.length + 1} className="border-l text-center">
@@ -121,6 +122,8 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                   </Head>
                 </tr>
                 <tr>
+                  <Head className="border-l text-right">{t("plan.opening.main")}</Head>
+                  <Head className="text-right">{t("plan.opening.savings")}</Head>
                   {income.map((column, index) => (
                     <ColumnHead
                       key={column.categoryId}
@@ -287,6 +290,23 @@ function BandRow({
           <Figure value={month.opening[band]} money={money} />
         )}
       </Cell>
+      <Cell column="savings">
+        {editable ? (
+          <PlanCell
+            value={month.savings.plan}
+            money={money}
+            onSave={(amount) =>
+              onSave({
+                month: month.month,
+                categoryId: SAVINGS_BALANCE_ID,
+                amount: String(amount)
+              })
+            }
+          />
+        ) : (
+          <Figure value={month.savings[band]} money={money} />
+        )}
+      </Cell>
 
       {income.map(categoryCell)}
       <Cell className="font-semibold" column="income-total">
@@ -375,9 +395,10 @@ function diffTone(cell: PlanFactCell, goodWhenNegative: boolean): string {
   return good ? "text-success" : "text-destructive";
 }
 
-// A plan cell is a plain number until it is clicked. Hundreds of live fields
-// would be hundreds of controlled inputs on a screen that has to stay quick on
-// a phone; one at a time is all the typing anyone does anyway.
+// A plan cell is a plain number until it is clicked, and a money field with a
+// calculator once it is. Keeping hundreds of live fields on screen would cost
+// what a grid this wide cannot afford on a phone; one at a time is all the
+// typing anyone does anyway.
 function PlanCell({
   value,
   money,
@@ -389,9 +410,14 @@ function PlanCell({
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<string | null>(null);
+  // The calculator lives in a dialog, so opening it takes focus out of the
+  // field. Without this the cell would close under its own calculator.
+  const [calculating, setCalculating] = useState(false);
 
-  function commit(next: string) {
+  function commit(next: string | null) {
     setDraft(null);
+    setCalculating(false);
+    if (next === null) return;
     const amount = Number(next.replace(",", "."));
     if (!Number.isFinite(amount) || amount < 0 || amount === value) return;
     onSave(amount);
@@ -413,19 +439,35 @@ function PlanCell({
     );
 
   return (
-    <Input
-      autoFocus
-      type="number"
-      inputMode="decimal"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={(event) => commit(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
-        if (event.key === "Escape") setDraft(null);
+    // The wrapper, not the input, watches focus: the calculator button sits
+    // inside it, and tabbing to that button must not count as leaving the cell.
+    <div
+      className="ml-auto w-36"
+      onBlur={(event) => {
+        if (calculating) return;
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        commit(draft);
       }}
-      className="h-8 w-28 px-2 text-right"
-    />
+    >
+      <AmountInput
+        autoFocus
+        value={draft}
+        onValueChange={setDraft}
+        onCalculatorOpenChange={(open) => {
+          setCalculating(open);
+          // Closing means the result has been applied (or dismissed); either
+          // way the cell is done being edited.
+          if (!open) setTimeout(() => commit(draft), 0);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") commit(null);
+        }}
+        className="h-8 text-right"
+        placeholder="0"
+        inputMode="decimal"
+      />
+    </div>
   );
 }
 

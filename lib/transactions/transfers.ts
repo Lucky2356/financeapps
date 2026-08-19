@@ -9,6 +9,14 @@ import type { TransactionRow } from "@/types/finance";
 // Rows created since 1.10.0 carry `transferId`. Older ones only have the marker
 // the transfer writer left in the description, so both are recognised here.
 
+/**
+ * The category both halves of a transfer are filed under. The pair has to live
+ * somewhere, and this is the name the transfer writer creates on first use — so
+ * screens that list every category (plan/fact) can leave it out when transfers
+ * are not being counted.
+ */
+export const TRANSFER_CATEGORY_LABEL = "Переводы";
+
 const LEGACY_MARKER = /\[transfer:[^\]]+\]/;
 
 export function isTransfer(row: Pick<TransactionRow, "description"> & { transferId?: string }) {
