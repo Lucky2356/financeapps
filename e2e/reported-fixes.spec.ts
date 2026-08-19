@@ -11,8 +11,10 @@ test("удаление операции спрашивает подтвержд�
   await openSettled(page, "/transactions");
 
   const rows = page.locator("tbody tr");
+  // The static shell paints an empty table and the device's own operations
+  // arrive a moment later; reading the count right away caught the empty one.
+  await expect.poll(() => rows.count(), { timeout: 20_000 }).toBeGreaterThan(0);
   const before = await rows.count();
-  expect(before).toBeGreaterThan(0);
 
   await rows.first().getByRole("button", { name: "Удалить операцию" }).click();
 
@@ -99,11 +101,16 @@ test("суммы на главной пересчитываются сразу �
   await dialog.getByRole("button", { name: "Доход", exact: true }).click();
   await dialog.getByLabel("Сумма").fill("54321");
 
-  // Pick the first offered category and account.
-  await dialog.getByRole("combobox").first().click();
-  await page.getByRole("option").first().click();
-  await dialog.getByRole("combobox").nth(1).click();
-  await page.getByRole("option").first().click();
+  // Pick the first offered category and account. Each list has to be gone
+  // before the next one is opened: a click that lands while the first is still
+  // closing is swallowed by its overlay, and the second list never appears.
+  const pickFirst = async (index: number) => {
+    await dialog.getByRole("combobox").nth(index).click();
+    await page.getByRole("option").first().click();
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+  };
+  await pickFirst(0);
+  await pickFirst(1);
 
   await dialog.getByRole("button", { name: "Добавить" }).click();
   await expect(dialog).toBeHidden({ timeout: 15_000 });

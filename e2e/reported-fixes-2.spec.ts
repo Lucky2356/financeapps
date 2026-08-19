@@ -74,10 +74,14 @@ test("легенда описывает каждую долю круга, вкл
   const quickAdd = page.getByRole("dialog");
   await quickAdd.getByRole("button", { name: "Расход", exact: true }).click();
   await quickAdd.getByLabel("Сумма").fill("3039");
+  // Each list must be closed before the next combobox is clicked: a click that
+  // lands while the first is still closing is swallowed by its overlay.
   await quickAdd.getByRole("combobox").first().click();
   await page.getByRole("option", { name: "Личные" }).click();
+  await expect(page.getByRole("listbox")).toHaveCount(0);
   await quickAdd.getByRole("combobox").nth(1).click();
   await page.getByRole("option").first().click();
+  await expect(page.getByRole("listbox")).toHaveCount(0);
   await quickAdd.getByRole("button", { name: "Добавить" }).click();
   await expect(quickAdd).toBeHidden({ timeout: 15_000 });
 

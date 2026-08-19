@@ -24,7 +24,9 @@ export default defineConfig({
   // CI), switching the UI to EN and breaking the RU text assertions in the specs.
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], locale: "ru-RU" } }],
   webServer: {
-    command: `npx serve out -l ${PORT}`,
+    // A local static server rather than `npx serve`: the latter leaked file
+    // handles and died mid-suite with EMFILE (see scripts/serve-static.mjs).
+    command: `node scripts/serve-static.mjs out ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000
