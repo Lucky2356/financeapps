@@ -32,13 +32,14 @@ const PROFILE_COLORS = [
   "#ca8a04"
 ];
 
-export function ProfileSwitcher() {
+export function ProfileSwitcher({ compact = false }: { compact?: boolean }) {
   // Only show in desktop-local mode
 
-  return <ProfileSwitcherInner />;
+  return <ProfileSwitcherInner compact={compact} />;
 }
 
-function ProfileSwitcherInner() {
+/** `compact` is the collapsed sidebar: the avatar alone, no name, no chevron. */
+function ProfileSwitcherInner({ compact }: { compact: boolean }) {
   const [list, setList] = useState<ProfileList | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -132,13 +133,17 @@ function ProfileSwitcherInner() {
   }
 
   return (
-    <div className="mx-3 mb-2 mt-3">
+    <div className={compact ? "mb-2 mt-3 flex justify-center" : "mx-3 mb-2 mt-3"}>
       {/* Trigger — compact button, no overflow issues */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2 text-sm transition-colors hover:bg-muted/50"
+            title={compact ? active.name : undefined}
+            className={cn(
+              "flex items-center rounded-lg border bg-muted/30 text-sm transition-colors hover:bg-muted/50",
+              compact ? "size-10 justify-center" : "w-full gap-2.5 px-3 py-2"
+            )}
           >
             <span
               className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -146,8 +151,14 @@ function ProfileSwitcherInner() {
             >
               {active.name.charAt(0).toUpperCase()}
             </span>
-            <span className="min-w-0 flex-1 truncate text-left font-medium">{active.name}</span>
-            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            {compact ? (
+              <span className="sr-only">{active.name}</span>
+            ) : (
+              <>
+                <span className="min-w-0 flex-1 truncate text-left font-medium">{active.name}</span>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+              </>
+            )}
           </button>
         </DialogTrigger>
 

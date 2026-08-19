@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CircleDollarSign, Search } from "lucide-react";
+import { CircleDollarSign, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { NotificationBell } from "@/components/notification-bell";
 import { ProfileSwitcher } from "@/components/profile-switcher";
@@ -11,6 +12,8 @@ import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 import { activeNavHref, DESKTOP_NAV } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+
+const COLLAPSED_KEY = "sidebar-collapsed";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -21,64 +24,132 @@ export function AppSidebar() {
   // above the page (see HubTabs).
   const activeHref = activeNavHref(pathname, "desktop");
 
+  // Collapsed to icons: the wide tables (plan/fact above all) want every pixel
+  // of the window. Starts expanded so the server shell and the first paint
+  // agree, then adopts the saved choice.
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    let saved = false;
+    try {
+      saved = localStorage.getItem(COLLAPSED_KEY) === "1";
+    } catch {
+      saved = false;
+    }
+    if (saved) void Promise.resolve().then(() => setCollapsed(true));
+  }, []);
+
+  function toggle() {
+    setCollapsed((previous) => {
+      const next = !previous;
+      try {
+        localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* storage unavailable — the choice lasts this session */
+      }
+      return next;
+    });
+  }
+
   return (
-    <aside className="sticky top-0 z-30 hidden h-screen w-64 shrink-0 flex-col border-r bg-card md:flex">
-      {/* Logo */}
-      <div className="border-b p-5">
-        <Link href="/" className="flex items-center gap-3">
+    <aside
+      data-collapsed={collapsed ? "true" : "false"}
+      className={cn(
+        "sticky top-0 z-30 hidden h-screen shrink-0 flex-col border-r bg-card transition-[width] duration-200 md:flex",
+        collapsed ? "w-[4.5rem]" : "w-64"
+      )}
+    >
+      {/* Logo and the collapse control */}
+      <div
+        className={cn(
+          "border-b",
+          collapsed ? "flex flex-col items-center gap-1 py-3" : "flex items-center gap-2 p-4"
+        )}
+      >
+        <Link href="/" className="flex min-w-0 flex-1 items-center gap-3" title={APP_NAME}>
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-sidebar-accent text-white shadow-sm">
             <CircleDollarSign className="size-[18px]" />
           </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-foreground">{APP_NAME}</span>
-            <span className="block text-[11px] text-muted-foreground">{t("shell.subtitle")}</span>
-          </span>
+          {collapsed ? null : (
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-foreground">
+                {APP_NAME}
+              </span>
+              <span className="block text-[11px] text-muted-foreground">{t("shell.subtitle")}</span>
+            </span>
+          )}
         </Link>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={collapsed ? t("shell.expand") : t("shell.collapse")}
+          title={collapsed ? t("shell.expand") : t("shell.collapse")}
+          aria-expanded={!collapsed}
+          className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+        >
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+        </button>
       </div>
 
-      <ProfileSwitcher />
+      <ProfileSwitcher compact={collapsed} />
 
       {/* Command palette trigger */}
-      <div className="px-3 pt-3">
+      <div className={collapsed ? "flex justify-center px-2 pt-3" : "px-3 pt-3"}>
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event("command-palette-open"))}
-          className="flex w-full items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60"
+          aria-label={t("shell.search")}
+          title={t("shell.search")}
+          className={cn(
+            "flex items-center gap-2 rounded-md border bg-muted/30 text-sm text-muted-foreground transition-colors hover:bg-muted/60",
+            collapsed ? "size-10 justify-center" : "w-full px-3 py-2"
+          )}
         >
           <Search className="size-4" />
-          <span className="flex-1 text-left">{t("shell.search")}</span>
-          <kbd className="rounded bg-background px-1.5 py-0.5 font-mono text-[10px]">Ctrl K</kbd>
+          {collapsed ? null : (
+            <>
+              <span className="flex-1 text-left">{t("shell.search")}</span>
+              <kbd className="rounded bg-background px-1.5 py-0.5 font-mono text-[10px]">
+                Ctrl K
+              </kbd>
+            </>
+          )}
         </button>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
+      <nav className={cn("flex-1 space-y-0.5 overflow-y-auto py-3", collapsed ? "px-2" : "px-3")}>
         {DESKTOP_NAV.map((item) => {
           const active = activeHref === item.href;
           const Icon = item.icon;
+          const label = t(item.labelKey);
           return (
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? label : undefined}
               className={cn(
-                "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150",
+                "relative flex items-center gap-3 rounded-md py-2 text-sm transition-colors duration-150",
+                collapsed ? "justify-center px-2" : "px-3",
                 active
                   ? "bg-primary/10 font-semibold text-primary before:absolute before:left-0 before:top-1/2 before:h-5 before:w-0.5 before:-translate-y-1/2 before:rounded-r before:bg-primary before:content-['']"
                   : "text-muted-foreground hover:bg-primary/5 hover:text-foreground"
               )}
             >
               <Icon className="size-4 shrink-0" />
-              {t(item.labelKey)}
+              {collapsed ? <span className="sr-only">{label}</span> : label}
             </Link>
           );
         })}
       </nav>
 
       {/* Footer */}
-      <div className="border-t px-4 py-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">{t("shell.themeAndNotifications")}</p>
-          <div className="flex items-center gap-0.5">
+      <div className={cn("border-t py-3", collapsed ? "px-2" : "px-4")}>
+        <div className={cn("flex items-center", collapsed ? "flex-col gap-1" : "justify-between")}>
+          {collapsed ? null : (
+            <p className="text-[11px] text-muted-foreground">{t("shell.themeAndNotifications")}</p>
+          )}
+          <div className={cn("flex items-center", collapsed ? "flex-col gap-1" : "gap-0.5")}>
             <NotificationBell />
             <ThemeToggle />
           </div>
