@@ -381,6 +381,33 @@ describe("LocalApiClient", () => {
     expect(ahead.months[0]?.month).toBe(next);
   });
 
+  it("keeps the funding account and the planned contribution when a goal is topped up", async () => {
+    const client = createClient();
+    const account = await seedAccount(client, { name: "Карта", balance: "50000" });
+    const goal = await client.post<{ id: string }>("/goals", {
+      title: "Отпуск",
+      targetAmount: "100000",
+      currentAmount: "0",
+      deadline: "2027-01-01",
+      linkedAccountId: account.id,
+      plannedContribution: "5000"
+    });
+
+    await client.post("/goals", {
+      action: "deposit",
+      goalId: goal.id,
+      amount: "1000",
+      accountId: account.id
+    });
+
+    // A top-up used to rebuild the goal from five fields and drop the rest.
+    const goals = await client.get<GoalsPageData>("/goals");
+    const updated = goals.goals.find((item) => item.id === goal.id);
+    expect(updated?.currentAmount).toBe(1000);
+    expect(updated?.linkedAccountId).toBe(account.id);
+    expect(updated?.plannedContribution).toBe(5000);
+  });
+
   it("manages watchlist and portfolio positions in desktop local mode", async () => {
     const client = createClient();
     const initial = await client.get<InvestmentData>("/investments");

@@ -57,8 +57,22 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
     });
   }
 
-  private async open() {
-    return new Promise<IDBDatabase>((resolve, reject) => {
+  /**
+   * One connection, opened once and reused.
+   *
+   * Every read and write used to open its own, and none was ever closed: a
+   * session accumulated a connection per operation, each holding the database
+   * open. Besides the waste, an open connection blocks a version upgrade — a
+   * future schema change would have hung waiting for connections nobody was
+   * going to close. The handle is dropped if the browser closes it (a version
+   * change elsewhere), so the next call simply opens a fresh one.
+   */
+  private connection: Promise<IDBDatabase> | null = null;
+
+  private async open(): Promise<IDBDatabase> {
+    if (this.connection) return this.connection;
+
+    this.connection = new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(this.databaseName, 1);
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -66,8 +80,21 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
           db.createObjectStore(this.storeName, { keyPath: "key" });
         }
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        db.onclose = () => (this.connection = null);
+        db.onversionchange = () => {
+          db.close();
+          this.connection = null;
+        };
+        resolve(db);
+      };
+      request.onerror = () => {
+        this.connection = null;
+        reject(request.error);
+      };
     });
+
+    return this.connection;
   }
 }
