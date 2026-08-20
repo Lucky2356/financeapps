@@ -21,15 +21,15 @@ import { apiClient } from "@/lib/api/client";
 import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
 import { buildCategoryTrends, type CategoryTrend } from "@/lib/analytics/category-trends";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { formatCurrency, formatInputDate } from "@/lib/format";
+import { axisMoney } from "@/lib/charts/format";
 import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
-  const { t } = useI18n();
-  const axisCurrency = (value: number) =>
-    Math.abs(value) >= 1000 ? `${Math.round(value / 1000)} ${t("an.thousand")}` : `${value}`;
+  const { t, locale } = useI18n();
   const TrendIcon =
     data.savingsRateTrend === "up"
       ? TrendingUp
@@ -142,12 +142,13 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                 data={data.monthlyCashflow}
                 margin={{ top: 10, right: 8, left: 0, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                <CartesianGrid {...chartGridProps} />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={chartAxisTick} />
                 <YAxis
-                  tickFormatter={(v) => axisCurrency(Number(v))}
+                  tickFormatter={(v) => axisMoney(Number(v), locale)}
                   tickLine={false}
                   axisLine={false}
+                  tick={chartAxisTick}
                   width={72}
                 />
                 <Tooltip
@@ -164,11 +165,45 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                     ];
                   }}
                 />
-                <Bar dataKey="income" name="income" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expense" name="expense" fill="#f97316" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="savings" name="savings" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                {/* The same three meanings carry the same three colours as on
+                    the home screen. Hard-coded green/orange/blue here meant
+                    income was one colour in one place and another elsewhere. */}
+                <Bar
+                  dataKey="income"
+                  name="income"
+                  fill={chartTokens.income}
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="expense"
+                  name="expense"
+                  fill={chartTokens.expense}
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="savings"
+                  name="savings"
+                  fill={chartTokens.primary}
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Three bars a month need saying which is which without hovering. */}
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+            {(
+              [
+                ["an.income", chartTokens.income],
+                ["an.expense", chartTokens.expense],
+                ["an.savings", chartTokens.primary]
+              ] as const
+            ).map(([key, color]) => (
+              <span key={key} className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
+                {t(key)}
+              </span>
+            ))}
           </div>
 
           {/* Savings rate legend row */}
