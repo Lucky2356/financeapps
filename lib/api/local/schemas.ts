@@ -253,6 +253,17 @@ export const investmentSchema = z.object({
       })
     )
     .default([]),
+  // Declared on the type and written on every /investments read, but missing
+  // here — so Zod quietly dropped the breakdown by asset kind on load.
+  assetStructure: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        value: z.coerce.number().finite(),
+        fill: z.string().optional()
+      })
+    )
+    .default([]),
   risks: z
     .array(
       z.object({
@@ -371,3 +382,53 @@ export const localStateSchema = z.object({
     .optional()
     .default([])
 });
+
+/**
+ * The row collections a damaged document can be rescued by dropping bad entries
+ * from. Listed by hand rather than derived from the schema: a collection that
+ * is forgotten here simply is not salvaged, which is the safe direction.
+ */
+const SALVAGEABLE = {
+  accounts: accountSchema,
+  categories: categorySchema,
+  transactions: transactionRowSchema,
+  budgets: budgetRowSchema,
+  goals: goalRowSchema,
+  recurringTransactions: recurringRowSchema,
+  liabilities: liabilitySchema,
+  rules: categorizationRuleSchema,
+  plans: planEntrySchema,
+  planNotes: planNoteSchema,
+  realizedInvestmentEvents: realizedEventSchema,
+  expectedDividends: expectedDividendSchema,
+  targetAllocations: targetAllocationSchema,
+  marketAlerts: marketAlertSchema
+} as const;
+
+/**
+ * Reads what can still be read out of a document the strict schema rejects.
+ *
+ * One unparseable row used to condemn the whole ledger — and the reader's
+ * answer was to replace it with an empty state, which is the worst possible
+ * answer for the only copy of someone's money. Dropping the bad rows keeps
+ * everything else; if even that does not parse, the caller leaves the stored
+ * document alone and says so out loud.
+ */
+export function salvageLocalState(
+  raw: unknown
+): { state: z.infer<typeof localStateSchema>; dropped: number } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+
+  const copy: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+  let dropped = 0;
+  for (const [field, schema] of Object.entries(SALVAGEABLE)) {
+    const value = copy[field];
+    if (!Array.isArray(value)) continue;
+    const kept = value.filter((row) => schema.safeParse(row).success);
+    dropped += value.length - kept.length;
+    copy[field] = kept;
+  }
+
+  const parsed = localStateSchema.safeParse(copy);
+  return parsed.success ? { state: parsed.data, dropped } : null;
+}

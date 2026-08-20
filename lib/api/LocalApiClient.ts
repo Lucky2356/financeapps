@@ -52,6 +52,7 @@ import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
+import { salvageLocalState } from "@/lib/api/local/schemas";
 import { countableRows, isTransfer, TRANSFER_CATEGORY_LABEL } from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
@@ -363,6 +364,12 @@ function cellOf(plan: number, fact: number): PlanFactCell {
   return { ...rounded, diff: roundMoney(rounded.plan - rounded.fact) };
 }
 
+/** The first day of "YYYY-MM" in local time, which is how month keys are read. */
+function monthStart(month: string): Date {
+  const [year, index] = month.split("-").map(Number);
+  return new Date(year, (index || 1) - 1, 1);
+}
+
 // "2026-08" three months on is "2026-11". Done through Date so December rolls
 // the year over on its own.
 function shiftMonth(month: string, step: number): string {
@@ -415,7 +422,12 @@ export class LocalApiClient implements ApiClient {
   }
 
   async get<T>(path: string): Promise<T> {
-    const state = await this.state();
+    // Reads get the cached document itself rather than a copy of it. Cloning a
+    // ledger of a few thousand operations costs more than everything the screen
+    // then does with it — over half the time of a page load went into copying
+    // data nobody was going to change. Read handlers build new objects and must
+    // never touch this one; `tests/read-paths.test.ts` holds them to it.
+    const state = await this.state(false);
     const { pathname, searchParams } = normalizePath(path);
 
     if (pathname === "/accounts") return this.accounts(state) as T;
@@ -434,9 +446,17 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") {
-      state.lastBackupAt = new Date().toISOString();
-      await this.save(state);
-      return (await this.backup(state)) as T;
+      // The exported file records when it was made, so the stamp goes into the
+      // payload here — and into storage inside the queue, on a state read
+      // again, so an export cannot roll back whatever was saved meanwhile.
+      const stamped = new Date().toISOString();
+      const payload = await this.backup({ ...state, lastBackupAt: stamped });
+      await this.serialize(async () => {
+        const fresh = await this.state();
+        fresh.lastBackupAt = stamped;
+        await this.save(fresh);
+      });
+      return payload as T;
     }
     if (pathname === "/investments/search") {
       // `kind` narrows the search to shares, bonds, funds or metal. Without it
@@ -467,17 +487,23 @@ export class LocalApiClient implements ApiClient {
     }
     if (pathname === "/investments") {
       const invData = await this.investments(state);
-      // Persist last-known prices so they survive app restart
-      state.investments = {
-        ...state.investments,
-        securities: invData.securities,
-        watchlist: invData.watchlist,
-        portfolio: invData.portfolio,
-        structure: invData.structure,
-        sectorStructure: invData.sectorStructure,
-        assetStructure: invData.assetStructure
-      };
-      await this.save(state);
+      // Persist last-known prices so they survive app restart. Read the state
+      // again inside the queue first: fetching quotes takes seconds, and
+      // whatever the owner saved meanwhile must not be rolled back by the
+      // snapshot this request started from.
+      await this.serialize(async () => {
+        const fresh = await this.state();
+        fresh.investments = {
+          ...fresh.investments,
+          securities: invData.securities,
+          watchlist: invData.watchlist,
+          portfolio: invData.portfolio,
+          structure: invData.structure,
+          sectorStructure: invData.sectorStructure,
+          assetStructure: invData.assetStructure
+        };
+        await this.save(fresh);
+      });
       return invData as T;
     }
     if (pathname === "/investments/events") return this.investmentEventsPage(state) as T;
@@ -746,6 +772,10 @@ export class LocalApiClient implements ApiClient {
     if (method === "PUT" && input.id) this.deleteTransaction(state, input.id);
 
     const amount = Number(input.amount);
+    // Checked here because the stored schema demands a positive number: a zero
+    // or a stray letter used to be written happily and made the whole document
+    // unreadable on the next start.
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
     const linkedRecurringId = recurringId ?? previous?.recurringId;
     const tags = String(input.tags ?? "")
@@ -882,6 +912,7 @@ export class LocalApiClient implements ApiClient {
     if (!category) throw new Error("Выберите расходную категорию.");
 
     const limit = Number(input.limitAmount);
+    if (!Number.isFinite(limit) || limit < 0) throw new Error("Введите лимит от нуля.");
     const monthKey = typeof input.month === "string" && input.month ? input.month : undefined;
 
     // A zero limit means "reset" — remove the budget for this category.
@@ -989,13 +1020,10 @@ export class LocalApiClient implements ApiClient {
     if (amount > account.balance) throw new Error("Недостаточно средств на счёте.");
 
     this.applyBalance(state, account.id, -amount);
-    const updated = recomputeGoal({
-      id: goal.id,
-      title: goal.title,
-      targetAmount: goal.targetAmount,
-      currentAmount: goal.currentAmount + amount,
-      deadline: goal.deadline
-    });
+    // Spread the goal rather than rebuilding it from five fields: the funding
+    // account and the planned contribution live on it too, and listing the
+    // fields by hand erased both on every top-up.
+    const updated = recomputeGoal({ ...goal, currentAmount: goal.currentAmount + amount });
     state.goals = state.goals.map((item) => (item.id === goal.id ? updated : item));
     return updated;
   }
@@ -1109,21 +1137,33 @@ export class LocalApiClient implements ApiClient {
         isActive: recurring.isActive
       });
       if (status.dueDates.length === 0) continue;
+      // A template whose account was archived or whose category was deleted
+      // throws. It must cost only itself: this runs on every start, and one
+      // stale template used to silently cancel the whole batch — the caller
+      // swallows the error, so nothing was posted and nothing was said.
+      let failed = false;
       for (const dueDate of status.dueDates) {
-        this.upsertTransaction(
-          state,
-          {
-            amount: String(recurring.amount),
-            type: recurring.type,
-            accountId: recurring.account.id,
-            categoryId: recurring.category.id,
-            date: dueDate.toISOString(),
-            description: recurring.description ?? recurring.category.label
-          },
-          "POST"
-        );
-        created += 1;
+        try {
+          this.upsertTransaction(
+            state,
+            {
+              amount: String(recurring.amount),
+              type: recurring.type,
+              accountId: recurring.account.id,
+              categoryId: recurring.category.id,
+              date: dueDate.toISOString(),
+              description: recurring.description ?? recurring.category.label
+            },
+            "POST"
+          );
+          created += 1;
+        } catch {
+          failed = true;
+        }
       }
+      // Nothing posted means the template stays due, so a fixed account or
+      // category makes it catch up rather than skip the period silently.
+      if (failed) continue;
       state.recurringTransactions = state.recurringTransactions.map((item) =>
         item.id === recurring.id
           ? { ...item, nextDate: status.nextDateAfterRun.toISOString(), isDue: false }
@@ -1149,8 +1189,9 @@ export class LocalApiClient implements ApiClient {
 
     for (const liability of due) {
       const accountId =
-        state.accounts.find((account) => account.id === liability.paymentAccountId)?.id ??
-        fallbackAccount?.id;
+        state.accounts.find(
+          (account) => account.id === liability.paymentAccountId && !account.isArchived
+        )?.id ?? fallbackAccount?.id;
       const categoryId =
         state.categories.find(
           (category) => category.id === liability.paymentCategoryId && category.kind === "EXPENSE"
@@ -1640,7 +1681,9 @@ export class LocalApiClient implements ApiClient {
   }
 
   private budgets(state: LocalState, month?: string): BudgetsPageData {
-    const targetDate = month ? new Date(`${month}-01`) : new Date();
+    // "2026-08-01" parses as UTC midnight, and the key is read back in local
+    // time — west of Greenwich that is the previous month.
+    const targetDate = month ? monthStart(month) : new Date();
     const selectedMonth = monthKeyOf(targetDate);
     const budgets = this.budgetRows(state, selectedMonth);
     const finance = this.financeInput(state);
@@ -2030,7 +2073,9 @@ export class LocalApiClient implements ApiClient {
     });
     const savingsBalance = this.sumInBase(
       state,
-      state.accounts.filter((account) => account.type === "SAVINGS")
+      // Archived accounts are outside capital, so they cannot back the
+      // emergency fund either — the two figures have to agree.
+      state.accounts.filter((account) => account.type === "SAVINGS" && !account.isArchived)
     );
     const averageMonthlyExpense =
       finance.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0) /
@@ -2649,11 +2694,17 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
-  private async state() {
+  /**
+   * The active profile's document. `mutable` (the default) hands back a copy,
+   * so a handler that changes things — and may still throw — cannot poison the
+   * cache; reads pass `false` and get the cached object itself, which is what
+   * keeps a big ledger quick.
+   */
+  private async state(mutable = true) {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
     if (this.stateCache && this.stateCache.key === key) {
-      return structuredClone(this.stateCache.state);
+      return mutable ? structuredClone(this.stateCache.state) : this.stateCache.state;
     }
     const existing = await this.storage.getItem<unknown>(key);
     const parsed = localStateSchema.safeParse(existing);
@@ -2665,10 +2716,53 @@ export class LocalApiClient implements ApiClient {
       this.stateCache = { key, state: structuredClone(migrated) };
       return structuredClone(migrated);
     }
-    const initial = createInitialState();
-    await this.storage.setItem(key, initial);
-    this.stateCache = { key, state: structuredClone(initial) };
-    return structuredClone(initial);
+    // Nothing below may overwrite what is stored: the only reason we are here
+    // is that this build cannot read it, and "cannot read" is not "may erase".
+    // Replacing it with an empty state — which is what happened until 1.13.0 —
+    // turns one bad row, or a file written by a newer build, into the loss of
+    // every account, operation and plan.
+    if (existing == null) {
+      const initial = createInitialState();
+      await this.storage.setItem(key, initial);
+      this.stateCache = { key, state: structuredClone(initial) };
+      return structuredClone(initial);
+    }
+
+    const storedVersion = (existing as { schemaVersion?: unknown })?.schemaVersion;
+    if (typeof storedVersion === "number" && storedVersion > LATEST_LOCAL_STATE_VERSION)
+      throw new Error(
+        `Данные сохранены более новой версией приложения (формат ${storedVersion}). ` +
+          "Обновите приложение — старая версия их не откроет."
+      );
+
+    await this.keepRescueCopy(key, existing);
+
+    const salvaged = salvageLocalState(existing);
+    if (!salvaged)
+      throw new Error(
+        "Не удалось прочитать сохранённые данные. Они не тронуты, копия отложена — " +
+          "восстановите из резервной копии в настройках."
+      );
+
+    const migrated = migrateLocalState(salvaged.state);
+    await this.storage.setItem(key, migrated);
+    this.stateCache = { key, state: structuredClone(migrated) };
+    return structuredClone(migrated);
+  }
+
+  /**
+   * Puts the unreadable document aside before anything else touches the key.
+   * Written once: a second failure must not overwrite the first rescue, which
+   * is the one closest to the moment things went wrong.
+   */
+  private async keepRescueCopy(key: string, document: unknown) {
+    const rescueKey = `${key}:rescue`;
+    try {
+      if ((await this.storage.getItem<unknown>(rescueKey)) == null)
+        await this.storage.setItem(rescueKey, document);
+    } catch {
+      /* storage refused the copy — the original is still where it was */
+    }
   }
 
   private async save(state: LocalState) {
