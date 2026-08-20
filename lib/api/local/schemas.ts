@@ -80,7 +80,11 @@ export const transactionRowSchema = z.object({
   // transaction, so all existing aggregations count them without double-counting).
   splitGroupId: z.string().optional(),
   // Shared id linking the two halves of a transfer between own accounts.
-  transferId: z.string().optional()
+  transferId: z.string().optional(),
+  // The debt this payment settles. A debt payment moves money out of an account
+  // AND reduces what is owed by the same amount, so it leaves net worth exactly
+  // where it was — the capital chart has to know not to count it as spending.
+  liabilityId: z.string().optional()
 });
 export const budgetRowSchema = z.object({
   id: z.string().min(1),
@@ -313,7 +317,8 @@ export const localStateSchema = z.object({
     z.literal(8),
     z.literal(9),
     z.literal(10),
-    z.literal(11)
+    z.literal(11),
+    z.literal(12)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed

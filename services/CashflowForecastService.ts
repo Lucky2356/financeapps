@@ -3,12 +3,14 @@ import { addDays, differenceInCalendarDays, format, isAfter, isBefore, startOfDa
 import { enUS, ru } from "date-fns/locale";
 
 import { upcomingInterest } from "@/lib/accounts/interest";
+import { isSettledDebt } from "@/lib/debts/settled";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 import type {
   AccountRow,
   ForecastData,
   ForecastEvent,
   GoalRow,
+  LiabilityRow,
   RecurringTransactionRow
 } from "@/types/finance";
 import { roundMoney } from "@/lib/utils";
@@ -20,6 +22,13 @@ export type CashflowForecastInput = {
   accounts: AccountRow[];
   recurringTransactions: RecurringTransactionRow[];
   goals: GoalRow[];
+  /**
+   * Debts with automatic payment. They leave the account on a known day for a
+   * known amount — planned spending in every sense — and were simply missing:
+   * a 40 000 ₽ monthly obligation left the 90-day balance ~120 000 ₽ too high,
+   * with no warning that it goes negative.
+   */
+  liabilities?: LiabilityRow[];
   horizonDays?: number;
   today?: Date;
 };
@@ -44,7 +53,8 @@ export class CashflowForecastService {
     // forecast understates every horizon balance.
     const events = [
       ...this.buildEvents(input.recurringTransactions, today, horizon),
-      ...this.buildInterestEvents(input.accounts, today, horizonDays, locale)
+      ...this.buildInterestEvents(input.accounts, today, horizonDays, locale),
+      ...this.buildDebtEvents(input.liabilities ?? [], today, horizon, locale)
     ].sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
     const points = this.buildPoints(startingBalance, events, today, horizonDays, dfLocale);
     const plannedIncome30d = this.sumEvents(events, "INCOME", 30, today);
@@ -139,6 +149,57 @@ export class CashflowForecastService {
       category: title,
       account: accrual.accountName
     }));
+  }
+
+  /**
+   * Every automatic debt payment falling inside the horizon. The app posts them
+   * itself on the due day, so a forecast that ignores them is planning with
+   * money already spoken for.
+   */
+  private buildDebtEvents(
+    liabilities: LiabilityRow[],
+    today: Date,
+    horizon: Date,
+    locale: Locale
+  ): ForecastEvent[] {
+    const title = translate(locale, "forecast.debtEvent");
+    const events: ForecastEvent[] = [];
+
+    for (const liability of liabilities) {
+      if (!liability.autoPay || !liability.dueDay || isSettledDebt(liability)) continue;
+
+      // What is still owed caps the payments: a debt with two payments left
+      // does not keep taking money for the rest of the horizon.
+      let outstanding = liability.balance;
+      for (let month = 0; month <= 12 && outstanding > 0; month += 1) {
+        const candidate = new Date(today.getFullYear(), today.getMonth() + month, 1);
+        // A 31st due day on a 30-day month lands on the last day of it.
+        const lastDay = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
+        const date = new Date(
+          candidate.getFullYear(),
+          candidate.getMonth(),
+          Math.min(liability.dueDay, lastDay)
+        );
+        if (isBefore(date, today)) continue;
+        if (isAfter(date, horizon)) break;
+
+        const amount = roundMoney(Math.min(liability.minPayment, outstanding));
+        if (amount <= 0) break;
+        outstanding = roundMoney(outstanding - amount);
+
+        events.push({
+          id: `debt-${liability.id}-${format(date, "yyyy-MM-dd")}`,
+          date: date.toISOString(),
+          title: `${title}: ${liability.name}`,
+          amount,
+          type: "EXPENSE" as TransactionType,
+          category: title,
+          account: liability.name
+        });
+      }
+    }
+
+    return events;
   }
 
   private buildPoints(
@@ -244,7 +305,9 @@ export class CashflowForecastService {
       });
     }
 
-    if (input.forecast30dBalance < input.startingBalance * 0.15) {
+    // Only meaningful while there is a balance to fall from: below zero the
+    // threshold flips, and −100 000 improving to −50 000 tripped the warning.
+    if (input.startingBalance > 0 && input.forecast30dBalance < input.startingBalance * 0.15) {
       warnings.push({
         id: "low-30d-balance",
         title: t("svc.fc.low30.title"),

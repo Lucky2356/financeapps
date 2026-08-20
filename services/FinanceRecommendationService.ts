@@ -37,7 +37,13 @@ export class FinanceRecommendationService {
     const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
     const recommendations: RecommendationView[] = [];
 
-    for (const budget of input.budgets.filter((item) => item.isExceeded)) {
+    // The three worst overruns, not every one of them: a dozen exceeded budgets
+    // is a list nobody reads, and it crowds out everything else.
+    const worstBudgets = input.budgets
+      .filter((item) => item.isExceeded)
+      .sort((left, right) => right.spent - right.limitAmount - (left.spent - left.limitAmount))
+      .slice(0, 3);
+    for (const budget of worstBudgets) {
       recommendations.push({
         id: `budget-${budget.category}`,
         title: t("svc.rec.budgetExceeded.title", { category: budget.category }),
@@ -115,7 +121,14 @@ export class FinanceRecommendationService {
       });
     }
 
-    return recommendations.slice(0, 8);
+    // Exceeded budgets are added first and there can be any number of them, so
+    // eight of them used to push out the CRITICAL reserve warning and every
+    // piece of advice after it. Order by how much the reader needs to see it;
+    // within a severity the original order (and its reasoning) is kept.
+    const bySeverity = { CRITICAL: 0, WARNING: 1, INFO: 2, SUCCESS: 3 } as const;
+    return [...recommendations]
+      .sort((left, right) => bySeverity[left.severity] - bySeverity[right.severity])
+      .slice(0, 8);
   }
 
   healthScore(input: FinanceRecommendationInput, locale: Locale = DEFAULT_LOCALE): HealthScore {

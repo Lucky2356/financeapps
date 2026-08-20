@@ -1,4 +1,4 @@
-import { differenceInCalendarMonths } from "date-fns";
+import { differenceInCalendarMonths, startOfDay } from "date-fns";
 
 import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 
@@ -30,7 +30,9 @@ export function describeGoalPace(
   const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
   const isComplete = remaining <= 0;
   const monthsLeft = differenceInCalendarMonths(new Date(goal.deadline), now);
-  const isOverdue = !isComplete && monthsLeft < 0;
+  // Counted in calendar months, a deadline on the 5th is still "this month" on
+  // the 20th — an expired goal read as achievable for up to four more weeks.
+  const isOverdue = !isComplete && startOfDay(new Date(goal.deadline)) < startOfDay(now);
 
   let hint: string;
   if (isComplete) {

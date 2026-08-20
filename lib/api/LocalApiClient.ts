@@ -52,6 +52,7 @@ import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
+import { pickBestWorstMonth } from "@/lib/analytics/best-month";
 import { salvageLocalState } from "@/lib/api/local/schemas";
 import { countableRows, isTransfer, TRANSFER_CATEGORY_LABEL } from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
@@ -103,7 +104,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -778,6 +779,8 @@ export class LocalApiClient implements ApiClient {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
     const linkedRecurringId = recurringId ?? previous?.recurringId;
+    const linkedLiabilityId =
+      (typeof input.liabilityId === "string" && input.liabilityId) || previous?.liabilityId;
     const tags = String(input.tags ?? "")
       .split(",")
       .map((value) => value.trim())
@@ -797,6 +800,7 @@ export class LocalApiClient implements ApiClient {
         ...(category.icon ? { icon: category.icon } : {})
       },
       ...(linkedRecurringId ? { recurringId: linkedRecurringId } : {}),
+      ...(linkedLiabilityId ? { liabilityId: linkedLiabilityId } : {}),
       ...(tags.length ? { tags } : {}),
       ...(input.splitGroupId ? { splitGroupId: String(input.splitGroupId) } : {}),
       ...(input.transferId ? { transferId: String(input.transferId) } : {})
@@ -1210,7 +1214,8 @@ export class LocalApiClient implements ApiClient {
           accountId,
           categoryId,
           date: today.toISOString(),
-          description: liability.name
+          description: liability.name,
+          liabilityId: liability.id
         },
         "POST"
       );
@@ -1867,13 +1872,21 @@ export class LocalApiClient implements ApiClient {
   }
 
   private forecast(state: LocalState): ForecastPageData {
+    const rates = this.rates(state);
     return new CashflowForecastService().build(
       {
         source: "database",
         currency: state.currency,
-        accounts: this.accounts(state).accounts,
+        // Balances converted to the base currency first: the forecast adds them
+        // up, and 1 000 $ counted as 1 000 ₽ corrupts every point on the chart.
+        accounts: this.accounts(state).accounts.map((account) => ({
+          ...account,
+          balance: toBaseAmount(account.balance, account.currency, rates),
+          currency: state.currency
+        })),
         recurringTransactions: this.recurring(state).recurringTransactions,
-        goals: this.goals(state).goals
+        goals: this.goals(state).goals,
+        liabilities: state.liabilities.map(recomputeLiability)
       },
       getClientLocale()
     );
@@ -2053,7 +2066,7 @@ export class LocalApiClient implements ApiClient {
   }
 
   private async dashboard(state: LocalState): Promise<DashboardData> {
-    const finance = this.financeInput(state);
+    const finance = this.financeInput(state, true);
     const totalBalance = this.accounts(state).totalBalance;
     const portfolioValue = await this.portfolioValue(state);
     // Goal savings are money the user set aside from accounts, so they stay
@@ -2500,19 +2513,28 @@ export class LocalApiClient implements ApiClient {
     const avgMonthlyExpense = Math.round(
       monthlyCashflow.reduce((sum, m) => sum + m.expense, 0) / nonZero
     );
+    // Averaged over the months that HAVE something in them, exactly like income
+    // and expense above. Dividing by six regardless meant two active months at
+    // 30% were reported as 10% — a number the owner reads next to a 51% figure
+    // computed the honest way, and the two never agreed.
     const avgSavingsRate =
-      Math.round(
-        (monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / monthlyCashflow.length) * 10
-      ) / 10;
+      Math.round((monthlyCashflow.reduce((sum, m) => sum + m.savingsRate, 0) / nonZero) * 10) / 10;
 
-    const bestMonth = [...monthlyCashflow].sort((a, b) => b.savings - a.savings)[0]?.month ?? "-";
-    const worstMonth = [...monthlyCashflow].sort((a, b) => a.savings - b.savings)[0]?.month ?? "-";
+    // The guarded pick: with nothing to compare, a plain sort is stable and
+    // would name the first month of the window as "the best" (and the same one
+    // as the worst) on a profile that has no data at all.
+    const { best: bestMonth, worst: worstMonth } = pickBestWorstMonth(monthlyCashflow);
 
-    // Top expense categories over 6 months
-    const sixMonthsAgoKey = months[0].key;
-    const expenseTxs = transactions.filter(
-      (t) => t.type === "EXPENSE" && t.date >= sixMonthsAgoKey
-    );
+    // Top expense categories over the same six months the chart above draws.
+    // The window had no upper end, so an operation dated next year counted in
+    // every category share while being absent from the months beside it.
+    const firstKey = months[0].key;
+    const lastKey = months[months.length - 1].key;
+    const inWindow = (date: string) => {
+      const key = date.slice(0, 7);
+      return key >= firstKey && key <= lastKey;
+    };
+    const expenseTxs = transactions.filter((t) => t.type === "EXPENSE" && inWindow(t.date));
     const totalExpense = expenseTxs.reduce((sum, t) => sum + t.amount, 0);
     const catTotals = new Map<
       string,
@@ -2540,7 +2562,8 @@ export class LocalApiClient implements ApiClient {
     // the operations over the same six months.
     const topIncomeCategories = topCategories(transactions, {
       type: "INCOME",
-      since: sixMonthsAgoKey,
+      since: `${firstKey}-01`,
+      until: monthKeyOf(new Date(now.getFullYear(), now.getMonth() + 1, 1)),
       colorOf: (categoryId) => state.categories.find((item) => item.id === categoryId)?.color
     });
 
@@ -2621,25 +2644,36 @@ export class LocalApiClient implements ApiClient {
     return category;
   }
 
-  private financeInput(state: LocalState) {
+  /**
+   * The three-month picture the health score, recommendations and the emergency
+   * fund are built from.
+   *
+   * `alreadyFiltered` is the dashboard, which hands over a state whose transfers
+   * were already dealt with according to the reader's choice. Everyone else gets
+   * them removed here: a transfer between your own accounts is not income and
+   * not spending, and counting it diluted the savings rate — so the budgets
+   * screen and the home screen disagreed about the same three months.
+   */
+  private financeInput(state: LocalState, alreadyFiltered = false) {
+    const rows = alreadyFiltered ? state.transactions : countableRows(state.transactions, false);
     const now = new Date();
     const monthKey = (offset: number) =>
       monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset, 1));
     const monthlyCashflow = [-2, -1, 0].map((offset) => {
       const key = monthKey(offset);
-      const rows = state.transactions.filter((transaction) => transaction.date.startsWith(key));
+      const monthRows = rows.filter((transaction) => transaction.date.startsWith(key));
       return {
         month: key,
-        income: rows
+        income: monthRows
           .filter((row) => row.type === "INCOME")
           .reduce((sum, row) => sum + row.amount, 0),
-        expense: rows
+        expense: monthRows
           .filter((row) => row.type === "EXPENSE")
           .reduce((sum, row) => sum + row.amount, 0)
       };
     });
     const currentMonth = monthlyCashflow[monthlyCashflow.length - 1];
-    const expenseRows = state.transactions.filter(
+    const expenseRows = rows.filter(
       (row) => row.type === "EXPENSE" && row.date.startsWith(monthKey(0))
     );
     const averageExpense =

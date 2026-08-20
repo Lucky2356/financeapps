@@ -17,7 +17,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 11;
+export const LATEST_LOCAL_STATE_VERSION = 12;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -131,6 +131,42 @@ export const localStateMigrations: LocalStateMigration[] = [
     // month). An install without them simply has no plan yet, which the Zod
     // defaults express as empty lists, so the migration only stamps the version.
     migrate: (state) => ({ ...state, schemaVersion: 11 })
+  },
+  {
+    from: 11,
+    to: 12,
+    // v12 marks a debt payment on the transaction that pays it. Such a payment
+    // takes money off an account and takes the same amount off what is owed, so
+    // net worth does not move — but the capital chart reconstructs the past from
+    // flows and counted it as spending, drawing a falling line for someone who
+    // was paying a loan down. Rows the app posted itself carry the debt's name
+    // as their description, which is what identifies them here; from now on the
+    // link is written at the source.
+    migrate: (state) => {
+      const liabilities = Array.isArray(state.liabilities) ? state.liabilities : [];
+      const transactions = Array.isArray(state.transactions) ? state.transactions : [];
+      const byName = new Map<string, string>();
+      for (const raw of liabilities) {
+        const liability = raw as { id?: unknown; name?: unknown; autoPay?: unknown };
+        // Only debts the app has been paying automatically: those are the rows
+        // it wrote, and a name typed by hand should not sweep up real spending.
+        if (!liability.autoPay || typeof liability.id !== "string") continue;
+        if (typeof liability.name === "string" && liability.name.trim())
+          byName.set(liability.name.trim().toLowerCase(), liability.id);
+      }
+
+      return {
+        ...state,
+        schemaVersion: 12,
+        transactions: transactions.map((raw) => {
+          const row = raw as Record<string, unknown>;
+          if (row.liabilityId || row.type !== "EXPENSE") return row;
+          const description = typeof row.description === "string" ? row.description.trim() : "";
+          const liabilityId = byName.get(description.toLowerCase());
+          return liabilityId ? { ...row, liabilityId } : row;
+        })
+      };
+    }
   }
 ];
 
