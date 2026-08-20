@@ -75,12 +75,22 @@ export function topCategories(
   options: {
     type: "INCOME" | "EXPENSE";
     since: string;
+    /**
+     * Exclusive upper end of the window. Without one the ranking counted rows
+     * dated beyond the period it claims to cover — a future-dated operation
+     * took a share of a six-month total it does not belong to.
+     */
+    until?: string;
     colorOf: (categoryId: string) => string | undefined;
     limit?: number;
   }
 ): RankedCategory[] {
   const matching = rows.filter(
-    (row) => row.type === options.type && row.date >= options.since && row.amount > 0
+    (row) =>
+      row.type === options.type &&
+      row.date >= options.since &&
+      (!options.until || row.date < options.until) &&
+      row.amount > 0
   );
   const total = matching.reduce((sum, row) => sum + row.amount, 0);
 

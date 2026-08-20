@@ -51,12 +51,15 @@ describe("net-worth snapshots (plan B7)", () => {
         snapshots: [{ date: "2026-05-31", value: 50000 }],
         now
       });
-      // Six buckets: Jan..Jun. Early months (no snapshot) → reconstruction (70000);
-      // May (snapshot) and June (carried-forward latest) → 50000.
+      // Six buckets: Jan..Jun. A month is answered by a snapshot taken IN it,
+      // otherwise by the reconstruction. May has one, so May reads 50 000.
+      // June does not, and carrying May's forward made the last point of the
+      // chart disagree with the capital figure printed above it — the
+      // reconstruction says 70 000, which is what the app shows everywhere else.
       expect(trend).toHaveLength(6);
       expect(trend[0].value).toBe(70000);
       expect(trend[4].value).toBe(50000);
-      expect(trend[5].value).toBe(50000);
+      expect(trend[5].value).toBe(70000);
     });
   });
 });

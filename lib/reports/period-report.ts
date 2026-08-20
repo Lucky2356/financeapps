@@ -132,7 +132,9 @@ function yearTotals(transactions: ReportTransaction[], year: number): PeriodTota
 }
 
 function changePct(current: number, previous: number): number {
-  if (previous === 0) return current === 0 ? 0 : 100;
+  // From nothing to something is 100% either way — but which way matters:
+  // savings going 0 → −50 000 was reported as growth of +100%.
+  if (previous === 0) return current === 0 ? 0 : current > 0 ? 100 : -100;
   return round2(((current - previous) / Math.abs(previous)) * 100);
 }
 

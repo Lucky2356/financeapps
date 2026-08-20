@@ -18,11 +18,17 @@ export function suggestedLimitFor(
   const now = options?.now ?? new Date();
   const months = options?.months ?? 3;
   const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  // The window needs both ends. Opening March's budgets in August summed five
+  // extra months and still divided by three, suggesting a limit half again too
+  // high — the further back the month, the worse the advice.
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const total = transactions
-    .filter(
-      (tx) => tx.type === "EXPENSE" && tx.category.id === categoryId && new Date(tx.date) >= start
-    )
+    .filter((tx) => {
+      if (tx.type !== "EXPENSE" || tx.category.id !== categoryId) return false;
+      const date = new Date(tx.date);
+      return date >= start && date < end;
+    })
     .reduce((sum, tx) => sum + tx.amount, 0);
 
   if (total <= 0) return 0;

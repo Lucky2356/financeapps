@@ -10,7 +10,16 @@ export function buildEmergencyFund(params: {
   targetMonths: number;
 }): EmergencyFundStatus {
   const { savingsBalance, averageMonthlyExpense, targetMonths } = params;
-  const months = averageMonthlyExpense > 0 ? savingsBalance / averageMonthlyExpense : 0;
+  // With no spending on record there is nothing for the reserve to cover, so
+  // money set aside counts as a full reserve. Reporting 0 months while the bar
+  // read 100% put a "critical: low reserve" beside a full bar and took 25
+  // points off the health score of someone with half a million saved.
+  const months =
+    averageMonthlyExpense > 0
+      ? savingsBalance / averageMonthlyExpense
+      : savingsBalance > 0
+        ? targetMonths
+        : 0;
   const targetAmount = Math.round(targetMonths * averageMonthlyExpense);
   const progress =
     targetAmount > 0

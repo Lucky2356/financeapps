@@ -48,6 +48,8 @@ export type NetWorthFlowTx = {
   type: string;
   amount: number;
   category?: { label?: string | null } | null;
+  /** Set on a debt payment, which leaves net worth where it was. */
+  liabilityId?: string;
 };
 
 // Goal deposits are recorded as an expense in this category but do not change
@@ -70,6 +72,11 @@ export function buildNetWorthTrend(params: {
   const flows = params.transactions
     .filter((tx) => tx.type === "INCOME" || tx.type === "EXPENSE")
     .filter((tx) => (tx.category?.label ?? "") !== SAVINGS_CATEGORY)
+    // A debt payment takes money off an account and takes the same amount off
+    // what is owed, so net worth does not move. Counted as plain spending, it
+    // made every earlier point higher than it really was — the chart of someone
+    // paying off a loan sloped downwards while they were getting richer.
+    .filter((tx) => !tx.liabilityId)
     .map((tx) => ({
       time: new Date(tx.date).getTime(),
       delta: tx.type === "INCOME" ? tx.amount : -tx.amount
@@ -81,7 +88,13 @@ export function buildNetWorthTrend(params: {
     const monthEnd = monthEndDate.getTime();
     // Prefer a real captured snapshot at/before this month-end; otherwise fall
     // back to the flow-reconstructed value (months before snapshots existed).
-    const snapshot = snapshotAsOf(snapshots, isoDay(monthEndDate));
+    // Only a snapshot taken IN this month says what this month ended with. Any
+    // older one was accepted before, so a single reading in January was
+    // repeated as the answer for February through July — a flat line where the
+    // reconstruction had the real curve.
+    const monthStart = isoDay(new Date(monthEndDate.getFullYear(), monthEndDate.getMonth(), 1));
+    const candidate = snapshotAsOf(snapshots, isoDay(monthEndDate));
+    const snapshot = candidate && candidate.date >= monthStart ? candidate : null;
     const flowAfter = flows.reduce(
       (sum, flow) => (flow.time > monthEnd ? sum + flow.delta : sum),
       0

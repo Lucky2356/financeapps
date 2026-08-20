@@ -180,6 +180,12 @@ export type TransactionRow = {
    * out — see lib/transactions/transfers.ts.
    */
   transferId?: string;
+  /**
+   * The debt this payment settles. Such a payment takes money off an account
+   * and takes the same amount off what is owed, so net worth does not move —
+   * the capital chart leaves it out of its flow reconstruction.
+   */
+  liabilityId?: string;
 };
 
 export type RecurringTransactionRow = {

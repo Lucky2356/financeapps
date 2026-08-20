@@ -39,14 +39,28 @@ describe("buildEmergencyFund", () => {
     expect(fund.progress).toBe(50);
   });
 
-  it("handles zero expense gracefully", () => {
+  it("treats a reserve with nothing to cover as complete", () => {
     const fund = buildEmergencyFund({
       savingsBalance: 1000,
       averageMonthlyExpense: 0,
       targetMonths: 6
     });
-    expect(fund.months).toBe(0);
-    expect(fund.targetAmount).toBe(0);
+    // The bar has always read 100% here — there is money set aside and no
+    // spending to cover. `months` used to say 0 at the same time, and the
+    // readers of that number put a CRITICAL "low reserve" beside the full bar
+    // and took 25 points off the health score. The two now agree.
     expect(fund.progress).toBe(100);
+    expect(fund.months).toBe(6);
+    expect(fund.targetAmount).toBe(0);
+  });
+
+  it("keeps an empty reserve empty", () => {
+    const fund = buildEmergencyFund({
+      savingsBalance: 0,
+      averageMonthlyExpense: 0,
+      targetMonths: 6
+    });
+    expect(fund.progress).toBe(0);
+    expect(fund.months).toBe(0);
   });
 });
