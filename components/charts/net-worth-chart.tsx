@@ -12,14 +12,13 @@ import {
 
 import type { NetWorthPoint } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { axisMoney } from "@/lib/charts/format";
 import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
 export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
-  const { t } = useI18n();
-  const axisCurrency = (value: number) =>
-    Math.abs(value) >= 1000 ? `${Math.round(value / 1000)} ${t("chart.thousand")}` : `${value} ₽`;
+  const { t, locale } = useI18n();
   return (
     <div className="h-64 w-full sm:h-72" role="img" aria-label={t("chart.aria.netWorth")}>
       <ResponsiveContainer width="100%" height="100%">
@@ -33,11 +32,11 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
           <CartesianGrid {...chartGridProps} />
           <XAxis dataKey="month" tickLine={false} axisLine={false} tick={chartAxisTick} />
           <YAxis
-            tickFormatter={(value) => axisCurrency(Number(value))}
+            tickFormatter={(value) => axisMoney(Number(value), locale)}
             tickLine={false}
             axisLine={false}
             tick={chartAxisTick}
-            width={78}
+            width={64}
           />
           <Tooltip
             {...chartTooltipProps}

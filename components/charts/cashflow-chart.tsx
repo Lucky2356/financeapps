@@ -4,14 +4,13 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import type { MonthlyCashflowDatum } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
+import { axisMoney } from "@/lib/charts/format";
 import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
 export function CashflowChart({ data }: { data: MonthlyCashflowDatum[] }) {
-  const { t } = useI18n();
-  const axisCurrency = (value: number) =>
-    Math.abs(value) >= 1000 ? `${Math.round(value / 1000)} ${t("chart.thousand")}` : `${value} ₽`;
+  const { t, locale } = useI18n();
   return (
     <div className="h-72 w-full sm:h-80" role="img" aria-label={t("chart.aria.cashflow")}>
       <ResponsiveContainer width="100%" height="100%">
@@ -19,11 +18,11 @@ export function CashflowChart({ data }: { data: MonthlyCashflowDatum[] }) {
           <CartesianGrid {...chartGridProps} />
           <XAxis dataKey="month" tickLine={false} axisLine={false} tick={chartAxisTick} />
           <YAxis
-            tickFormatter={(value) => axisCurrency(Number(value))}
+            tickFormatter={(value) => axisMoney(Number(value), locale)}
             tickLine={false}
             axisLine={false}
             tick={chartAxisTick}
-            width={78}
+            width={72}
           />
           <Tooltip {...chartTooltipProps} formatter={(value) => formatCurrency(Number(value))} />
           <Bar

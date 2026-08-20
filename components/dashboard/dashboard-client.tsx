@@ -176,6 +176,8 @@ function CategoryBreakdownCard({
   data: DashboardData["categoryExpenses"];
   currency: string;
 }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+
   return (
     <Card data-testid="breakdown-card">
       <CardHeader>
@@ -201,7 +203,14 @@ function CategoryBreakdownCard({
                     />
                     <span className="truncate">{item.name}</span>
                   </span>
-                  <span className="num font-medium">{formatCurrency(item.value, currency)}</span>
+                  <span className="flex shrink-0 items-baseline gap-1.5">
+                    <span className="num font-medium">{formatCurrency(item.value, currency)}</span>
+                    {/* The share is the thing the ring is drawn to show; without
+                        it the legend only repeats what the tooltip says. */}
+                    <span className="num w-9 text-right text-xs text-muted-foreground">
+                      {total > 0 ? `${Math.round((item.value / total) * 100)}%` : ""}
+                    </span>
+                  </span>
                 </div>
               ))}
             </div>
