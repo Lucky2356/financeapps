@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { DEFAULT_CATEGORY_ICON, ICON_GROUPS } from "@/lib/categories/icons";
+import { suggestIconForName } from "@/lib/categories/suggest-icon";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type { CategoryRow } from "@/types/finance";
@@ -29,8 +30,28 @@ export function CategoryDialog({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useI18n();
+  const [name, setName] = useState(category?.name ?? "");
   const [selectedColor, setSelectedColor] = useState(category?.color ?? DEFAULT_CATEGORY_COLOR);
   const [selectedIcon, setSelectedIcon] = useState(category?.icon ?? DEFAULT_CATEGORY_ICON);
+  // Until the owner picks a picture themselves, the name chooses it: typing
+  // "Продукты" puts the trolley there without a trip through fourteen groups.
+  // One tap on any icon ends that for good — a deliberate choice is never
+  // overwritten by the next keystroke.
+  const [pickedByHand, setPickedByHand] = useState(
+    Boolean(category?.icon) && category?.icon !== DEFAULT_CATEGORY_ICON
+  );
+
+  function rename(next: string) {
+    setName(next);
+    if (pickedByHand) return;
+    const suggestion = suggestIconForName(next);
+    setSelectedIcon(suggestion ?? DEFAULT_CATEGORY_ICON);
+  }
+
+  function pickIcon(icon: string) {
+    setPickedByHand(true);
+    setSelectedIcon(icon);
+  }
   const [isEssential, setIsEssential] = useState(category?.isEssential ?? false);
   const [isSubscription, setIsSubscription] = useState(category?.isSubscription ?? false);
 
@@ -51,7 +72,8 @@ export function CategoryDialog({
           <Label>{t("common.name")}</Label>
           <Input
             name="name"
-            defaultValue={category?.name ?? ""}
+            value={name}
+            onChange={(event) => rename(event.target.value)}
             minLength={2}
             maxLength={80}
             required
@@ -78,21 +100,21 @@ export function CategoryDialog({
                   {t(group.labelKey)}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {group.icons.map((name) => (
+                  {group.icons.map((icon) => (
                     <button
-                      key={`${group.id}-${name}`}
+                      key={`${group.id}-${icon}`}
                       type="button"
-                      aria-label={name}
-                      aria-pressed={selectedIcon === name}
-                      onClick={() => setSelectedIcon(name)}
+                      aria-label={icon}
+                      aria-pressed={selectedIcon === icon}
+                      onClick={() => pickIcon(icon)}
                       className={cn(
                         "flex size-8 items-center justify-center rounded-md border transition-colors",
-                        selectedIcon === name
+                        selectedIcon === icon
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted"
                       )}
                     >
-                      <CategoryIcon name={name} className="size-4" />
+                      <CategoryIcon name={icon} className="size-4" />
                     </button>
                   ))}
                 </div>

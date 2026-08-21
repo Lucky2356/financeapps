@@ -322,35 +322,109 @@
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   On paper.
+   Printing used to hand back a grey dump of the screen: every colour flattened
+   to black, the charts squeezed to a third of their height, and — from the dark
+   theme — cards that arrived as dark rectangles. A report is something the
+   owner shows to someone, so it prints as a report: the light palette whatever
+   the app is wearing, the category colours intact, and page breaks that fall
+   between blocks rather than through them.
+   ══════════════════════════════════════════════════════════════════════════ */
 @media print {
+  /* Paper is white. Print the light palette even when the app is dark — these
+     sit outside @layer base on purpose, so they win over both themes. */
+  :root,
+  .dark {
+    color-scheme: light;
+    --background: 0 0% 100%;
+    --foreground: 232 27% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 232 27% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 232 27% 12%;
+    --primary: 249 45% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 33% 95%;
+    --secondary-foreground: 232 27% 16%;
+    --muted: 240 33% 96%;
+    --muted-foreground: 230 12% 38%;
+    --accent: 249 45% 42%;
+    --accent-foreground: 0 0% 100%;
+    --border: 233 20% 80%;
+    --input: 233 20% 80%;
+    --success: 168 55% 28%;
+    --warning: 33 85% 35%;
+    --destructive: 352 65% 44%;
+    --info: 249 45% 42%;
+  }
+
+  /* Without this every background and every coloured dot is dropped by the
+     browser — which is exactly what made the old printout grey. */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* The application around the report: navigation, controls, dialogs. */
   aside,
   nav,
   header,
   .fixed,
   button,
   [role="dialog"],
+  [data-testid="hub-tabs"],
   .quick-add-fab,
   .no-print {
     display: none !important;
   }
 
-  body {
-    background: white !important;
-    background-image: none !important;
-    color: black !important;
-    font-size: 11pt;
+  /* Shown only on paper — the report's own cover block. */
+  .print-only {
+    display: block !important;
   }
 
+  body,
+  body > div,
   main {
+    background: #fff !important;
+    font-size: 10.5pt;
+  }
+
+  main,
+  main > div {
     padding: 0 !important;
     max-width: 100% !important;
   }
 
-  .rounded-lg,
-  .surface {
-    border: 1px solid #ccc !important;
+  /* Elevation is a screen idea; on paper it is a hairline. */
+  .shadow-soft,
+  .shadow-soft-sm {
     box-shadow: none !important;
+  }
+
+  .rounded-md,
+  .rounded-lg,
+  .rounded-xl,
+  .surface {
+    border: 1px solid hsl(var(--border)) !important;
+  }
+
+  /* Break between blocks, never through one, and never right after a heading. */
+  section,
+  .rounded-md,
+  .rounded-lg,
+  .rounded-xl,
+  tr {
     break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
   }
 
   table {
@@ -358,17 +432,22 @@
     width: 100%;
   }
 
+  /* A table that runs over the page carries its header onto the next one. */
+  thead {
+    display: table-header-group;
+  }
+
   th,
   td {
-    border: 1px solid #ddd !important;
-    padding: 6pt 8pt !important;
+    border-bottom: 1px solid hsl(var(--border)) !important;
+    padding: 5pt 7pt !important;
   }
 
   .recharts-responsive-container {
-    height: 200pt !important;
+    height: 190pt !important;
   }
 
   @page {
-    margin: 2cm;
+    margin: 14mm;
   }
 }

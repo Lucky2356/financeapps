@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { summarizeDividendIncome, upcomingDividends } from "@/lib/investments/dividends";
 import type { ExpectedDividend, RealizedInvestmentEvent } from "@/types/finance";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -77,15 +77,9 @@ export function DividendTracker() {
   const upcoming = upcomingDividends(expected);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CalendarClock className="size-4" />
-          {t("inv.div.title")}
-        </CardTitle>
+    <CollapsibleCard title={t("inv.div.title")} icon={CalendarClock} storageKey="inv-dividends">
+      <div className="space-y-5">
         <p className="text-sm text-muted-foreground">{t("inv.div.desc")}</p>
-      </CardHeader>
-      <CardContent className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-lg border p-4">
             <p className="text-xs text-muted-foreground">{t("inv.div.ltm")}</p>
@@ -159,7 +153,7 @@ export function DividendTracker() {
         ) : (
           <p className="text-sm text-muted-foreground">{t("inv.div.noUpcoming")}</p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

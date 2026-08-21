@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { useI18n } from "@/lib/i18n/context";
 import { activeNavHref, findHub, MAIN_NAV, MOBILE_PRIMARY } from "@/lib/navigation";
+import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
 
 const primaryItems = MOBILE_PRIMARY;
@@ -91,11 +92,12 @@ export function MobileBottomNav() {
         type="button"
         aria-label={t("qa.fabAria")}
         onClick={() => window.dispatchEvent(new Event("quick-add-open"))}
-        // Lifted out of the bar so it reads as the one primary action; this is
-        // the only solid accent fill in the whole system.
-        className="-mt-8 flex size-[54px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-soft transition-[filter] hover:brightness-110"
+        // Lifted out of the bar so it reads as the one primary action. The ring
+        // is the bar's own colour, which turns the overlap into a deliberate
+        // notch instead of a circle that happens to sit on the edge.
+        className={cn(FAB_RING, "-mt-7 flex size-14 shrink-0 !px-0")}
       >
-        <Plus className="size-6" strokeWidth={2} />
+        <Plus className="size-6" strokeWidth={2.2} />
       </button>
       {primaryItems.slice(2).map(navItem)}
     </nav>

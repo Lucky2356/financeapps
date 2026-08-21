@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { evaluateAlerts, tickersToFetch, type MarketAlert } from "@/lib/market/alerts";
 import { SMARTLAB_FIELDS, type SmartLabFundamentals } from "@/lib/market/smartlab";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -114,28 +114,24 @@ export function MarketAlertsPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Flag className="size-4 text-primary" />
-          {t("alerts.title")}
-        </CardTitle>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => void checkNow()}
-          disabled={checking || alerts.length === 0}
-        >
-          {checking ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-          {t("alerts.checkNow")}
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard title={t("alerts.title")} icon={Flag} storageKey="inv-alerts">
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void checkNow()}
+            disabled={checking || alerts.length === 0}
+          >
+            {checking ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+            {t("alerts.checkNow")}
+          </Button>
+        </div>
         <p className="text-sm text-muted-foreground">{t("alerts.hint")}</p>
 
         <div className="grid gap-3 sm:grid-cols-[1fr_1.4fr_auto_1fr_auto] sm:items-end">
@@ -233,7 +229,7 @@ export function MarketAlertsPanel() {
           </p>
         ) : null}
         <p className="text-xs text-muted-foreground">{t("alerts.footer")}</p>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

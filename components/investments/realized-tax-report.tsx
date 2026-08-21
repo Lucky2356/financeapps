@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { buildRealizedTaxReport } from "@/services/InvestmentTaxReportService";
 import type { RealizedInvestmentEvent } from "@/types/finance";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -78,11 +78,8 @@ export function RealizedTaxReport() {
   const report = buildRealizedTaxReport(events);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("inv.rt.title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <CollapsibleCard title={t("inv.rt.title")} storageKey="inv-realized">
+      <div className="space-y-5">
         {/* Add form */}
         <form onSubmit={add} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
@@ -206,7 +203,7 @@ export function RealizedTaxReport() {
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

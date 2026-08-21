@@ -18,7 +18,11 @@ export default async function BudgetsPage() {
       <BudgetsSummary data={data} />
       <AiBudgetPlanCard />
       <BudgetManager data={data} />
-      <RecommendationList titleKey="page.budgets.optimization" items={data.recommendations} />
+      {/* An empty card that says "nothing to show" is itself something to
+          scroll past — when there is no advice, there is no card. */}
+      {data.recommendations.length > 0 && (
+        <RecommendationList titleKey="page.budgets.optimization" items={data.recommendations} />
+      )}
     </div>
   );
 }

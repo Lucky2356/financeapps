@@ -27,7 +27,7 @@ export function PageHeader({
   const resolvedDescription = descriptionKey ? t(descriptionKey) : description;
 
   return (
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="no-print mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{resolvedTitle}</h1>
         {resolvedDescription ? (

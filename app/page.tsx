@@ -2,6 +2,7 @@ import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { ImportLinkButton } from "@/components/dashboard/import-link-button";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
+import { PrintHeader } from "@/components/reports/print-header";
 import { QuickAddButton } from "@/components/quick-add-button";
 import { getDashboardData, getForecastData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
@@ -12,6 +13,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="page-grid">
+      <PrintHeader titleKey="page.home.title" />
       {/* On a phone the greeting header in the app bar already names the screen
           and the round button in the bottom bar covers "add" — a second title
           row with the same actions would only push the headline card down. */}

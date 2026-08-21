@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { computeRebalance } from "@/lib/investments/rebalance";
 import type { PortfolioRow, TargetAllocation } from "@/types/finance";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 
 // Desktop-only rebalancing helper: set a target weight per sector and see how
@@ -69,15 +69,9 @@ export function RebalancePanel({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Scale className="size-4" />
-          {t("inv.reb.title")}
-        </CardTitle>
+    <CollapsibleCard title={t("inv.reb.title")} icon={Scale} storageKey="inv-rebalance">
+      <div className="space-y-5">
         <p className="text-sm text-muted-foreground">{t("inv.reb.desc")}</p>
-      </CardHeader>
-      <CardContent className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {sectors.map((sector) => (
             <div key={sector} className="flex items-center gap-2">
@@ -154,7 +148,7 @@ export function RebalancePanel({
         ) : (
           <p className="text-sm text-muted-foreground">{t("inv.reb.empty")}</p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

@@ -863,6 +863,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 // Compact reusable card wrapper for a settings section. `fields` lays the
 // controls out in a responsive 2-column grid so wide screens are used well
 // instead of stretching a single control across the whole width.
+//
+// No lid here on purpose: the nav on the left already shows one section at a
+// time, so folding would hide the very thing that was just selected.
 function SectionCard({
   title,
   icon: Icon,
