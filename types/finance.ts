@@ -186,11 +186,19 @@ export type TransactionRow = {
    * the capital chart leaves it out of its flow reconstruction.
    */
   liabilityId?: string;
+  /**
+   * What `amount` is worth in the base currency, when the account keeps another
+   * one. Derived on read and never stored: totals use it, while the row itself
+   * still shows the money as it was recorded.
+   */
+  baseAmount?: number;
 };
 
 export type RecurringTransactionRow = {
   id: string;
   amount: number;
+  /** `amount` in the base currency, when the account keeps another one. */
+  baseAmount?: number;
   type: TransactionType;
   frequency: RecurrenceFrequency;
   nextDate: string;

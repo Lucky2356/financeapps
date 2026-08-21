@@ -53,6 +53,13 @@ import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
 import { pickBestWorstMonth } from "@/lib/analytics/best-month";
+import {
+  baseAmountContext,
+  baseAmountOf,
+  countableAmount,
+  isSingleCurrency,
+  toBaseRows
+} from "@/lib/transactions/base-amount";
 import { salvageLocalState } from "@/lib/api/local/schemas";
 import { countableRows, isTransfer, TRANSFER_CATEGORY_LABEL } from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
@@ -434,15 +441,15 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/accounts") return this.accounts(state) as T;
     if (pathname === "/transactions") return this.transactions(state, searchParams) as T;
     if (pathname === "/budgets")
-      return this.budgets(state, searchParams.get("month") ?? undefined) as T;
+      return this.budgets(this.inBase(state), searchParams.get("month") ?? undefined) as T;
     if (pathname === "/goals") return this.goals(state) as T;
     if (pathname === "/debts") return this.debts(state) as T;
     if (pathname === "/rules") return this.rulesPage(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
-    if (pathname === "/forecast") return this.forecast(state) as T;
+    if (pathname === "/forecast") return this.forecast(this.inBase(state)) as T;
     if (pathname === "/dashboard")
       return (await this.dashboard(
-        this.countingState(state, searchParams.get("transfers") === "1")
+        this.countingState(this.inBase(state), searchParams.get("transfers") === "1")
       )) as T;
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
@@ -521,10 +528,10 @@ export class LocalApiClient implements ApiClient {
       return { targets: state.targetAllocations ?? [], currency: state.currency } as T;
     if (pathname === "/categories") return this.categoriesPage(state) as T;
     if (pathname === "/analytics")
-      return this.analyticsPage(state, searchParams.get("transfers") === "1") as T;
+      return this.analyticsPage(this.inBase(state), searchParams.get("transfers") === "1") as T;
     if (pathname === "/plan")
       return this.planFactPage(
-        state,
+        this.inBase(state),
         Number(searchParams.get("ahead") ?? 0),
         searchParams.get("transfers") === "1"
       ) as T;
@@ -823,7 +830,8 @@ export class LocalApiClient implements ApiClient {
     const budget = state.budgets.find((item) => item.categoryId === tx.category.id);
     if (!budget || budget.limitAmount <= 0) return null;
     const month = tx.date.slice(0, 7);
-    const spent = state.transactions
+    const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
+    const spent = toBaseRows(state.transactions, context)
       .filter(
         (item) =>
           item.type === "EXPENSE" &&
@@ -1668,9 +1676,18 @@ export class LocalApiClient implements ApiClient {
       .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
     const start = (page - 1) * limit;
 
+    // The rows keep the amount as it was recorded — a dollar operation reads
+    // as dollars — and carry what it is worth in the base currency beside it,
+    // so the totals above the list add up like every other total in the app.
+    const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
+    const rows = filtered.slice(start, start + limit).map((row) => {
+      const base = baseAmountOf(row, context);
+      return base === row.amount ? row : { ...row, baseAmount: base };
+    });
+
     return {
       source: "database",
-      transactions: filtered.slice(start, start + limit),
+      transactions: rows,
       accounts: this.accounts(state).accounts,
       categories: state.categories,
       rules: state.rules,
@@ -1704,6 +1721,7 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
+  /** Amounts are expected in the base currency already — see `inBase`. */
   private spentInMonth(state: LocalState, categoryId: string, monthKey: string): number {
     return state.transactions
       .filter(
@@ -1809,6 +1827,7 @@ export class LocalApiClient implements ApiClient {
 
   private recurring(state: LocalState): RecurringTransactionsPageData {
     const service = new RecurringTransactionService();
+    const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
     const rows = service.sortUpcoming(
       state.recurringTransactions.map((item) => {
         const status = service.getStatus({
@@ -1816,7 +1835,13 @@ export class LocalApiClient implements ApiClient {
           frequency: item.frequency,
           isActive: item.isActive
         });
-        return { ...item, daysUntilNext: status.daysUntilNext, isDue: status.isDue };
+        const base = baseAmountOf(item, context);
+        return {
+          ...item,
+          daysUntilNext: status.daysUntilNext,
+          isDue: status.isDue,
+          ...(base === item.amount ? {} : { baseAmount: base })
+        };
       })
     );
     const active = rows.filter((row) => row.isActive);
@@ -1826,7 +1851,7 @@ export class LocalApiClient implements ApiClient {
         .reduce(
           (sum, row) =>
             sum +
-            row.amount *
+            countableAmount(row) *
               (row.frequency === "WEEKLY" ? 4.33 : row.frequency === "YEARLY" ? 1 / 12 : 1),
           0
         );
@@ -2060,6 +2085,33 @@ export class LocalApiClient implements ApiClient {
   // operations, so everything derived downstream — month totals, category
   // breakdowns, budget spending, the health score — counts the same rows. The
   // balances are untouched, and so is capital: a transfer never changed them.
+  /**
+   * The same document with every operation's amount expressed in the base
+   * currency.
+   *
+   * An operation is stored in the currency of its account — a dollar card keeps
+   * 100, not what that is worth in roubles. Balances were converted before they
+   * were summed; operations were not, so every total built on them added
+   * dollars to roubles as though they were the same unit. The conversion
+   * happens here, once, on the way into the read paths; a ledger already in one
+   * currency is handed back untouched and pays nothing for this.
+   */
+  private inBase(state: LocalState): LocalState {
+    const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
+    if (isSingleCurrency(context)) return state;
+
+    return {
+      ...state,
+      transactions: toBaseRows(state.transactions, context),
+      // A recurring template spends from the same account, so it carries the
+      // same currency and the forecast needs it converted too.
+      recurringTransactions: state.recurringTransactions.map((row) => {
+        const amount = baseAmountOf({ amount: row.amount, account: row.account }, context);
+        return amount === row.amount ? row : { ...row, amount };
+      })
+    };
+  }
+
   private countingState(state: LocalState, includeTransfers: boolean): LocalState {
     if (includeTransfers) return state;
     return { ...state, transactions: countableRows(state.transactions, false) };
@@ -2396,7 +2448,6 @@ export class LocalApiClient implements ApiClient {
     const group = new Map(
       live.map((account) => [account.id, SAVINGS_ACCOUNT_TYPES.includes(account.type)] as const)
     );
-    const currencyOf = new Map(live.map((account) => [account.id, account.currency] as const));
 
     const now = { main: 0, savings: 0 };
     for (const account of live) {
@@ -2413,11 +2464,9 @@ export class LocalApiClient implements ApiClient {
       if (savings === undefined) continue; // archived, or an account since gone
       const month = transaction.date.slice(0, 7);
       const bucket = flow.get(month) ?? { main: 0, savings: 0 };
-      const signed = toBaseAmount(
-        transaction.type === "INCOME" ? transaction.amount : -transaction.amount,
-        currencyOf.get(transaction.account.id) ?? state.currency,
-        rates
-      );
+      // Amounts arrive in the base currency already (see `inBase`), so only
+      // the balances above still need converting.
+      const signed = transaction.type === "INCOME" ? transaction.amount : -transaction.amount;
       if (savings) bucket.savings += signed;
       else bucket.main += signed;
       flow.set(month, bucket);

@@ -1,4 +1,5 @@
 // Pure period aggregation for the reports page: income/expense/savings for an
+import { countableAmount } from "@/lib/transactions/base-amount";
 // arbitrary date range, a monthly breakdown, top expense categories, and a
 // year-over-year comparison. Deterministic and dependency-free so it can run in
 // both the web and desktop builds and be unit-tested directly.
@@ -69,7 +70,7 @@ export function buildPeriodReport(
   const categories = new Map<string, { category: string; total: number }>();
 
   for (const transaction of rows) {
-    const amount = Math.abs(transaction.amount);
+    const amount = Math.abs(countableAmount(transaction));
     const monthKey = transaction.date.slice(0, 7);
     const bucket = monthly.get(monthKey) ?? { income: 0, expense: 0 };
     if (transaction.type === "INCOME") {

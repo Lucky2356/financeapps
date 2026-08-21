@@ -51,6 +51,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
+import { countableAmount } from "@/lib/transactions/base-amount";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -195,10 +196,23 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   useEffect(() => {
     void Promise.resolve().then(() => setSelectedIds(new Set()));
   }, [paramsString]);
+  // A row shows the money as it was actually paid. When the account keeps
+  // another currency, what it is worth in the base one follows in brackets —
+  // otherwise 100 $ would read as "100 ₽" beside totals that count 9 000.
+  const currencyOfAccount = new Map(data.accounts.map((account) => [account.id, account.currency]));
+  const rowAmount = (transaction: TransactionsPageData["transactions"][number]) => {
+    const currency = currencyOfAccount.get(transaction.account.id) ?? "RUB";
+    const own = formatCurrency(transaction.amount, currency);
+    if (transaction.baseAmount === undefined) return own;
+    return `${own} (${formatCurrency(transaction.baseAmount)})`;
+  };
+
   const totals = visibleTransactions.reduce(
     (acc, transaction) => {
-      if (transaction.type === "INCOME") acc.income += transaction.amount;
-      if (transaction.type === "EXPENSE") acc.expense += transaction.amount;
+      // A dollar operation contributes what it is worth in the base currency,
+      // not its number of dollars.
+      if (transaction.type === "INCOME") acc.income += countableAmount(transaction);
+      if (transaction.type === "EXPENSE") acc.expense += countableAmount(transaction);
       return acc;
     },
     { income: 0, expense: 0 }
@@ -264,7 +278,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
       title: t("tx.delete.title"),
       description: t("tx.delete.desc", {
         category: transaction.category.label,
-        amount: formatCurrency(transaction.amount),
+        amount: rowAmount(transaction),
         date: formatDate(transaction.date)
       }),
       destructive: true,
@@ -864,7 +878,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                           }
                         >
                           {transaction.type === "INCOME" ? "+" : "-"}
-                          {formatCurrency(transaction.amount)}
+                          {rowAmount(transaction)}
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
@@ -955,7 +969,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         }
                       >
                         {transaction.type === "INCOME" ? "+" : "-"}
-                        {formatCurrency(transaction.amount)}
+                        {rowAmount(transaction)}
                       </p>
                     </div>
                     <div className="mt-3 flex gap-2">
