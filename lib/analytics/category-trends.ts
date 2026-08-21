@@ -1,4 +1,5 @@
 // Per-category spending trends with simple anomaly detection. Pure and
+import { countableAmount } from "@/lib/transactions/base-amount";
 // deterministic: given raw expense transactions it builds a month-by-month
 // series per category, compares the latest month against the average of the
 // prior months in the window, and flags unusually high/low months. Feeds the
@@ -80,7 +81,7 @@ export function buildCategoryTrends(
       color: transaction.category.color ?? "#64748b",
       totals: new Map<string, number>()
     };
-    entry.totals.set(key, (entry.totals.get(key) ?? 0) + Math.abs(transaction.amount));
+    entry.totals.set(key, (entry.totals.get(key) ?? 0) + Math.abs(countableAmount(transaction)));
     byCategory.set(id, entry);
   }
 

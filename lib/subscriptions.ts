@@ -1,4 +1,5 @@
 import type { RecurringTransactionRow } from "@/types/finance";
+import { countableAmount } from "@/lib/transactions/base-amount";
 
 export type SubscriptionItem = RecurringTransactionRow & {
   /** Cost normalized to one month. */
@@ -34,7 +35,7 @@ export function summarizeSubscriptions(rows: RecurringTransactionRow[]): Subscri
   const items: SubscriptionItem[] = rows
     .filter((row) => row.isActive && row.type === "EXPENSE")
     .map((row) => {
-      const monthlyEquivalent = round2(row.amount * monthlyFactor(row.frequency));
+      const monthlyEquivalent = round2(countableAmount(row) * monthlyFactor(row.frequency));
       return { ...row, monthlyEquivalent, annualCost: round2(monthlyEquivalent * 12) };
     })
     .sort((left, right) => right.monthlyEquivalent - left.monthlyEquivalent);

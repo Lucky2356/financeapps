@@ -9,6 +9,7 @@ import type {
   PortfolioRow,
   TransactionRow
 } from "@/types/finance";
+import { countableAmount } from "@/lib/transactions/base-amount";
 
 // Pure, platform-agnostic derivations shared by the server data layer (plan A2).
 // They operate purely on domain arrays — no Prisma, demo data, or request state.
@@ -34,10 +35,12 @@ export function buildMonthlyCashflow(transactions: TransactionRow[]): MonthlyCas
 
     return {
       month: format(month, "LLL", { locale: ru }),
-      income: rows.filter((row) => row.type === "INCOME").reduce((sum, row) => sum + row.amount, 0),
+      income: rows
+        .filter((row) => row.type === "INCOME")
+        .reduce((sum, row) => sum + countableAmount(row), 0),
       expense: rows
         .filter((row) => row.type === "EXPENSE")
-        .reduce((sum, row) => sum + row.amount, 0)
+        .reduce((sum, row) => sum + countableAmount(row), 0)
     };
   });
 }
@@ -55,7 +58,7 @@ export function buildCategoryExpenses(transactions: TransactionRow[]): ChartDatu
       value: 0,
       fill: transaction.category.color
     };
-    current.value += transaction.amount;
+    current.value += countableAmount(transaction);
     byCategory.set(transaction.category.id, current);
   }
 
