@@ -15,9 +15,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
-import { PortfolioStructureChart } from "@/components/charts/lazy";
 import { RecommendationList } from "@/components/recommendation-list";
 import { AllocationBar } from "@/components/investments/allocation-bar";
+import { PortfolioBreakdown } from "@/components/investments/portfolio-breakdown";
 import { HoldingCard } from "@/components/investments/holding-card";
 import { PortfolioHero } from "@/components/investments/portfolio-hero";
 import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
@@ -535,42 +535,15 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       {/* ── Analytics — structure, sectors, risks & education ──────────────── */}
       {activeTab === "analytics" ? (
         <div className="space-y-5">
-          <section className="grid gap-5 xl:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("inv.structureTitle")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PortfolioStructureChart data={data.structure} />
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t("inv.riskProfileLabel")} {data.riskProfile}
-                </p>
-              </CardContent>
-            </Card>
+          {/* Where the money actually sits, in one line, before any chart. */}
+          <AllocationBar data={data.structure} />
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("inv.sectorTitle")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PortfolioStructureChart data={data.sectorStructure} />
-                <p className="mt-2 text-sm text-muted-foreground">{t("inv.sectorDesc")}</p>
-              </CardContent>
-            </Card>
-
-            {/* Sectors answer "which industries"; this answers "shares or
-                bonds", and a portfolio can be beautifully spread across
-                industries while sitting entirely in one kind of asset. */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("inv.assetTitle")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PortfolioStructureChart data={data.assetStructure} />
-                <p className="mt-2 text-sm text-muted-foreground">{t("inv.assetDesc")}</p>
-              </CardContent>
-            </Card>
-          </section>
+          <PortfolioBreakdown
+            structure={data.structure}
+            sectorStructure={data.sectorStructure}
+            assetStructure={data.assetStructure}
+            riskProfile={data.riskProfile}
+          />
 
           {data.portfolio.length > 0 && (
             <TaxEstimateCard positions={data.portfolio} currency={data.currency} />
@@ -580,7 +553,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           <DividendTracker />
           <RealizedTaxReport />
 
-          <section className="grid gap-5 xl:grid-cols-2">
+          <section className="grid items-start gap-5 xl:grid-cols-2">
             <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />
             <RecommendationList titleKey="inv.educationTips" items={data.education} />
           </section>

@@ -1,26 +1,11 @@
 "use client";
 
-import {
-  ArrowRightLeft,
-  Check,
-  ChevronDown,
-  Download,
-  Edit2,
-  Plus,
-  ReceiptText,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
-  Split,
-  Star,
-  Trash2,
-  X
-} from "lucide-react";
+import { ArrowRightLeft, Edit2, Plus, ReceiptText, Sparkles, Split, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { FormEvent, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -28,13 +13,13 @@ import { onDataChanged } from "@/lib/api/data-events";
 import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import { TransactionFilterBar } from "@/components/transactions/filter-bar";
 import type { AiProvider } from "@/lib/ai/models";
 import { useAiSettings } from "@/hooks/use-ai-settings";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { TransactionsPageData } from "@/lib/data";
-import type { CategoryOption } from "@/lib/data/demo-seed";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
@@ -55,7 +40,6 @@ import { countableAmount } from "@/lib/transactions/base-amount";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  ALL_OPTION,
   normalizeSelectValues,
   Select,
   SelectContent,
@@ -72,7 +56,6 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const router = useRouter();
@@ -81,18 +64,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const searchParams = useSearchParams();
   const paramsString = searchParams.toString();
   const [pageData, setPageData] = useState(data);
-  const clientFilters = {
-    from: searchParams.get("from") ?? "",
-    to: searchParams.get("to") ?? "",
-    type: searchParams.get("type") ?? "ALL",
-    categoryId: searchParams.get("categoryId") ?? "",
-    accountId: searchParams.get("accountId") ?? "",
-    q: searchParams.get("q") ?? "",
-    minAmount: searchParams.get("minAmount") ?? "",
-    maxAmount: searchParams.get("maxAmount") ?? "",
-    tag: searchParams.get("tag") ?? "",
-    limit: searchParams.get("limit") ?? String(pageData.pagination.limit)
-  };
   const criteria = criteriaFromParams(searchParams);
   const { run, pending: isMutating } = useApiMutation();
   const confirm = useConfirm();
@@ -106,41 +77,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkPending, setBulkPending] = useState(false);
-  // Filter panel is collapsed by default (it's tall); the preference persists.
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(FILTERS_OPEN_KEY) === "1") {
-        void Promise.resolve().then(() => setFiltersOpen(true));
-      }
-    } catch {
-      /* storage unavailable */
-    }
-  }, []);
-  function toggleFilters() {
-    setFiltersOpen((open) => {
-      const next = !open;
-      try {
-        localStorage.setItem(FILTERS_OPEN_KEY, next ? "1" : "0");
-      } catch {
-        /* storage unavailable */
-      }
-      return next;
-    });
-  }
-  // Count of active filters (everything except paging + the "all" defaults) for
-  // the collapsed-panel badge.
-  const activeFilterCount =
-    [
-      clientFilters.from,
-      clientFilters.to,
-      clientFilters.q,
-      clientFilters.minAmount,
-      clientFilters.maxAmount,
-      clientFilters.tag,
-      clientFilters.accountId,
-      clientFilters.type !== "ALL" ? clientFilters.type : ""
-    ].filter(Boolean).length + (criteria.categoryIds?.length ? 1 : 0);
   const loadTransactions = useCallback(
     async (forceApi = false) => {
       if (!paramsString && !forceApi) {
@@ -222,20 +158,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   async function refresh() {
     await loadTransactions(true);
     router.refresh();
-  }
-
-  // Filters live in the URL. The themed Select submits a sentinel for "all", so
-  // we normalize it to "" and drop empties before navigating.
-  function applyFilters(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const entries = normalizeSelectValues(
-      Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>
-    );
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(entries)) {
-      if (value) params.set(key, String(value));
-    }
-    router.push(`/transactions?${params.toString()}`);
   }
 
   async function submitTransaction(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
@@ -523,52 +445,38 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
 
   return (
     <div className="space-y-5">
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            type="button"
-            onClick={toggleFilters}
-            aria-expanded={filtersOpen}
-            className="group flex items-center gap-2 text-left"
-          >
-            <SlidersHorizontal className="size-4 text-muted-foreground" />
-            <CardTitle>{t("tx.filters")}</CardTitle>
-            {activeFilterCount > 0 ? (
-              <span className="num inline-flex min-w-5 items-center justify-center rounded-full bg-primary/15 px-1.5 text-xs font-semibold text-primary">
-                {activeFilterCount}
-              </span>
-            ) : null}
-            <ChevronDown
-              className={cn(
-                "size-4 text-muted-foreground transition-transform",
-                filtersOpen && "rotate-180"
-              )}
-            />
-          </button>
-          <div className="flex flex-wrap gap-2">
+      <TransactionFilterBar
+        categories={pageData.categories}
+        accounts={pageData.accounts}
+        defaultLimit={pageData.pagination.limit}
+        actions={
+          <>
             <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="h-10" aria-label={t("tx.transfer")}>
                   <ArrowRightLeft className="size-4" />
-                  {t("tx.transfer")}
+                  <span className="hidden sm:inline">{t("tx.transfer")}</span>
                 </Button>
               </DialogTrigger>
               <TransferDialog data={pageData} pending={isMutating} onSubmit={submitTransfer} />
             </Dialog>
             <Dialog open={splitOpen} onOpenChange={setSplitOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="h-10" aria-label={t("tx.split")}>
                   <Split className="size-4" />
-                  {t("tx.split")}
+                  <span className="hidden sm:inline">{t("tx.split")}</span>
                 </Button>
               </DialogTrigger>
               <SplitDialog data={pageData} pending={bulkPending} onSubmit={submitSplit} />
             </Dialog>
             <Dialog open={addOpen} onOpenChange={setAddOpen}>
               <DialogTrigger asChild>
-                <Button>
+                {/* The label shortens on a phone, the name does not: what the
+                    button is called must not depend on the screen width. */}
+                <Button className="h-10" aria-label={t("tx.add")}>
                   <Plus className="size-4" />
-                  {t("tx.add")}
+                  <span className="sm:hidden">{t("common.add")}</span>
+                  <span className="hidden sm:inline">{t("tx.add")}</span>
                 </Button>
               </DialogTrigger>
               <TransactionDialog
@@ -580,162 +488,28 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 onRefsReload={() => loadTransactions(true)}
               />
             </Dialog>
-          </div>
-        </CardHeader>
-        {filtersOpen ? (
-          <CardContent className="space-y-4">
-            <SavedFilters currentParams={paramsString} />
-            {/* key remounts the uncontrolled filter inputs when the URL params
-              change (e.g. arriving from a drill-down link) so the controls
-              reflect the active category/account filter. */}
-            <form
-              key={paramsString}
-              onSubmit={applyFilters}
-              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"
-            >
-              <div className="space-y-2 sm:col-span-2 xl:col-span-6">
-                <Label htmlFor="q">{t("tx.search")}</Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="q"
-                    name="q"
-                    defaultValue={clientFilters.q}
-                    placeholder={t("tx.search.placeholder")}
-                    className="pl-9"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="from">{t("tx.from")}</Label>
-                <Input id="from" name="from" type="date" defaultValue={clientFilters.from} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="to">{t("tx.to")}</Label>
-                <Input id="to" name="to" type="date" defaultValue={clientFilters.to} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="type">{t("tx.type")}</Label>
-                <Select name="type" defaultValue={clientFilters.type}>
-                  <SelectTrigger id="type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">{t("tx.type.all")}</SelectItem>
-                    <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
-                    <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>{t("common.category")}</Label>
-                <CategoryMultiSelect
-                  categories={pageData.categories}
-                  initial={criteria.categoryIds ?? []}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="minAmount">{t("tx.minAmount")}</Label>
-                <Input
-                  id="minAmount"
-                  name="minAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  defaultValue={clientFilters.minAmount}
-                  placeholder="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="maxAmount">{t("tx.maxAmount")}</Label>
-                <Input
-                  id="maxAmount"
-                  name="maxAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  defaultValue={clientFilters.maxAmount}
-                  placeholder="∞"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tag">{t("tx.tag")}</Label>
-                <Input
-                  id="tag"
-                  name="tag"
-                  defaultValue={clientFilters.tag}
-                  placeholder={t("tx.tagPlaceholder")}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="accountId">{t("tx.account")}</Label>
-                <Select name="accountId" defaultValue={clientFilters.accountId || ALL_OPTION}>
-                  <SelectTrigger id="accountId">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL_OPTION}>{t("tx.allAccounts")}</SelectItem>
-                    {pageData.accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="limit">{t("tx.perPage")}</Label>
-                <Select name="limit" defaultValue={clientFilters.limit}>
-                  <SelectTrigger id="limit">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex gap-2 sm:col-span-2 xl:col-span-6">
-                <Button type="submit">{t("tx.apply")}</Button>
-                <Button asChild variant="outline">
-                  <Link href="/transactions">{t("tx.reset")}</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/import">
-                    <Download className="size-4" />
-                    {t("nav.import")}
-                  </Link>
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        ) : null}
-      </Card>
-
-      <section className="grid gap-3 md:grid-cols-3">
-        <SummaryTile
-          label={t("tx.sumIncome")}
-          value={formatCurrency(totals.income)}
-          tone="success"
-        />
-        <SummaryTile
-          label={t("tx.sumExpense")}
-          value={formatCurrency(totals.expense)}
-          tone="danger"
-        />
-        <SummaryTile
-          label={t("tx.sumNet")}
-          value={formatCurrency(net)}
-          tone={net >= 0 ? "success" : "danger"}
-        />
-      </section>
+          </>
+        }
+      />
 
       <Card>
-        <CardHeader>
+        {/* The totals belong to the rows below them: they follow the filter,
+            unlike the month tiles at the top of the screen. Three cards said
+            the same in three times the space. */}
+        <CardHeader className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("tx.title")}</CardTitle>
+          <p className="num flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="text-muted-foreground">
+              {t("tx.shown", { count: visibleTransactions.length })}
+            </span>
+            <span className="text-success">+{formatCurrency(totals.income)}</span>
+            <span className="text-destructive">-{formatCurrency(totals.expense)}</span>
+            <span
+              className={net >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}
+            >
+              {t("tx.sumNet")}: {formatCurrency(net)}
+            </span>
+          </p>
         </CardHeader>
         <CardContent>
           {visibleTransactions.length === 0 ? (
@@ -1021,303 +795,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           />
         )}
       </Dialog>
-    </div>
-  );
-}
-
-// Multi-category filter. The selection is mirrored into a hidden `categoryId`
-// input (comma-separated) so it submits with the filter form; a single
-// `?categoryId=x` from a drill-down link still arrives selected.
-//
-// Income and spending are listed apart on purpose: some names exist on both
-// sides — "Переводы" most of all — and a flat list gave no way to tell which
-// one you were ticking.
-function CategoryMultiSelect({
-  categories,
-  initial
-}: {
-  categories: CategoryOption[];
-  initial: string[];
-}) {
-  const { t } = useI18n();
-  const [selected, setSelected] = useState<string[]>(initial);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  function toggle(categoryId: string) {
-    setSelected((prev) =>
-      prev.includes(categoryId) ? prev.filter((x) => x !== categoryId) : [...prev, categoryId]
-    );
-  }
-
-  // Close the dropdown on an outside click / Escape.
-  useEffect(() => {
-    if (!open) return;
-    function onPointer(event: PointerEvent) {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const groups = [
-    { kind: "INCOME" as const, title: t("cat.income") },
-    { kind: "EXPENSE" as const, title: t("cat.expense") }
-  ]
-    .map((group) => ({
-      ...group,
-      items: categories.filter((category) => category.kind === group.kind)
-    }))
-    .filter((group) => group.items.length > 0);
-
-  const allIds = categories.map((category) => category.id);
-  const label =
-    selected.length === 0
-      ? t("tx.allCategories")
-      : t("tx.categoriesSelected", { count: selected.length });
-
-  return (
-    <div className="relative" ref={ref}>
-      <input type="hidden" name="categoryId" value={selected.join(",")} />
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-ring/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-      >
-        <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
-          {label}
-        </span>
-        <ChevronDown
-          className={cn("size-4 shrink-0 opacity-60 transition-transform", open && "rotate-180")}
-        />
-      </button>
-      {open ? (
-        <div
-          data-testid="category-filter-menu"
-          className="absolute z-50 mt-1 max-h-72 w-full min-w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
-        >
-          {categories.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("tx.allCategories")}</p>
-          ) : (
-            <>
-              <div className="mb-1 flex gap-1 border-b px-1 pb-1.5">
-                <BulkButton onClick={() => setSelected(allIds)}>{t("tx.checkAll")}</BulkButton>
-                <BulkButton onClick={() => setSelected([])}>{t("tx.uncheckAll")}</BulkButton>
-              </div>
-              {groups.map((group) => {
-                const groupIds = group.items.map((category) => category.id);
-                const allPicked = groupIds.every((groupId) => selected.includes(groupId));
-                return (
-                  <div key={group.kind} className="mb-1 last:mb-0">
-                    <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-1.5">
-                      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {group.title}
-                      </span>
-                      <BulkButton
-                        onClick={() =>
-                          setSelected((prev) =>
-                            allPicked
-                              ? prev.filter((prevId) => !groupIds.includes(prevId))
-                              : [...new Set([...prev, ...groupIds])]
-                          )
-                        }
-                      >
-                        {allPicked ? t("tx.uncheckAll") : t("tx.checkAll")}
-                      </BulkButton>
-                    </div>
-                    {group.items.map((category) => {
-                      const active = selected.includes(category.id);
-                      return (
-                        <button
-                          key={category.id}
-                          type="button"
-                          role="option"
-                          aria-selected={active}
-                          onClick={() => toggle(category.id)}
-                          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-                        >
-                          <span
-                            className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded border",
-                              active
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-input"
-                            )}
-                          >
-                            {active ? <Check className="size-3" /> : null}
-                          </span>
-                          <span
-                            className="flex size-5 shrink-0 items-center justify-center rounded-full text-white"
-                            style={{ backgroundColor: category.color }}
-                          >
-                            <CategoryIcon name={category.icon} className="size-3" />
-                          </span>
-                          <span className="truncate">{category.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function BulkButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-sm px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-accent"
-    >
-      {children}
-    </button>
-  );
-}
-
-type SavedFilter = { name: string; params: string };
-const SAVED_FILTERS_KEY = "tx-saved-filters";
-const FILTERS_OPEN_KEY = "tx-filters-open";
-
-// Named filter presets persisted in localStorage. Saving snapshots the currently
-// applied URL params; applying navigates to them. No server involved.
-function SavedFilters({ currentParams }: { currentParams: string }) {
-  const { t } = useI18n();
-  const router = useRouter();
-  const [saved, setSaved] = useState<SavedFilter[]>([]);
-  const [naming, setNaming] = useState(false);
-  const [name, setName] = useState("");
-
-  useEffect(() => {
-    let raw: string | null = null;
-    try {
-      raw = localStorage.getItem(SAVED_FILTERS_KEY);
-    } catch {
-      raw = null;
-    }
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as SavedFilter[];
-      if (Array.isArray(parsed)) void Promise.resolve().then(() => setSaved(parsed));
-    } catch {
-      /* ignore malformed */
-    }
-  }, []);
-
-  function persist(next: SavedFilter[]) {
-    setSaved(next);
-    try {
-      localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore quota */
-    }
-  }
-
-  function confirmSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    persist([...saved.filter((f) => f.name !== trimmed), { name: trimmed, params: currentParams }]);
-    setName("");
-    setNaming(false);
-    toast.success(t("tx.saved.savedToast"));
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-medium text-muted-foreground">{t("tx.saved.title")}</span>
-      {saved.map((filter) => (
-        <span
-          key={filter.name}
-          className="inline-flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-xs"
-        >
-          <button
-            type="button"
-            className="hover:text-primary"
-            onClick={() => router.push(`/transactions?${filter.params}`)}
-          >
-            {filter.name}
-          </button>
-          <button
-            type="button"
-            aria-label={t("common.delete")}
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => persist(saved.filter((f) => f.name !== filter.name))}
-          >
-            <X className="size-3" />
-          </button>
-        </span>
-      ))}
-      {naming ? (
-        <form onSubmit={confirmSave} className="flex items-center gap-1">
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder={t("tx.saved.namePlaceholder")}
-            className="h-8 w-40"
-            autoFocus
-          />
-          <Button type="submit" size="sm">
-            {t("tx.dialog.create")}
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setNaming(false)}>
-            {t("tx.dialog.cancel")}
-          </Button>
-        </form>
-      ) : (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (!currentParams) {
-              toast.info(t("tx.saved.empty"));
-              return;
-            }
-            setNaming(true);
-          }}
-        >
-          <Star className="size-3.5" />
-          {t("tx.saved.save")}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function SummaryTile({
-  label,
-  value,
-  tone
-}: {
-  label: string;
-  value: string;
-  tone: "success" | "danger";
-}) {
-  return (
-    <div className="rounded-lg border bg-card p-4 shadow-soft">
-      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-      <p
-        className={
-          tone === "success"
-            ? "mt-2 text-xl font-semibold text-success"
-            : "mt-2 text-xl font-semibold text-destructive"
-        }
-      >
-        {value}
-      </p>
     </div>
   );
 }

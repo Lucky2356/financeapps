@@ -70,7 +70,9 @@ const TAB = {
 } satisfies Record<string, NavTab>;
 
 // A hub groups several routes under one sidebar button; `landing` is where the
-// button points (the first tab). The first matching group owns a path.
+// button points. It is usually the first tab, but not always: the owner reads
+// План/факт most often and asked for it at the head of the strip, while the
+// button itself still opens Аналитика. The first matching group owns a path.
 export const HUB_GROUPS: HubGroup[] = [
   {
     landing: "/transactions",
@@ -83,10 +85,10 @@ export const HUB_GROUPS: HubGroup[] = [
       // The design folds the read-only screens into the same hub: they answer
       // questions about the ledger, so they belong beside it rather than behind
       // a bottom-bar slot of their own.
+      TAB.plan,
       TAB.analytics,
       TAB.forecast,
-      TAB.reports,
-      TAB.plan
+      TAB.reports
     ]
   },
   {
@@ -133,7 +135,7 @@ export const DESKTOP_HUBS: HubGroup[] = [
   // payments by another name, so they live beside the scheduled ones.
   { landing: "/recurring", tabs: [TAB.recurring, TAB.subscriptions] },
   // Reading the money rather than recording it.
-  { landing: "/analytics", tabs: [TAB.analytics, TAB.forecast, TAB.reports, TAB.plan] }
+  { landing: "/analytics", tabs: [TAB.plan, TAB.analytics, TAB.forecast, TAB.reports] }
 ];
 
 export function hubsFor(surface: NavSurface): HubGroup[] {

@@ -11,7 +11,7 @@ import { useI18n } from "@/lib/i18n/context";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import type { AiParseContext, AiTransactionDraft } from "@/lib/ai/parse-transaction";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import {
   Select,
   SelectContent,
@@ -178,14 +178,16 @@ export function AiQuickAdd() {
   );
 
   return (
-    <Card className="border-primary/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Sparkles className="size-4 text-primary" />
-          {t("ai.title")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    // Folded by default: the point of this screen is the list of operations,
+    // and a permanent card for a feature used now and then pushed it further
+    // down every time. The choice is remembered per device.
+    <CollapsibleCard
+      title={t("ai.title")}
+      icon={Sparkles}
+      storageKey="ai-quick-add"
+      className="border border-primary/30"
+    >
+      <div className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             value={text}
@@ -326,7 +328,7 @@ export function AiQuickAdd() {
         )}
 
         <p className="text-xs text-muted-foreground">{t("ai.footer")}</p>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

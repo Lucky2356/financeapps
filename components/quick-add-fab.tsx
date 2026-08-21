@@ -1,6 +1,9 @@
 "use client";
 
 import { Plus } from "lucide-react";
+
+import { FAB_RING } from "@/components/ui/fab";
+import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -218,16 +221,25 @@ export function QuickAddFab({
 
   return (
     <>
-      <Button
-        size="icon"
-        // Hidden on a phone: the bottom bar carries the round add button there, and
-        // two of them would compete. Desktop has no bottom bar, so it stays.
-        className="fixed bottom-6 right-6 z-40 hidden size-14 rounded-full shadow-soft md:flex"
+      <button
+        type="button"
+        // Hidden on a phone: the bottom bar carries the round add button there,
+        // and two of them would compete. Desktop has no bottom bar, so it stays.
+        //
+        // The ring is the whole trick. A plain circle sitting on top of a table
+        // dissolved into whatever was under it; a ring in the page colour cuts
+        // a clean hole around the button, so it reads as floating above the
+        // screen on any background and in either theme. Hovering widens it into
+        // a pill that says what it does — the circle alone never did.
+        className={cn(FAB_RING, "group fixed bottom-8 right-8 z-40 hidden h-[52px] md:flex")}
         onClick={() => void openDialog()}
         aria-label={t("qa.fabAria")}
       >
-        <Plus className="size-6" />
-      </Button>
+        <Plus className="size-6 shrink-0" strokeWidth={2.2} />
+        <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[9rem] group-hover:opacity-100">
+          {t("common.transaction")}
+        </span>
+      </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">

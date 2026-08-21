@@ -6,12 +6,14 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { CashflowChart } from "@/components/charts/lazy";
+import { PrintHeader } from "@/components/reports/print-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
-import { formatCurrency, formatInputDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { buildPeriodReport, buildYoY } from "@/lib/reports/period-report";
 import { countableRows } from "@/lib/transactions/transfers";
 import { ExportService } from "@/services/export/ExportService";
@@ -44,6 +46,8 @@ export function ReportView({
 
   return (
     <div className="space-y-4">
+      <PrintHeader titleKey="rep.printTitle" />
+
       <div className="no-print flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {t("rep.generated", {
@@ -95,6 +99,17 @@ export function ReportView({
         </Card>
       )}
 
+      {analytics.monthlyCashflow.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t("rep.cashflowChart")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CashflowChart data={analytics.monthlyCashflow} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("rep.structure")}</CardTitle>
@@ -122,8 +137,23 @@ export function ReportView({
                       {cat.category}
                     </td>
                     <td className="py-2 text-right">{formatCurrency(cat.total, currency)}</td>
-                    <td className="py-2 text-right text-muted-foreground">
-                      {Math.round(cat.share)}%
+                    <td className="py-2 text-right">
+                      {/* The share as a number and as a length: on paper the bar
+                          is what makes the table readable at a glance. */}
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+                          <span
+                            className="block h-full rounded-full"
+                            style={{
+                              width: `${Math.min(100, Math.max(2, cat.share))}%`,
+                              backgroundColor: cat.color
+                            }}
+                          />
+                        </span>
+                        <span className="num w-9 text-right text-muted-foreground">
+                          {Math.round(cat.share)}%
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -233,13 +263,17 @@ function ExtendedReport({
   const savingsPctClass = (value: number) => (value >= 0 ? "text-success" : "text-destructive");
 
   return (
-    <Card className="no-print">
+    <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <CardTitle className="text-base">{t("rep.ext.title")}</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">{t("rep.ext.desc")}</p>
+          <p className="no-print mt-1 text-sm text-muted-foreground">{t("rep.ext.desc")}</p>
+          {/* The dates are controls on screen and a fact on paper. */}
+          <p className="print-only mt-1 hidden text-sm text-muted-foreground">
+            {t("rep.period", { from: formatDate(from), to: formatDate(to) })}
+          </p>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="no-print flex flex-wrap items-end gap-2">
           <div className="space-y-1">
             <Label htmlFor="rep-from" className="text-xs">
               {t("tx.from")}

@@ -6,7 +6,7 @@ import { computeInvestmentTaxEstimate } from "@/services/InvestmentTaxService";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { InvestmentData } from "@/types/finance";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 
 // "If you sold now" tax estimate for the portfolio's unrealized gains. Renders
 // only when there is a positive gain to tax. Clearly labelled as an estimate.
@@ -33,14 +33,8 @@ export function TaxEstimateCard({
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Receipt className="size-4" />
-          {t("inv.tax.title")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <CollapsibleCard title={t("inv.tax.title")} icon={Receipt} storageKey="inv-tax" defaultOpen>
+      <div className="space-y-3">
         <dl className="space-y-2">
           {rows.map((row) => (
             <div key={row.label} className="flex items-center justify-between gap-3 text-sm">
@@ -52,7 +46,7 @@ export function TaxEstimateCard({
         <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
           {t("inv.tax.disclaimer")}
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

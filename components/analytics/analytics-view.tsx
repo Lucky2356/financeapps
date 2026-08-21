@@ -1,6 +1,17 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Info, Printer, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
+  CheckCircle2,
+  Info,
+  PiggyBank,
+  Printer,
+  TrendingDown,
+  TrendingUp,
+  Trophy
+} from "lucide-react";
 import Link from "next/link";
 import { addMonths } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
@@ -25,8 +36,12 @@ import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { axisMoney } from "@/lib/charts/format";
 import { useI18n } from "@/lib/i18n/context";
+import { PrintHeader } from "@/components/reports/print-header";
 import { Button } from "@/components/ui/button";
+import { StatGrid } from "@/components/ui/stat-grid";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
   const { t, locale } = useI18n();
@@ -45,6 +60,8 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
 
   return (
     <div className="space-y-6">
+      <PrintHeader titleKey="page.analytics.title" />
+
       {/* Print button */}
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden">
@@ -53,25 +70,29 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
         </Button>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard
+      {/* The same tiles as every other screen — this card had its own look for
+          no reason other than being written earlier. */}
+      <StatGrid title={t("dash.widget.overview")}>
+        <StatTile
           label={t("an.avgIncome")}
           value={formatCurrency(data.avgMonthlyIncome, data.currency)}
-          colorClass="text-green-700 dark:text-green-400"
+          icon={ArrowDownLeft}
+          tone="success"
         />
-        <SummaryCard
+        <StatTile
           label={t("an.avgExpense")}
           value={formatCurrency(data.avgMonthlyExpense, data.currency)}
-          colorClass="text-orange-700 dark:text-orange-400"
+          icon={ArrowUpRight}
+          tone="warning"
         />
-        <SummaryCard
+        <StatTile
           label={t("an.avgSavings")}
           value={`${data.avgSavingsRate.toFixed(1)}%`}
-          colorClass="text-primary"
+          icon={PiggyBank}
+          tone={data.avgSavingsRate >= 0 ? "success" : "danger"}
         />
-        <SummaryCard label={t("an.bestMonth")} value={data.bestMonth} colorClass="text-primary" />
-      </div>
+        <StatTile label={t("an.bestMonth")} value={data.bestMonth} icon={Trophy} />
+      </StatGrid>
 
       <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
@@ -218,74 +239,30 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
         </CardContent>
       </Card>
 
-      {/* Category breakdown */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("an.topCategories")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data.topExpenseCategories.map((cat) => (
-                <Link
-                  key={cat.category}
-                  href={`/transactions?categoryId=${encodeURIComponent(cat.categoryId)}&type=EXPENSE`}
-                  className="block rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
-                  title={t("acc.showTransactions", { name: cat.category })}
-                >
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-block size-3 shrink-0 rounded-full"
-                        style={{ backgroundColor: cat.color }}
-                      />
-                      <span>{cat.category}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-muted-foreground">{cat.share.toFixed(1)}%</span>
-                      <span className="font-medium">
-                        {formatCurrency(cat.total, data.currency)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${Math.min(cat.share, 100)}%`,
-                        backgroundColor: cat.color
-                      }}
-                    />
-                  </div>
-                </Link>
-              ))}
-              {data.topExpenseCategories.length === 0 && (
-                <p className="py-8 text-center text-sm text-muted-foreground">{t("an.noData6m")}</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Spending by category, once. The screen used to carry a ranked list and
+          a pie of exactly the same numbers side by side; the ranking now lives
+          in the pie's own legend, where it says the same thing in one card. */}
+      <StructureCard
+        title={t("an.structure")}
+        slices={data.topExpenseCategories}
+        shareLabel={t("an.share")}
+        otherLabel={t("section.other")}
+        empty={t("an.noData6m")}
+        currency={data.currency}
+        linkType="EXPENSE"
+      />
 
-        <StructureCard
-          title={t("an.structure")}
-          slices={data.topExpenseCategories}
-          shareLabel={t("an.share")}
-          otherLabel={t("section.other")}
-          empty={t("an.noData")}
-        />
-      </div>
-
-      {/* The same structure for money coming in. Spending alone says how it was
-          used; this says what there was to use. */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <StructureCard
-          title={t("an.structureIncome")}
-          slices={data.topIncomeCategories}
-          shareLabel={t("an.share")}
-          otherLabel={t("section.other")}
-          empty={t("an.noIncome6m")}
-        />
-      </div>
+      {/* The same for money coming in. Spending alone says how it was used;
+          this says what there was to use. */}
+      <StructureCard
+        title={t("an.structureIncome")}
+        slices={data.topIncomeCategories}
+        shareLabel={t("an.share")}
+        otherLabel={t("section.other")}
+        empty={t("an.noIncome6m")}
+        currency={data.currency}
+        linkType="INCOME"
+      />
 
       <CategoryTrendsSection currency={data.currency} />
     </div>
@@ -299,13 +276,18 @@ function StructureCard({
   slices,
   shareLabel,
   otherLabel,
-  empty
+  empty,
+  currency,
+  linkType
 }: {
   title: string;
   slices: AnalyticsData["topExpenseCategories"];
   shareLabel: string;
   otherLabel: string;
   empty: string;
+  currency: string;
+  /** Rows open the ledger filtered to this category and this side of it. */
+  linkType: "INCOME" | "EXPENSE";
 }) {
   // The ranking keeps the six biggest categories, so the ring was drawn from a
   // part of the period while its percentages counted the whole of it — the
@@ -335,8 +317,8 @@ function StructureCard({
       </CardHeader>
       <CardContent>
         {shown.length > 0 ? (
-          <div className="flex items-center gap-4">
-            <div className="h-52 w-52 shrink-0">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="mx-auto h-52 w-52 shrink-0 sm:mx-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -360,19 +342,48 @@ function StructureCard({
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="min-w-0 flex-1 space-y-1.5">
-              {shown.map((cat) => (
-                <div key={cat.category} className="flex items-center gap-2 text-sm">
-                  <span
-                    className="inline-block size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  <span className="truncate">{cat.category}</span>
-                  <span className="ml-auto shrink-0 text-muted-foreground">
-                    {cat.share.toFixed(0)}%
-                  </span>
-                </div>
-              ))}
+            <div className="min-w-0 flex-1 space-y-2">
+              {shown.map((cat) => {
+                const row = (
+                  <>
+                    <div className="mb-1 flex items-center gap-2 text-sm">
+                      <span
+                        className="inline-block size-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      <span className="truncate">{cat.category}</span>
+                      <span className="num ml-auto shrink-0 text-muted-foreground">
+                        {cat.share.toFixed(0)}%
+                      </span>
+                      {cat.total > 0 ? (
+                        <span className="num shrink-0 whitespace-nowrap font-medium">
+                          {formatCurrency(cat.total, currency)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(cat.share, 100)}%`,
+                          backgroundColor: cat.color
+                        }}
+                      />
+                    </div>
+                  </>
+                );
+                return cat.categoryId === "__rest__" ? (
+                  <div key={cat.category}>{row}</div>
+                ) : (
+                  <Link
+                    key={cat.category}
+                    href={`/transactions?categoryId=${encodeURIComponent(cat.categoryId)}&type=${linkType}`}
+                    className="block rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
+                  >
+                    {row}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -437,12 +448,11 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
   if (trends.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("an.trends.title")}</CardTitle>
+    // Eight categories with a sparkline each is a screenful on its own, and it
+    // is the last thing on the page — folded until it is asked for.
+    <CollapsibleCard title={t("an.trends.title")} storageKey="an-trends">
+      <div className="grid gap-2">
         <p className="text-sm text-muted-foreground">{t("an.trends.desc")}</p>
-      </CardHeader>
-      <CardContent className="grid gap-2">
         {trends.map((trend: CategoryTrend) => (
           <div
             key={trend.categoryId}
@@ -477,26 +487,7 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
             </div>
           </div>
         ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  colorClass
-}: {
-  label: string;
-  value: string;
-  colorClass: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className={`mt-1 text-2xl font-semibold ${colorClass}`}>{value}</p>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }
