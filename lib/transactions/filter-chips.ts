@@ -143,7 +143,7 @@ export function activeFilterCount(params: URLSearchParams): number {
     if (params.get(key)) count += 1;
   }
   const type = params.get("type");
-  if (type === "INCOME" || type === "EXPENSE") count += 1;
+  if (type === "INCOME" || type === "EXPENSE" || type === "TRANSFER") count += 1;
   if (params.get("from") || params.get("to")) count += 1;
   count += parseCategoryIds(params.get("categoryId")).length;
   return count;
@@ -195,7 +195,8 @@ export function describeFilters(params: URLSearchParams, context: ChipContext): 
   if (from || to) push("period", "period", `${from}→${to}`, "period");
 
   const type = params.get("type");
-  if (type === "INCOME" || type === "EXPENSE") push("type", "type", type, "type");
+  if (type === "INCOME" || type === "EXPENSE" || type === "TRANSFER")
+    push("type", "type", type, "type");
 
   for (const id of parseCategoryIds(params.get("categoryId"))) {
     const name = context.categories.find((category) => category.id === id)?.label ?? id;

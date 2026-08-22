@@ -13,11 +13,10 @@ test.describe("desktop static build", () => {
     await page.goto("/transactions");
     // TransactionManager renders these once the client-side LocalApiClient
     // resolves — proves data wiring works in the exported build without a backend.
-    await expect(page.getByText("Фильтры").first()).toBeVisible({ timeout: 15_000 });
-    // Adding an operation lives on the round button now; what this screen keeps
-    // is what that button cannot do. Located by attribute rather than by role:
-    // on a first run the onboarding tour is open, and a modal takes the rest of
-    // the page out of the accessibility tree.
-    await expect(page.locator('main [aria-label="Перевод"]')).toBeVisible();
+    // The filters are the list's own line now. Located by attribute rather than
+    // by role: on a first run the onboarding tour is open, and a modal takes the
+    // rest of the page out of the accessibility tree.
+    await expect(page.locator('main [aria-label="Период"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('main [aria-label="Тип"]')).toBeVisible();
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeNavHref,
   DESKTOP_HUBS,
+  DESKTOP_NAV,
   findHub,
   HUB_GROUPS,
   hubsFor,
@@ -23,11 +24,12 @@ describe("the analytics hub", () => {
     }
   });
 
-  it("still opens Аналитика from the menu button", () => {
-    // The landing is deliberately not the first tab here: the owner asked for
-    // План/факт first in the strip while the section itself stays where it was.
-    expect(activeNavHref("/plan", "desktop")).toBe("/analytics");
-    expect(activeNavHref("/analytics", "desktop")).toBe("/analytics");
+  it("opens План/факт from the menu button", () => {
+    // The button carries the group's name and lands on its first tab — the
+    // screen the owner asked to see first.
+    expect(activeNavHref("/plan", "desktop")).toBe("/plan");
+    expect(activeNavHref("/analytics", "desktop")).toBe("/plan");
+    expect(DESKTOP_NAV.find((item) => item.labelKey === "nav.analytics")?.href).toBe("/plan");
   });
 });
 

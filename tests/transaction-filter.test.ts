@@ -45,6 +45,30 @@ describe("matchesCriteria", () => {
     expect(matchesCriteria(tx({ type: "INCOME" }), { type: "ALL" })).toBe(true);
   });
 
+  // A transfer is not a type a row carries — it is a pair of ordinary rows. The
+  // filter has to recognise both the modern marker and the legacy one, or the
+  // owner's older transfers would go missing from a filter that names them.
+  it("selects both halves of a transfer, and only them", () => {
+    const out = tx({ type: "EXPENSE", transferId: "tr-1" });
+    const back = tx({ type: "INCOME", transferId: "tr-1" });
+    const legacy = tx({ description: "Перевод [transfer:tr-0]" });
+    const ordinary = tx();
+
+    expect(matchesCriteria(out, { type: "TRANSFER" })).toBe(true);
+    expect(matchesCriteria(back, { type: "TRANSFER" })).toBe(true);
+    expect(matchesCriteria(legacy, { type: "TRANSFER" })).toBe(true);
+    expect(matchesCriteria(ordinary, { type: "TRANSFER" })).toBe(false);
+
+    // And it stays out of the way of the other two: a transfer half is still an
+    // expense when expenses are what was asked for.
+    expect(matchesCriteria(out, { type: "EXPENSE" })).toBe(true);
+  });
+
+  it("reads TRANSFER out of the URL like any other type", () => {
+    expect(criteriaFromParams(new URLSearchParams("type=TRANSFER")).type).toBe("TRANSFER");
+    expect(criteriaFromParams(new URLSearchParams("type=nonsense")).type).toBe("ALL");
+  });
+
   it("filters by multiple categories (OR)", () => {
     expect(
       matchesCriteria(tx({ category: { id: "a", label: "A" } }), { categoryIds: ["a", "b"] })

@@ -70,17 +70,21 @@ export function AnalyticsView({
     <div className="space-y-4">
       <PrintHeader titleKey="page.analytics.title" />
 
-      <div className="flex flex-wrap items-center justify-end gap-3 print:hidden">
-        {transfers}
-        <Button variant="outline" size="sm" onClick={() => window.print()}>
-          <Printer className="size-4" />
-          {t("an.print")}
-        </Button>
-      </div>
-
       {/* The same tiles as every other screen — this card had its own look for
-          no reason other than being written earlier. */}
-      <StatGrid title={t("dash.widget.overview")}>
+          no reason other than being written earlier. The two controls ride on
+          the heading line instead of a strip of their own above it. */}
+      <StatGrid
+        title={t("dash.widget.overview")}
+        actions={
+          <div className="flex flex-wrap items-center gap-3 print:hidden">
+            {transfers}
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Printer className="size-4" />
+              {t("an.print")}
+            </Button>
+          </div>
+        }
+      >
         <StatTile
           label={t("an.avgIncome")}
           value={formatCurrency(data.avgMonthlyIncome, data.currency)}
@@ -165,7 +169,7 @@ export function AnalyticsView({
           <CardTitle>{t("an.cashflow6m")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-72 w-full sm:h-80">
+          <div className="h-60 w-full sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={data.monthlyCashflow}
@@ -326,7 +330,7 @@ function StructureCard({
       <CardContent>
         {shown.length > 0 ? (
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="mx-auto h-52 w-52 shrink-0 sm:mx-0">
+            <div className="mx-auto size-40 shrink-0 sm:mx-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -335,8 +339,8 @@ function StructureCard({
                     nameKey="category"
                     cx="50%"
                     cy="50%"
-                    innerRadius={48}
-                    outerRadius={90}
+                    innerRadius="52%"
+                    outerRadius="88%"
                     strokeWidth={2}
                   >
                     {shown.map((entry) => (

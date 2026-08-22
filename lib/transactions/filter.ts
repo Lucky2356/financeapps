@@ -4,10 +4,16 @@
 // date/type/category/account/text filters with an amount range and multiple
 // categories.
 
+import { isTransfer } from "@/lib/transactions/transfers";
+
 export type TxFilterCriteria = {
   from?: string;
   to?: string;
-  type?: "ALL" | "INCOME" | "EXPENSE";
+  /**
+   * "TRANSFER" is not a type a row carries: both halves of a transfer are
+   * ordinary income/expense rows. It selects the pair (see `transfers.ts`).
+   */
+  type?: "ALL" | "INCOME" | "EXPENSE" | "TRANSFER";
   /** One or more category ids (OR-combined). Empty = any category. */
   categoryIds?: string[];
   accountId?: string;
@@ -25,6 +31,8 @@ export type FilterableTransaction = {
   type: string;
   amount: number;
   description?: string | null;
+  /** Present on transfer halves recorded since 1.10.0. */
+  transferId?: string;
   account: { id: string; label: string };
   category: { id: string; label: string };
   tags?: string[];
@@ -47,7 +55,7 @@ export function criteriaFromParams(params: URLSearchParams): TxFilterCriteria {
   return {
     from: params.get("from") || undefined,
     to: params.get("to") || undefined,
-    type: type === "INCOME" || type === "EXPENSE" ? type : "ALL",
+    type: type === "INCOME" || type === "EXPENSE" || type === "TRANSFER" ? type : "ALL",
     categoryIds: parseCategoryIds(params.get("categoryId")),
     accountId: params.get("accountId") || undefined,
     q: params.get("q") || undefined,
@@ -65,7 +73,18 @@ export function matchesCriteria(
   const date = transaction.date.slice(0, 10);
   if (criteria.from && date < criteria.from) return false;
   if (criteria.to && date > criteria.to) return false;
-  if (criteria.type && criteria.type !== "ALL" && transaction.type !== criteria.type) return false;
+  if (criteria.type === "TRANSFER") {
+    if (
+      !isTransfer({
+        description: transaction.description ?? null,
+        transferId: transaction.transferId
+      })
+    ) {
+      return false;
+    }
+  } else if (criteria.type && criteria.type !== "ALL" && transaction.type !== criteria.type) {
+    return false;
+  }
   if (criteria.categoryIds && criteria.categoryIds.length > 0) {
     if (!criteria.categoryIds.includes(transaction.category.id)) return false;
   }

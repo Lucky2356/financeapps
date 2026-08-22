@@ -304,6 +304,13 @@ export type PortfolioRow = {
   /** Share, bond, fund or metal. Absent on positions saved before 1.9.0. */
   assetKind?: AssetKind;
   sector: string;
+  /**
+   * The industry the owner set by hand. The market directory knows the industry
+   * of the liquid names only (lib/market/sectors.ts); for anything else — a
+   * bond, a fresh listing — this is how a holding gets filed correctly, and it
+   * wins over whatever the directory says.
+   */
+  sectorOverride?: string;
   quantity: number;
   averageBuyPrice: number;
   currentPrice: number;

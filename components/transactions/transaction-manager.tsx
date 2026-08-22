@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeft, Edit2, Plus, ReceiptText, Sparkles, Split, Trash2 } from "lucide-react";
+import { Edit2, ReceiptText, Sparkles, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -33,8 +33,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-  DialogTrigger
+  DialogTitle
 } from "@/components/ui/dialog";
 import { countableAmount } from "@/lib/transactions/base-amount";
 import { Input } from "@/components/ui/input";
@@ -67,8 +66,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const criteria = criteriaFromParams(searchParams);
   const { run, pending: isMutating } = useApiMutation();
   const confirm = useConfirm();
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [splitOpen, setSplitOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<
     TransactionsPageData["transactions"][number] | null
   >(null);
@@ -384,59 +381,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     }
   }
 
-  // A split is N normal EXPENSE transactions sharing a generated splitGroupId —
-  // each is counted by every existing aggregation, so nothing double-counts.
-  async function submitSplit(payload: {
-    date: string;
-    accountId: string;
-    description: string;
-    rows: { categoryId: string; amount: string }[];
-  }) {
-    const splitGroupId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `split-${Date.now()}`;
-    setBulkPending(true);
-    let created = 0;
-    for (const row of payload.rows) {
-      try {
-        await apiClient.post("/transactions", {
-          type: "EXPENSE",
-          amount: row.amount,
-          categoryId: row.categoryId,
-          accountId: payload.accountId,
-          date: payload.date,
-          description: payload.description,
-          splitGroupId
-        });
-        created += 1;
-      } catch {
-        /* continue; summary reports how many landed */
-      }
-    }
-    setBulkPending(false);
-    setSplitOpen(false);
-    toast.success(t("tx.split.created", { count: created }));
-    await refresh();
-  }
-
-  async function submitTransfer(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const payload = {
-      action: "transfer",
-      ...normalizeSelectValues(Object.fromEntries(new FormData(event.currentTarget).entries()))
-    };
-
-    await run(() => apiClient.post("/transactions", payload), {
-      success: t("tx.toast.transferCreated"),
-      error: t("tx.toast.transferError"),
-      onSuccess: async () => {
-        setTransferOpen(false);
-        await refresh();
-      }
-    });
-  }
-
   return (
     <div className="space-y-4">
       {/* The filters belong to the list they filter. They used to sit on the
@@ -444,34 +388,11 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           inside the card they read as its own controls. */}
       <Card>
         <CardHeader className="gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>{t("tx.title")}</CardTitle>
-            {/* Adding an operation is the round button in the corner — on this
-                screen a second one said the same thing twice. What is left is
-                what that button cannot do. */}
-            <div className="flex flex-wrap gap-2">
-              <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" aria-label={t("tx.transfer")}>
-                    <ArrowRightLeft className="size-4" />
-                    <span className="hidden sm:inline">{t("tx.transfer")}</span>
-                  </Button>
-                </DialogTrigger>
-                <TransferDialog data={pageData} pending={isMutating} onSubmit={submitTransfer} />
-              </Dialog>
-              <Dialog open={splitOpen} onOpenChange={setSplitOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" aria-label={t("tx.split")}>
-                    <Split className="size-4" />
-                    <span className="hidden sm:inline">{t("tx.split")}</span>
-                  </Button>
-                </DialogTrigger>
-                <SplitDialog data={pageData} pending={bulkPending} onSubmit={submitSplit} />
-              </Dialog>
-            </div>
-          </div>
-
+          {/* Every way of adding something — an operation, a transfer, a split
+              receipt — is the round "+" button. What stands here instead are
+              the filters that decide which rows are below. */}
           <TransactionFilterBar
+            title={<CardTitle>{t("tx.title")}</CardTitle>}
             categories={pageData.categories}
             accounts={pageData.accounts}
             defaultLimit={pageData.pagination.limit}
@@ -767,230 +688,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
         )}
       </Dialog>
     </div>
-  );
-}
-
-function TransferDialog({
-  data,
-  pending,
-  onSubmit
-}: {
-  data: TransactionsPageData;
-  pending?: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  const { t } = useI18n();
-  const defaultFromAccount = data.accounts[0]?.id ?? "";
-  const defaultToAccount =
-    data.accounts.find((account) => account.id !== defaultFromAccount)?.id ?? "";
-
-  return (
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>{t("tx.transfer.title")}</DialogTitle>
-        <DialogDescription>{t("tx.transfer.desc")}</DialogDescription>
-      </DialogHeader>
-      <form onSubmit={onSubmit} className="grid gap-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>{t("common.amount")}</Label>
-            <AmountInput name="amount" min="0" step="0.01" required />
-          </div>
-          <div className="space-y-2">
-            <Label>{t("common.date")}</Label>
-            <Input name="date" type="date" defaultValue={formatInputDate(new Date())} required />
-          </div>
-          <div className="space-y-2">
-            <Label>{t("tx.transfer.from")}</Label>
-            <Select name="fromAccountId" defaultValue={defaultFromAccount} required>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {data.accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("tx.transfer.to")}</Label>
-            <Select name="toAccountId" defaultValue={defaultToAccount} required>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {data.accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label>{t("tx.col.description")}</Label>
-            <Textarea name="description" placeholder={t("tx.transfer.descPlaceholder")} />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button type="submit" disabled={pending || data.accounts.length < 2}>
-            {pending ? t("tx.transfer.creating") : t("tx.transfer.create")}
-          </Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
-  );
-}
-
-function SplitDialog({
-  data,
-  pending,
-  onSubmit
-}: {
-  data: TransactionsPageData;
-  pending?: boolean;
-  onSubmit: (payload: {
-    date: string;
-    accountId: string;
-    description: string;
-    rows: { categoryId: string; amount: string }[];
-  }) => void;
-}) {
-  const { t } = useI18n();
-  const expenseCategories = useMemo(
-    () => data.categories.filter((category) => category.kind === "EXPENSE"),
-    [data.categories]
-  );
-  const [accountId, setAccountId] = useState(data.accounts[0]?.id ?? "");
-  const [date, setDate] = useState(formatInputDate(new Date()));
-  const [description, setDescription] = useState("");
-  const [rows, setRows] = useState<{ categoryId: string; amount: string }[]>([
-    { categoryId: expenseCategories[0]?.id ?? "", amount: "" },
-    { categoryId: expenseCategories[1]?.id ?? expenseCategories[0]?.id ?? "", amount: "" }
-  ]);
-
-  const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
-  const valid =
-    accountId && rows.length >= 2 && rows.every((row) => row.categoryId && Number(row.amount) > 0);
-
-  function updateRow(index: number, patch: Partial<{ categoryId: string; amount: string }>) {
-    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  }
-
-  return (
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>{t("tx.split.title")}</DialogTitle>
-        <DialogDescription>{t("tx.split.desc")}</DialogDescription>
-      </DialogHeader>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (valid) onSubmit({ date, accountId, description, rows });
-        }}
-        className="grid gap-4"
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>{t("common.date")}</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-          </div>
-          <div className="space-y-2">
-            <Label>{t("tx.account")}</Label>
-            <Select value={accountId || undefined} onValueChange={setAccountId}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {data.accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label>{t("tx.col.description")}</Label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t("tx.split.descPlaceholder")}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          {rows.map((row, index) => (
-            <div key={index} className="flex gap-2">
-              <Select
-                value={row.categoryId || undefined}
-                onValueChange={(value) => updateRow(index, { categoryId: value })}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={t("common.category")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {expenseCategories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={row.amount}
-                onChange={(e) => updateRow(index, { amount: e.target.value })}
-                placeholder={t("common.amount")}
-                className="w-32"
-              />
-              {rows.length > 2 ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setRows((prev) => prev.filter((_, i) => i !== index))}
-                  aria-label={t("common.delete")}
-                >
-                  <Trash2 className="size-4 text-destructive" />
-                </Button>
-              ) : null}
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setRows((prev) => [
-                ...prev,
-                { categoryId: expenseCategories[0]?.id ?? "", amount: "" }
-              ])
-            }
-          >
-            <Plus className="size-4" />
-            {t("tx.split.addRow")}
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{t("tx.split.total")}</span>
-          <span className="font-semibold">{formatCurrency(total)}</span>
-        </div>
-
-        <DialogFooter>
-          <Button type="submit" disabled={pending || !valid}>
-            {pending ? t("tx.dialog.saving") : t("tx.split.submit")}
-          </Button>
-        </DialogFooter>
-      </form>
-    </DialogContent>
   );
 }
 

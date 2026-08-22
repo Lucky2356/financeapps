@@ -1,12 +1,13 @@
 import { addDays, startOfDay, subDays } from "date-fns";
 
 import type { AssetKind } from "@/types/enums";
+import { sectorForTicker } from "@/lib/market/sectors";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 
 // The stand-in universe is blue chips only, so the kind is stamped on when a
 // security is handed out rather than repeated on every row here.
 const securities: Array<
-  Omit<MarketSecurity, "price" | "changeDay" | "change30d" | "assetKind"> & {
+  Omit<MarketSecurity, "price" | "changeDay" | "change30d" | "assetKind" | "sector"> & {
     basePrice: number;
     volatility: number;
   }
@@ -14,7 +15,6 @@ const securities: Array<
   {
     ticker: "SBER",
     name: "Сбербанк",
-    sector: "Финансы",
     risk: "MEDIUM",
     basePrice: 315,
     volatility: 2.2,
@@ -23,7 +23,6 @@ const securities: Array<
   {
     ticker: "GAZP",
     name: "Газпром",
-    sector: "Энергетика",
     risk: "HIGH",
     basePrice: 138,
     volatility: 3.6,
@@ -33,7 +32,6 @@ const securities: Array<
   {
     ticker: "LKOH",
     name: "Лукойл",
-    sector: "Энергетика",
     risk: "MEDIUM",
     basePrice: 7420,
     volatility: 2.4,
@@ -42,7 +40,6 @@ const securities: Array<
   {
     ticker: "YDEX",
     name: "Яндекс",
-    sector: "Технологии",
     risk: "HIGH",
     basePrice: 4060,
     volatility: 4.2,
@@ -51,7 +48,6 @@ const securities: Array<
   {
     ticker: "T",
     name: "Т-Технологии",
-    sector: "Финтех",
     risk: "HIGH",
     basePrice: 3160,
     volatility: 4.6,
@@ -60,7 +56,6 @@ const securities: Array<
   {
     ticker: "VTBR",
     name: "ВТБ",
-    sector: "Финансы",
     risk: "HIGH",
     basePrice: 0.021,
     volatility: 5.4,
@@ -69,7 +64,6 @@ const securities: Array<
   {
     ticker: "MGNT",
     name: "Магнит",
-    sector: "Ритейл",
     risk: "MEDIUM",
     basePrice: 5980,
     volatility: 2.5,
@@ -78,7 +72,6 @@ const securities: Array<
   {
     ticker: "NVTK",
     name: "Новатэк",
-    sector: "Энергетика",
     risk: "MEDIUM",
     basePrice: 1125,
     volatility: 2.9,
@@ -87,7 +80,6 @@ const securities: Array<
   {
     ticker: "ROSN",
     name: "Роснефть",
-    sector: "Энергетика",
     risk: "MEDIUM",
     basePrice: 575,
     volatility: 2.8,
@@ -96,7 +88,6 @@ const securities: Array<
   {
     ticker: "MOEX",
     name: "Московская биржа",
-    sector: "Финансовая инфраструктура",
     risk: "LOW",
     basePrice: 228,
     volatility: 1.8,
@@ -105,7 +96,6 @@ const securities: Array<
   {
     ticker: "PLZL",
     name: "Полюс",
-    sector: "Металлы и добыча",
     risk: "MEDIUM",
     basePrice: 15200,
     volatility: 2.7,
@@ -114,7 +104,6 @@ const securities: Array<
   {
     ticker: "PHOR",
     name: "ФосАгро",
-    sector: "Химия",
     risk: "MEDIUM",
     basePrice: 6350,
     volatility: 2.6,
@@ -123,7 +112,6 @@ const securities: Array<
   {
     ticker: "CHMF",
     name: "Северсталь",
-    sector: "Металлы и добыча",
     risk: "MEDIUM",
     basePrice: 1780,
     volatility: 2.9,
@@ -132,7 +120,6 @@ const securities: Array<
   {
     ticker: "SNGS",
     name: "Сургутнефтегаз",
-    sector: "Энергетика",
     risk: "MEDIUM",
     basePrice: 32,
     volatility: 3.1,
@@ -141,7 +128,6 @@ const securities: Array<
   {
     ticker: "AFLT",
     name: "Аэрофлот",
-    sector: "Транспорт",
     risk: "HIGH",
     basePrice: 58,
     volatility: 4.8,
@@ -197,7 +183,9 @@ export class MockMarketDataProvider implements MarketDataService {
         // The offline stand-in carries blue chips only; anything it answers
         // with is a share.
         assetKind: "STOCK" as const,
-        sector: security.sector,
+        // The same table the live provider uses, so the offline example and the
+        // real portfolio are cut into the same industries.
+        sector: sectorForTicker(security.ticker, "STOCK"),
         risk: security.risk,
         comment: security.comment,
         price: latest,

@@ -885,7 +885,16 @@ function SectionCard({
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className={fields ? "grid items-start gap-4 lg:grid-cols-2" : "space-y-4"}>
+      {/* Every setting gets the same box: a plain label-and-select sitting next
+          to a bordered toggle made the two columns look like two different
+          screens. */}
+      <CardContent
+        className={
+          fields
+            ? "grid items-start gap-3 lg:grid-cols-2 [&>div]:rounded-lg [&>div]:border [&>div]:bg-muted/10 [&>div]:p-4"
+            : "space-y-4"
+        }
+      >
         {children}
       </CardContent>
     </Card>
@@ -905,7 +914,7 @@ function ToggleRow({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/30">
+    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border bg-muted/10 p-4 transition-colors hover:bg-muted/30">
       <span>
         <span className="block text-sm font-medium">{title}</span>
         <span className="block text-xs text-muted-foreground">{description}</span>

@@ -437,6 +437,37 @@ describe("LocalApiClient", () => {
     expect(afterDelete.portfolio).toHaveLength(0);
   });
 
+  it("files a position under its industry, and lets the owner overrule it", async () => {
+    // The exchange sends no industry, so the app fills it in from its own table
+    // (lib/market/sectors.ts). What it does not know — a bond, a fresh listing —
+    // is the owner's to file, and their choice has to outrank the table on every
+    // later read, or the next price refresh would quietly undo it.
+    const client = createClient();
+    await client.post("/investments", { ticker: "SBER", quantity: "1", averageBuyPrice: "100" });
+    const known = await client.get<InvestmentData>("/investments");
+    expect(known.portfolio[0].sector).toBe("Финансы и Банки");
+
+    await client.post("/investments", {
+      ticker: "SBER",
+      quantity: "1",
+      averageBuyPrice: "100",
+      sector: "Разное"
+    });
+    const overruled = await client.get<InvestmentData>("/investments");
+    expect(overruled.portfolio[0].sector).toBe("Разное");
+    expect(overruled.sectorStructure.map((slice) => slice.name)).toEqual(["Разное"]);
+
+    // Choosing what the table already says is not an override — nothing sticks.
+    await client.post("/investments", {
+      ticker: "SBER",
+      quantity: "1",
+      averageBuyPrice: "100",
+      sector: "Финансы и Банки"
+    });
+    const back = await client.get<InvestmentData>("/investments");
+    expect(back.portfolio[0].sector).toBe("Финансы и Банки");
+  });
+
   it("keeps portfolio positions whose ticker is outside the curated board", async () => {
     // Regression: "Сохранить позицию" appeared to do nothing for a security
     // picked through the full-board search (e.g. ETLN). The position was written

@@ -10,7 +10,10 @@ import { useI18n } from "@/lib/i18n/context";
 export function PortfolioStructureChart({ data }: { data: ChartDatum[] }) {
   const { t } = useI18n();
   return (
-    <div className="h-72 w-full sm:h-80" role="img" aria-label={t("chart.aria.portfolioStructure")}>
+    // The box is the caller's to size: this used to carry a fixed 288/320px of
+    // its own, which drew a donut a third taller than the 176px slot it was put
+    // in — the ring hung out of the bottom of the card.
+    <div className="size-full" role="img" aria-label={t("chart.aria.portfolioStructure")}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie

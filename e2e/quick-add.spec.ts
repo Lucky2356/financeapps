@@ -43,13 +43,28 @@ test.describe("быстрое добавление", () => {
     await expect(dialog.getByLabel("Категория")).toContainText("Продукты", { timeout: 10_000 });
   });
 
-  test("на экране операций нет второй кнопки добавления", async ({ page }) => {
+  test("на экране операций не осталось кнопок добавления", async ({ page }) => {
     await openSettled(page, "/transactions");
-    // Transfer and split stay — the round button cannot do either.
-    await expect(page.getByRole("button", { name: "Перевод" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Разбить" })).toBeVisible();
+    // The screen's header carries filters only: everything that records
+    // something moved to the round button.
     await expect(page.getByRole("button", { name: "Добавить операцию", exact: true })).toHaveCount(
       0
     );
+    await expect(page.locator('main [aria-label="Перевод"]')).toHaveCount(0);
+    await expect(page.locator('main [aria-label="Разбить"]')).toHaveCount(0);
+  });
+
+  test("перевод и разбивка чека живут в круглой кнопке", async ({ page }) => {
+    await openSettled(page, "/");
+    await page.getByRole("button", { name: "Быстрое добавление операции" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("button", { name: "Перевод", exact: true })).toBeVisible();
+
+    // A split is two or more expense rows sharing one receipt; the form has to
+    // offer both rows before it can be submitted.
+    await dialog.getByRole("button", { name: "Разбить", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "Добавить строку" })).toBeVisible();
+    await expect(dialog.getByLabel("Сумма").first()).toBeVisible();
   });
 });
