@@ -48,3 +48,26 @@ test("считает среднюю цену покупки по списку п
   await expect(page.getByText("SBER").first()).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText(/7\s?000/).first()).toBeVisible({ timeout: 45_000 });
 });
+
+// The dialog keeps its state inside itself, and it used to stay mounted after
+// closing: the next security you added opened with the previous one already
+// chosen, and the quantity still in the field.
+test("форма добавления бумаги открывается чистой", async ({ page }) => {
+  test.setTimeout(120_000);
+  await seedExampleData(page);
+  await openSettled(page, "/investments");
+
+  await page.getByRole("button", { name: "Добавить первую бумагу" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox").first().fill("SBER");
+  await dialog.getByRole("button", { name: /SBER/ }).first().click();
+  await expect(dialog.getByText("Сбербанк")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole("button", { name: "Добавить первую бумагу" }).click();
+  // A search field, not a chosen security.
+  await expect(dialog.getByRole("textbox").first()).toBeVisible();
+  await expect(dialog.getByText("Сбербанк")).toHaveCount(0);
+});

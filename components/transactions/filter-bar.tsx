@@ -2,20 +2,12 @@
 
 import { Check, ChevronDown, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { CategoryIcon } from "@/components/category-icon";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -47,32 +39,34 @@ type SavedFilter = { name: string; params: string };
 const SAVED_FILTERS_KEY = "tx-saved-filters";
 
 /**
- * The filter bar: one line that is always on screen, the active filters as
- * removable chips under it, and everything else behind "Фильтры".
+ * The filters of the operations list: one line beside the list's own title.
  *
- * Filtering itself lives in the URL (see `lib/transactions/filter.ts`) and has
- * not changed — this is a different remote control for the same set. What is
- * new is that nothing has to be applied: every control writes its parameter as
- * soon as it is touched, and a chip's cross removes exactly one filter instead
- * of sending the owner back into a nine-field form to find it.
+ * They used to hide behind a window — the owner had to open it, change
+ * something, and close it again to see the result. Nothing hides now: category,
+ * period, account and type are on the line itself, and the gear next to them
+ * holds only what is asked for rarely (own dates, amount range, tag, page size,
+ * saved filters). Every control writes its parameter the moment it is touched;
+ * there is no "apply" anywhere.
+ *
+ * Filtering itself still lives in the URL (see `lib/transactions/filter.ts`) —
+ * this is only the remote control for it.
  */
 export function TransactionFilterBar({
   categories,
   accounts,
   defaultLimit,
-  actions
+  title
 }: {
   categories: CategoryOption[];
   accounts: TransactionsPageData["accounts"];
   defaultLimit: number;
-  /** The screen's own buttons (transfer, split, add) — shown on the same line. */
-  actions?: ReactNode;
+  /** The list's heading — kept on the same line as the filters that trim it. */
+  title?: ReactNode;
 }) {
   const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const paramsString = searchParams.toString();
-  const [open, setOpen] = useState(false);
 
   const go = useCallback(
     (next: URLSearchParams | string) => {
@@ -94,37 +88,33 @@ export function TransactionFilterBar({
     label: (kind, value) => chipLabel(t, kind, value, preset)
   });
   const count = activeFilterCount(searchParams);
+  const selectedCategories = parseCategoryIds(searchParams.get("categoryId"));
+  const type = searchParams.get("type") ?? "ALL";
+  const accountId = searchParams.get("accountId") || ALL_OPTION;
 
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[11rem] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label={t("tx.search")}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("tx.search.placeholder")}
-            className="h-10 pl-9"
-          />
-        </div>
+        {title ? <div className="mr-auto">{title}</div> : null}
+
+        <CategoryFilter
+          categories={categories}
+          selected={selectedCategories}
+          onChange={(ids) => setParam("categoryId", ids.join(","))}
+        />
 
         <Select
           value={preset}
-          onValueChange={(value) => {
-            if (value === "custom") {
-              setOpen(true);
-              return;
-            }
+          onValueChange={(value) =>
             go(
               applyPeriodPreset(
                 new URLSearchParams(paramsString),
                 value as Exclude<PeriodPresetId, "custom">
               )
-            );
-          }}
+            )
+          }
         >
-          <SelectTrigger className="h-10 w-auto min-w-[9.5rem]" aria-label={t("tx.period.all")}>
+          <SelectTrigger className="h-9 w-auto min-w-[8.5rem]" aria-label={t("tx.period")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -141,17 +131,58 @@ export function TransactionFilterBar({
           </SelectContent>
         </Select>
 
-        <Button type="button" variant="outline" className="h-10" onClick={() => setOpen(true)}>
-          <SlidersHorizontal className="size-4" />
-          {t("tx.filters")}
-          {count > 0 ? (
-            <span className="num ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-primary/15 px-1.5 text-xs font-semibold text-primary">
-              {count}
-            </span>
-          ) : null}
-        </Button>
+        <Select
+          value={accountId}
+          onValueChange={(value) => setParam("accountId", value === ALL_OPTION ? "" : value)}
+        >
+          <SelectTrigger className="h-9 w-auto min-w-[8rem]" aria-label={t("tx.account")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_OPTION}>{t("tx.allAccounts")}</SelectItem>
+            {accounts.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+                {account.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        <Select
+          value={type}
+          onValueChange={(value) => setParam("type", value === "ALL" ? "" : value)}
+        >
+          <SelectTrigger className="h-9 w-auto min-w-[7rem]" aria-label={t("tx.type")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">{t("tx.type.all")}</SelectItem>
+            <SelectItem value="EXPENSE">{t("tx.type.expense")}</SelectItem>
+            <SelectItem value="INCOME">{t("tx.type.income")}</SelectItem>
+            {/* Both halves of a transfer are ordinary rows; this picks out the
+                pair rather than a type of its own. */}
+            <SelectItem value="TRANSFER">{t("tx.type.transfer")}</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <MoreFilters
+          defaultLimit={defaultLimit}
+          paramsString={paramsString}
+          count={count}
+          onGo={go}
+          onSetParam={setParam}
+        />
+      </div>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          aria-label={t("tx.search")}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("tx.search.placeholder")}
+          className="h-9 pl-9"
+        />
       </div>
 
       {chips.length > 0 ? (
@@ -181,18 +212,6 @@ export function TransactionFilterBar({
           </button>
         </div>
       ) : null}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <FilterDialog
-          categories={categories}
-          accounts={accounts}
-          defaultLimit={defaultLimit}
-          paramsString={paramsString}
-          onGo={go}
-          onSetParam={setParam}
-          onClose={() => setOpen(false)}
-        />
-      </Dialog>
     </div>
   );
 }
@@ -248,7 +267,8 @@ function chipLabel(
       return t("tx.chip.to", { to: formatDate(to) });
     }
     case "type":
-      return value === "INCOME" ? t("tx.type.income") : t("tx.type.expense");
+      if (value === "INCOME") return t("tx.type.income");
+      return value === "TRANSFER" ? t("tx.type.transfer") : t("tx.type.expense");
     case "minAmount":
       return t("tx.chip.min", { amount: formatCurrency(Number(value)) });
     case "maxAmount":
@@ -260,28 +280,52 @@ function chipLabel(
   }
 }
 
-// ── The "more filters" window ───────────────────────────────────────────────
-// Everything that has not earned a place on the always-visible line. Each
-// control writes its parameter straight away, so the window has no "apply" —
-// closing it is not a step, it is just closing it.
-function FilterDialog({
-  categories,
-  accounts,
+// ── An anchored panel ───────────────────────────────────────────────────────
+// Not a modal: the list stays visible and keeps re-filtering underneath while
+// the panel is open, which is the whole point of applying on the spot.
+function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: PointerEvent) {
+      if (!ref.current?.contains(event.target as Node)) close();
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") close();
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, close, ref]);
+}
+
+const TRIGGER =
+  "flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-ring/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
+
+// ── The gear ────────────────────────────────────────────────────────────────
+// What the line has no room for and the owner asks for rarely. Everything here
+// applies on the spot too; the panel closes by clicking away from it.
+function MoreFilters({
   defaultLimit,
   paramsString,
+  count,
   onGo,
-  onSetParam,
-  onClose
+  onSetParam
 }: {
-  categories: CategoryOption[];
-  accounts: TransactionsPageData["accounts"];
   defaultLimit: number;
   paramsString: string;
+  count: number;
   onGo: (next: URLSearchParams | string) => void;
   onSetParam: (key: string, value: string) => void;
-  onClose: () => void;
 }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useDismiss(ref, open, close);
+
   const params = new URLSearchParams(paramsString);
   const [minAmount, setMinAmount] = useDebouncedParam(
     params.get("minAmount") ?? "",
@@ -294,7 +338,6 @@ function FilterDialog({
     onSetParam
   );
   const [tag, setTag] = useDebouncedParam(params.get("tag") ?? "", "tag", onSetParam);
-  const type = params.get("type") ?? "ALL";
   // The list's own default is 20, which was not among the sizes on offer — so
   // the control sat there empty until something was picked. Whatever size is
   // actually in force is listed, even when it is not one of the three.
@@ -303,162 +346,144 @@ function FilterDialog({
     .filter((size) => Number(size) > 0)
     .sort((a, b) => Number(a) - Number(b));
 
-  const types = [
-    { value: "ALL", label: t("tx.type.all") },
-    { value: "INCOME", label: t("tx.type.income") },
-    { value: "EXPENSE", label: t("tx.type.expense") }
-  ];
-
   return (
-    <DialogContent className="max-h-[88vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>{t("tx.filters.title")}</DialogTitle>
-        <DialogDescription>{t("tx.filters.desc")}</DialogDescription>
-      </DialogHeader>
-
-      <div className="grid gap-4">
-        <div className="space-y-2">
-          <Label>{t("tx.type")}</Label>
-          <div className="flex gap-2">
-            {types.map((item) => (
-              <Button
-                key={item.value}
-                type="button"
-                variant={type === item.value ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => onSetParam("type", item.value === "ALL" ? "" : item.value)}
-              >
-                {item.label}
-              </Button>
-            ))}
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={t("tx.filters")}
+        className={cn(TRIGGER, "px-2.5")}
+      >
+        <SlidersHorizontal className="size-4" />
+        {count > 0 ? (
+          <span className="num inline-flex min-w-5 items-center justify-center rounded-full bg-primary/15 px-1.5 text-xs font-semibold text-primary">
+            {count}
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="absolute right-0 z-50 mt-1 w-[19rem] max-w-[calc(100vw-2rem)] space-y-3 rounded-md border bg-popover p-3 text-popover-foreground shadow-lg">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="flt-from" className="text-xs">
+                {t("tx.from")}
+              </Label>
+              <Input
+                id="flt-from"
+                type="date"
+                className="h-9"
+                value={params.get("from") ?? ""}
+                onChange={(event) => onSetParam("from", event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="flt-to" className="text-xs">
+                {t("tx.to")}
+              </Label>
+              <Input
+                id="flt-to"
+                type="date"
+                className="h-9"
+                value={params.get("to") ?? ""}
+                onChange={(event) => onSetParam("to", event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="flt-min" className="text-xs">
+                {t("tx.minAmount")}
+              </Label>
+              <Input
+                id="flt-min"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="0"
+                className="h-9"
+                value={minAmount}
+                onChange={(event) => setMinAmount(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="flt-max" className="text-xs">
+                {t("tx.maxAmount")}
+              </Label>
+              <Input
+                id="flt-max"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="∞"
+                className="h-9"
+                value={maxAmount}
+                onChange={(event) => setMaxAmount(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="flt-tag" className="text-xs">
+                {t("tx.tag")}
+              </Label>
+              <Input
+                id="flt-tag"
+                className="h-9"
+                value={tag}
+                onChange={(event) => setTag(event.target.value)}
+                placeholder={t("tx.tagPlaceholder")}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="flt-limit" className="text-xs">
+                {t("tx.perPage")}
+              </Label>
+              <Select value={pageSize} onValueChange={(value) => onSetParam("limit", value)}>
+                <SelectTrigger id="flt-limit" className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageSizes.map((size) => (
+                    <SelectItem key={size} value={size}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <Label>{t("common.category")}</Label>
-          <CategoryMultiSelect
-            categories={categories}
-            selected={parseCategoryIds(params.get("categoryId"))}
-            onChange={(ids) => onSetParam("categoryId", ids.join(","))}
+          <SavedFilters
+            currentParams={paramsString}
+            onApply={(value) => {
+              onGo(value);
+              close();
+            }}
           />
-        </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="flt-from">{t("tx.from")}</Label>
-            <Input
-              id="flt-from"
-              type="date"
-              value={params.get("from") ?? ""}
-              onChange={(event) => onSetParam("from", event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="flt-to">{t("tx.to")}</Label>
-            <Input
-              id="flt-to"
-              type="date"
-              value={params.get("to") ?? ""}
-              onChange={(event) => onSetParam("to", event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="flt-min">{t("tx.minAmount")}</Label>
-            <Input
-              id="flt-min"
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              placeholder="0"
-              value={minAmount}
-              onChange={(event) => setMinAmount(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="flt-max">{t("tx.maxAmount")}</Label>
-            <Input
-              id="flt-max"
-              type="number"
-              min="0"
-              step="0.01"
-              inputMode="decimal"
-              placeholder="∞"
-              value={maxAmount}
-              onChange={(event) => setMaxAmount(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="flt-account">{t("tx.account")}</Label>
-            <Select
-              value={params.get("accountId") || ALL_OPTION}
-              onValueChange={(value) => onSetParam("accountId", value === ALL_OPTION ? "" : value)}
+          {count > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                onGo("");
+                close();
+              }}
             >
-              <SelectTrigger id="flt-account">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_OPTION}>{t("tx.allAccounts")}</SelectItem>
-                {accounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="flt-tag">{t("tx.tag")}</Label>
-            <Input
-              id="flt-tag"
-              value={tag}
-              onChange={(event) => setTag(event.target.value)}
-              placeholder={t("tx.tagPlaceholder")}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="flt-limit">{t("tx.perPage")}</Label>
-            <Select value={pageSize} onValueChange={(value) => onSetParam("limit", value)}>
-              <SelectTrigger id="flt-limit">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {pageSizes.map((size) => (
-                  <SelectItem key={size} value={size}>
-                    {size}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              {t("tx.filters.clearAll")}
+            </Button>
+          ) : null}
         </div>
-
-        <SavedFilters currentParams={paramsString} onApply={onGo} />
-      </div>
-
-      <DialogFooter className="gap-2 sm:justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            onGo("");
-            onClose();
-          }}
-        >
-          {t("tx.filters.clearAll")}
-        </Button>
-        <Button type="button" onClick={onClose}>
-          {t("tx.filters.done")}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
+      ) : null}
+    </div>
   );
 }
 
 // Multi-category filter. Income and spending are listed apart on purpose: some
 // names exist on both sides — "Переводы" most of all — and a flat list gave no
 // way to tell which one you were ticking.
-function CategoryMultiSelect({
+function CategoryFilter({
   categories,
   selected,
   onChange
@@ -470,6 +495,8 @@ function CategoryMultiSelect({
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useDismiss(ref, open, close);
 
   function toggle(categoryId: string) {
     onChange(
@@ -478,23 +505,6 @@ function CategoryMultiSelect({
         : [...selected, categoryId]
     );
   }
-
-  // Close the dropdown on an outside click / Escape.
-  useEffect(() => {
-    if (!open) return;
-    function onPointer(event: PointerEvent) {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
 
   const groups = [
     { kind: "INCOME" as const, title: t("cat.income") },
@@ -507,10 +517,11 @@ function CategoryMultiSelect({
     .filter((group) => group.items.length > 0);
 
   const allIds = categories.map((category) => category.id);
+  const only = selected.length === 1 ? categories.find((item) => item.id === selected[0]) : null;
   const label =
     selected.length === 0
       ? t("tx.allCategories")
-      : t("tx.categoriesSelected", { count: selected.length });
+      : (only?.label ?? t("tx.categoriesSelected", { count: selected.length }));
 
   return (
     <div className="relative" ref={ref}>
@@ -518,7 +529,8 @@ function CategoryMultiSelect({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-ring/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        aria-label={t("common.category")}
+        className={cn(TRIGGER, "max-w-[12rem]")}
       >
         <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
           {label}
@@ -530,7 +542,7 @@ function CategoryMultiSelect({
       {open ? (
         <div
           data-testid="category-filter-menu"
-          className="absolute z-50 mt-1 max-h-72 w-full min-w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+          className="absolute z-50 mt-1 max-h-72 w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
         >
           {categories.length === 0 ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("tx.allCategories")}</p>
@@ -668,7 +680,7 @@ function SavedFilters({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+    <div className="flex flex-wrap items-center gap-1.5 border-t pt-2.5">
       <span className="text-xs font-medium text-muted-foreground">{t("tx.saved.title")}</span>
       {saved.map((filter) => (
         <span
@@ -698,7 +710,7 @@ function SavedFilters({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t("tx.saved.namePlaceholder")}
-            className="h-8 w-40"
+            className="h-8 w-32"
             autoFocus
           />
           <Button type="submit" size="sm">

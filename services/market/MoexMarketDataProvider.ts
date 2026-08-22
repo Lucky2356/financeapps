@@ -1,6 +1,7 @@
 import { format, subDays } from "date-fns";
 
 import type { AssetKind } from "@/types/enums";
+import { sectorForTicker } from "@/lib/market/sectors";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 import { MockMarketDataProvider } from "./MockMarketDataProvider";
 
@@ -26,96 +27,81 @@ const TICKERS = [
 ] as const;
 
 type Ticker = (typeof TICKERS)[number];
-type StaticMeta = Pick<MarketSecurity, "sector" | "risk" | "comment"> & { name: string };
+type StaticMeta = Pick<MarketSecurity, "risk" | "comment"> & { name: string };
 
 const STATIC_META: Record<Ticker, StaticMeta> = {
   SBER: {
     name: "Сбербанк",
-    sector: "Финансы",
     risk: "MEDIUM",
     comment: "Крупная ликвидная бумага, чувствительна к ставкам и качеству кредитного портфеля."
   },
   GAZP: {
     name: "Газпром",
-    sector: "Энергетика",
     risk: "HIGH",
     comment: "Высокая зависимость от экспортной конъюнктуры, налоговой нагрузки и капзатрат."
   },
   LKOH: {
     name: "Лукойл",
-    sector: "Энергетика",
     risk: "MEDIUM",
     comment: "Нефтегазовый сектор, чувствителен к ценам на сырьё и валютному курсу."
   },
   YDEX: {
     name: "Яндекс",
-    sector: "Технологии",
     risk: "HIGH",
     comment: "Технологическая компания с повышенной волатильностью и регуляторными факторами."
   },
   T: {
     name: "Т-Технологии",
-    sector: "Финтех",
     risk: "HIGH",
     comment: "Финтех-эмитент с быстрым ростом и заметной чувствительностью к ожиданиям рынка."
   },
   VTBR: {
     name: "ВТБ",
-    sector: "Финансы",
     risk: "HIGH",
     comment: "Банковская бумага с высокой волатильностью и зависимостью от макрофакторов."
   },
   MGNT: {
     name: "Магнит",
-    sector: "Ритейл",
     risk: "MEDIUM",
     comment: "Защитный сектор, но маржинальность зависит от потребительского спроса и логистики."
   },
   NVTK: {
     name: "Новатэк",
-    sector: "Энергетика",
     risk: "MEDIUM",
     comment: "Газовый сектор, важны санкционные ограничения и инвестиционные проекты."
   },
   ROSN: {
     name: "Роснефть",
-    sector: "Энергетика",
     risk: "MEDIUM",
     comment: "Зависимость от нефтяных цен, налоговой политики и курса рубля."
   },
   MOEX: {
     name: "Московская биржа",
-    sector: "Финансовая инфраструктура",
     risk: "LOW",
     comment: "Инфраструктурная компания, динамика зависит от оборотов торгов и ставок."
   },
   PLZL: {
     name: "Полюс",
-    sector: "Металлы и добыча",
     risk: "MEDIUM",
     comment: "Золотодобытчик, чувствителен к ценам на золото и валютному курсу."
   },
   PHOR: {
     name: "ФосАгро",
-    sector: "Химия",
     risk: "MEDIUM",
     comment: "Производитель удобрений; важны экспортные рынки, цены на сырье и логистика."
   },
   CHMF: {
     name: "Северсталь",
-    sector: "Металлы и добыча",
     risk: "MEDIUM",
     comment: "Металлургический сектор, зависит от спроса на сталь и сырьевых циклов."
   },
   SNGS: {
     name: "Сургутнефтегаз",
-    sector: "Энергетика",
     risk: "MEDIUM",
     comment: "Нефтегазовая компания с заметной зависимостью от курса рубля и дивидендных ожиданий."
   },
   AFLT: {
     name: "Аэрофлот",
-    sector: "Транспорт",
     risk: "HIGH",
     comment:
       "Авиаперевозчик с высокой чувствительностью к топливу, пассажиропотоку и регуляторным факторам."
@@ -264,16 +250,6 @@ function kindFromSecType(secType: string): AssetKind {
   return SHARE_SECTYPES.has(secType) ? "STOCK" : "FUND";
 }
 
-// What to show as the "sector" of a security the curated list says nothing
-// about — for a bond or a fund the kind itself is the most useful label.
-const SECTOR_BY_KIND: Record<AssetKind, string> = {
-  STOCK: "Прочее",
-  BOND: "Облигации",
-  FUND: "Фонды",
-  GOLD: "Драгоценные металлы",
-  OTHER: "Прочее"
-};
-
 // Price priority: trustworthy live price → official last close (out of hours) →
 // weighted-average market price as a final fallback.
 function resolvePrice(row: SnapshotRow | undefined, stat: HistoryStats | undefined): number {
@@ -311,7 +287,9 @@ export class MoexMarketDataProvider implements MarketDataService {
           ticker,
           name: row?.name || meta.name,
           assetKind: "STOCK",
-          sector: meta.sector,
+          // One table decides the industry for every security, curated or not,
+          // so the sector chart cannot end up speaking two vocabularies at once.
+          sector: sectorForTicker(ticker, "STOCK"),
           risk: meta.risk,
           comment: meta.comment,
           price,
@@ -473,7 +451,7 @@ export class MoexMarketDataProvider implements MarketDataService {
           ticker: secid,
           name: row.name || meta?.name || secid,
           assetKind: row.assetKind,
-          sector: meta?.sector ?? SECTOR_BY_KIND[row.assetKind],
+          sector: sectorForTicker(secid, row.assetKind),
           risk: meta?.risk ?? "MEDIUM",
           comment:
             meta?.comment ??

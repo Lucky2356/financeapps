@@ -75,8 +75,11 @@ export function PortfolioBreakdown({
         {items.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t("inv.emptyChart")}</p>
         ) : (
-          <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,13rem)_1fr]">
-            <div className="h-44">
+          // Held to a readable width: on a wide window the legend used to
+          // stretch the whole card, leaving a hand's breadth of nothing between
+          // a name and its share.
+          <div className="grid max-w-2xl items-center gap-5 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+            <div className="mx-auto size-44 sm:mx-0">
               <PortfolioStructureChart data={slice.data} />
             </div>
             {/* The donut alone never said which slice was which; the list does,

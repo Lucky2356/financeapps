@@ -70,9 +70,9 @@ const TAB = {
 } satisfies Record<string, NavTab>;
 
 // A hub groups several routes under one sidebar button; `landing` is where the
-// button points. It is usually the first tab, but not always: the owner reads
-// План/факт most often and asked for it at the head of the strip, while the
-// button itself still opens Аналитика. The first matching group owns a path.
+// button points — the first tab of the group. The owner reads План/факт most
+// often, so it heads the analytics strip and the button opens it. The first
+// matching group owns a path.
 export const HUB_GROUPS: HubGroup[] = [
   {
     landing: "/transactions",
@@ -123,7 +123,9 @@ export const DESKTOP_NAV: NavItem[] = [
     labelKey: "section.planning",
     icon: CalendarClock
   },
-  { href: "/analytics", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp },
+  // Opens План/факт: it is the first tab of the group and what the owner reads
+  // first. The label stays "Аналитика" — it names the group, not the screen.
+  { href: "/plan", label: "Аналитика", labelKey: "nav.analytics", icon: TrendingUp },
   { href: "/investments", label: "Инвестиции", labelKey: "nav.investments", icon: BarChart3 },
   { href: "/settings", label: "Настройки", labelKey: "nav.settings", icon: Settings }
 ];
@@ -135,7 +137,7 @@ export const DESKTOP_HUBS: HubGroup[] = [
   // payments by another name, so they live beside the scheduled ones.
   { landing: "/recurring", tabs: [TAB.recurring, TAB.subscriptions] },
   // Reading the money rather than recording it.
-  { landing: "/analytics", tabs: [TAB.plan, TAB.analytics, TAB.forecast, TAB.reports] }
+  { landing: "/plan", tabs: [TAB.plan, TAB.analytics, TAB.forecast, TAB.reports] }
 ];
 
 export function hubsFor(surface: NavSurface): HubGroup[] {

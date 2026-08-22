@@ -58,7 +58,7 @@ export type TransactionsPageData = {
   filters: {
     from?: string;
     to?: string;
-    type?: "ALL" | "INCOME" | "EXPENSE";
+    type?: "ALL" | "INCOME" | "EXPENSE" | "TRANSFER";
     categoryId?: string;
     accountId?: string;
     q?: string;

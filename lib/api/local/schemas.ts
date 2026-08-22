@@ -166,6 +166,8 @@ export const portfolioRowSchema = z.object({
   // anything but shares; readers treat that as a share.
   assetKind: z.enum(["STOCK", "BOND", "FUND", "GOLD", "OTHER"]).optional(),
   sector: z.string().trim().min(1).max(80),
+  /** Set by hand on the position; wins over the market directory's industry. */
+  sectorOverride: z.string().trim().min(1).max(60).optional(),
   quantity: z.coerce.number().finite().positive(),
   averageBuyPrice: z.coerce.number().finite().positive(),
   currentPrice: z.coerce.number().finite().min(0),

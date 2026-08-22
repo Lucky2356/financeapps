@@ -55,6 +55,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { isUsableLot, summarizeLots } from "@/lib/investments/lots";
+import { MARKET_SECTORS } from "@/lib/market/sectors";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import {
@@ -568,13 +569,19 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
       {/* Controlled "add position" dialog, opened from Overview (header + empty). */}
       <Dialog open={addPositionOpen} onOpenChange={setAddPositionOpen}>
-        <PositionDialog
-          title={t("inv.addPosition")}
-          description={t("inv.addPosition.desc")}
-          data={data}
-          currency={data.currency}
-          onSubmit={submitPosition}
-        />
+        {/* Mounted only while open. The form keeps its state in the component
+            itself, and leaving it mounted meant the second security you added
+            opened with the first one already chosen — and its quantity still in
+            the field. */}
+        {addPositionOpen && (
+          <PositionDialog
+            title={t("inv.addPosition")}
+            description={t("inv.addPosition.desc")}
+            data={data}
+            currency={data.currency}
+            onSubmit={submitPosition}
+          />
+        )}
       </Dialog>
 
       {/* Single controlled dialog for editing any portfolio position */}
@@ -652,6 +659,12 @@ function PositionDialog({
         }))
       : [{ date: formatInputDate(new Date()), quantity: "", price: "" }]
   );
+
+  // Pre-filled with whatever the position is filed under today; the list also
+  // carries that value when it came from somewhere else (a bond, a fund), so
+  // opening the dialog never silently reclassifies a holding.
+  const [sector, setSector] = useState(position?.sector ?? "");
+  const sectorOptions = [...new Set([...(sector ? [sector] : []), ...MARKET_SECTORS])];
 
   const parsedLots = lots.map((lot) => ({
     date: lot.date,
@@ -800,8 +813,9 @@ function PositionDialog({
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>{t("inv.quantity")}</Label>
+              <Label htmlFor="pos-quantity">{t("inv.quantity")}</Label>
               <Input
+                id="pos-quantity"
                 name="quantity"
                 type="number"
                 min="0"
@@ -812,8 +826,9 @@ function PositionDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label>{t("inv.avgPrice")}</Label>
+              <Label htmlFor="pos-avg-price">{t("inv.avgPrice")}</Label>
               <Input
+                id="pos-avg-price"
                 name="averageBuyPrice"
                 type="number"
                 min="0"
@@ -825,6 +840,26 @@ function PositionDialog({
             </div>
           </div>
         )}
+        {/* The market feed carries no industry, so the app fills it in from its
+            own table of liquid tickers. Anything it does not know — a bond, a
+            fresh listing — is the owner's to file, and what they choose wins. */}
+        <div className="space-y-2">
+          <Label htmlFor="pos-sector">{t("inv.col.sector")}</Label>
+          <input type="hidden" name="sector" value={sector} />
+          <Select value={sector} onValueChange={setSector}>
+            <SelectTrigger id="pos-sector">
+              <SelectValue placeholder={t("inv.sectorPlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {sectorOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="rounded-lg border border-info/30 bg-info/12 p-3 text-sm text-muted-foreground">
           {t("inv.positionNote")}
         </div>

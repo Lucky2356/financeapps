@@ -1496,11 +1496,24 @@ export class LocalApiClient implements ApiClient {
     if (!Number.isFinite(averageBuyPrice) || averageBuyPrice <= 0)
       throw new Error("Введите среднюю цену больше нуля.");
 
+    // The industry can be corrected by hand: the market directory knows the
+    // liquid names, and a bond or a fresh listing is nobody's to classify but
+    // the owner's. Choosing what the directory already says stores nothing.
+    const typedSector = String(input.sector ?? "").trim();
+    const existing = state.investments.portfolio.find((item) => item.ticker === ticker);
+    const sectorOverride =
+      typedSector && typedSector !== security.sector
+        ? typedSector
+        : typedSector
+          ? undefined
+          : existing?.sectorOverride;
+
     const position = {
       ticker: security.ticker,
       name: security.name,
       assetKind: security.assetKind,
-      sector: security.sector,
+      sector: sectorOverride ?? security.sector,
+      ...(sectorOverride ? { sectorOverride } : {}),
       quantity,
       averageBuyPrice,
       ...(fromLots ? { lots: sortLots(lots) } : {}),
@@ -1956,7 +1969,9 @@ export class LocalApiClient implements ApiClient {
         // Kind comes from the market when it can be resolved, and from what was
         // stored when it cannot — so an offline portfolio keeps its grouping.
         assetKind: security?.assetKind ?? position.assetKind ?? "STOCK",
-        sector: security?.sector ?? position.sector,
+        // A hand-set industry outranks the directory — that is the point of it.
+        sector: position.sectorOverride ?? security?.sector ?? position.sector,
+        ...(position.sectorOverride ? { sectorOverride: position.sectorOverride } : {}),
         quantity: position.quantity,
         averageBuyPrice: position.averageBuyPrice,
         currentPrice: price,

@@ -21,7 +21,8 @@ test("боковое меню сворачивается и остаётся с�
     .poll(async () => (await sidebar.boundingBox())?.width ?? 0, { timeout: 5000 })
     .toBeLessThan(wide);
   // The screens are still reachable — the label just moved into the tooltip.
-  await expect(sidebar.locator('a[href="/analytics"]')).toBeVisible();
+  // The analytics button lands on План/факт — the first tab of its group.
+  await expect(sidebar.locator('a[href="/plan"]')).toBeVisible();
 
   await openSettled(page, "/accounts");
   await expect(sidebar).toHaveAttribute("data-collapsed", "true");

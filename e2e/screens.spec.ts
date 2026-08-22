@@ -31,12 +31,10 @@ for (const screen of SCREENS) {
     // The grid always carries four tiles — a half-filled row reads as a bug.
     // Counted as "children of the grid", because a tile is a link when the
     // figure has somewhere to open and a plain box when it does not.
-    const tiles = await page.evaluate(() => {
-      const heading = Array.from(document.querySelectorAll("h2")).find(
-        (node) => node.textContent?.trim() === "Обзор"
-      );
-      return heading?.nextElementSibling?.children.length ?? 0;
-    });
+    const tiles = await page
+      .getByTestId("stat-grid")
+      .first()
+      .evaluate((node) => node.children.length);
     expect(tiles, `Плиток в сетке на ${screen.route}`).toBe(4);
 
     // No figure may be cut off: a truncated amount is worse than none.

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import type { BudgetsPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n/catalog";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
@@ -248,7 +249,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                 <TableHead>{t("common.category")}</TableHead>
                 <TableHead className="w-[38%]">{t("bud.progress")}</TableHead>
                 <TableHead className="w-32 text-right">{t("bud.spent")}</TableHead>
-                <TableHead className="w-[15rem]">{t("bud.limit")}</TableHead>
+                <TableHead className="w-[17rem]">{t("bud.limit")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -431,19 +432,38 @@ function BudgetForm({
           }}
           className="h-9 min-w-0 flex-1"
         />
-        {onToggleRollover && budget.limitAmount > 0 ? (
+        {onToggleRollover ? (
           // Carrying the remainder over is a switch, not a sentence — it used
           // to take a whole line under the field on every row that had a limit.
+          // It stands on every row, limit or not: appearing only on some rows
+          // made the column jump about, and the switch is easier to find in a
+          // place it always occupies. Without a limit there is no remainder to
+          // carry, so it waits rather than pretends.
           <Button
             type="button"
             size="icon"
             variant={budget.rollover ? "default" : "outline"}
-            className="size-9 shrink-0"
+            disabled={budget.limitAmount <= 0}
+            className={cn(
+              "size-9 shrink-0 transition-all duration-200",
+              budget.rollover && "shadow-sm ring-2 ring-primary/30",
+              budget.limitAmount <= 0 && "opacity-40"
+            )}
             aria-pressed={budget.rollover}
-            title={`${t("bud.rolloverLabel")} — ${t("bud.rolloverTitle")}`}
+            aria-label={t("bud.rolloverLabel")}
+            title={
+              budget.limitAmount > 0
+                ? `${t("bud.rolloverLabel")} — ${t("bud.rolloverTitle")}`
+                : t("bud.rolloverNeedsLimit")
+            }
             onClick={onToggleRollover}
           >
-            <Repeat className="size-4" />
+            <Repeat
+              className={cn(
+                "size-4 transition-transform duration-300",
+                budget.rollover && "rotate-180"
+              )}
+            />
           </Button>
         ) : null}
         <Button

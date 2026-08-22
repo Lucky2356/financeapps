@@ -36,13 +36,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SplitForm, type SplitPayload } from "@/components/transactions/split-form";
 
 type AccountOption = ImportPageData["accounts"][number];
 type CategoryOption = ImportPageData["categories"][number];
 
 const LAST_ACCOUNT_KEY = "quick-add-last-account";
 
-type QuickAddType = "INCOME" | "EXPENSE" | "TRANSFER";
+type QuickAddType = "INCOME" | "EXPENSE" | "TRANSFER" | "SPLIT";
 
 const ACCOUNT_TYPES = [
   { value: "DEBIT_CARD", labelKey: "tx.acctType.DEBIT_CARD" },
@@ -81,6 +82,7 @@ export function QuickAddFab({
   const [manualCategory, setManualCategory] = useState(false);
   const [autoSuggested, setAutoSuggested] = useState(false);
   const [ledger, setLedger] = useState<TransactionsPageData | null>(null);
+  const [splitPending, setSplitPending] = useState(false);
 
   // The server props are empty on the desktop static build — the real accounts
   // and categories live in the client API (LocalApiClient/IndexedDB).
@@ -243,6 +245,37 @@ export function QuickAddFab({
     }
   }
 
+  // A split is N ordinary EXPENSE rows sharing one generated splitGroupId, so
+  // every total that already exists counts them once and nothing is special-cased.
+  async function submitSplit(payload: SplitPayload) {
+    const splitGroupId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `split-${Date.now()}`;
+    setSplitPending(true);
+    let created = 0;
+    for (const row of payload.rows) {
+      try {
+        await apiClient.post("/transactions", {
+          type: "EXPENSE",
+          amount: row.amount,
+          categoryId: row.categoryId,
+          accountId: payload.accountId,
+          date: payload.date,
+          description: payload.description,
+          splitGroupId
+        });
+        created += 1;
+      } catch {
+        /* continue; the summary reports how many landed */
+      }
+    }
+    setSplitPending(false);
+    setOpen(false);
+    toast.success(t("tx.split.created", { count: created }));
+    router.refresh();
+  }
+
   function changeType(next: QuickAddType) {
     setType(next);
     setCategoryId(""); // categories are type-specific
@@ -307,15 +340,17 @@ export function QuickAddFab({
           <DialogHeader>
             <DialogTitle>{t("qa.title")}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4">
+          <div className="grid gap-4">
             <div className="space-y-2">
               <Label>{t("tx.type")}</Label>
-              <div className="flex gap-2">
+              {/* Four ways to record something, one row. "Разбить" is here
+                  because it is one of them — it used to be a button of its own
+                  on the operations screen. */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Button
                   type="button"
                   variant={type === "EXPENSE" ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
                   onClick={() => changeType("EXPENSE")}
                 >
                   {t("tx.type.expense")}
@@ -324,7 +359,6 @@ export function QuickAddFab({
                   type="button"
                   variant={type === "INCOME" ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
                   onClick={() => changeType("INCOME")}
                 >
                   {t("tx.type.income")}
@@ -333,181 +367,200 @@ export function QuickAddFab({
                   type="button"
                   variant={type === "TRANSFER" ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
                   onClick={() => changeType("TRANSFER")}
                   disabled={activeAccounts.length < 2}
                   title={activeAccounts.length < 2 ? t("qa.transfer.needTwo") : undefined}
                 >
                   {t("tx.transfer")}
                 </Button>
+                <Button
+                  type="button"
+                  variant={type === "SPLIT" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => changeType("SPLIT")}
+                >
+                  {t("tx.split")}
+                </Button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="fab-amount">{t("common.amount")}</Label>
-              <AmountInput
-                id="fab-amount"
-                name="amount"
-                step="0.01"
-                min="0.01"
-                placeholder="0.00"
-                autoFocus
-                required
+            {type === "SPLIT" ? (
+              <SplitForm
+                accounts={activeAccounts}
+                categories={refs.categories}
+                pending={splitPending}
+                onSubmit={(payload) => void submitSplit(payload)}
+                onCancel={() => setOpen(false)}
               />
-            </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="grid gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fab-amount">{t("common.amount")}</Label>
+                  <AmountInput
+                    id="fab-amount"
+                    name="amount"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="0.00"
+                    autoFocus
+                    required
+                  />
+                </div>
 
-            {/* Category with inline creation — a transfer has none: the money
+                {/* Category with inline creation — a transfer has none: the money
                 does not leave the household, it changes pocket. */}
-            <div className={type === "TRANSFER" ? "hidden" : "space-y-2"}>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="fab-category">{t("common.category")}</Label>
-                <button
-                  type="button"
-                  className="text-xs text-primary hover:underline"
-                  onClick={() => setShowNewCategory((v) => !v)}
-                >
-                  {showNewCategory ? t("tx.dialog.cancel") : t("tx.dialog.newCategory")}
-                </button>
-              </div>
-              {showNewCategory ? (
-                <div className="flex gap-2">
-                  <Input
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder={
-                      type === "INCOME"
-                        ? t("tx.dialog.catPlaceholderIncome")
-                        : t("tx.dialog.catPlaceholderExpense")
-                    }
-                  />
-                  <Button type="button" variant="outline" onClick={() => void createCategory()}>
-                    {t("tx.dialog.create")}
-                  </Button>
+                <div className={type === "TRANSFER" ? "hidden" : "space-y-2"}>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="fab-category">{t("common.category")}</Label>
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => setShowNewCategory((v) => !v)}
+                    >
+                      {showNewCategory ? t("tx.dialog.cancel") : t("tx.dialog.newCategory")}
+                    </button>
+                  </div>
+                  {showNewCategory ? (
+                    <div className="flex gap-2">
+                      <Input
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder={
+                          type === "INCOME"
+                            ? t("tx.dialog.catPlaceholderIncome")
+                            : t("tx.dialog.catPlaceholderExpense")
+                        }
+                      />
+                      <Button type="button" variant="outline" onClick={() => void createCategory()}>
+                        {t("tx.dialog.create")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Select value={categoryId || undefined} onValueChange={pickCategory}>
+                        <SelectTrigger id="fab-category">
+                          <SelectValue placeholder={t("ai.selectCategory")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredCategories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {autoSuggested ? (
+                        <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
+                      ) : null}
+                    </>
+                  )}
                 </div>
-              ) : (
-                <>
-                  <Select value={categoryId || undefined} onValueChange={pickCategory}>
-                    <SelectTrigger id="fab-category">
-                      <SelectValue placeholder={t("ai.selectCategory")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {autoSuggested ? (
-                    <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
-                  ) : null}
-                </>
-              )}
-            </div>
 
-            {/* Account with inline creation */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="fab-account">
-                  {type === "TRANSFER" ? t("tx.transfer.from") : t("common.account")}
-                </Label>
-                <button
-                  type="button"
-                  className="text-xs text-primary hover:underline"
-                  onClick={() => setShowNewAccount((v) => !v)}
-                >
-                  {showNewAccount ? t("tx.dialog.cancel") : t("tx.dialog.newAccount")}
-                </button>
-              </div>
-              {showNewAccount ? (
-                <div className="flex gap-2">
-                  <Input
-                    value={newAccountName}
-                    onChange={(e) => setNewAccountName(e.target.value)}
-                    placeholder={t("tx.dialog.accountPlaceholder")}
-                  />
-                  <Select value={newAccountType} onValueChange={setNewAccountType}>
-                    <SelectTrigger className="w-40 shrink-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACCOUNT_TYPES.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {t(opt.labelKey)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="button" variant="outline" onClick={() => void createAccount()}>
-                    {t("tx.dialog.create")}
-                  </Button>
+                {/* Account with inline creation */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="fab-account">
+                      {type === "TRANSFER" ? t("tx.transfer.from") : t("common.account")}
+                    </Label>
+                    <button
+                      type="button"
+                      className="text-xs text-primary hover:underline"
+                      onClick={() => setShowNewAccount((v) => !v)}
+                    >
+                      {showNewAccount ? t("tx.dialog.cancel") : t("tx.dialog.newAccount")}
+                    </button>
+                  </div>
+                  {showNewAccount ? (
+                    <div className="flex gap-2">
+                      <Input
+                        value={newAccountName}
+                        onChange={(e) => setNewAccountName(e.target.value)}
+                        placeholder={t("tx.dialog.accountPlaceholder")}
+                      />
+                      <Select value={newAccountType} onValueChange={setNewAccountType}>
+                        <SelectTrigger className="w-40 shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ACCOUNT_TYPES.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {t(opt.labelKey)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" variant="outline" onClick={() => void createAccount()}>
+                        {t("tx.dialog.create")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select value={accountId || undefined} onValueChange={setAccountId}>
+                      <SelectTrigger id="fab-account">
+                        <SelectValue placeholder={t("ai.selectAccount")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeAccounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
-              ) : (
-                <Select value={accountId || undefined} onValueChange={setAccountId}>
-                  <SelectTrigger id="fab-account">
-                    <SelectValue placeholder={t("ai.selectAccount")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeAccounts.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
 
-            {type === "TRANSFER" ? (
-              <div className="space-y-2">
-                <Label htmlFor="fab-to-account">{t("tx.transfer.to")}</Label>
-                <Select value={toAccountId || undefined} onValueChange={setToAccountId}>
-                  <SelectTrigger id="fab-to-account">
-                    <SelectValue placeholder={t("ai.selectAccount")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeAccounts
-                      .filter((a) => a.id !== accountId)
-                      .map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
+                {type === "TRANSFER" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="fab-to-account">{t("tx.transfer.to")}</Label>
+                    <Select value={toAccountId || undefined} onValueChange={setToAccountId}>
+                      <SelectTrigger id="fab-to-account">
+                        <SelectValue placeholder={t("ai.selectAccount")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeAccounts
+                          .filter((a) => a.id !== accountId)
+                          .map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="fab-date">{t("common.date")}</Label>
-              <Input id="fab-date" name="date" type="date" defaultValue={today} required />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fab-date">{t("common.date")}</Label>
+                  <Input id="fab-date" name="date" type="date" defaultValue={today} required />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="fab-description">{t("qa.descLabel")}</Label>
-              <Input
-                id="fab-description"
-                name="description"
-                maxLength={180}
-                placeholder={t("qa.descPlaceholder")}
-                onChange={(event) => onDescriptionChange(event.target.value)}
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fab-description">{t("qa.descLabel")}</Label>
+                  <Input
+                    id="fab-description"
+                    name="description"
+                    maxLength={180}
+                    placeholder={t("qa.descPlaceholder")}
+                    onChange={(event) => onDescriptionChange(event.target.value)}
+                  />
+                </div>
 
-            {type !== "TRANSFER" ? (
-              <div className="space-y-2">
-                <Label htmlFor="fab-tags">{t("tx.dialog.tags")}</Label>
-                <Input id="fab-tags" name="tags" placeholder={t("tx.dialog.tagsPlaceholder")} />
-              </div>
-            ) : null}
+                {type !== "TRANSFER" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="fab-tags">{t("tx.dialog.tags")}</Label>
+                    <Input id="fab-tags" name="tags" placeholder={t("tx.dialog.tagsPlaceholder")} />
+                  </div>
+                ) : null}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                {t("tx.dialog.cancel")}
-              </Button>
-              <Button type="submit">{t("common.add")}</Button>
-            </DialogFooter>
-          </form>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    {t("tx.dialog.cancel")}
+                  </Button>
+                  <Button type="submit">{t("common.add")}</Button>
+                </DialogFooter>
+              </form>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
