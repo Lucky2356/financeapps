@@ -8,7 +8,7 @@ import { CategoryIcon } from "@/components/category-icon";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
+import { CATEGORY_COLOR_GROUPS, DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import { DEFAULT_CATEGORY_ICON, ICON_GROUPS } from "@/lib/categories/icons";
 import { suggestIconForName } from "@/lib/categories/suggest-icon";
 import { useI18n } from "@/lib/i18n/context";
@@ -125,23 +125,44 @@ export function CategoryDialog({
 
         <div className="space-y-2">
           <Label>{t("cat.color")}</Label>
-          <div className="max-h-36 overflow-y-auto rounded-md border p-3">
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORY_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className="size-6 rounded-full border-2 transition-transform hover:scale-110"
-                  style={{
-                    backgroundColor: color,
-                    borderColor: selectedColor === color ? "hsl(var(--foreground))" : "transparent"
-                  }}
-                  onClick={() => setSelectedColor(color)}
-                  aria-label={t("cat.colorAria", { color })}
-                  aria-pressed={selectedColor === color}
-                />
-              ))}
-            </div>
+          {/* Three blocks instead of one long wrap: the app's own colours, then
+              the wheel a row per hue, then the greys. The wheel starts at red
+              and walks round, so a colour is found by aiming rather than by
+              scrolling past a hundred swatches. */}
+          <div className="max-h-52 space-y-3 overflow-y-auto rounded-md border p-3">
+            {CATEGORY_COLOR_GROUPS.map((group) => (
+              <div key={group.id} className="space-y-1.5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t(group.labelKey)}
+                </p>
+                <div
+                  className={
+                    group.columns ? "grid justify-items-center gap-1" : "flex flex-wrap gap-1.5"
+                  }
+                  style={
+                    group.columns
+                      ? { gridTemplateColumns: `repeat(${group.columns}, minmax(0, 1fr))` }
+                      : undefined
+                  }
+                >
+                  {group.colors.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className="size-6 rounded-full border-2 transition-transform hover:scale-110"
+                      style={{
+                        backgroundColor: color,
+                        borderColor:
+                          selectedColor === color ? "hsl(var(--foreground))" : "transparent"
+                      }}
+                      onClick={() => setSelectedColor(color)}
+                      aria-label={t("cat.colorAria", { color })}
+                      aria-pressed={selectedColor === color}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span

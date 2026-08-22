@@ -140,6 +140,8 @@ type LocalState = {
   categories: CategoryOption[];
   plans: Array<{ month: string; categoryId: string; amount: number }>;
   planNotes: Array<{ month: string; note: string; factNote: string }>;
+  /** Months pinned into the plan/fact grid by hand (see savePlan/addMonth). */
+  planMonths?: string[];
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
   goals: GoalsPageData["goals"];
@@ -2335,7 +2337,9 @@ export class LocalApiClient implements ApiClient {
 
     const current = monthKeyOf(new Date());
     const keys = new Set(
-      [current, ...plan.keys(), ...fact.keys()].filter((key) => MONTH_KEY.test(key))
+      [current, ...plan.keys(), ...fact.keys(), ...(state.planMonths ?? [])].filter((key) =>
+        MONTH_KEY.test(key)
+      )
     );
     // A month still to come has no operations of its own; it is here only
     // because the owner asked for a row to plan that far ahead.
@@ -2501,6 +2505,27 @@ export class LocalApiClient implements ApiClient {
     const input = toFormObject(body);
     const month = String(input.month ?? "");
     if (!MONTH_KEY.test(month)) throw new Error("Укажите месяц в виде ГГГГ-ММ.");
+
+    // A month the owner wants a row for. Before this, the grid could only be
+    // asked for months AHEAD of the current one, so an earlier month with
+    // nothing recorded in it could not be planned at all.
+    const action = String(input.action ?? "");
+    if (action === "addMonth") {
+      const pinned = state.planMonths ?? [];
+      state.planMonths = [...new Set([...pinned, month])].sort().slice(-48);
+      return { month };
+    }
+    // Removing a month takes away what this screen owns — the plan and the
+    // comments. Operations are not the grid's to delete, so a month that has
+    // any stays in the table with its fact row; the period filter is what hides
+    // it from view.
+    if (action === "removeMonth") {
+      state.planMonths = (state.planMonths ?? []).filter((entry) => entry !== month);
+      state.plans = state.plans.filter((entry) => entry.month !== month);
+      state.planNotes = state.planNotes.filter((entry) => entry.month !== month);
+      const hasFacts = state.transactions.some((row) => row.date.slice(0, 7) === month);
+      return { month, hasFacts };
+    }
 
     if (input.note !== undefined || input.factNote !== undefined) {
       // Either comment can be written on its own, so the one not being edited

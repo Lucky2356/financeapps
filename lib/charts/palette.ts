@@ -29,13 +29,32 @@ export const chartAxisTick = { fill: chartTokens.axis, fontSize: 12 } as const;
 // Categorical palette for donuts / allocation strips. Kept as an ordered set of
 // distinct hues (distinctness matters more than theming here); the primary slot
 // follows the accent, the rest are fixed hues that read on both themes.
+//
+// The order matters as much as the colours: neighbouring slices sit next to
+// each other in the ring and in the legend, so two blue-violets in the list —
+// which is what the accent and #7c3aed were — made a three-slice chart look
+// like it had two of the same thing.
 export const CHART_PALETTE = [
   "hsl(var(--primary))",
   "hsl(var(--warning))",
-  "hsl(var(--info))",
-  "#db2777",
-  "#7c3aed",
-  "#ea580c",
+  "#6fb2d2",
+  "#e2788a",
+  "#7ed6b7",
+  "#c9a2d8",
   "#0891b2",
   "hsl(var(--muted-foreground))"
 ];
+
+/**
+ * A fixed colour per kind of asset. Shares, bonds, funds and metal are four
+ * fixed things, not an arbitrary list, so they get four fixed colours instead
+ * of whatever position they happen to take in the ring — the "by kind" chart
+ * used to paint funds and bonds the same violet twice.
+ */
+export const ASSET_KIND_COLORS: Record<string, string> = {
+  STOCK: "hsl(var(--primary))",
+  BOND: "#6fb2d2",
+  FUND: "#7ed6b7",
+  GOLD: "#e2b26e",
+  OTHER: "hsl(var(--muted-foreground))"
+};

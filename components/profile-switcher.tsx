@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Edit2, Plus, Trash2, User } from "lucide-react";
+import { Check, CircleDollarSign, Edit2, Plus, Trash2, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
@@ -32,13 +33,38 @@ const PROFILE_COLORS = [
   "#ca8a04"
 ];
 
+/**
+ * The app's mark in the corner of the sidebar, which is also the way profiles
+ * are switched.
+ *
+ * There used to be a row of its own under the logo carrying a coloured circle
+ * and the profile name — two badges stacked on top of each other, one of them
+ * a control and one of them decoration. The mark is the control now; whose
+ * data is open is written under the app's name, where the subtitle was.
+ *
+ * `compact` is the collapsed sidebar: the tile alone, no words.
+ */
 export function ProfileSwitcher({ compact = false }: { compact?: boolean }) {
-  // Only show in desktop-local mode
-
   return <ProfileSwitcherInner compact={compact} />;
 }
 
-/** `compact` is the collapsed sidebar: the avatar alone, no name, no chevron. */
+/** The tile itself — the same one whether profiles loaded or not. */
+function Logo({ color }: { color?: string }) {
+  return (
+    <span className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-sidebar-accent text-white shadow-sm">
+      <CircleDollarSign className="size-[18px]" />
+      {/* Whose data is open, as a dot on the mark — visible even when the
+          sidebar is collapsed to icons. */}
+      {color ? (
+        <span
+          className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card"
+          style={{ backgroundColor: color }}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 function ProfileSwitcherInner({ compact }: { compact: boolean }) {
   const [list, setList] = useState<ProfileList | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -71,10 +97,17 @@ function ProfileSwitcherInner({ compact }: { compact: boolean }) {
     };
   }, []);
 
-  if (!list) return null;
-
-  const active = list.profiles.find((p) => p.id === list.activeProfileId) ?? list.profiles[0];
-  if (!active) return null;
+  const active = list?.profiles.find((p) => p.id === list.activeProfileId) ?? list?.profiles[0];
+  // Profiles come from the local API; in a build without it the sidebar still
+  // needs its head, so the mark is drawn plain and does nothing.
+  if (!list || !active) {
+    return (
+      <div className={compact ? "flex justify-center" : "flex min-w-0 flex-1 items-center gap-3"}>
+        <Logo />
+        {compact ? null : <AppTitle />}
+      </div>
+    );
+  }
 
   async function switchTo(profileId: string) {
     try {
@@ -133,31 +166,22 @@ function ProfileSwitcherInner({ compact }: { compact: boolean }) {
   }
 
   return (
-    <div className={compact ? "mb-2 mt-3 flex justify-center" : "mx-3 mb-2 mt-3"}>
-      {/* Trigger — compact button, no overflow issues */}
+    <div className={compact ? "flex justify-center" : "flex min-w-0 flex-1"}>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
           <button
             type="button"
-            title={compact ? active.name : undefined}
+            title={`${t("prof.title")}: ${active.name}`}
             className={cn(
-              "flex items-center rounded-lg border bg-muted/30 text-sm transition-colors hover:bg-muted/50",
-              compact ? "size-10 justify-center" : "w-full gap-2.5 px-3 py-2"
+              "flex items-center rounded-lg text-left transition-colors hover:bg-muted/50",
+              compact ? "justify-center p-1" : "min-w-0 flex-1 gap-2.5 p-1"
             )}
           >
-            <span
-              className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-              style={{ backgroundColor: active.color }}
-            >
-              {active.name.charAt(0).toUpperCase()}
-            </span>
+            <Logo color={active.color} />
             {compact ? (
               <span className="sr-only">{active.name}</span>
             ) : (
-              <>
-                <span className="min-w-0 flex-1 truncate text-left font-medium">{active.name}</span>
-                <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-              </>
+              <AppTitle profile={active.name} />
             )}
           </button>
         </DialogTrigger>
@@ -297,5 +321,24 @@ function ProfileSwitcherInner({ compact }: { compact: boolean }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * The app's name and, under it, whose data is open. The name is allowed two
+ * lines: at the sidebar's width "Финансовый помощник" was cut to "Финансовый
+ * пом…" on a single one.
+ */
+function AppTitle({ profile }: { profile?: string }) {
+  const { t } = useI18n();
+  return (
+    <span className="min-w-0">
+      <span className="block text-[13px] font-semibold leading-tight text-foreground">
+        {APP_NAME}
+      </span>
+      <span className="block truncate text-[11px] text-muted-foreground">
+        {profile ?? t("shell.subtitle")}
+      </span>
+    </span>
   );
 }

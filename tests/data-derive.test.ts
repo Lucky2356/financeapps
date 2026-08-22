@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildAssetKindStructure,
   buildCategoryExpenses,
   buildMonthlyCashflow,
   buildSectorStructure
 } from "@/lib/data/derive";
+import { ASSET_KIND_COLORS } from "@/lib/charts/palette";
 import type { PortfolioRow, TransactionRow } from "@/types/finance";
 
 function tx(
@@ -34,6 +36,28 @@ describe("buildSectorStructure", () => {
 
   it("returns an empty array when the portfolio is empty", () => {
     expect(buildSectorStructure([])).toEqual([]);
+  });
+});
+
+describe("buildAssetKindStructure", () => {
+  const holding = (assetKind: PortfolioRow["assetKind"], currentValue: number) =>
+    ({ assetKind, currentValue, sector: "Разное" }) as PortfolioRow;
+
+  // The chart used to take its colours from the position of a slice in the ring,
+  // and two of the four kinds landed on neighbouring violets — funds and bonds
+  // came out the same colour.
+  it("gives every kind its own colour, whatever order the slices are in", () => {
+    const result = buildAssetKindStructure(
+      [holding("FUND", 50), holding("STOCK", 30), holding("BOND", 20)],
+      (kind) => kind
+    );
+    expect(result.map((slice) => slice.name)).toEqual(["FUND", "STOCK", "BOND"]);
+    expect(result.map((slice) => slice.fill)).toEqual([
+      ASSET_KIND_COLORS.FUND,
+      ASSET_KIND_COLORS.STOCK,
+      ASSET_KIND_COLORS.BOND
+    ]);
+    expect(new Set(result.map((slice) => slice.fill)).size).toBe(3);
   });
 });
 

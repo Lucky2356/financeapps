@@ -25,7 +25,9 @@ export function PortfolioStructureChart({ data }: { data: ChartDatum[] }) {
             paddingAngle={2}
           >
             {data.map((entry, index) => (
-              <Cell key={entry.name} fill={colors[index % colors.length]} />
+              // A slice that carries its own colour keeps it — that is how the
+              // kinds of asset stay the same colour wherever they are drawn.
+              <Cell key={entry.name} fill={entry.fill ?? colors[index % colors.length]} />
             ))}
           </Pie>
           <Tooltip {...chartTooltipProps} formatter={(value) => `${Number(value).toFixed(1)}%`} />

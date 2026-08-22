@@ -9,6 +9,7 @@ import type {
   PortfolioRow,
   TransactionRow
 } from "@/types/finance";
+import { ASSET_KIND_COLORS } from "@/lib/charts/palette";
 import { countableAmount } from "@/lib/transactions/base-amount";
 
 // Pure, platform-agnostic derivations shared by the server data layer (plan A2).
@@ -83,7 +84,14 @@ export function buildAssetKindStructure(
   }
 
   return [...totals.entries()]
-    .map(([kind, value]) => ({ name: labelOf(kind), value: percent(value, total) }))
+    .map(([kind, value]) => ({
+      name: labelOf(kind),
+      value: percent(value, total),
+      // A kind always carries its own colour, whatever order the slices end up
+      // in — otherwise two of them can land on neighbouring palette entries and
+      // read as one.
+      fill: ASSET_KIND_COLORS[kind] ?? ASSET_KIND_COLORS.OTHER
+    }))
     .sort((left, right) => right.value - left.value);
 }
 

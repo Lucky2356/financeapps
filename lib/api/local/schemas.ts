@@ -357,6 +357,11 @@ export const localStateSchema = z.object({
   // Plan/fact: what the owner intends to earn and spend per month.
   plans: z.array(planEntrySchema).default([]),
   planNotes: z.array(planNoteSchema).default([]),
+  // Months the owner asked the plan/fact grid to show even though nothing has
+  // happened in them yet — next month to plan ahead, or an earlier one they
+  // want to fill in by hand. A month with operations or a plan appears without
+  // being listed here.
+  planMonths: z.array(z.string().regex(/^\d{4}-\d{2}$/)).default([]),
   transactions: z.array(transactionRowSchema).default([]),
   budgets: z.array(budgetRowSchema).default([]),
   goals: z.array(goalRowSchema).default([]),

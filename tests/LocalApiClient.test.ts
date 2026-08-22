@@ -222,6 +222,32 @@ describe("LocalApiClient", () => {
     expect([...months].sort((a, b) => b.localeCompare(a))).toEqual(months);
   });
 
+  it("pins a month into the plan grid and takes it away again", async () => {
+    // The grid used to be able to ask only for months AHEAD of the current one,
+    // so an earlier month with nothing recorded in it could not be planned at
+    // all — and the row vanished on reload, because "how many months ahead"
+    // lived in the screen rather than in the data.
+    const client = createClient();
+    const categories = await client.get<CategoriesPageData>("/categories");
+    const key = categories.categories.find((category) => category.name === "Продукты")?.id ?? "";
+
+    await client.post("/plan", { action: "addMonth", month: "2020-01" });
+    await client.post("/plan", { month: "2020-01", categoryId: key, amount: "5000" });
+
+    const pinned = await client.get<PlanFactPageData>("/plan");
+    expect(pinned.months.map((entry) => entry.month)).toContain("2020-01");
+    expect(pinned.months.find((entry) => entry.month === "2020-01")?.cells[key]?.plan).toBe(5000);
+
+    // Removing takes the plan with it — that is what the grid owns.
+    const removed = await client.post<{ hasFacts?: boolean }>("/plan", {
+      action: "removeMonth",
+      month: "2020-01"
+    });
+    expect(removed.hasFacts).toBe(false);
+    const after = await client.get<PlanFactPageData>("/plan");
+    expect(after.months.map((entry) => entry.month)).not.toContain("2020-01");
+  });
+
   it("keeps savings apart from the money on hand in plan/fact", async () => {
     const client = createClient();
     const card = await seedAccount(client, { name: "Карта", balance: "50000" });

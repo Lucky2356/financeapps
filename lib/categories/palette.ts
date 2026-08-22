@@ -22,15 +22,20 @@ export const SEED_CATEGORY_COLORS = [
 
 // Ten colours is enough for a seeded install and nowhere near enough for
 // someone keeping forty categories apart at a glance. The rest of the palette
-// is a grid: fifteen hues around the circle, each in seven tones. It is built
+// is a grid: seventeen hues around the circle, each in eight tones. It is built
 // rather than typed out so the steps stay even — an eyeballed list of a hundred
 // colours drifts, and two neighbouring categories end up the same shade.
 //
-// The tones stay inside a mid band (lightness 38–74%) on purpose: that is the
-// range that holds its own against the light surface AND the dark one, so a
-// chosen colour looks the same deliberate choice in either theme.
-const HUES = [265, 285, 305, 325, 345, 5, 25, 45, 68, 95, 125, 155, 178, 198, 225];
+// Around the circle starting at red, so the picker reads as a rainbow and a
+// colour can be found by walking to it. It used to start at violet and put the
+// warm end in the middle, which is how "there is no yellow in the palette"
+// happened: the yellows were three rows below the fold of a scrolling box.
+const HUES = [5, 25, 45, 52, 68, 95, 125, 155, 178, 198, 225, 250, 265, 285, 305, 325, 345];
+// The first tone is the vivid one — without it every hue came out muted, and a
+// muted yellow is olive. The rest keep the mid band (lightness 38–74%) that
+// holds up on both the light surface and the dark one.
 const TONES = [
+  { s: 78, l: 52 },
   { s: 58, l: 40 },
   { s: 55, l: 48 },
   { s: 52, l: 56 },
@@ -84,6 +89,23 @@ const NEUTRALS = [
 /** Everything the colour picker offers, seeds first, no duplicates. */
 export const CATEGORY_COLORS: string[] = [
   ...new Set([...SEED_CATEGORY_COLORS, ...GRID, ...NEUTRALS])
+];
+
+/**
+ * The same colours, in the three blocks the picker draws them as. A hundred and
+ * forty swatches in one flat wrap is a wall, not a palette: laid out as one hue
+ * per row, with the seeds and the greys apart, a colour can be aimed at.
+ */
+export const CATEGORY_COLOR_GROUPS: Array<{
+  id: string;
+  labelKey: string;
+  colors: readonly string[];
+  /** How many swatches per row — the grid block puts one hue on each row. */
+  columns?: number;
+}> = [
+  { id: "seeds", labelKey: "cat.color.seeds", colors: SEED_CATEGORY_COLORS },
+  { id: "grid", labelKey: "cat.color.palette", colors: GRID, columns: TONES.length },
+  { id: "neutrals", labelKey: "cat.color.neutrals", colors: NEUTRALS }
 ];
 
 /** Colour for a category the user creates without picking one. */
