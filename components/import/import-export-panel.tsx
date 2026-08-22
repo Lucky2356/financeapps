@@ -317,7 +317,7 @@ export function ImportExportPanel({
     : t("imp.neverBackup");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* ── Import Wizard ────────────────────────────────────── */}
       <Card>
         <CardHeader className="border-b bg-muted/20">
@@ -653,7 +653,7 @@ export function ImportExportPanel({
       </Card>
 
       {/* ── Export & Backup ──────────────────────────────────── */}
-      <section className="grid gap-5 xl:grid-cols-2">
+      <section className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader className="border-b bg-muted/20">
             <CardTitle>{t("imp.exportTitle")}</CardTitle>

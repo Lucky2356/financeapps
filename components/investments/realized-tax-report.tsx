@@ -79,7 +79,7 @@ export function RealizedTaxReport() {
 
   return (
     <CollapsibleCard title={t("inv.rt.title")} storageKey="inv-realized">
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Add form */}
         <form onSubmit={add} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">

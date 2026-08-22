@@ -30,12 +30,12 @@ export function AnalyticsClient({ initialData }: { initialData: AnalyticsData })
   const [includeTransfers, setIncludeTransfers] = useIncludeTransfers();
   const { data } = useApiPageData(initialData, `/analytics${transfersQuery(includeTransfers)}`);
 
+  // The toggle and the print button used to sit on two rows of their own, each
+  // nearly empty, before anything on the screen began.
   return (
-    <>
-      <div className="flex justify-end">
-        <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
-      </div>
-      <AnalyticsView data={data} />
-    </>
+    <AnalyticsView
+      data={data}
+      transfers={<TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />}
+    />
   );
 }

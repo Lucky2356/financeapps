@@ -138,7 +138,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <section className="grid gap-3 md:grid-cols-4">
         <SummaryTile label={t("rec.summary.active")} value={String(pageData.summary.activeCount)} />
         <SummaryTile

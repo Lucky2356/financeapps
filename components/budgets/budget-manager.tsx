@@ -2,7 +2,7 @@
 
 import { format, subMonths } from "date-fns";
 import { enUS, ru } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, Sparkles, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Repeat, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
@@ -246,9 +246,9 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
             <TableHeader>
               <TableRow>
                 <TableHead>{t("common.category")}</TableHead>
-                <TableHead>{t("bud.progress")}</TableHead>
-                <TableHead className="text-right">{t("bud.spent")}</TableHead>
-                <TableHead className="min-w-40">{t("bud.limit")}</TableHead>
+                <TableHead className="w-[38%]">{t("bud.progress")}</TableHead>
+                <TableHead className="w-32 text-right">{t("bud.spent")}</TableHead>
+                <TableHead className="w-[15rem]">{t("bud.limit")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -417,7 +417,7 @@ function BudgetForm({
 
   return (
     <div className="space-y-1">
-      <div className="flex gap-2">
+      <div className="flex items-center gap-1.5">
         <AmountInput
           name="limitAmount"
           min="0"
@@ -429,12 +429,28 @@ function BudgetForm({
             if (timer.current) clearTimeout(timer.current);
             commit(value);
           }}
-          className="min-w-0"
+          className="h-9 min-w-0 flex-1"
         />
+        {onToggleRollover && budget.limitAmount > 0 ? (
+          // Carrying the remainder over is a switch, not a sentence — it used
+          // to take a whole line under the field on every row that had a limit.
+          <Button
+            type="button"
+            size="icon"
+            variant={budget.rollover ? "default" : "outline"}
+            className="size-9 shrink-0"
+            aria-pressed={budget.rollover}
+            title={`${t("bud.rolloverLabel")} — ${t("bud.rolloverTitle")}`}
+            onClick={onToggleRollover}
+          >
+            <Repeat className="size-4" />
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="icon"
           variant="outline"
+          className="size-9 shrink-0"
           title={t("bud.resetLimit")}
           onClick={onReset}
         >
@@ -450,20 +466,6 @@ function BudgetForm({
         >
           {t("bud.bySuggest", { amount: formatCurrency(budget.suggestedLimit, currency) })}
         </button>
-      ) : null}
-      {onToggleRollover && budget.limitAmount > 0 ? (
-        <label
-          className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground"
-          title={t("bud.rolloverTitle")}
-        >
-          <input
-            type="checkbox"
-            checked={budget.rollover}
-            onChange={onToggleRollover}
-            className="size-3.5 accent-primary"
-          />
-          {t("bud.rolloverLabel")}
-        </label>
       ) : null}
     </div>
   );

@@ -18,7 +18,7 @@ import type { ForecastData, ForecastWarning } from "@/types/finance";
 export function ForecastView({ data }: { data: ForecastData }) {
   const { t } = useI18n();
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Same head as every other screen: the number the screen is about, then
           the four supporting ones. */}
       <HeroCard
@@ -65,7 +65,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
         />
       </StatGrid>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>{t("fc.balanceForecast")}</CardTitle>
@@ -93,7 +93,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
         </Card>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>{t("fc.plannedAmounts")}</CardTitle>

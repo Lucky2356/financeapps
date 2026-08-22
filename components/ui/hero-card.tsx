@@ -53,7 +53,7 @@ export function HeroCard({
   return (
     <section
       className={cn(
-        "reveal relative overflow-hidden rounded-lg p-5 shadow-soft sm:p-6",
+        "reveal relative overflow-hidden rounded-lg p-4 shadow-soft sm:p-5",
         accent ? "fa-hero text-white" : "border bg-card",
         className
       )}

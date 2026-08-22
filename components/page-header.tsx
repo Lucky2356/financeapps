@@ -27,11 +27,11 @@ export function PageHeader({
   const resolvedDescription = descriptionKey ? t(descriptionKey) : description;
 
   return (
-    <div className="no-print mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="no-print mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{resolvedTitle}</h1>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{resolvedTitle}</h1>
         {resolvedDescription ? (
-          <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
+          <p className="mt-1 max-w-3xl text-[13px] text-muted-foreground">
             <span className="mr-1.5 inline-block size-1.5 translate-y-[-1px] rounded-full bg-primary/60 align-middle" />
             {resolvedDescription}
           </p>

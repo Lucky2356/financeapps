@@ -110,7 +110,7 @@ export function TransactionsAnalytics() {
       </button>
 
       {open ? (
-        <CardContent className={cn("space-y-5 border-t pt-5")}>
+        <CardContent className={cn("space-y-4 border-t pt-5")}>
           {!data && state !== "error" ? (
             <p className="text-sm text-muted-foreground">{t("txa.loading")}</p>
           ) : !data ? (
@@ -131,7 +131,7 @@ export function TransactionsAnalytics() {
                 ))}
               </div>
 
-              <div className="grid gap-5 xl:grid-cols-2">
+              <div className="grid gap-4 xl:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-medium">{t("txa.cashflow")}</p>
                   <CashflowChart data={data.monthlyCashflow} />

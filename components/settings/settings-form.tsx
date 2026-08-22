@@ -808,7 +808,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* Section nav: vertical on desktop, wrapping chips on mobile — no
             sideways scroll, so no section hides off the right edge of a phone. */}
         <nav

@@ -37,7 +37,7 @@ function Strip({ surface, className }: { surface: NavSurface; className: string 
       // The design's strip: pills on the ground (no card, no border), scrolling
       // sideways with proximity snap and no visible scrollbar. The owner chose
       // this over the wrapping rows the app had.
-      className={cn("fa-hubstrip -mx-1 mb-5 gap-1.5 overflow-x-auto px-1 pb-1", className)}
+      className={cn("fa-hubstrip -mx-1 mb-3 gap-1.5 overflow-x-auto px-1 pb-1", className)}
     >
       {hub.tabs.map((tab) => {
         const active = pathname === tab.href;

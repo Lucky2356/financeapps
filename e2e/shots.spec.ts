@@ -40,7 +40,7 @@ test.describe("скриншоты", () => {
     await seedExampleData(page);
     await setTheme(page, "Тёмная");
 
-    // The filter bar: search, period and the count, with the active filters as
+    // The filter bar inside the list it filters, with the active filters as
     // chips underneath.
     await openSettled(page, "/transactions?type=EXPENSE&categoryId=cat-food&minAmount=1000");
     await page.waitForTimeout(1200);
@@ -62,6 +62,12 @@ test.describe("скриншоты", () => {
     await page.getByTestId("section-tabs").getByRole("button", { name: "Аналитика" }).click();
     await chartsPainted(page, "path.recharts-sector");
     await page.screenshot({ path: `${DIR}/04-инвестиции-аналитика.png` });
+
+    // The limits table: one line per limit, and a field the width of the money
+    // that goes in it.
+    await openSettled(page, "/budgets");
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: `${DIR}/06-лимиты.png` });
 
     // The icon that follows the name.
     await openSettled(page, "/categories");
