@@ -107,10 +107,10 @@ export function DashboardClient({
         </section>
       ),
       charts: (
-        <section className="space-y-5">
+        <section className="space-y-4">
           {/* Two halves of the same month, side by side: what came in and what
               went out. Reading one without the other only tells half a story. */}
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             <CategoryBreakdownCard
               title={t("dash.categoryIncome")}
               empty={t("dash.categoryIncome.empty")}

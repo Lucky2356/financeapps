@@ -272,7 +272,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Tabs cut the endless scroll: Overview / Market / Analytics. They wrap
           instead of scrolling sideways, so none is hidden off a phone screen. */}
       <div
@@ -307,7 +307,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           // The head of the screen stays put when the portfolio is empty: the
           // card reads zero instead of vanishing, so adding a first position
           // does not rebuild the layout under the owner's finger.
-          <div className="space-y-5">
+          <div className="space-y-4">
             <PortfolioHero
               portfolio={data.portfolio}
               currency={data.currency}
@@ -335,7 +335,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             </Card>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <PortfolioHero
               portfolio={data.portfolio}
               currency={data.currency}
@@ -379,7 +379,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
       {/* ── Market — watchlist + search + picker ───────────────────────────── */}
       {activeTab === "market" ? (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <Card>
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>
@@ -534,7 +534,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
       {/* ── Analytics — structure, sectors, risks & education ──────────────── */}
       {activeTab === "analytics" ? (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {/* Where the money actually sits, in one line, before any chart. */}
           <AllocationBar data={data.structure} />
 
@@ -553,7 +553,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           <DividendTracker />
           <RealizedTaxReport />
 
-          <section className="grid items-start gap-5 xl:grid-cols-2">
+          <section className="grid items-start gap-4 xl:grid-cols-2">
             <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />
             <RecommendationList titleKey="inv.educationTips" items={data.education} />
           </section>

@@ -120,7 +120,7 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
     // Same head as the filled screen, reading zero — the layout does not jump
     // when the first subscription appears.
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <HeroCard
           label={t("sub.perMonth")}
           value={formatCurrency(0, pageData.currency)}
@@ -132,7 +132,7 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {summary.items.length > 0 ? (
         <>
           <HeroCard

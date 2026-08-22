@@ -67,7 +67,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const criteria = criteriaFromParams(searchParams);
   const { run, pending: isMutating } = useApiMutation();
   const confirm = useConfirm();
-  const [addOpen, setAddOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<
@@ -160,36 +159,31 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     router.refresh();
   }
 
-  async function submitTransaction(event: FormEvent<HTMLFormElement>, method: "POST" | "PUT") {
+  // Editing only. Adding one goes through the quick-add dialog the round button
+  // opens — this screen no longer carries a second door to the same room.
+  async function submitTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = normalizeSelectValues(
       Object.fromEntries(new FormData(event.currentTarget).entries())
     );
 
-    await run(
-      () =>
-        method === "POST"
-          ? apiClient.post<{ budgetWarning?: BudgetWarning }>("/transactions", payload)
-          : apiClient.put<{ budgetWarning?: BudgetWarning }>("/transactions", payload),
-      {
-        success: method === "POST" ? t("tx.toast.added") : t("tx.toast.updated"),
-        error: t("tx.toast.saveError"),
-        onSuccess: async (result) => {
-          if (method === "POST") setAddOpen(false);
-          else setEditingTransaction(null);
-          if (result?.budgetWarning) {
-            toast.warning(
-              t("tx.toast.budgetWarning", {
-                category: result.budgetWarning.category,
-                spent: formatCurrency(result.budgetWarning.spent),
-                limit: formatCurrency(result.budgetWarning.limit)
-              })
-            );
-          }
-          await refresh();
+    await run(() => apiClient.put<{ budgetWarning?: BudgetWarning }>("/transactions", payload), {
+      success: t("tx.toast.updated"),
+      error: t("tx.toast.saveError"),
+      onSuccess: async (result) => {
+        setEditingTransaction(null);
+        if (result?.budgetWarning) {
+          toast.warning(
+            t("tx.toast.budgetWarning", {
+              category: result.budgetWarning.category,
+              spent: formatCurrency(result.budgetWarning.spent),
+              limit: formatCurrency(result.budgetWarning.limit)
+            })
+          );
         }
+        await refresh();
       }
-    );
+    });
   }
 
   // Deleting one operation asks first, exactly as deleting several already did.
@@ -444,60 +438,47 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   }
 
   return (
-    <div className="space-y-5">
-      <TransactionFilterBar
-        categories={pageData.categories}
-        accounts={pageData.accounts}
-        defaultLimit={pageData.pagination.limit}
-        actions={
-          <>
-            <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="h-10" aria-label={t("tx.transfer")}>
-                  <ArrowRightLeft className="size-4" />
-                  <span className="hidden sm:inline">{t("tx.transfer")}</span>
-                </Button>
-              </DialogTrigger>
-              <TransferDialog data={pageData} pending={isMutating} onSubmit={submitTransfer} />
-            </Dialog>
-            <Dialog open={splitOpen} onOpenChange={setSplitOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="h-10" aria-label={t("tx.split")}>
-                  <Split className="size-4" />
-                  <span className="hidden sm:inline">{t("tx.split")}</span>
-                </Button>
-              </DialogTrigger>
-              <SplitDialog data={pageData} pending={bulkPending} onSubmit={submitSplit} />
-            </Dialog>
-            <Dialog open={addOpen} onOpenChange={setAddOpen}>
-              <DialogTrigger asChild>
-                {/* The label shortens on a phone, the name does not: what the
-                    button is called must not depend on the screen width. */}
-                <Button className="h-10" aria-label={t("tx.add")}>
-                  <Plus className="size-4" />
-                  <span className="sm:hidden">{t("common.add")}</span>
-                  <span className="hidden sm:inline">{t("tx.add")}</span>
-                </Button>
-              </DialogTrigger>
-              <TransactionDialog
-                title={t("tx.new")}
-                description={t("tx.new.desc")}
-                data={pageData}
-                pending={isMutating}
-                onSubmit={(event) => submitTransaction(event, "POST")}
-                onRefsReload={() => loadTransactions(true)}
-              />
-            </Dialog>
-          </>
-        }
-      />
-
+    <div className="space-y-4">
+      {/* The filters belong to the list they filter. They used to sit on the
+          page between two cards, a strip of controls attached to nothing;
+          inside the card they read as its own controls. */}
       <Card>
-        {/* The totals belong to the rows below them: they follow the filter,
-            unlike the month tiles at the top of the screen. Three cards said
-            the same in three times the space. */}
-        <CardHeader className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("tx.title")}</CardTitle>
+        <CardHeader className="gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>{t("tx.title")}</CardTitle>
+            {/* Adding an operation is the round button in the corner — on this
+                screen a second one said the same thing twice. What is left is
+                what that button cannot do. */}
+            <div className="flex flex-wrap gap-2">
+              <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" aria-label={t("tx.transfer")}>
+                    <ArrowRightLeft className="size-4" />
+                    <span className="hidden sm:inline">{t("tx.transfer")}</span>
+                  </Button>
+                </DialogTrigger>
+                <TransferDialog data={pageData} pending={isMutating} onSubmit={submitTransfer} />
+              </Dialog>
+              <Dialog open={splitOpen} onOpenChange={setSplitOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" aria-label={t("tx.split")}>
+                    <Split className="size-4" />
+                    <span className="hidden sm:inline">{t("tx.split")}</span>
+                  </Button>
+                </DialogTrigger>
+                <SplitDialog data={pageData} pending={bulkPending} onSubmit={submitSplit} />
+              </Dialog>
+            </div>
+          </div>
+
+          <TransactionFilterBar
+            categories={pageData.categories}
+            accounts={pageData.accounts}
+            defaultLimit={pageData.pagination.limit}
+          />
+
+          {/* The totals belong to the rows below them: they follow the filter,
+              unlike the month tiles at the top of the screen. */}
           <p className="num flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="text-muted-foreground">
               {t("tx.shown", { count: visibleTransactions.length })}
@@ -690,9 +671,9 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                 </Table>
               </div>
 
-              <div className="space-y-3 md:hidden">
+              <div className="space-y-2 md:hidden">
                 {visibleTransactions.map((transaction) => (
-                  <div key={transaction.id} className="rounded-lg border p-4">
+                  <div key={transaction.id} className="rounded-lg border p-3">
                     <div className="flex items-start justify-between gap-3">
                       <input
                         type="checkbox"
@@ -711,10 +692,10 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         className="min-w-0 flex-1 text-left"
                       >
                         <p className="text-sm font-semibold">{transaction.category.label}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {formatDate(transaction.date)} · {transaction.account.label}
                         </p>
-                        <p className="mt-2 text-sm text-muted-foreground">
+                        <p className="mt-1 truncate text-[13px] text-muted-foreground">
                           {transaction.description ?? t("tx.noDescription")}
                         </p>
                         {(transaction.tags?.length || transaction.splitGroupId) && (
@@ -735,37 +716,27 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                           </span>
                         )}
                       </button>
-                      <p
-                        className={
-                          transaction.type === "INCOME"
-                            ? "shrink-0 font-semibold text-success"
-                            : "shrink-0 font-semibold"
-                        }
-                      >
-                        {transaction.type === "INCOME" ? "+" : "-"}
-                        {rowAmount(transaction)}
-                      </p>
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditingTransaction(transaction)}
-                      >
-                        <Edit2 className="size-4" />
-                        {t("common.edit")}
-                      </Button>
-                      <form
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void removeTransaction(transaction);
-                        }}
-                      >
-                        <Button type="submit" variant="outline" size="sm" disabled={isMutating}>
-                          <Trash2 className="size-4 text-destructive" />
-                          {t("common.delete")}
-                        </Button>
-                      </form>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <p
+                          className={
+                            transaction.type === "INCOME"
+                              ? "font-semibold text-success"
+                              : "font-semibold"
+                          }
+                        >
+                          {transaction.type === "INCOME" ? "+" : "-"}
+                          {rowAmount(transaction)}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label={t("common.delete")}
+                          disabled={isMutating}
+                          onClick={() => void removeTransaction(transaction)}
+                          className="p-1 text-muted-foreground transition-colors hover:text-destructive"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -790,7 +761,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
             data={pageData}
             transaction={editingTransaction}
             pending={isMutating}
-            onSubmit={(event) => submitTransaction(event, "PUT")}
+            onSubmit={submitTransaction}
             onRefsReload={() => loadTransactions(true)}
           />
         )}

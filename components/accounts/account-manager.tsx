@@ -88,7 +88,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* The total lives in the headline card at the top of the screen now, and
           the "add" button moved onto the list's own header — one card, one
           number, no repetition. */}

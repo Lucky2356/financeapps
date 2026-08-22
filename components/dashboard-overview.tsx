@@ -62,7 +62,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         : t("dash.health.critical");
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-4">
       {/* The one painted card in the app — the home screen's privilege. */}
       <HeroCard
         variant="accent"

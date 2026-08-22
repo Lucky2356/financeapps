@@ -148,7 +148,7 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* The total is the headline card at the top of the screen; printing it a
           second time here only competed with it. */}
       <div className="flex items-center justify-end gap-3">

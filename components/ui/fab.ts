@@ -6,4 +6,4 @@
  * cuts a clean hole around it in either theme.
  */
 export const FAB_RING =
-  "items-center justify-center rounded-full bg-primary px-[15px] text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--primary)/0.7)] ring-4 ring-background transition-[filter,max-width] hover:brightness-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring";
+  "items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_24px_-8px_hsl(var(--primary)/0.7)] ring-4 ring-background transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring";

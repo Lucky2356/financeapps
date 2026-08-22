@@ -78,7 +78,7 @@ export function DividendTracker() {
 
   return (
     <CollapsibleCard title={t("inv.div.title")} icon={CalendarClock} storageKey="inv-dividends">
-      <div className="space-y-5">
+      <div className="space-y-4">
         <p className="text-sm text-muted-foreground">{t("inv.div.desc")}</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-lg border p-4">

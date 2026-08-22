@@ -89,7 +89,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex justify-end">
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>

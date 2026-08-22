@@ -62,7 +62,7 @@ export function StatTile({
     </>
   );
 
-  const surface = "rounded-lg border bg-card p-4 shadow-soft";
+  const surface = "rounded-lg border bg-card p-3.5 shadow-soft";
 
   if (href) {
     return (

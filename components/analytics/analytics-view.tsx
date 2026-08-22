@@ -13,6 +13,7 @@ import {
   Trophy
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { addMonths } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -43,7 +44,14 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 
-export function AnalyticsView({ data }: { data: AnalyticsData }) {
+export function AnalyticsView({
+  data,
+  transfers
+}: {
+  data: AnalyticsData;
+  /** The "count transfers" checkbox — shown on the same line as the print button. */
+  transfers?: ReactNode;
+}) {
   const { t, locale } = useI18n();
   const TrendIcon =
     data.savingsRateTrend === "up"
@@ -59,12 +67,12 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
         : t("an.trend.stable");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PrintHeader titleKey="page.analytics.title" />
 
-      {/* Print button */}
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden">
+      <div className="flex flex-wrap items-center justify-end gap-3 print:hidden">
+        {transfers}
+        <Button variant="outline" size="sm" onClick={() => window.print()}>
           <Printer className="size-4" />
           {t("an.print")}
         </Button>
@@ -94,7 +102,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
         <StatTile label={t("an.bestMonth")} value={data.bestMonth} icon={Trophy} />
       </StatGrid>
 
-      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid items-start gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
           <CardHeader>
             <CardTitle>{t("an.monthTrend")}</CardTitle>

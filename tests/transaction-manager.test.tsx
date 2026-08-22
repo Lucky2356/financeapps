@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TransactionsPageData } from "@/lib/data";
@@ -48,48 +47,6 @@ describe("TransactionManager", () => {
     expect(await screen.findByText("Операции не найдены")).toBeInTheDocument();
   });
 
-  it("creates an expense through the add dialog with sensible defaults", async () => {
-    const user = userEvent.setup();
-    renderWithConfirm(<TransactionManager data={data} />);
-
-    await user.click(await screen.findByRole("button", { name: "Добавить операцию" }));
-
-    // Amount is the only number field in the dialog; type/category/account default.
-    await user.type(await screen.findByRole("spinbutton"), "1000");
-    await user.click(screen.getByRole("button", { name: "Добавить" }));
-
-    await waitFor(() =>
-      expect(apiClientMock.post).toHaveBeenCalledWith(
-        "/transactions",
-        expect.objectContaining({
-          amount: "1000",
-          type: "EXPENSE",
-          categoryId: "cat-food",
-          accountId: "acc-1"
-        })
-      )
-    );
-    expect(toast.success).toHaveBeenCalled();
-  });
-
-  it("applies a category rule from the description, overriding the default category", async () => {
-    const user = userEvent.setup();
-    renderWithConfirm(<TransactionManager data={data} />);
-
-    await user.click(await screen.findByRole("button", { name: "Добавить операцию" }));
-    // Default expense category is the first one (cat-food); the "Пятёрочка" rule
-    // should move it to cat-fun as soon as the keyword appears in the description.
-    await user.type(await screen.findByRole("spinbutton"), "500");
-    // Target the description Textarea specifically (a separate tags input also
-    // renders as a textbox now).
-    await user.type(screen.getByPlaceholderText(/подберётся/), "Покупка в Пятёрочка");
-    await user.click(screen.getByRole("button", { name: "Добавить" }));
-
-    await waitFor(() =>
-      expect(apiClientMock.post).toHaveBeenCalledWith(
-        "/transactions",
-        expect.objectContaining({ type: "EXPENSE", categoryId: "cat-fun" })
-      )
-    );
-  });
+  // Creating an operation moved to the quick-add dialog (this screen's own add
+  // button was a second door to the same room) — see tests/quick-add.test.tsx.
 });

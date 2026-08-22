@@ -95,7 +95,7 @@ export function MobileBottomNav() {
         // Lifted out of the bar so it reads as the one primary action. The ring
         // is the bar's own colour, which turns the overlap into a deliberate
         // notch instead of a circle that happens to sit on the edge.
-        className={cn(FAB_RING, "-mt-7 flex size-14 shrink-0 !px-0")}
+        className={cn(FAB_RING, "-mt-7 flex size-14 shrink-0")}
       >
         <Plus className="size-6" strokeWidth={2.2} />
       </button>

@@ -20,7 +20,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
       <AlertTriangle className="size-12 text-destructive" />
       <div>
         <h2 className="text-2xl font-bold">{t("error.title")}</h2>

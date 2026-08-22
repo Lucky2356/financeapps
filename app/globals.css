@@ -109,12 +109,12 @@
      (comfortable) matches the previous fixed spacing; compact tightens it for
      large histories on desktop. */
   :root {
-    --density-card: 1.25rem; /* comfortable: p-5 */
-    --density-row-y: 0.75rem; /* comfortable table cell padding-y */
+    --density-card: 1rem; /* comfortable: p-4 */
+    --density-row-y: 0.55rem; /* comfortable table cell padding-y */
   }
   :root[data-density="compact"] {
-    --density-card: 0.85rem;
-    --density-row-y: 0.4rem;
+    --density-card: 0.7rem;
+    --density-row-y: 0.3rem;
   }
 
   /* The hub tab strip: snap-scrolled sideways with no visible scrollbar, per
@@ -208,7 +208,7 @@
      the screen, letting the whole layout pan sideways and clipping the fixed
      header and bottom bar. */
   .page-grid {
-    @apply grid gap-5;
+    @apply grid gap-4;
     grid-template-columns: minmax(0, 1fr);
   }
 

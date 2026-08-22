@@ -9,6 +9,9 @@ import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { matchRule } from "@/lib/categorization-rules";
+import { suggestCategoryId } from "@/lib/category-suggest";
+import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
@@ -72,21 +75,49 @@ export function QuickAddFab({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
+  // This is now the only way an operation is created, so it carries what the
+  // operations screen's own form used to: the category guessed from the
+  // description, and tags.
+  const [manualCategory, setManualCategory] = useState(false);
+  const [autoSuggested, setAutoSuggested] = useState(false);
+  const [ledger, setLedger] = useState<TransactionsPageData | null>(null);
 
   // The server props are empty on the desktop static build — the real accounts
   // and categories live in the client API (LocalApiClient/IndexedDB).
   const initialRefs = { source: "database", accounts, categories } as ImportPageData;
-  const { data: refs, reload: reloadRefs } = useApiPageData<ImportPageData>(initialRefs, "/import");
+  const {
+    data: refs,
+    reload: reloadRefs,
+    setData: setRefs
+  } = useApiPageData<ImportPageData>(initialRefs, "/import");
 
   async function openDialog() {
-    void reloadRefs();
-    // Pre-select the last account the user added an operation to.
+    // Rules and recent operations feed the category guess. Fetched when the
+    // dialog opens rather than kept live: it is a hint, not a total.
+    void apiClient
+      .get<TransactionsPageData>("/transactions?limit=100")
+      .then(setLedger)
+      .catch(() => setLedger(null));
+    // Pre-select the last account the operation was added to. On a device that
+    // has never added one there is nothing to remember, and the field stayed
+    // empty — the form then refused to save with only a toast to explain
+    // itself. Falling back to the first account is what the operations screen's
+    // own form used to do.
+    let last: string | null = null;
     try {
-      const last = localStorage.getItem(LAST_ACCOUNT_KEY);
-      if (last) setAccountId(last);
+      last = localStorage.getItem(LAST_ACCOUNT_KEY);
     } catch {
-      /* ignore */
+      /* storage unavailable */
     }
+    // Read the accounts here rather than waiting for the shared state to
+    // update: the default has to be decided before the dialog is on screen.
+    const fresh = await apiClient.get<ImportPageData>("/import").catch(() => null);
+    if (fresh) setRefs(fresh);
+    const available = (fresh ?? refs).accounts.filter(
+      (account) => !(account as AccountOption & { isArchived?: boolean }).isArchived
+    );
+    const known = last && available.some((account) => account.id === last) ? last : null;
+    setAccountId(known ?? available[0]?.id ?? "");
     // Honour the default transaction type from settings.
     try {
       const settings = await apiClient.get<SettingsPageData>("/settings");
@@ -217,6 +248,40 @@ export function QuickAddFab({
     setCategoryId(""); // categories are type-specific
     setToAccountId("");
     setShowNewCategory(false);
+    setManualCategory(false);
+    setAutoSuggested(false);
+  }
+
+  function pickCategory(value: string) {
+    setCategoryId(value);
+    setManualCategory(true);
+    setAutoSuggested(false);
+  }
+
+  // A user-defined rule is an explicit mapping ("Пятёрочка" → Продукты), so it
+  // wins even after a category was picked by hand. The history heuristic is a
+  // softer guess and only fills in while nothing has been chosen.
+  function onDescriptionChange(value: string) {
+    if (type === "TRANSFER" || !ledger) return;
+    const known = (id: string) => filteredCategories.some((category) => category.id === id);
+
+    const ruled = ledger.rules.length > 0 ? matchRule(value, ledger.rules) : null;
+    if (ruled && known(ruled)) {
+      setCategoryId(ruled);
+      setAutoSuggested(true);
+      return;
+    }
+    if (manualCategory) return;
+    const suggestion = suggestCategoryId(value, ledger.transactions, {
+      type: type === "INCOME" ? "INCOME" : "EXPENSE",
+      rules: ledger.rules
+    });
+    if (suggestion && known(suggestion)) {
+      setCategoryId(suggestion);
+      setAutoSuggested(true);
+    } else {
+      setAutoSuggested(false);
+    }
   }
 
   return (
@@ -229,16 +294,12 @@ export function QuickAddFab({
         // The ring is the whole trick. A plain circle sitting on top of a table
         // dissolved into whatever was under it; a ring in the page colour cuts
         // a clean hole around the button, so it reads as floating above the
-        // screen on any background and in either theme. Hovering widens it into
-        // a pill that says what it does — the circle alone never did.
-        className={cn(FAB_RING, "group fixed bottom-8 right-8 z-40 hidden h-[52px] md:flex")}
+        // screen on any background and in either theme.
+        className={cn(FAB_RING, "fixed bottom-6 right-6 z-40 hidden size-[52px] !px-0 md:flex")}
         onClick={() => void openDialog()}
         aria-label={t("qa.fabAria")}
       >
         <Plus className="size-6 shrink-0" strokeWidth={2.2} />
-        <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-all duration-200 group-hover:ml-2 group-hover:max-w-[9rem] group-hover:opacity-100">
-          {t("common.transaction")}
-        </span>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -324,18 +385,23 @@ export function QuickAddFab({
                   </Button>
                 </div>
               ) : (
-                <Select value={categoryId || undefined} onValueChange={setCategoryId}>
-                  <SelectTrigger id="fab-category">
-                    <SelectValue placeholder={t("ai.selectCategory")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredCategories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Select value={categoryId || undefined} onValueChange={pickCategory}>
+                    <SelectTrigger id="fab-category">
+                      <SelectValue placeholder={t("ai.selectCategory")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredCategories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {autoSuggested ? (
+                    <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
+                  ) : null}
+                </>
               )}
             </div>
 
@@ -424,8 +490,16 @@ export function QuickAddFab({
                 name="description"
                 maxLength={180}
                 placeholder={t("qa.descPlaceholder")}
+                onChange={(event) => onDescriptionChange(event.target.value)}
               />
             </div>
+
+            {type !== "TRANSFER" ? (
+              <div className="space-y-2">
+                <Label htmlFor="fab-tags">{t("tx.dialog.tags")}</Label>
+                <Input id="fab-tags" name="tags" placeholder={t("tx.dialog.tagsPlaceholder")} />
+              </div>
+            ) : null}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
