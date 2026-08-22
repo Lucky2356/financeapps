@@ -1,7 +1,8 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
+import { toast } from "sonner";
 
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { CategoryIcon } from "@/components/category-icon";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Input } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
@@ -24,6 +26,17 @@ import type {
   PlanFactPageData
 } from "@/types/finance";
 
+/** "2026-08" for a date, the same key the plan grid is indexed by. */
+function monthKeyOf(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** The month `step` months after `key` (negative steps go back). */
+function shiftMonth(key: string, step: number): string {
+  const [year, month] = key.split("-").map(Number);
+  return monthKeyOf(new Date(year, month - 1 + step, 1));
+}
+
 // Plan against fact, laid out like the spreadsheet this screen replaces: every
 // category is a column, every month a row, in three bands — plan, fact and the
 // gap between them. Only the plan band is typed in; the other two are read off
@@ -31,18 +44,68 @@ import type {
 export function PlanFactView({ initialData }: { initialData: PlanFactPageData }) {
   const { t, locale } = useI18n();
   const [includeTransfers, setIncludeTransfers] = useIncludeTransfers();
-  // Months with operations show up on their own; planning further ahead means
-  // asking for rows that nothing in the data would produce yet.
-  const [ahead, setAhead] = useState(0);
+  // Months with operations show up on their own. Any other month — next month
+  // to plan ahead, or an earlier one to fill in by hand — is pinned into the
+  // grid and stored with the data, so it is there on the next device too.
   const { data, reload } = useApiPageData(
     initialData,
-    `/plan?ahead=${ahead}${transfersQuery(includeTransfers, "&")}`
+    `/plan${transfersQuery(includeTransfers, "?")}`
   );
   const { run } = useApiMutation();
+  const confirm = useConfirm();
+
+  // Which months are on screen. The grid holds every month the ledger touches,
+  // and after a year of use that is a long table to scroll through to reach the
+  // one being planned.
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [newMonth, setNewMonth] = useState("");
 
   const income = data.columns.filter((column) => column.kind === "INCOME");
   const expense = data.columns.filter((column) => column.kind === "EXPENSE");
   const width = income.length + expense.length + 7;
+
+  const months = data.months.filter(
+    (month) => (!from || month.month >= from) && (!to || month.month <= to)
+  );
+  // The month the "add" button offers: the one after the newest row, which is
+  // what planning ahead means nine times out of ten. Any other month can be
+  // typed into the field beside it — including one in the past.
+  const newest = data.months[0]?.month ?? monthKeyOf(new Date());
+  const suggested = shiftMonth(newest, 1);
+  const monthToAdd = newMonth || suggested;
+
+  async function addMonth() {
+    await run(() => apiClient.post("/plan", { action: "addMonth", month: monthToAdd }), {
+      success: t("plan.monthAdded"),
+      error: t("plan.saveError"),
+      onSuccess: async () => {
+        setNewMonth("");
+        await reload();
+      }
+    });
+  }
+
+  async function removeMonth(month: string) {
+    const confirmed = await confirm({
+      title: t("plan.remove.title"),
+      description: t("plan.remove.desc", { month: monthLabel(month) }),
+      confirmLabel: t("common.delete"),
+      destructive: true
+    });
+    if (!confirmed) return;
+    await run(
+      () => apiClient.post<{ hasFacts?: boolean }>("/plan", { action: "removeMonth", month }),
+      {
+        success: t("plan.removed"),
+        error: t("plan.saveError"),
+        onSuccess: async (result) => {
+          if (result?.hasFacts) toast.info(t("plan.removeKeptFacts"));
+          await reload();
+        }
+      }
+    );
+  }
 
   async function save(body: Record<string, string>) {
     await run(() => apiClient.post("/plan", body), {
@@ -83,95 +146,147 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">{t("plan.units", { currency: unit })}</p>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Which months to show. Empty on both sides means "everything the
+              ledger knows about", which is where the screen starts. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md border px-2 py-1.5 text-sm sm:h-9 sm:flex-nowrap sm:py-0">
+            <span className="text-xs text-muted-foreground">{t("plan.period")}</span>
+            <input
+              type="month"
+              aria-label={t("plan.periodFrom")}
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              className="min-w-0 max-w-[8.5rem] flex-1 bg-transparent text-sm outline-none"
+            />
+            <span className="text-muted-foreground">—</span>
+            <input
+              type="month"
+              aria-label={t("plan.periodTo")}
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              className="min-w-0 max-w-[8.5rem] flex-1 bg-transparent text-sm outline-none"
+            />
+            {from || to ? (
+              <button
+                type="button"
+                aria-label={t("plan.periodReset")}
+                title={t("plan.periodReset")}
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                }}
+                className="text-muted-foreground transition-colors hover:text-destructive"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </div>
+
           <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setAhead((value) => Math.min(value + 1, 24))}
-          >
+
+          <input
+            type="month"
+            aria-label={t("plan.newMonth")}
+            value={monthToAdd}
+            onChange={(event) => setNewMonth(event.target.value)}
+            className="h-9 min-w-0 max-w-[10rem] flex-1 rounded-md border bg-background px-2 text-sm sm:flex-none"
+          />
+          <Button variant="outline" size="sm" onClick={() => void addMonth()}>
             <Plus className="size-4" />
             {t("plan.addMonth")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto" data-testid="plan-grid">
-            <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
-              <thead>
-                <tr>
-                  <Head rowSpan={2} className="sticky left-0 z-20 text-left">
-                    {t("plan.month")}
-                  </Head>
-                  <Head colSpan={2} className="border-l text-center" title={t("plan.opening.hint")}>
-                    {t("plan.opening")}
-                  </Head>
-                  <Head colSpan={income.length + 1} className="border-l text-center">
-                    {t("plan.income")}
-                  </Head>
-                  <Head colSpan={expense.length + 1} className="border-l text-center">
-                    {t("plan.expense")}
-                  </Head>
-                  <Head rowSpan={2} className="border-l text-right">
-                    {t("plan.result")}
-                  </Head>
-                  <Head rowSpan={2} className="border-l text-left">
-                    {t("plan.note")}
-                  </Head>
-                </tr>
-                <tr>
-                  <Head className="border-l text-right">{t("plan.opening.main")}</Head>
-                  <Head className="text-right">{t("plan.opening.savings")}</Head>
-                  {income.map((column, index) => (
-                    <ColumnHead
-                      key={column.categoryId}
-                      column={column}
-                      className={index === 0 ? "border-l" : undefined}
-                    />
-                  ))}
-                  <Head className="text-right font-semibold">{t("plan.total")}</Head>
-                  {expense.map((column, index) => (
-                    <ColumnHead
-                      key={column.categoryId}
-                      column={column}
-                      className={index === 0 ? "border-l" : undefined}
-                    />
-                  ))}
-                  <Head className="text-right font-semibold">{t("plan.total")}</Head>
-                </tr>
-              </thead>
-
-              {(["plan", "fact", "diff"] as const).map((band) => (
-                <tbody key={band}>
+      {months.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            {t("plan.noMonths")}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto" data-testid="plan-grid">
+              <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
+                <thead>
                   <tr>
-                    <th
-                      scope="rowgroup"
-                      className="sticky left-0 z-20 whitespace-nowrap border-y bg-muted px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide"
+                    <Head rowSpan={2} className="sticky left-0 z-20 text-left">
+                      {t("plan.month")}
+                    </Head>
+                    <Head
+                      colSpan={2}
+                      className="border-l text-center"
+                      title={t("plan.opening.hint")}
                     >
-                      {t(`plan.${band}`)}
-                    </th>
-                    <td className="border-y bg-muted" colSpan={width - 1} />
+                      {t("plan.opening")}
+                    </Head>
+                    <Head colSpan={income.length + 1} className="border-l text-center">
+                      {t("plan.income")}
+                    </Head>
+                    <Head colSpan={expense.length + 1} className="border-l text-center">
+                      {t("plan.expense")}
+                    </Head>
+                    <Head rowSpan={2} className="border-l text-right">
+                      {t("plan.result")}
+                    </Head>
+                    <Head rowSpan={2} className="border-l text-left">
+                      {t("plan.note")}
+                    </Head>
                   </tr>
-                  {data.months.map((month) => (
-                    <BandRow
-                      key={`${band}-${month.month}`}
-                      band={band}
-                      month={month}
-                      income={income}
-                      expense={expense}
-                      label={monthLabel(month.month)}
-                      money={money}
-                      onSave={save}
-                    />
-                  ))}
-                </tbody>
-              ))}
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                  <tr>
+                    <Head className="border-l text-right">{t("plan.opening.main")}</Head>
+                    <Head className="text-right">{t("plan.opening.savings")}</Head>
+                    {income.map((column, index) => (
+                      <ColumnHead
+                        key={column.categoryId}
+                        column={column}
+                        className={index === 0 ? "border-l" : undefined}
+                      />
+                    ))}
+                    <Head className="text-right font-semibold">{t("plan.total")}</Head>
+                    {expense.map((column, index) => (
+                      <ColumnHead
+                        key={column.categoryId}
+                        column={column}
+                        className={index === 0 ? "border-l" : undefined}
+                      />
+                    ))}
+                    <Head className="text-right font-semibold">{t("plan.total")}</Head>
+                  </tr>
+                </thead>
+
+                {(["plan", "fact", "diff"] as const).map((band) => (
+                  <tbody key={band}>
+                    <tr>
+                      <th
+                        scope="rowgroup"
+                        className="sticky left-0 z-20 whitespace-nowrap border-y bg-muted px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide"
+                      >
+                        {t(`plan.${band}`)}
+                      </th>
+                      <td className="border-y bg-muted" colSpan={width - 1} />
+                    </tr>
+                    {months.map((month) => (
+                      <BandRow
+                        key={`${band}-${month.month}`}
+                        band={band}
+                        month={month}
+                        income={income}
+                        expense={expense}
+                        label={monthLabel(month.month)}
+                        money={money}
+                        onSave={save}
+                        onRemove={band === "plan" ? () => void removeMonth(month.month) : undefined}
+                      />
+                    ))}
+                  </tbody>
+                ))}
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -224,7 +339,8 @@ function BandRow({
   expense,
   label,
   money,
-  onSave
+  onSave,
+  onRemove
 }: {
   band: "plan" | "fact" | "diff";
   month: PlanFactMonth;
@@ -233,6 +349,8 @@ function BandRow({
   label: string;
   money: (value: number) => string;
   onSave: (body: Record<string, string>) => Promise<void>;
+  /** Given only on the plan band: the month's own row is where it is removed. */
+  onRemove?: () => void;
 }) {
   const { t } = useI18n();
   const editable = band === "plan";
@@ -271,7 +389,20 @@ function BandRow({
         scope="row"
         className="sticky left-0 z-10 whitespace-nowrap border-b bg-card px-3 py-1.5 text-left font-medium"
       >
-        {label}
+        <span className="flex items-center gap-1.5">
+          {label}
+          {onRemove ? (
+            <button
+              type="button"
+              aria-label={`${t("plan.removeMonth")}: ${label}`}
+              title={t("plan.removeMonth")}
+              onClick={onRemove}
+              className="text-muted-foreground/60 transition-colors hover:text-destructive"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
+        </span>
       </th>
       <Cell className="border-l" column="opening">
         {editable ? (

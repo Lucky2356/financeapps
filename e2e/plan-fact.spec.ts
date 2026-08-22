@@ -58,11 +58,46 @@ test("план сохраняется и месяц можно добавить 
     })
     .toBe("31000");
 
-  // A month still to come has no operations, so it only appears on request.
+  // A month with nothing in it appears only on request — and the request now
+  // works in both directions, so an earlier month can be planned too.
   const rows = page.locator('tr[data-band="plan"]');
   const before = await rows.count();
   await page.getByRole("button", { name: "Добавить месяц" }).click();
   await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
+
+  // A pinned month belongs to the data, not to the session.
+  await openSettled(page, "/plan");
+  await expect.poll(() => rows.count(), { timeout: 20_000 }).toBe(before + 1);
+});
+
+test("месяц можно добавить назад, отфильтровать и удалить", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/plan");
+
+  const rows = page.locator('tr[data-band="plan"]');
+  await expect.poll(() => rows.count(), { timeout: 20_000 }).toBeGreaterThan(0);
+  const before = await rows.count();
+
+  // A month in the past, which nothing in the ledger would have produced.
+  await page.getByLabel("Месяц, который добавить").fill("2020-01");
+  await page.getByRole("button", { name: "Добавить месяц" }).click();
+  await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
+  await expect(page.locator('tr[data-band="plan"][data-month="2020-01"]')).toBeVisible();
+
+  // The period filter hides everything outside it — the point of it on a table
+  // that grows by a row a month.
+  await page.getByLabel("Период: по какой месяц").fill("2020-06");
+  await expect.poll(() => rows.count(), { timeout: 10_000 }).toBe(1);
+  await page.getByRole("button", { name: "Показать все месяцы" }).click();
+  await expect.poll(() => rows.count(), { timeout: 10_000 }).toBe(before + 1);
+
+  // And it can be taken away again.
+  await page
+    .locator('tr[data-band="plan"][data-month="2020-01"]')
+    .getByRole("button", { name: /Удалить месяц/ })
+    .click();
+  await page.getByRole("button", { name: "Удалить" }).last().click();
+  await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before);
 });
 
 test("остаток разделён на основные счета и сбережения", async ({ page }) => {

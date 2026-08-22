@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CircleDollarSign, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { NotificationBell } from "@/components/notification-bell";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 import { activeNavHref, DESKTOP_NAV } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -56,29 +55,18 @@ export function AppSidebar() {
       data-collapsed={collapsed ? "true" : "false"}
       className={cn(
         "sticky top-0 z-30 hidden h-screen shrink-0 flex-col border-r bg-card transition-[width] duration-200 md:flex",
-        collapsed ? "w-[4.5rem]" : "w-64"
+        collapsed ? "w-[4.5rem]" : "w-[17rem]"
       )}
     >
-      {/* Logo and the collapse control */}
+      {/* The mark, the name, and whose data is open — one control, because the
+          mark is what switches profiles now. */}
       <div
         className={cn(
           "border-b",
-          collapsed ? "flex flex-col items-center gap-1 py-3" : "flex items-center gap-2 p-4"
+          collapsed ? "flex flex-col items-center gap-1 py-3" : "flex items-center gap-2 p-3"
         )}
       >
-        <Link href="/" className="flex min-w-0 flex-1 items-center gap-3" title={APP_NAME}>
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-sidebar-accent text-white shadow-sm">
-            <CircleDollarSign className="size-[18px]" />
-          </span>
-          {collapsed ? null : (
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-foreground">
-                {APP_NAME}
-              </span>
-              <span className="block text-[11px] text-muted-foreground">{t("shell.subtitle")}</span>
-            </span>
-          )}
-        </Link>
+        <ProfileSwitcher compact={collapsed} />
         <button
           type="button"
           onClick={toggle}
@@ -90,8 +78,6 @@ export function AppSidebar() {
           {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
         </button>
       </div>
-
-      <ProfileSwitcher compact={collapsed} />
 
       {/* Command palette trigger */}
       <div className={collapsed ? "flex justify-center px-2 pt-3" : "px-3 pt-3"}>
