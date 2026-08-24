@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
 import { toast } from "sonner";
 
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
@@ -10,6 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Input } from "@/components/ui/input";
+import {
+  ALL_OPTION,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -59,7 +67,6 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
   // one being planned.
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [newMonth, setNewMonth] = useState("");
 
   const income = data.columns.filter((column) => column.kind === "INCOME");
   const expense = data.columns.filter((column) => column.kind === "EXPENSE");
@@ -68,21 +75,11 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
   const months = data.months.filter(
     (month) => (!from || month.month >= from) && (!to || month.month <= to)
   );
-  // The month the "add" button offers: the one after the newest row, which is
-  // what planning ahead means nine times out of ten. Any other month can be
-  // typed into the field beside it — including one in the past.
-  const newest = data.months[0]?.month ?? monthKeyOf(new Date());
-  const suggested = shiftMonth(newest, 1);
-  const monthToAdd = newMonth || suggested;
-
-  async function addMonth() {
-    await run(() => apiClient.post("/plan", { action: "addMonth", month: monthToAdd }), {
+  async function addMonth(month: string) {
+    await run(() => apiClient.post("/plan", { action: "addMonth", month }), {
       success: t("plan.monthAdded"),
       error: t("plan.saveError"),
-      onSuccess: async () => {
-        setNewMonth("");
-        await reload();
-      }
+      onSuccess: reload
     });
   }
 
@@ -147,54 +144,55 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">{t("plan.units", { currency: unit })}</p>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Which months to show. Empty on both sides means "everything the
-              ledger knows about", which is where the screen starts. */}
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md border px-2 py-1.5 text-sm sm:h-9 sm:flex-nowrap sm:py-0">
+          {/* Which months to show, in the app's own controls: the native month
+              fields were the only two OS-drawn widgets on the screen, and they
+              looked it. The lists carry the months the grid actually has. */}
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-muted-foreground">{t("plan.period")}</span>
-            <input
-              type="month"
-              aria-label={t("plan.periodFrom")}
+            <MonthSelect
+              label={t("plan.periodFrom")}
               value={from}
-              onChange={(event) => setFrom(event.target.value)}
-              className="min-w-0 max-w-[8.5rem] flex-1 bg-transparent text-sm outline-none"
+              months={data.months.map((month) => month.month)}
+              monthLabel={monthLabel}
+              anyLabel={t("plan.periodAny")}
+              onChange={setFrom}
             />
             <span className="text-muted-foreground">—</span>
-            <input
-              type="month"
-              aria-label={t("plan.periodTo")}
+            <MonthSelect
+              label={t("plan.periodTo")}
               value={to}
-              onChange={(event) => setTo(event.target.value)}
-              className="min-w-0 max-w-[8.5rem] flex-1 bg-transparent text-sm outline-none"
+              months={data.months.map((month) => month.month)}
+              monthLabel={monthLabel}
+              anyLabel={t("plan.periodAny")}
+              onChange={setTo}
             />
             {from || to ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8"
                 aria-label={t("plan.periodReset")}
                 title={t("plan.periodReset")}
                 onClick={() => {
                   setFrom("");
                   setTo("");
                 }}
-                className="text-muted-foreground transition-colors hover:text-destructive"
               >
                 <X className="size-4" />
-              </button>
+              </Button>
             ) : null}
           </div>
 
           <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
 
-          <input
-            type="month"
-            aria-label={t("plan.newMonth")}
-            value={monthToAdd}
-            onChange={(event) => setNewMonth(event.target.value)}
-            className="h-9 min-w-0 max-w-[10rem] flex-1 rounded-md border bg-background px-2 text-sm sm:flex-none"
+          {/* One button, and the months to choose from underneath it — instead
+              of a date field to fill in before pressing it. */}
+          <AddMonthMenu
+            present={new Set(data.months.map((month) => month.month))}
+            monthLabel={monthLabel}
+            onPick={(month) => void addMonth(month)}
           />
-          <Button variant="outline" size="sm" onClick={() => void addMonth()}>
-            <Plus className="size-4" />
-            {t("plan.addMonth")}
-          </Button>
         </div>
       </div>
 
@@ -287,6 +285,135 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+/**
+ * One end of the period, as the app's own dropdown rather than the browser's
+ * month field. It offers the months the grid actually holds — anything else
+ * would filter to nothing.
+ */
+function MonthSelect({
+  label,
+  value,
+  months,
+  monthLabel,
+  anyLabel,
+  onChange
+}: {
+  label: string;
+  value: string;
+  months: string[];
+  monthLabel: (key: string) => string;
+  anyLabel: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Select
+      value={value || ALL_OPTION}
+      onValueChange={(next) => onChange(next === ALL_OPTION ? "" : next)}
+    >
+      <SelectTrigger className="h-9 w-auto min-w-[9rem]" aria-label={label}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL_OPTION}>{anyLabel}</SelectItem>
+        {months.map((month) => (
+          <SelectItem key={month} value={month}>
+            {monthLabel(month)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/**
+ * "Добавить месяц" and the months to choose from. A year forward and a year and
+ * a half back, minus the ones already in the grid: pressing the button used to
+ * add whatever a date field beside it happened to hold.
+ */
+function AddMonthMenu({
+  present,
+  monthLabel,
+  onPick
+}: {
+  present: Set<string>;
+  monthLabel: (key: string) => string;
+  onPick: (month: string) => void;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: PointerEvent) {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const current = monthKeyOf(new Date());
+  const ahead: string[] = [];
+  for (let step = 1; step <= 12; step += 1) {
+    const month = shiftMonth(current, step);
+    if (!present.has(month)) ahead.push(month);
+  }
+  const back: string[] = [];
+  for (let step = 0; step <= 18; step += 1) {
+    const month = shiftMonth(current, -step);
+    if (!present.has(month)) back.push(month);
+  }
+
+  const groups = [
+    { id: "ahead", title: t("plan.addMonth.ahead"), months: ahead },
+    { id: "back", title: t("plan.addMonth.back"), months: back }
+  ].filter((group) => group.months.length > 0);
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button variant="outline" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <Plus className="size-4" />
+        {t("plan.addMonth")}
+      </Button>
+      {open ? (
+        <div
+          data-testid="add-month-menu"
+          className="absolute right-0 z-50 mt-1 max-h-72 w-56 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+        >
+          {groups.map((group) => (
+            <div key={group.id} className="mb-1 last:mb-0">
+              <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {group.title}
+              </p>
+              {group.months.map((month) => (
+                <button
+                  key={month}
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onPick(month);
+                  }}
+                  // `capitalize` would also raise the "г." after the year.
+                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm first-letter:uppercase hover:bg-accent"
+                >
+                  {monthLabel(month)}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

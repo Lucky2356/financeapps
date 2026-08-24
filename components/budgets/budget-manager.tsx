@@ -247,7 +247,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
             <TableHeader>
               <TableRow>
                 <TableHead>{t("common.category")}</TableHead>
-                <TableHead className="w-[38%]">{t("bud.progress")}</TableHead>
+                <TableHead className="w-[26%]">{t("bud.progress")}</TableHead>
                 <TableHead className="w-32 text-right">{t("bud.spent")}</TableHead>
                 <TableHead className="w-[17rem]">{t("bud.limit")}</TableHead>
               </TableRow>
@@ -430,7 +430,7 @@ function BudgetForm({
             if (timer.current) clearTimeout(timer.current);
             commit(value);
           }}
-          className="h-9 min-w-0 flex-1"
+          className="h-9 min-w-0 flex-1 px-2 text-[13px]"
         />
         {onToggleRollover ? (
           // Carrying the remainder over is a switch, not a sentence — it used
