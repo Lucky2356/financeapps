@@ -222,6 +222,53 @@ describe("LocalApiClient", () => {
     expect([...months].sort((a, b) => b.localeCompare(a))).toEqual(months);
   });
 
+  it("makes the accounts a CSV names when the profile has none", async () => {
+    // Moving to a second computer starts with an empty profile: no accounts at
+    // all. The import read the file, showed which account every row belonged
+    // to — and then refused with "Create an account before importing CSV.",
+    // in English, on an otherwise Russian screen.
+    const client = createClient();
+    const before = await client.get<AccountsPageData>("/accounts");
+    expect(before.accounts).toHaveLength(0);
+
+    const result = await client.post<{ imported: number; skipped: number }>("/import", {
+      dateColumn: "date",
+      amountColumn: "amount",
+      categoryColumn: "category",
+      accountColumn: "account",
+      rows: JSON.stringify([
+        { date: "2026-08-23", amount: "300", category: "Прочие доходы", account: "Лариса" },
+        { date: "2026-08-23", amount: "-380", category: "Транспорт", account: "Саша" },
+        { date: "2026-08-22", amount: "-544", category: "Бытовая химия", account: "Саша" }
+      ])
+    });
+
+    expect(result.imported).toBe(3);
+    const after = await client.get<AccountsPageData>("/accounts");
+    expect(after.accounts.map((account) => account.name).sort()).toEqual(["Лариса", "Саша"]);
+    // The balance is what was imported onto it: +300 for one, -924 for the other.
+    const larisa = after.accounts.find((account) => account.name === "Лариса");
+    const sasha = after.accounts.find((account) => account.name === "Саша");
+    expect(larisa?.balance).toBe(300);
+    expect(sasha?.balance).toBe(-924);
+  });
+
+  it("files rows with no account of their own under one import account", async () => {
+    const client = createClient();
+    await client.post("/import", {
+      dateColumn: "date",
+      amountColumn: "amount",
+      rows: JSON.stringify([
+        { date: "2026-08-23", amount: "-100" },
+        { date: "2026-08-24", amount: "-200" }
+      ])
+    });
+    const accounts = await client.get<AccountsPageData>("/accounts");
+    expect(accounts.accounts).toHaveLength(1);
+    expect(accounts.accounts[0].name).toBe("Импорт");
+    expect(accounts.accounts[0].balance).toBe(-300);
+  });
+
   it("pins a month into the plan grid and takes it away again", async () => {
     // The grid used to be able to ask only for months AHEAD of the current one,
     // so an earlier month with nothing recorded in it could not be planned at
