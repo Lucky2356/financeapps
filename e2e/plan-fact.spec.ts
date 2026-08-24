@@ -63,6 +63,7 @@ test("план сохраняется и месяц можно добавить 
   const rows = page.locator('tr[data-band="plan"]');
   const before = await rows.count();
   await page.getByRole("button", { name: "Добавить месяц" }).click();
+  await page.getByTestId("add-month-menu").getByRole("button").first().click();
   await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
 
   // A pinned month belongs to the data, not to the session.
@@ -78,22 +79,29 @@ test("месяц можно добавить назад, отфильтрова�
   await expect.poll(() => rows.count(), { timeout: 20_000 }).toBeGreaterThan(0);
   const before = await rows.count();
 
-  // A month in the past, which nothing in the ledger would have produced.
-  await page.getByLabel("Месяц, который добавить").fill("2020-01");
+  // A month in the past, which nothing in the ledger would have produced. The
+  // button opens a list of months rather than expecting a date to be typed.
   await page.getByRole("button", { name: "Добавить месяц" }).click();
+  const menu = page.getByTestId("add-month-menu");
+  await expect(menu).toBeVisible();
+  await menu.getByRole("button").last().click();
   await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
-  await expect(page.locator('tr[data-band="plan"][data-month="2020-01"]')).toBeVisible();
+
+  // The oldest row is the one just added — it is 18 months back.
+  const oldest = await rows.last().getAttribute("data-month");
+  expect(oldest).toBeTruthy();
 
   // The period filter hides everything outside it — the point of it on a table
   // that grows by a row a month.
-  await page.getByLabel("Период: по какой месяц").fill("2020-06");
+  await page.getByRole("combobox", { name: "Период: по какой месяц" }).click();
+  await page.getByRole("option").last().click();
   await expect.poll(() => rows.count(), { timeout: 10_000 }).toBe(1);
   await page.getByRole("button", { name: "Показать все месяцы" }).click();
   await expect.poll(() => rows.count(), { timeout: 10_000 }).toBe(before + 1);
 
   // And it can be taken away again.
   await page
-    .locator('tr[data-band="plan"][data-month="2020-01"]')
+    .locator(`tr[data-band="plan"][data-month="${oldest}"]`)
     .getByRole("button", { name: /Удалить месяц/ })
     .click();
   await page.getByRole("button", { name: "Удалить" }).last().click();

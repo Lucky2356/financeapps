@@ -498,7 +498,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                       <TableHead>{t("tx.account")}</TableHead>
                       <TableHead>{t("tx.col.description")}</TableHead>
                       <TableHead className="text-right">{t("common.amount")}</TableHead>
-                      <TableHead className="w-28 text-right">{t("common.actions")}</TableHead>
+                      <TableHead className="w-[4.5rem] text-right">{t("common.actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -514,20 +514,29 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                           />
                         </TableCell>
                         <TableCell>{formatDate(transaction.date)}</TableCell>
+                        {/* Long names are cut rather than allowed to push the
+                            actions column out of the card: between a phone and
+                            a wide window the table had more columns than room. */}
                         <TableCell>
-                          <span className="inline-flex items-center gap-2">
+                          <span className="flex max-w-[11rem] items-center gap-2">
                             <span
                               className="flex size-5 shrink-0 items-center justify-center rounded-md text-white"
                               style={{ backgroundColor: transaction.category.color }}
                             >
                               <CategoryIcon name={transaction.category.icon} className="size-3" />
                             </span>
-                            {transaction.category.label}
+                            <span className="truncate">{transaction.category.label}</span>
                           </span>
                         </TableCell>
-                        <TableCell>{transaction.account.label}</TableCell>
-                        <TableCell className="max-w-60 text-muted-foreground">
-                          <span className="block truncate">{transaction.description ?? "—"}</span>
+                        <TableCell>
+                          <span className="block max-w-[9rem] truncate">
+                            {transaction.account.label}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          <span className="block max-w-[12rem] truncate">
+                            {transaction.description ?? "—"}
+                          </span>
                           {(transaction.tags?.length || transaction.splitGroupId) && (
                             <span className="mt-1 flex flex-wrap gap-1">
                               {transaction.splitGroupId ? (
@@ -561,6 +570,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="size-8"
                               title={t("common.editAria")}
                               aria-label={t("tx.editAria")}
                               onClick={() => setEditingTransaction(transaction)}
@@ -577,6 +587,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                                 type="submit"
                                 variant="ghost"
                                 size="icon"
+                                className="size-8"
                                 title={t("common.delete")}
                                 aria-label={t("tx.deleteAria")}
                                 disabled={isMutating}

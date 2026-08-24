@@ -90,7 +90,9 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    // Two tables side by side need a wide window: at anything narrower the
+    // right-hand card ran out of room and cut its own actions column off.
+    <div className="grid gap-4 xl:grid-cols-2">
       <CategoryColumn
         title={t("cat.income")}
         kind="INCOME"
@@ -184,10 +186,12 @@ function CategoryColumn({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {/* The marks used to be a column of their own, and
+                        "Обязательная" is a wide word that cannot wrap: it alone
+                        pushed the actions column past the edge of the card. */}
                     <TableHead>{t("common.category")}</TableHead>
-                    <TableHead>{t("cat.tags")}</TableHead>
-                    <TableHead className="text-right">{t("common.transactions")}</TableHead>
-                    <TableHead className="w-20 text-right">{t("common.actions")}</TableHead>
+                    <TableHead className="w-16 text-right">{t("common.transactions")}</TableHead>
+                    <TableHead className="w-[4.5rem] text-right">{t("common.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -235,8 +239,8 @@ function CategoryTableRow({
 
   return (
     <TableRow>
-      <TableCell>
-        <div className="flex items-center gap-2">
+      <TableCell className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
           {/* The colour was the only mark a category carried, so two spending
               categories of a similar shade looked alike everywhere. The chosen
               picture sits inside it. */}
@@ -246,31 +250,34 @@ function CategoryTableRow({
           >
             <CategoryIcon name={category.icon} className="size-3" />
           </span>
-          <span className="font-medium">{category.name}</span>
+          <span className="min-w-0 truncate font-medium" title={category.name}>
+            {category.name}
+          </span>
         </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-wrap gap-1">
-          {category.isEssential && (
-            <Badge variant="secondary" className="text-xs">
-              {t("cat.essential")}
-            </Badge>
-          )}
-          {category.isSubscription && (
-            <Badge variant="secondary" className="text-xs">
-              {t("cat.subscription")}
-            </Badge>
-          )}
-        </div>
+        {category.isEssential || category.isSubscription ? (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {category.isEssential && (
+              <Badge variant="secondary" className="text-[10px]">
+                {t("cat.essential")}
+              </Badge>
+            )}
+            {category.isSubscription && (
+              <Badge variant="secondary" className="text-[10px]">
+                {t("cat.subscription")}
+              </Badge>
+            )}
+          </div>
+        ) : null}
       </TableCell>
       <TableCell className="text-right">
-        <span className="text-sm text-muted-foreground">{category.transactionCount}</span>
+        <span className="num text-sm text-muted-foreground">{category.transactionCount}</span>
       </TableCell>
       <TableCell>
-        <div className="flex justify-end gap-1">
+        <div className="flex justify-end gap-0.5">
           <Button
             variant="ghost"
             size="icon"
+            className="size-8"
             title={t("common.editAria")}
             aria-label={t("cat.edit")}
             onClick={() => onEdit(category)}
@@ -280,6 +287,7 @@ function CategoryTableRow({
           <Button
             variant="ghost"
             size="icon"
+            className="size-8"
             disabled={!canDelete}
             title={
               canDelete
