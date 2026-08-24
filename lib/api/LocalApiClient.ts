@@ -712,9 +712,18 @@ export class LocalApiClient implements ApiClient {
 
   private async restoreBackup<TResponse>(body: unknown) {
     const payload = (body as { backup?: unknown })?.backup;
-    const parsed = localStateSchema.safeParse(payload);
+    // Scheduled backups and folder sync write the document inside an envelope
+    // (`{ exportedAt, backup }`); the button writes it bare. Accept either, so
+    // any file the app itself produced can be restored.
+    const document =
+      payload && typeof payload === "object" && "backup" in payload
+        ? (payload as { backup?: unknown }).backup
+        : payload;
+    const parsed = localStateSchema.safeParse(document);
     if (!parsed.success)
-      throw new Error("Backup payload is invalid or incompatible with local mode.");
+      throw new Error(
+        "Файл не похож на резервную копию приложения — выберите файл, сохранённый кнопкой «Скачать backup»."
+      );
     await this.save(migrateLocalState(parsed.data));
     return { restored: true } as TResponse;
   }

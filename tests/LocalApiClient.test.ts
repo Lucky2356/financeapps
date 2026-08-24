@@ -222,6 +222,36 @@ describe("LocalApiClient", () => {
     expect([...months].sort((a, b) => b.localeCompare(a))).toEqual(months);
   });
 
+  it("restores a backup written by the button and by the scheduled job alike", async () => {
+    // Three things write backups: the button writes the state document itself,
+    // while the scheduled backup and the folder sync wrap it as
+    // `{ exportedAt, backup }`. Restore understood only the first, so a file
+    // picked up on the second computer was refused as "invalid".
+    const client = createClient();
+    const account = await seedAccount(client, { name: "Карта", balance: "1000" });
+    const document = await client.get<Record<string, unknown>>("/backup");
+
+    const fresh = createClient();
+    // A file that is not a backup at all is still refused, or a wrong pick
+    // would wipe the data it was meant to bring back.
+    await expect(
+      fresh.post("/backup", { backup: { exportedAt: new Date().toISOString(), rows: [] } })
+    ).rejects.toThrow(/резервную копию/);
+
+    await fresh.post("/backup", {
+      backup: { exportedAt: new Date().toISOString(), backup: document }
+    });
+    const restored = await fresh.get<AccountsPageData>("/accounts");
+    expect(restored.accounts.map((item) => item.name)).toEqual(["Карта"]);
+    expect(restored.accounts[0].id).toBe(account.id);
+
+    // And the bare document, the way the button writes it.
+    const bare = createClient();
+    await bare.post("/backup", { backup: document });
+    const fromBare = await bare.get<AccountsPageData>("/accounts");
+    expect(fromBare.accounts.map((item) => item.name)).toEqual(["Карта"]);
+  });
+
   it("makes the accounts a CSV names when the profile has none", async () => {
     // Moving to a second computer starts with an empty profile: no accounts at
     // all. The import read the file, showed which account every row belonged
@@ -634,7 +664,7 @@ describe("LocalApiClient", () => {
     await expect(client.post("/backup", { backup })).resolves.toEqual({ restored: true });
     await expect(
       client.post("/backup", { backup: { schemaVersion: 1, accounts: "not-an-array" } })
-    ).rejects.toThrow("Backup payload is invalid");
+    ).rejects.toThrow(/резервную копию/);
   });
 
   it("restores compatible v1 local backups through the state migration", async () => {

@@ -35,23 +35,31 @@ const DialogContent = React.forwardRef<
   return (
     <DialogPortal>
       <DialogOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          // A centered dialog taller than the screen used to overflow in BOTH
-          // directions, putting its heading and its save button out of reach on
-          // a phone. Cap the height and scroll inside instead.
-          "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100svh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-lg bg-card p-6 shadow-soft-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          className
-        )}
-        {...props}
-      >
-        {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
-          <X className="size-4" />
-          <span className="sr-only">{t("common.close")}</span>
-        </DialogPrimitive.Close>
-      </DialogPrimitive.Content>
+      {/* A layer that centres by flexbox rather than by `left-1/2` plus a
+          translate. The translate trick only lands in the middle while the
+          fixed containing block IS the viewport — any transformed, filtered or
+          zoomed ancestor moves it, and one desktop window showed the dialog
+          sitting off in a corner because of exactly that. The layer itself
+          passes clicks through, so closing by clicking outside still works. */}
+      <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+        <DialogPrimitive.Content
+          ref={ref}
+          className={cn(
+            // A dialog taller than the screen used to overflow in BOTH
+            // directions, putting its heading and its save button out of reach
+            // on a phone. Cap the height and scroll inside instead.
+            "pointer-events-auto relative grid max-h-[calc(100svh-2rem)] w-full max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-lg bg-card p-6 shadow-soft-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            className
+          )}
+          {...props}
+        >
+          {children}
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
+            <X className="size-4" />
+            <span className="sr-only">{t("common.close")}</span>
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </div>
     </DialogPortal>
   );
 });
