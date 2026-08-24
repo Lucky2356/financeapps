@@ -369,6 +369,9 @@ export const SAVINGS_BALANCE_ID = "__savings__";
 const SAVINGS_ACCOUNT_TYPES = ["SAVINGS", "BROKERAGE"];
 const MONTH_KEY = /^\d{4}-\d{2}$/;
 
+/** What an imported operation is filed under when the file names no account. */
+const DEFAULT_IMPORT_ACCOUNT = "Импорт";
+
 function cellOf(plan: number, fact: number): PlanFactCell {
   const rounded = { plan: roundMoney(plan), fact: roundMoney(fact) };
   return { ...rounded, diff: roundMoney(rounded.plan - rounded.fact) };
@@ -1248,8 +1251,11 @@ export class LocalApiClient implements ApiClient {
   private importCsvRows(state: LocalState, body: unknown) {
     const input = toFormObject(body);
     const rows = JSON.parse(input.rows || "[]") as Array<Record<string, unknown>>;
-    const fallbackAccount = state.accounts.find((account) => !account.isArchived);
-    if (!fallbackAccount) throw new Error("Create an account before importing CSV.");
+    // A fresh profile has no accounts, and the import used to stop there — with
+    // an English sentence, on a screen that had already read the file and shown
+    // which account every row belongs to. The names in the file are enough to
+    // make the accounts, the same way the categories in it are made.
+    let fallbackAccount = state.accounts.find((account) => !account.isArchived);
 
     let imported = 0;
     let skipped = 0;
@@ -1262,13 +1268,13 @@ export class LocalApiClient implements ApiClient {
         continue;
       }
       const type = rawAmount >= 0 ? "INCOME" : "EXPENSE";
-      const accountName = String(row[input.accountColumn ?? ""] ?? "")
-        .trim()
-        .toLowerCase();
-      const account =
-        state.accounts.find(
-          (item) => item.name.toLowerCase() === accountName && !item.isArchived
-        ) ?? fallbackAccount;
+      const accountName = String(row[input.accountColumn ?? ""] ?? "").trim();
+      const account = accountName
+        ? this.findOrCreateAccount(state, accountName)
+        : (fallbackAccount ?? this.findOrCreateAccount(state, DEFAULT_IMPORT_ACCOUNT));
+      // Rows without an account of their own follow the first one there is —
+      // including one this import has just made.
+      fallbackAccount = fallbackAccount ?? account;
       const rawCategoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
       const description = String(row[input.descriptionColumn ?? ""] ?? "").trim();
       // When the CSV row carries no category, try to auto-categorize it from
@@ -1341,6 +1347,28 @@ export class LocalApiClient implements ApiClient {
     }
     state.importBatches = rest;
     return { removed, importBatchId: batch.id };
+  }
+
+  /**
+   * The account a CSV row names, made if it is not there yet. Balances follow
+   * from the operations posted onto it, so a new account starts at zero and
+   * ends up holding exactly what was imported into it.
+   */
+  private findOrCreateAccount(state: LocalState, name: string) {
+    const label = name.trim().slice(0, 60) || DEFAULT_IMPORT_ACCOUNT;
+    const existing = state.accounts.find(
+      (item) => !item.isArchived && item.name.toLowerCase() === label.toLowerCase()
+    );
+    if (existing) return existing;
+    const account = {
+      id: id("account"),
+      name: label,
+      type: "DEBIT_CARD" as const,
+      balance: 0,
+      currency: state.currency
+    };
+    state.accounts = [...state.accounts, account];
+    return account;
   }
 
   private findOrCreateCategory(state: LocalState, label: string, kind: "INCOME" | "EXPENSE") {
