@@ -81,8 +81,8 @@ flowchart TD
     STATE --> IDB[("IndexedDB")]
     LOCAL --> SERVICES["services/* · прогноз, рекомендации, налоги, рынок"]
     SERVICES --> MOEX["MOEX ISS · котировки"]
-    BACKUP["Резервная копия .json"] -. перенос между устройствами .- STATE
-    AI["LLM · opt-in, ключ владельца"] -. -. CLIENT
+    STATE -.-> BACKUP["Резервная копия .json · перенос между устройствами"]
+    CLIENT -.-> AI["LLM · opt-in, ключ владельца"]
 ```
 
 **Как читается страница.** `page.tsx` — серверный компонент, который отдаёт типизированную
