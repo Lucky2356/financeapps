@@ -77,11 +77,28 @@ function countArray(value: unknown) {
   return Array.isArray(value) ? value.length : 0;
 }
 
+/**
+ * The state document inside whatever the file holds.
+ *
+ * Three things in the app write a backup: the "download backup" button writes
+ * the document itself, while the scheduled backup and the folder sync wrap it
+ * as `{ exportedAt, backup }`. Restore only understood the first, so a file
+ * from the other two opened with every count at zero and was then refused —
+ * which is exactly what a person moving to a second computer picks up.
+ */
+function unwrapBackup(payload: unknown): unknown {
+  const data = payload as { backup?: unknown } | null;
+  return data && typeof data === "object" && data.backup && typeof data.backup === "object"
+    ? data.backup
+    : payload;
+}
+
 function summarizeBackupPayload(payload: unknown): BackupPreview {
-  const data = (typeof payload === "object" && payload !== null ? payload : {}) as Record<
+  const envelope = (typeof payload === "object" && payload !== null ? payload : {}) as Record<
     string,
     unknown
   >;
+  const data = (unwrapBackup(payload) ?? {}) as Record<string, unknown>;
   const investments = (
     typeof data.investments === "object" && data.investments !== null ? data.investments : {}
   ) as Record<string, unknown>;
@@ -89,8 +106,8 @@ function summarizeBackupPayload(payload: unknown): BackupPreview {
   return {
     schemaVersion: String(data.schemaVersion ?? "—"),
     exportedAt:
-      typeof data.exportedAt === "string"
-        ? data.exportedAt
+      typeof envelope.exportedAt === "string"
+        ? envelope.exportedAt
         : typeof data.lastBackupAt === "string"
           ? data.lastBackupAt
           : null,
@@ -230,9 +247,9 @@ export function ImportExportPanel({
     if (!file) return;
 
     try {
-      const backup = JSON.parse(file.content) as unknown;
-      setRestorePayload(backup);
-      setRestorePreview(summarizeBackupPayload(backup));
+      const parsed = JSON.parse(file.content) as unknown;
+      setRestorePayload(unwrapBackup(parsed));
+      setRestorePreview(summarizeBackupPayload(parsed));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("imp.toast.readError"));
     }
