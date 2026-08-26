@@ -104,7 +104,14 @@ export class InvestmentAnalysisService {
       });
     }
 
-    const drawdown = this.maxDrawdown(Object.values(historicalPrices).flat());
+    // The deepest fall any one holding went through. Measured over every series
+    // laid end to end, the step from one company's price to the next company's
+    // counted as a crash: SBER around 300 followed by GAZP around 130 read as a
+    // −57% drawdown that never happened to anything.
+    const drawdown = Object.values(historicalPrices).reduce(
+      (deepest, series) => Math.min(deepest, this.maxDrawdown(series)),
+      0
+    );
     if (drawdown < -12) {
       risks.push({
         id: "drawdown",

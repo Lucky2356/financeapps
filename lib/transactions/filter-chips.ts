@@ -84,6 +84,11 @@ export function periodPresetOf(params: URLSearchParams, today: Date = new Date()
 /**
  * A copy of the params with a preset's dates written in. Paging is dropped:
  * page 4 of the old result set means nothing in the new one.
+ *
+ * "Всё" writes `period=all` rather than simply clearing the dates: an empty
+ * period is also what a freshly opened screen has, and the screen fills that in
+ * with the current month. The marker is how asking for everything is told apart
+ * from having asked for nothing yet.
  */
 export function applyPeriodPreset(
   params: URLSearchParams,
@@ -95,12 +100,23 @@ export function applyPeriodPreset(
   if (range) {
     next.set("from", range.from);
     next.set("to", range.to);
+    next.delete("period");
   } else {
     next.delete("from");
     next.delete("to");
+    next.set("period", "all");
   }
   next.delete("page");
   return next;
+}
+
+/**
+ * True when the URL says nothing about a period at all — no dates and no "всё".
+ * The operations screen starts on the current month, so this is the question it
+ * asks before writing that month in.
+ */
+export function periodIsUnset(params: URLSearchParams): boolean {
+  return !params.get("from") && !params.get("to") && params.get("period") !== "all";
 }
 
 /** A copy with one filter written in (empty value removes it), paging reset. */
@@ -108,6 +124,13 @@ export function withFilter(params: URLSearchParams, key: string, value: string):
   const next = new URLSearchParams(params);
   if (value) next.set(key, value);
   else next.delete(key);
+  // Emptying a date by hand is a period of its own — an open end — so the
+  // screen must not read it as "nothing chosen yet" and fill the month back in.
+  if ((key === "from" || key === "to") && !next.get("from") && !next.get("to")) {
+    next.set("period", "all");
+  } else if (key === "from" || key === "to") {
+    next.delete("period");
+  }
   next.delete("page");
   return next;
 }
@@ -129,6 +152,8 @@ export function withoutFilter(
   } else if (key === "period") {
     next.delete("from");
     next.delete("to");
+    // Taking the period off means "за всё время", not "back to the default".
+    next.set("period", "all");
   } else {
     next.delete(key);
   }
@@ -136,15 +161,23 @@ export function withoutFilter(
   return next;
 }
 
-/** Everything except paging and the "all" defaults — the count on the button. */
-export function activeFilterCount(params: URLSearchParams): number {
+/**
+ * Everything except paging and the defaults — the count on the button.
+ *
+ * The current month is where the screen starts, so it is not something the
+ * reader turned on: counting it would leave the badge permanently at one and
+ * say nothing about what is actually narrowing the list.
+ */
+export function activeFilterCount(params: URLSearchParams, today: Date = new Date()): number {
   let count = 0;
   for (const key of ["q", "accountId", "minAmount", "maxAmount", "tag"]) {
     if (params.get(key)) count += 1;
   }
   const type = params.get("type");
   if (type === "INCOME" || type === "EXPENSE" || type === "TRANSFER") count += 1;
-  if (params.get("from") || params.get("to")) count += 1;
+  if ((params.get("from") || params.get("to")) && periodPresetOf(params, today) !== "thisMonth") {
+    count += 1;
+  }
   count += parseCategoryIds(params.get("categoryId")).length;
   return count;
 }

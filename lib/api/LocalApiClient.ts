@@ -1,6 +1,6 @@
 "use client";
 
-import { subMonths } from "date-fns";
+import { differenceInCalendarMonths, subMonths } from "date-fns";
 import { z } from "zod";
 
 import type { ApiClient } from "@/lib/api/ApiClient";
@@ -22,6 +22,7 @@ import type {
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import { storedTransactionDate } from "@/lib/transactions/date";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
@@ -31,9 +32,9 @@ import type { MarketAlert } from "@/lib/market/alerts";
 import { buildAssetKindStructure, buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
 import {
+  convert,
   DEFAULT_CURRENCY_RATES,
   isSupportedCurrency,
-  toBaseAmount,
   type CurrencyCode,
   type CurrencyRates
 } from "@/lib/currency";
@@ -111,7 +112,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -142,6 +143,14 @@ type LocalState = {
   planNotes: Array<{ month: string; note: string; factNote: string }>;
   /** Months pinned into the plan/fact grid by hand (see savePlan/addMonth). */
   planMonths?: string[];
+  /** Top-ups of saving goals — a balance change with no operation behind it. */
+  goalMovements?: Array<{
+    id: string;
+    goalId: string;
+    accountId: string;
+    amount: number;
+    date: string;
+  }>;
   transactions: Array<TransactionRow & { recurringId?: string }>;
   budgets: BudgetsPageData["budgets"];
   goals: GoalsPageData["goals"];
@@ -225,10 +234,10 @@ function recomputeGoal(
   goal: Omit<GoalsPageData["goals"][number], "progress" | "monthlyContribution">
 ): GoalsPageData["goals"][number] {
   const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
-  const months = Math.max(
-    1,
-    Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 30))
-  );
+  // Counted in whole calendar months, the same way the card beside this figure
+  // says how long is left. Thirty-day months and rounding up disagreed with it:
+  // «осталось 2 месяца, по 30 000 ₽» for the 90 000 ₽ still missing.
+  const months = Math.max(1, differenceInCalendarMonths(new Date(goal.deadline), new Date()));
 
   return {
     ...goal,
@@ -446,7 +455,13 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/accounts") return this.accounts(state) as T;
     if (pathname === "/transactions") return this.transactions(state, searchParams) as T;
     if (pathname === "/budgets")
-      return this.budgets(this.inBase(state), searchParams.get("month") ?? undefined) as T;
+      // Moving money between your own accounts is not spending, so a limit must
+      // never be eaten by it — on this screen there is nothing to toggle, the
+      // answer is always no.
+      return this.budgets(
+        this.countingState(this.inBase(state), false),
+        searchParams.get("month") ?? undefined
+      ) as T;
     if (pathname === "/goals") return this.goals(state) as T;
     if (pathname === "/debts") return this.debts(state) as T;
     if (pathname === "/rules") return this.rulesPage(state) as T;
@@ -745,7 +760,15 @@ export class LocalApiClient implements ApiClient {
   private upsertAccount(state: LocalState, body: unknown, method: "POST" | "PUT") {
     const input = toFormObject(body);
     const requestedCurrency = String(input.currency ?? "").toUpperCase();
+    // What is already stored and not in the form stays: the archive flag lives
+    // only on the record, and rebuilding the account from the fields shown
+    // quietly brought an archived account back.
+    const previous =
+      method === "PUT" && input.id
+        ? state.accounts.find((item) => item.id === input.id)
+        : undefined;
     const account = {
+      ...previous,
       id: method === "PUT" && input.id ? input.id : id("account"),
       name: input.name?.trim() || "Новый счет",
       type: input.type || "DEBIT_CARD",
@@ -756,7 +779,10 @@ export class LocalApiClient implements ApiClient {
       // dropped rather than stored as zero.
       ...(() => {
         const rate = Number(input.interestRate);
-        if (!Number.isFinite(rate) || rate <= 0) return {};
+        // Clearing the rate has to clear the terms too, now that the stored
+        // record is the starting point.
+        if (!Number.isFinite(rate) || rate <= 0)
+          return { interestRate: undefined, interestCompounding: undefined };
         const period = input.interestCompounding;
         const compounding: AccountRow["interestCompounding"] =
           period === "QUARTERLY" || period === "YEARLY" ? period : "MONTHLY";
@@ -811,7 +837,8 @@ export class LocalApiClient implements ApiClient {
       id: method === "PUT" && input.id ? input.id : id("tx"),
       amount,
       type,
-      date: new Date(input.date).toISOString(),
+      // The calendar day, always stored the same way — see storedTransactionDate.
+      date: storedTransactionDate(input.date),
       description: input.description?.trim() || null,
       account: { id: account.id, label: account.name },
       category: {
@@ -875,6 +902,15 @@ export class LocalApiClient implements ApiClient {
       throw new Error("Счета списания и зачисления должны отличаться.");
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
 
+    // Money moving between currencies is still the same money: 100 $ leaving a
+    // dollar card arrives as roubles, not as 100 ₽. Both halves used to carry
+    // the typed amount, so a transfer either invented or destroyed the
+    // difference — and the capital line moved on an operation that must leave
+    // it exactly where it was.
+    const credited = roundMoney(
+      convert(amount, fromAccount.currency, toAccount.currency, this.rates(state))
+    );
+
     const transferId = id("transfer");
     const expenseCategory = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
     const incomeCategory = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
@@ -897,7 +933,7 @@ export class LocalApiClient implements ApiClient {
     const income = this.upsertTransaction(
       state,
       {
-        amount: String(amount),
+        amount: String(credited),
         type: "INCOME",
         accountId: toAccount.id,
         categoryId: incomeCategory.id,
@@ -1046,10 +1082,29 @@ export class LocalApiClient implements ApiClient {
     if (amount > account.balance) throw new Error("Недостаточно средств на счёте.");
 
     this.applyBalance(state, account.id, -amount);
+    // The amount is entered in the account's own currency; a goal is kept in the
+    // app's, like every other total.
+    const credited = roundMoney(
+      convert(amount, account.currency, state.currency, this.rates(state))
+    );
+    // A top-up moves money out of a balance and into a goal without recording an
+    // operation, so plan/fact — which winds today's balances back through the
+    // operations — could not see it and reported every earlier month short by
+    // the amount. The movement is written down here so it can.
+    state.goalMovements = [
+      {
+        id: id("goalmove"),
+        goalId: goal.id,
+        accountId: account.id,
+        amount: credited,
+        date: storedTransactionDate(new Date())
+      },
+      ...(state.goalMovements ?? [])
+    ].slice(0, 2000);
     // Spread the goal rather than rebuilding it from five fields: the funding
     // account and the planned contribution live on it too, and listing the
     // fields by hand erased both on every top-up.
-    const updated = recomputeGoal({ ...goal, currentAmount: goal.currentAmount + amount });
+    const updated = recomputeGoal({ ...goal, currentAmount: goal.currentAmount + credited });
     state.goals = state.goals.map((item) => (item.id === goal.id ? updated : item));
     return updated;
   }
@@ -1408,14 +1463,11 @@ export class LocalApiClient implements ApiClient {
       state.riskProfileCode = input.riskProfileCode as LocalState["riskProfileCode"];
     }
     if (input.currency && isSupportedCurrency(input.currency)) {
+      // The app's currency is the one every total is shown in; an account keeps
+      // the money it actually holds. Stamping the new currency onto every
+      // account left 500 000 ₽ reading as 500 000 $, and a rate table nobody
+      // was using — the totals now convert through it instead.
       state.currency = input.currency;
-      // Single-currency model: keep every account on the app currency so the
-      // displayed currency stays consistent. Amounts are not converted — only
-      // the currency label changes (no invented FX rates).
-      state.accounts = state.accounts.map((account) => ({
-        ...account,
-        currency: state.currency
-      }));
     }
     if (input.emergencyFundMonthsTarget !== undefined && input.emergencyFundMonthsTarget !== "") {
       state.emergencyFundMonthsTarget = Number(input.emergencyFundMonthsTarget);
@@ -1585,7 +1637,10 @@ export class LocalApiClient implements ApiClient {
   ): number {
     const rates = this.rates(state);
     return roundMoney(
-      items.reduce((sum, item) => sum + toBaseAmount(item.balance, item.currency, rates), 0)
+      items.reduce(
+        (sum, item) => sum + convert(item.balance, item.currency, state.currency, rates),
+        0
+      )
     );
   }
 
@@ -1709,7 +1764,13 @@ export class LocalApiClient implements ApiClient {
 
   private transactions(state: LocalState, searchParams: URLSearchParams): TransactionsPageData {
     const page = Math.max(1, Number(searchParams.get("page") || 1));
-    const limit = Math.min(100, Math.max(10, Number(searchParams.get("limit") || 20)));
+    // `limit=all` hands back the whole filtered ledger. Exporting and looking
+    // for duplicates need every row, and asking for a page of twenty and
+    // treating it as the ledger is how a CSV export came out twenty rows long.
+    const wantsEverything = searchParams.get("limit") === "all";
+    const limit = wantsEverything
+      ? Number.MAX_SAFE_INTEGER
+      : Math.min(100, Math.max(10, Number(searchParams.get("limit") || 20)));
     const criteria = criteriaFromParams(searchParams);
     const filters = {
       from: criteria.from,
@@ -1746,10 +1807,10 @@ export class LocalApiClient implements ApiClient {
       filters,
       pagination: {
         page,
-        limit,
+        limit: wantsEverything ? filtered.length : limit,
         total: filtered.length,
         hasPreviousPage: page > 1,
-        hasNextPage: start + limit < filtered.length
+        hasNextPage: !wantsEverything && start + limit < filtered.length
       }
     };
   }
@@ -1843,12 +1904,44 @@ export class LocalApiClient implements ApiClient {
 
   private debts(state: LocalState): LiabilitiesPageData {
     const liabilities = state.liabilities.map(recomputeLiability);
+    const active = activeDebts(liabilities);
+    const inAppCurrency = (amount: number, currency: string) =>
+      convert(amount, currency, state.currency, this.rates(state));
+    const balance = this.sumInBase(state, active);
+    const original = roundMoney(
+      active.reduce(
+        (sum, debt) => sum + inAppCurrency(debt.originalAmount || debt.balance, debt.currency),
+        0
+      )
+    );
+    // The nearest payment by the calendar, not the smallest day of the month:
+    // on the 20th, debts due on the 5th and the 27th have the 27th coming next.
+    const upcoming = plannedDebtPayments(active, new Date())[0];
     return {
       source: "database",
       liabilities,
       // Repaid debts stay in the list as history but are no longer owed.
-      total: this.sumInBase(state, activeDebts(liabilities)),
-      currency: state.currency
+      total: balance,
+      currency: state.currency,
+      totals: {
+        balance,
+        original,
+        repaid: roundMoney(Math.max(0, original - balance)),
+        monthly: roundMoney(
+          active.reduce((sum, debt) => sum + inAppCurrency(debt.minPayment, debt.currency), 0)
+        ),
+        rate:
+          balance > 0
+            ? roundMoney(
+                active.reduce(
+                  (sum, debt) =>
+                    sum + debt.interestRate * inAppCurrency(debt.balance, debt.currency),
+                  0
+                ) / balance
+              )
+            : 0,
+        nextDue: upcoming ? { date: upcoming.dueDate, isDue: upcoming.isDue } : null
+      }
     };
   }
 
@@ -1958,7 +2051,7 @@ export class LocalApiClient implements ApiClient {
         // up, and 1 000 $ counted as 1 000 ₽ corrupts every point on the chart.
         accounts: this.accounts(state).accounts.map((account) => ({
           ...account,
-          balance: toBaseAmount(account.balance, account.currency, rates),
+          balance: convert(account.balance, account.currency, state.currency, rates),
           currency: state.currency
         })),
         recurringTransactions: this.recurring(state).recurringTransactions,
@@ -2172,6 +2265,10 @@ export class LocalApiClient implements ApiClient {
   }
 
   private async dashboard(state: LocalState): Promise<DashboardData> {
+    // Every figure on this screen is expressed in the app's currency, so the
+    // sign printed beside it is that one — not the rouble the module-level
+    // constant assumes.
+    const currency = state.currency;
     const finance = this.financeInput(state, true);
     const totalBalance = this.accounts(state).totalBalance;
     const portfolioValue = await this.portfolioValue(state);
@@ -2241,11 +2338,17 @@ export class LocalApiClient implements ApiClient {
           tone: finance.freeCashflow >= 0 ? "success" : "danger"
         }
       ],
-      categoryExpenses: this.budgetRows(state)
-        .filter((budget) => budget.spent > 0)
-        .map((budget) => ({ name: budget.category, value: budget.spent, fill: budget.color })),
-      // Where the money came from, alongside where it went. Expenses are read
-      // off the budget rows; income has no budgets, so it is summed directly.
+      // Both halves are totalled the same way, from the operations themselves.
+      // Spending used to be read off the budget rows, which walk the category
+      // list: anything filed under a category the list no longer holds was
+      // missing from the ring, and the ring came out in the order the categories
+      // happen to be stored in rather than largest first.
+      categoryExpenses: categoryBreakdown(state.transactions, {
+        type: "EXPENSE",
+        month: monthKeyOf(new Date()),
+        colorOf: (categoryId) => state.categories.find((item) => item.id === categoryId)?.color
+      }),
+      // Where the money came from, alongside where it went.
       categoryIncome: categoryBreakdown(state.transactions, {
         type: "INCOME",
         month: monthKeyOf(new Date()),
@@ -2507,10 +2610,14 @@ export class LocalApiClient implements ApiClient {
 
     const now = { main: 0, savings: 0 };
     for (const account of live) {
-      const base = toBaseAmount(account.balance, account.currency, rates);
+      const base = convert(account.balance, account.currency, state.currency, rates);
       if (group.get(account.id)) now.savings += base;
       else now.main += base;
     }
+    // Money put into a goal is still savings — it left a balance and went into a
+    // jar, and counting only the balances made the row drop by the size of every
+    // top-up with nothing on the income or spending side to explain it.
+    for (const goal of state.goals) now.savings += goal.currentAmount;
 
     // Everything recorded since, per month and per group — in base currency, or
     // a foreign-currency account would be wound back by raw units of its own.
@@ -2525,6 +2632,18 @@ export class LocalApiClient implements ApiClient {
       const signed = transaction.type === "INCOME" ? transaction.amount : -transaction.amount;
       if (savings) bucket.savings += signed;
       else bucket.main += signed;
+      flow.set(month, bucket);
+    }
+
+    // A goal top-up is a move between the two halves of this row: it leaves the
+    // account it came from and joins the goals counted above.
+    for (const movement of state.goalMovements ?? []) {
+      const savings = group.get(movement.accountId);
+      const month = movement.date.slice(0, 7);
+      const bucket = flow.get(month) ?? { main: 0, savings: 0 };
+      if (savings === false) bucket.main -= movement.amount;
+      else if (savings === true) bucket.savings -= movement.amount;
+      bucket.savings += movement.amount;
       flow.set(month, bucket);
     }
 
@@ -2676,9 +2795,13 @@ export class LocalApiClient implements ApiClient {
       existing.total += t.amount;
       catTotals.set(t.category.id, existing);
     }
+    // Every category, largest first. Keeping only the six biggest here meant the
+    // ring on the operations screen added up to less than the month it claimed
+    // to show — «всего 102 079 ₽» beside a spend of 111 234 ₽, the difference
+    // being the eight categories that were never drawn. Screens that want a
+    // short list cut it themselves and say what the rest is.
     const topExpenseCategories = [...catTotals.values()]
       .sort((a, b) => b.total - a.total)
-      .slice(0, 6)
       .map((item) => ({
         ...item,
         share: totalExpense > 0 ? Math.round((item.total / totalExpense) * 1000) / 10 : 0
@@ -2807,7 +2930,10 @@ export class LocalApiClient implements ApiClient {
       Math.max(monthlyCashflow.length, 1);
     const emergencyFund = this.sumInBase(
       state,
-      state.accounts.filter((account) => account.type === "SAVINGS")
+      // Archived accounts are outside capital, so they cannot back the reserve
+      // either — the health score and the dashboard card have to agree on what
+      // the cushion is.
+      state.accounts.filter((account) => account.type === "SAVINGS" && !account.isArchived)
     );
     const softExpense = expenseRows
       .filter((row) => {
@@ -2842,9 +2968,14 @@ export class LocalApiClient implements ApiClient {
         currentMonth.income > 0 ? percent(essentialExpense, currentMonth.income) : 0,
       subscriptionAndEntertainmentShare:
         currentMonth.expense > 0 ? percent(softExpense, currentMonth.expense) : 0,
-      monthlyDebtPayments: activeDebts(state.liabilities).reduce(
-        (sum, item) => sum + item.minPayment,
-        0
+      // A debt is kept in its own currency; the income it is compared against is
+      // in the app's.
+      monthlyDebtPayments: this.sumInBase(
+        state,
+        activeDebts(state.liabilities).map((item) => ({
+          balance: item.minPayment,
+          currency: item.currency
+        }))
       ),
       goals: this.goals(state).goals.map((goal) => ({
         title: goal.title,

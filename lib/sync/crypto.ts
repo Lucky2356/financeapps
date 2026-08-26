@@ -30,7 +30,14 @@ function fromBase64(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+async function deriveKey(
+  passphrase: string,
+  salt: Uint8Array<ArrayBuffer>,
+  // The envelope says how many rounds made it, and decryption has to believe it
+  // rather than the current constant — otherwise raising this number would lock
+  // every file written before the change.
+  iterations: number = KDF_ITERATIONS
+): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(passphrase),
@@ -39,7 +46,7 @@ async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>): Pro
     ["deriveKey"]
   );
   return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt, iterations: KDF_ITERATIONS, hash: "SHA-256" },
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
@@ -80,7 +87,13 @@ export async function decryptString(payload: string, passphrase: string): Promis
   if (envelope.alg !== "AES-GCM" || !envelope.salt || !envelope.iv || !envelope.ct) {
     throw new Error("Неизвестный формат файла синхронизации.");
   }
-  const key = await deriveKey(passphrase, fromBase64(envelope.salt));
+  const rounds =
+    typeof envelope.iterations === "number" &&
+    Number.isFinite(envelope.iterations) &&
+    envelope.iterations > 0
+      ? envelope.iterations
+      : KDF_ITERATIONS;
+  const key = await deriveKey(passphrase, fromBase64(envelope.salt), rounds);
   try {
     const plaintext = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: fromBase64(envelope.iv) },

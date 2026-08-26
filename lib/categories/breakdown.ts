@@ -82,6 +82,7 @@ export function topCategories(
      */
     until?: string;
     colorOf: (categoryId: string) => string | undefined;
+    /** How many to list. Omitted (or 0) means every category with money in it. */
     limit?: number;
   }
 ): RankedCategory[] {
@@ -111,7 +112,7 @@ export function topCategories(
 
   return [...totals.values()]
     .sort((a, b) => b.total - a.total)
-    .slice(0, options.limit ?? 6)
+    .slice(0, options.limit && options.limit > 0 ? options.limit : totals.size)
     .map((item) => ({
       ...item,
       total: roundMoney(item.total),

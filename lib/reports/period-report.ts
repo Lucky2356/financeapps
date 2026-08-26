@@ -125,7 +125,10 @@ function yearTotals(transactions: ReportTransaction[], year: number): PeriodTota
   let expense = 0;
   for (const transaction of transactions) {
     if (Number(transaction.date.slice(0, 4)) !== year) continue;
-    const amount = Math.abs(transaction.amount);
+    // The same figure the report above it adds up — a dollar operation counted
+    // as raw units made the year-on-year block disagree with the period totals
+    // beside it.
+    const amount = Math.abs(countableAmount(transaction));
     if (transaction.type === "INCOME") income += amount;
     else if (transaction.type === "EXPENSE") expense += amount;
   }

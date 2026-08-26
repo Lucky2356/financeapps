@@ -52,6 +52,35 @@ async function ledgerInTwoCurrencies() {
 }
 
 describe("money in more than one currency", () => {
+  it("keeps each account's own currency when the display one changes", async () => {
+    const { client, expected } = await ledgerInTwoCurrencies();
+
+    // Switching the currency of the app used to stamp it onto every account
+    // without touching the amounts, so 100 000 ₽ started reading as 100 000 $.
+    await client.put("/settings", { currency: "USD" });
+
+    const accounts = await client.get<{
+      accounts: Array<{ name: string; currency: string; balance: number }>;
+      totalBalance: number;
+      currency: string;
+    }>("/accounts");
+    expect(accounts.currency).toBe("USD");
+    expect(accounts.accounts.find((account) => account.name === "Рублёвая карта")?.currency).toBe(
+      "RUB"
+    );
+    expect(accounts.accounts.find((account) => account.name === "Долларовая карта")?.currency).toBe(
+      "USD"
+    );
+    // 100 000 ₽ − 1 000 ₽ spent = 99 000 ₽ → 1 100 $, plus 900 $ left on the
+    // dollar card. Totals are converted, not relabelled.
+    expect(accounts.totalBalance).toBeCloseTo(99_000 / USD_RATE + 900, 2);
+
+    // And the same for the operations: the month is now counted in dollars.
+    const analytics = await client.get<AnalyticsData>("/analytics");
+    const thisMonth = analytics.monthlyCashflow[analytics.monthlyCashflow.length - 1];
+    expect(thisMonth.expense).toBeCloseTo(expected / USD_RATE, 2);
+  });
+
   it("adds up the month on the analytics screen by converting first", async () => {
     const { client, expected } = await ledgerInTwoCurrencies();
 

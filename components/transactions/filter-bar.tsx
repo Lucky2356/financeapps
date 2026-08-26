@@ -27,7 +27,9 @@ import {
   applyPeriodPreset,
   describeFilters,
   PERIOD_PRESETS,
+  periodIsUnset,
   periodPresetOf,
+  periodRange,
   withFilter,
   type ChipKind,
   type PeriodPresetId
@@ -43,10 +45,15 @@ const SAVED_FILTERS_KEY = "tx-saved-filters";
  *
  * They used to hide behind a window — the owner had to open it, change
  * something, and close it again to see the result. Nothing hides now: category,
- * period, account and type are on the line itself, and the gear next to them
- * holds only what is asked for rarely (own dates, amount range, tag, page size,
- * saved filters). Every control writes its parameter the moment it is touched;
- * there is no "apply" anywhere.
+ * the two ends of the period, account and type are on the line itself, and the
+ * gear next to them holds only what is asked for rarely (named periods, amount
+ * range, tag, page size, saved filters). Every control writes its parameter the
+ * moment it is touched; there is no "apply" anywhere.
+ *
+ * The screen opens on the current month rather than on the whole ledger: the
+ * question people arrive with is what has happened this month. "За всё время"
+ * is one click away and says so in the URL, which is how it is told apart from
+ * a period nobody has chosen yet.
  *
  * Filtering itself still lives in the URL (see `lib/transactions/filter.ts`) —
  * this is only the remote control for it.
@@ -81,6 +88,20 @@ export function TransactionFilterBar({
   );
 
   const [query, setQuery] = useDebouncedParam(searchParams.get("q") ?? "", "q", setParam);
+
+  // Arriving with nothing said about a period means the current month — written
+  // into the URL rather than assumed, so the dates in the fields, the chips, the
+  // list and any link copied out of here all agree on what is being shown.
+  useEffect(() => {
+    if (!periodIsUnset(new URLSearchParams(paramsString))) return;
+    const month = periodRange("thisMonth");
+    if (!month) return;
+    const next = new URLSearchParams(paramsString);
+    next.set("from", month.from);
+    next.set("to", month.to);
+    router.replace(`/transactions?${next.toString()}`);
+  }, [paramsString, router]);
+
   const preset = periodPresetOf(searchParams);
   const chips = describeFilters(searchParams, {
     categories,
@@ -103,33 +124,28 @@ export function TransactionFilterBar({
           onChange={(ids) => setParam("categoryId", ids.join(","))}
         />
 
-        <Select
-          value={preset}
-          onValueChange={(value) =>
-            go(
-              applyPeriodPreset(
-                new URLSearchParams(paramsString),
-                value as Exclude<PeriodPresetId, "custom">
-              )
-            )
-          }
-        >
-          <SelectTrigger className="h-9 w-auto min-w-[8.5rem]" aria-label={t("tx.period")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PERIOD_PRESETS.map((id) => (
-              <SelectItem key={id} value={id}>
-                {t(`tx.period.${id}`)}
-              </SelectItem>
-            ))}
-            {/* Offered only once the dates are already their own thing: picking
-                it from a named period would say nothing about which dates. */}
-            {preset === "custom" ? (
-              <SelectItem value="custom">{t("tx.period.custom")}</SelectItem>
-            ) : null}
-          </SelectContent>
-        </Select>
+        {/* The period as the two dates it actually is. A named period fills
+            both in (the gear holds the names); typing over one of them keeps
+            the other. */}
+        <div className="flex items-center gap-1">
+          <Input
+            type="date"
+            aria-label={t("tx.from")}
+            value={searchParams.get("from") ?? ""}
+            max={searchParams.get("to") || undefined}
+            onChange={(event) => setParam("from", event.target.value)}
+            className="h-9 w-[9.5rem] px-2"
+          />
+          <span className="text-muted-foreground">—</span>
+          <Input
+            type="date"
+            aria-label={t("tx.to")}
+            value={searchParams.get("to") ?? ""}
+            min={searchParams.get("from") || undefined}
+            onChange={(event) => setParam("to", event.target.value)}
+            className="h-9 w-[9.5rem] px-2"
+          />
+        </div>
 
         <Select
           value={accountId}
@@ -364,31 +380,27 @@ function MoreFilters({
       </button>
       {open ? (
         <div className="absolute right-0 z-50 mt-1 w-[19rem] max-w-[calc(100vw-2rem)] space-y-3 rounded-md border bg-popover p-3 text-popover-foreground shadow-lg">
+          {/* The dates themselves are on the bar; these only fill them in. */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("tx.period")}</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {PERIOD_PRESETS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onGo(applyPeriodPreset(new URLSearchParams(params), id))}
+                  className={cn(
+                    "rounded-md border px-2 py-1 text-xs transition-colors hover:bg-muted",
+                    periodPresetOf(params) === id && "border-primary bg-primary/10 text-primary"
+                  )}
+                >
+                  {t(`tx.period.${id}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="flt-from" className="text-xs">
-                {t("tx.from")}
-              </Label>
-              <Input
-                id="flt-from"
-                type="date"
-                className="h-9"
-                value={params.get("from") ?? ""}
-                onChange={(event) => onSetParam("from", event.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="flt-to" className="text-xs">
-                {t("tx.to")}
-              </Label>
-              <Input
-                id="flt-to"
-                type="date"
-                className="h-9"
-                value={params.get("to") ?? ""}
-                onChange={(event) => onSetParam("to", event.target.value)}
-              />
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="flt-min" className="text-xs">
                 {t("tx.minAmount")}

@@ -151,8 +151,12 @@ export function DistributeCashflow({ freeCashflowLabel }: { freeCashflowLabel: s
                   <Label>{t("common.amount")}</Label>
                   <Input
                     type="number"
-                    min="1"
-                    step="100"
+                    min="0.01"
+                    // step="0.01", not a round hundred: a coarse step makes the
+                    // browser reject everything between the steps, and with
+                    // min="1" as the base even 5 000 ₽ counted as invalid — the
+                    // form simply refused to submit.
+                    step="0.01"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder={t("goal.deposit.placeholder")}

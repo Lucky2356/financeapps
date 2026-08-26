@@ -124,6 +124,25 @@ export type LiabilitiesPageData = {
   liabilities: LiabilityRow[];
   total: number;
   currency: string;
+  /**
+   * The head of the screen, totalled where the exchange rates live. A debt is
+   * kept in its own currency, so adding the raw numbers up in the component
+   * gave one figure for a mortgage in roubles and a loan in dollars.
+   */
+  totals?: {
+    balance: number;
+    original: number;
+    repaid: number;
+    monthly: number;
+    /** Average annual rate, weighted by what is still owed. */
+    rate: number;
+    /**
+     * The nearest payment there is, as a date rather than a day of the month —
+     * with a flag for one whose day has come and gone unpaid, because "23
+     * числа" printed on the 26th says nothing useful.
+     */
+    nextDue: { date: string; isDue: boolean } | null;
+  };
 };
 
 export type RulesPageData = {

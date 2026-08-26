@@ -51,20 +51,19 @@ test.describe("быстрое добавление", () => {
       0
     );
     await expect(page.locator('main [aria-label="Перевод"]')).toHaveCount(0);
-    await expect(page.locator('main [aria-label="Разбить"]')).toHaveCount(0);
   });
 
-  test("перевод и разбивка чека живут в круглой кнопке", async ({ page }) => {
+  test("перевод живёт в круглой кнопке, и больше ничего", async ({ page }) => {
     await openSettled(page, "/");
     await page.getByRole("button", { name: "Быстрое добавление операции" }).click();
 
     const dialog = page.getByRole("dialog");
+    // Three ways to record something: spending, income, and money changing
+    // pocket. "Разбить" is gone — it was a fourth kind of form for what is
+    // simply several operations.
+    await expect(dialog.getByRole("button", { name: "Расход", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Доход", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Перевод", exact: true })).toBeVisible();
-
-    // A split is two or more expense rows sharing one receipt; the form has to
-    // offer both rows before it can be submitted.
-    await dialog.getByRole("button", { name: "Разбить", exact: true }).click();
-    await expect(dialog.getByRole("button", { name: "Добавить строку" })).toBeVisible();
-    await expect(dialog.getByLabel("Сумма").first()).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Разбить", exact: true })).toHaveCount(0);
   });
 });

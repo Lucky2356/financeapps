@@ -10,7 +10,7 @@ const { apiClientMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api/client", () => ({ apiClient: apiClientMock }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/transactions",
   useSearchParams: () => new URLSearchParams("")
 }));
