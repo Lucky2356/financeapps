@@ -120,6 +120,31 @@ describe("runLocalStateMigrations", () => {
     expect(categories[2].icon).toBe("Plane");
   });
 
+  it("puts every operation on the day it is shown on (v13)", () => {
+    // What the app used to write for itself: a local midnight serialised into
+    // UTC. East of Greenwich that is the evening before, so the row read
+    // «1 сентября» in the ledger and was counted in August everywhere else.
+    const localMidnight = new Date(2026, 8, 1);
+    const state: RawLocalState = {
+      schemaVersion: 12,
+      transactions: [
+        { id: "tx-1", date: localMidnight.toISOString(), amount: 100 },
+        { id: "tx-2", date: "2026-09-02T00:00:00.000Z", amount: 200 },
+        { id: "tx-3", amount: 300 }
+      ]
+    };
+    const migrated = runLocalStateMigrations(state, 13);
+
+    expect(migrated.schemaVersion).toBe(13);
+    const rows = migrated.transactions as Array<{ id: string; date?: string }>;
+    // The day a person sees, kept as the day everything counts.
+    expect(rows[0].date).toBe("2026-09-01T00:00:00.000Z");
+    // A date that was already a plain UTC midnight is left exactly as it was.
+    expect(rows[1].date).toBe("2026-09-02T00:00:00.000Z");
+    // A row without a date is not invented one.
+    expect(rows[2].date).toBeUndefined();
+  });
+
   it("defaults a missing schemaVersion to 1 and migrates from there", () => {
     const legacy: RawLocalState = { accounts: [] };
     const migrated = runLocalStateMigrations(legacy);
