@@ -2617,7 +2617,11 @@ export class LocalApiClient implements ApiClient {
     // Money put into a goal is still savings — it left a balance and went into a
     // jar, and counting only the balances made the row drop by the size of every
     // top-up with nothing on the income or spending side to explain it.
-    for (const goal of state.goals) now.savings += goal.currentAmount;
+    //
+    // What the app actually moved, not what a goal says it holds: a target
+    // whose current amount was typed in by hand is money still sitting on some
+    // account, and counting it here would count it twice.
+    for (const movement of state.goalMovements ?? []) now.savings += movement.amount;
 
     // Everything recorded since, per month and per group — in base currency, or
     // a foreign-currency account would be wound back by raw units of its own.

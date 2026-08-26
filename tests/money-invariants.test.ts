@@ -93,6 +93,28 @@ describe("putting money into a goal", () => {
   });
 });
 
+describe("a goal filled in by hand", () => {
+  it("does not add money to plan/fact that never left an account", async () => {
+    const api = await client();
+    await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "100000" });
+    const before = await api.get<PlanFactPageData>("/plan");
+    const monthBefore = before.months.find((entry) => entry.month === monthKey());
+
+    // A target whose current amount is typed in describes money that is still
+    // on an account — counting it beside the balances would count it twice.
+    await api.post("/goals", {
+      title: "Уже накоплено",
+      targetAmount: "300000",
+      currentAmount: "50000",
+      deadline: new Date(new Date().getFullYear() + 1, 0, 1).toISOString().slice(0, 10)
+    });
+
+    const after = await api.get<PlanFactPageData>("/plan");
+    const monthAfter = after.months.find((entry) => entry.month === monthKey());
+    expect(monthAfter?.savings.fact).toBe(monthBefore?.savings.fact ?? 0);
+  });
+});
+
 describe("the head of the debts screen", () => {
   it("names the next payment by the calendar and converts what is owed", async () => {
     const api = await client();
