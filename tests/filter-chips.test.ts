@@ -88,8 +88,19 @@ describe("the count on the button", () => {
     const params = new URLSearchParams(
       "from=2026-08-01&to=2026-08-31&categoryId=cat-food,cat-fun&type=EXPENSE&q=кофе"
     );
-    // period + two categories + type + search
-    expect(activeFilterCount(params)).toBe(5);
+    // period + two categories + type + search, judged from a day outside that
+    // period so it is a chosen one rather than the screen's own default.
+    expect(activeFilterCount(params, new Date(2026, 10, 15))).toBe(5);
+  });
+
+  it("does not count the month the screen opens on", () => {
+    // Every visit starts on the current month, so counting it would leave the
+    // badge stuck at one with nothing actually filtered.
+    const today = new Date(2026, 7, 20);
+    const params = new URLSearchParams("from=2026-08-01&to=2026-08-31");
+    expect(activeFilterCount(params, today)).toBe(0);
+    params.set("type", "EXPENSE");
+    expect(activeFilterCount(params, today)).toBe(1);
   });
 });
 

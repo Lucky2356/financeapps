@@ -307,6 +307,14 @@ export const planNoteSchema = z.object({
   factNote: z.string().trim().max(500).default("")
 });
 
+export const goalMovementSchema = z.object({
+  id: z.string().min(1),
+  goalId: z.string().min(1),
+  accountId: z.string().min(1),
+  amount: z.coerce.number().finite(),
+  date: z.string().min(1)
+});
+
 export const localStateSchema = z.object({
   schemaVersion: z.union([
     z.literal(1),
@@ -320,7 +328,8 @@ export const localStateSchema = z.object({
     z.literal(9),
     z.literal(10),
     z.literal(11),
-    z.literal(12)
+    z.literal(12),
+    z.literal(13)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
@@ -362,6 +371,11 @@ export const localStateSchema = z.object({
   // want to fill in by hand. A month with operations or a plan appears without
   // being listed here.
   planMonths: z.array(z.string().regex(/^\d{4}-\d{2}$/)).default([]),
+  // Money moved from an account into a saving goal. It changes a balance without
+  // recording an operation, so plan/fact — which winds today's balances back
+  // through the operations — needs the movement written down to stay right about
+  // the months before it.
+  goalMovements: z.array(goalMovementSchema).default([]),
   transactions: z.array(transactionRowSchema).default([]),
   budgets: z.array(budgetRowSchema).default([]),
   goals: z.array(goalRowSchema).default([]),

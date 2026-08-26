@@ -43,7 +43,15 @@ const TAB = {
   accounts: { href: "/accounts", label: "Счета", labelKey: "nav.accounts", icon: WalletCards },
   debts: { href: "/debts", label: "Долги", labelKey: "nav.debts", icon: CreditCard },
   categories: { href: "/categories", label: "Категории", labelKey: "nav.categories", icon: Tag },
-  import: { href: "/import", label: "Импорт", labelKey: "nav.import", icon: Download },
+  // The import screen was a page of its own next to a settings tab called
+  // «Данные» that did the same kind of work. There is one place for data now;
+  // this tab opens it.
+  import: {
+    href: "/settings?section=data",
+    label: "Данные",
+    labelKey: "nav.import",
+    icon: Download
+  },
   analytics: {
     href: "/analytics",
     label: "Аналитика",

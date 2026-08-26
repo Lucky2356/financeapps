@@ -2,6 +2,7 @@
 
 import { Edit2, ReceiptText, Sparkles, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
+import { CategoryOptionLabel } from "@/components/category-option";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
@@ -434,7 +435,11 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                     <SelectContent>
                       {pageData.categories.map((category) => (
                         <SelectItem key={category.id} value={category.id}>
-                          {category.label}
+                          <CategoryOptionLabel
+                            label={category.label}
+                            color={category.color}
+                            icon={category.icon}
+                          />
                         </SelectItem>
                       ))}
                     </SelectContent>

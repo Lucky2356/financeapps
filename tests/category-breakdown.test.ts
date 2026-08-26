@@ -76,17 +76,22 @@ describe("top categories", () => {
     expect(ranked.map((item) => item.total)).toEqual([92000, 30000]);
   });
 
-  it("keeps the list short", () => {
+  it("lists every category, and only as many as asked for", () => {
     const many = Array.from({ length: 10 }, (_, index) => ({
       type: "INCOME",
       amount: 100 * (index + 1),
       date: "2026-08-01",
       category: { id: `c${index}`, label: `Категория ${index}` }
     }));
-    expect(topCategories(many, { type: "INCOME", since: "2026-08", colorOf }).length).toBe(6);
+    // Without a limit the ranking is complete: a ring drawn from it adds up to
+    // the period it claims to show.
+    expect(topCategories(many, { type: "INCOME", since: "2026-08", colorOf }).length).toBe(10);
     expect(
       topCategories(many, { type: "INCOME", since: "2026-08", colorOf, limit: 3 }).length
     ).toBe(3);
+    // The shares still describe the whole period, whatever is listed.
+    const short = topCategories(many, { type: "INCOME", since: "2026-08", colorOf, limit: 3 });
+    expect(short.reduce((sum, item) => sum + item.share, 0)).toBeLessThan(100);
   });
 
   it("reports zero shares instead of dividing by nothing", () => {

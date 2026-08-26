@@ -31,7 +31,8 @@ test("боковая панель показывает разделы, а Учё
   const tabs = page.locator('[data-testid="hub-tabs"][data-surface="desktop"]');
   await expect(tabs.getByRole("link", { name: "Операции" })).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Долги" })).toBeVisible();
-  await expect(tabs.getByRole("link", { name: "Импорт" })).toBeVisible();
+  // Loading and unloading data is one place now — the settings tab.
+  await expect(tabs.getByRole("link", { name: "Данные" })).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Счета" })).toBeHidden();
 });
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
+import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
 import { toast } from "sonner";
 
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
@@ -18,6 +18,13 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
@@ -37,12 +44,6 @@ import type {
 /** "2026-08" for a date, the same key the plan grid is indexed by. */
 function monthKeyOf(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-/** The month `step` months after `key` (negative steps go back). */
-function shiftMonth(key: string, step: number): string {
-  const [year, month] = key.split("-").map(Number);
-  return monthKeyOf(new Date(year, month - 1 + step, 1));
 }
 
 // Plan against fact, laid out like the spreadsheet this screen replaces: every
@@ -188,9 +189,8 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
 
           {/* One button, and the months to choose from underneath it — instead
               of a date field to fill in before pressing it. */}
-          <AddMonthMenu
+          <AddMonthDialog
             present={new Set(data.months.map((month) => month.month))}
-            monthLabel={monthLabel}
             onPick={(month) => void addMonth(month)}
           />
         </div>
@@ -334,87 +334,98 @@ function MonthSelect({
  * a half back, minus the ones already in the grid: pressing the button used to
  * add whatever a date field beside it happened to hold.
  */
-function AddMonthMenu({
+// Adding a month is choosing a month and a year, so the picker says so: the
+// year on a stepper, its twelve months as a grid. The list it replaced could
+// only offer the months around today — a plan for a year out meant scrolling a
+// column of names, and the years were nowhere to be seen.
+function AddMonthDialog({
   present,
-  monthLabel,
   onPick
 }: {
   present: Set<string>;
-  monthLabel: (key: string) => string;
   onPick: (month: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
 
-  useEffect(() => {
-    if (!open) return;
-    function onPointer(event: PointerEvent) {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const current = monthKeyOf(new Date());
-  const ahead: string[] = [];
-  for (let step = 1; step <= 12; step += 1) {
-    const month = shiftMonth(current, step);
-    if (!present.has(month)) ahead.push(month);
-  }
-  const back: string[] = [];
-  for (let step = 0; step <= 18; step += 1) {
-    const month = shiftMonth(current, -step);
-    if (!present.has(month)) back.push(month);
-  }
-
-  const groups = [
-    { id: "ahead", title: t("plan.addMonth.ahead"), months: ahead },
-    { id: "back", title: t("plan.addMonth.back"), months: back }
-  ].filter((group) => group.months.length > 0);
+  const monthNames = Array.from({ length: 12 }, (_, index) =>
+    new Date(2020, index, 1).toLocaleDateString(locale === "en" ? "en" : "ru", { month: "short" })
+  );
+  const key = (index: number) => `${year}-${String(index + 1).padStart(2, "0")}`;
+  const currentKey = monthKeyOf(today);
 
   return (
-    <div className="relative" ref={ref}>
-      <Button variant="outline" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <Plus className="size-4" />
-        {t("plan.addMonth")}
-      </Button>
-      {open ? (
-        <div
-          data-testid="add-month-menu"
-          className="absolute right-0 z-50 mt-1 max-h-72 w-56 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
-        >
-          {groups.map((group) => (
-            <div key={group.id} className="mb-1 last:mb-0">
-              <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                {group.title}
-              </p>
-              {group.months.map((month) => (
-                <button
-                  key={month}
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onPick(month);
-                  }}
-                  // `capitalize` would also raise the "г." after the year.
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm first-letter:uppercase hover:bg-accent"
-                >
-                  {monthLabel(month)}
-                </button>
-              ))}
-            </div>
-          ))}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setYear(today.getFullYear());
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Plus className="size-4" />
+          {t("plan.addMonth")}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm" data-testid="add-month-dialog">
+        <DialogHeader>
+          <DialogTitle>{t("plan.addMonth.title")}</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex items-center justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={t("plan.addMonth.prevYear")}
+            onClick={() => setYear((value) => value - 1)}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="num text-base font-semibold">{year}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={t("plan.addMonth.nextYear")}
+            onClick={() => setYear((value) => value + 1)}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
         </div>
-      ) : null}
-    </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          {monthNames.map((name, index) => {
+            const month = key(index);
+            const already = present.has(month);
+            return (
+              <button
+                key={month}
+                type="button"
+                disabled={already}
+                onClick={() => {
+                  setOpen(false);
+                  onPick(month);
+                }}
+                title={already ? t("plan.addMonth.already") : undefined}
+                className={cn(
+                  "rounded-md border px-2 py-2 text-sm capitalize transition-colors",
+                  already
+                    ? "cursor-not-allowed border-dashed text-muted-foreground/60"
+                    : "hover:border-primary hover:bg-primary/10 hover:text-primary",
+                  month === currentKey && !already && "border-primary/60 font-medium"
+                )}
+              >
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

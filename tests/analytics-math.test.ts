@@ -59,6 +59,55 @@ describe("analytics figures", () => {
     expect(analytics.avgSavingsRate).toBe(50);
   });
 
+  it("ranks every category, so a ring drawn from it covers the whole period", async () => {
+    const client = createClient();
+    const { account, salary, food } = await seed(client);
+
+    // Nine categories of spending, which is more than the six the ranking used
+    // to keep — the three smallest were nowhere, while the total above the ring
+    // still counted them.
+    for (let index = 0; index < 9; index += 1) {
+      const category = await client.post<{ id: string }>("/categories", {
+        name: `Категория ${index}`,
+        kind: "EXPENSE",
+        color: "#64748b"
+      });
+      await client.post("/transactions", {
+        amount: String(1000 * (index + 1)),
+        type: "EXPENSE",
+        accountId: account.id,
+        categoryId: category.id,
+        date: today(),
+        description: `Расход ${index}`
+      });
+    }
+    await client.post("/transactions", {
+      amount: "500",
+      type: "EXPENSE",
+      accountId: account.id,
+      categoryId: food?.id,
+      date: today(),
+      description: "Продукты"
+    });
+    await client.post("/transactions", {
+      amount: "100000",
+      type: "INCOME",
+      accountId: account.id,
+      categoryId: salary?.id,
+      date: today(),
+      description: "Зарплата"
+    });
+
+    const analytics = await client.get<AnalyticsData>("/analytics");
+    const ring = analytics.topExpenseCategories.reduce((sum, item) => sum + item.total, 0);
+    const spent = analytics.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0);
+    expect(analytics.topExpenseCategories.length).toBe(10);
+    expect(ring).toBeCloseTo(spent, 2);
+    // Largest first — the ring and its legend are read top down.
+    const totals = analytics.topExpenseCategories.map((item) => item.total);
+    expect(totals).toEqual([...totals].sort((left, right) => right - left));
+  });
+
   it("names no best month when there is nothing to compare", async () => {
     const client = createClient();
     await seed(client);

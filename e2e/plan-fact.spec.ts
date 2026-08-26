@@ -63,7 +63,11 @@ test("план сохраняется и месяц можно добавить 
   const rows = page.locator('tr[data-band="plan"]');
   const before = await rows.count();
   await page.getByRole("button", { name: "Добавить месяц" }).click();
-  await page.getByTestId("add-month-menu").getByRole("button").first().click();
+  const picker = page.getByTestId("add-month-dialog");
+  await expect(picker).toBeVisible();
+  // Next year, so the month picked is certainly not in the table yet.
+  await picker.getByRole("button", { name: "Следующий год" }).click();
+  await picker.getByRole("button", { name: /^(янв|jan)/i }).click();
   await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
 
   // A pinned month belongs to the data, not to the session.
@@ -80,14 +84,16 @@ test("месяц можно добавить назад, отфильтрова�
   const before = await rows.count();
 
   // A month in the past, which nothing in the ledger would have produced. The
-  // button opens a list of months rather than expecting a date to be typed.
+  // button opens a picker with the year on a stepper and its twelve months
+  // beside it, rather than a list of the months around today.
   await page.getByRole("button", { name: "Добавить месяц" }).click();
-  const menu = page.getByTestId("add-month-menu");
-  await expect(menu).toBeVisible();
-  await menu.getByRole("button").last().click();
+  const picker = page.getByTestId("add-month-dialog");
+  await expect(picker).toBeVisible();
+  await picker.getByRole("button", { name: "Предыдущий год" }).click();
+  await picker.getByRole("button", { name: /^(янв|jan)/i }).click();
   await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
 
-  // The oldest row is the one just added — it is 18 months back.
+  // The oldest row is the one just added — it is a year and more back.
   const oldest = await rows.last().getAttribute("data-month");
   expect(oldest).toBeTruthy();
 

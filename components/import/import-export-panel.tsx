@@ -148,7 +148,10 @@ export function ImportExportPanel({
           hasNextPage: false
         }
       },
-      "/transactions"
+      // The whole ledger, not the first page of it: this panel exports it and
+      // looks through it for duplicates, and a page of twenty made a CSV export
+      // twenty rows long and «пропустить дубликаты» find nothing.
+      "/transactions?limit=all"
     );
   const [fields, setFields] = useState<string[]>([]);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
@@ -170,8 +173,8 @@ export function ImportExportPanel({
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   // Rows that match an already-stored transaction or repeat earlier in the file.
   const duplicateIndices = useMemo(
-    () => mapper.findDuplicateRows(rows, mapping, transactions),
-    [mapper, rows, mapping, transactions]
+    () => mapper.findDuplicateRows(rows, mapping, transactionData.transactions),
+    [mapper, rows, mapping, transactionData.transactions]
   );
   const router = useRouter();
 
@@ -335,6 +338,135 @@ export function ImportExportPanel({
 
   return (
     <div className="space-y-4">
+      {/* ── Копия данных ─────────────────────────────────── */}
+      <Card>
+        <CardHeader className="border-b bg-muted/20">
+          <CardTitle>{t("imp.backupTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-5">
+          <div
+            className={cn(
+              "rounded-lg border p-4 text-sm",
+              pageData.backupReminderDue
+                ? "border-warning/30 bg-warning/10"
+                : "border-success/30 bg-success/10"
+            )}
+          >
+            <div className="flex items-start gap-3">
+              {pageData.backupReminderDue ? (
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+              ) : (
+                <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
+              )}
+              <div>
+                <p className="font-medium">
+                  {pageData.backupReminderDue ? t("imp.backupDue") : t("imp.backupFresh")}
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  {t("imp.lastBackup", { label: lastBackupLabel })}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={exportBackup}>
+              <Download className="size-4" />
+              {t("imp.downloadBackup")}
+            </Button>
+            <Dialog
+              open={restoreDialogOpen}
+              onOpenChange={(open) => {
+                setRestoreDialogOpen(open);
+                if (!open) {
+                  setRestorePayload(null);
+                  setRestorePreview(null);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline" disabled={restorePending}>
+                  <RotateCcw className="size-4" />
+                  {t("imp.restoreBackup")}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("imp.restoreTitle")}</DialogTitle>
+                  <DialogDescription>{t("imp.restoreDesc")}</DialogDescription>
+                </DialogHeader>
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                    <p>{t("imp.restoreWarn")}</p>
+                  </div>
+                </div>
+                {restorePreview ? (
+                  <div className="rounded-lg border bg-muted/20 p-4 text-sm">
+                    <p className="font-medium">{t("imp.selectedBackup")}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-muted-foreground">
+                      <span>{t("imp.bVersion", { v: restorePreview.schemaVersion })}</span>
+                      <span>
+                        {t("imp.bDate", {
+                          d: restorePreview.exportedAt
+                            ? new Date(restorePreview.exportedAt).toLocaleString(
+                                locale === "en" ? "en-US" : "ru-RU"
+                              )
+                            : t("imp.dateNone")
+                        })}
+                      </span>
+                      <span>{t("imp.bAccounts", { n: restorePreview.accounts })}</span>
+                      <span>{t("imp.bCategories", { n: restorePreview.categories })}</span>
+                      <span>{t("imp.bTransactions", { n: restorePreview.transactions })}</span>
+                      <span>{t("imp.bBudgets", { n: restorePreview.budgets })}</span>
+                      <span>{t("imp.bGoals", { n: restorePreview.goals })}</span>
+                      <span>
+                        {t("imp.bRecurring", { n: restorePreview.recurringTransactions })}
+                      </span>
+                      <span>{t("imp.bPortfolio", { n: restorePreview.portfolioItems })}</span>
+                      <span>{t("imp.bWatchlist", { n: restorePreview.watchlistItems })}</span>
+                    </div>
+                  </div>
+                ) : null}
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={pickBackupForRestore}
+                    disabled={restorePending}
+                  >
+                    {t("imp.pickFile")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={confirmRestoreBackup}
+                    disabled={restorePending || !restorePayload}
+                  >
+                    {restorePending ? t("imp.restoring") : t("imp.restoreConfirm")}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("imp.backupIncludes")}</p>
+
+          {/* A copy is for this app; these two are for anything else — kept
+                quiet and on one line, because that is how often they are used. */}
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-sm">
+            <span className="text-muted-foreground">{t("imp.exportTitle")}</span>
+            <Button type="button" variant="ghost" size="sm" onClick={exportCsv}>
+              <Download className="size-4" />
+              CSV
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={exportJson}>
+              <FileJson className="size-4" />
+              JSON
+            </Button>
+            <span className="text-xs text-muted-foreground">{t("imp.exportHint")}</span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Import Wizard ────────────────────────────────────── */}
       <Card>
         <CardHeader className="border-b bg-muted/20">
@@ -668,139 +800,6 @@ export function ImportExportPanel({
           )}
         </CardContent>
       </Card>
-
-      {/* ── Export & Backup ──────────────────────────────────── */}
-      <section className="grid gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle>{t("imp.exportTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2 pt-5">
-            <Button type="button" variant="outline" onClick={exportCsv}>
-              <Download className="size-4" />
-              CSV
-            </Button>
-            <Button type="button" variant="outline" onClick={exportJson}>
-              <FileJson className="size-4" />
-              JSON
-            </Button>
-            <p className="self-center text-xs text-muted-foreground">{t("imp.exportHint")}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="border-b bg-muted/20">
-            <CardTitle>{t("imp.backupTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-5">
-            <div
-              className={cn(
-                "rounded-lg border p-4 text-sm",
-                pageData.backupReminderDue
-                  ? "border-warning/30 bg-warning/10"
-                  : "border-success/30 bg-success/10"
-              )}
-            >
-              <div className="flex items-start gap-3">
-                {pageData.backupReminderDue ? (
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-                ) : (
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
-                )}
-                <div>
-                  <p className="font-medium">
-                    {pageData.backupReminderDue ? t("imp.backupDue") : t("imp.backupFresh")}
-                  </p>
-                  <p className="mt-1 text-muted-foreground">
-                    {t("imp.lastBackup", { label: lastBackupLabel })}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={exportBackup}>
-                <Download className="size-4" />
-                {t("imp.downloadBackup")}
-              </Button>
-              <Dialog
-                open={restoreDialogOpen}
-                onOpenChange={(open) => {
-                  setRestoreDialogOpen(open);
-                  if (!open) {
-                    setRestorePayload(null);
-                    setRestorePreview(null);
-                  }
-                }}
-              >
-                <DialogTrigger asChild>
-                  <Button type="button" variant="outline" disabled={restorePending}>
-                    <RotateCcw className="size-4" />
-                    {t("imp.restoreBackup")}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{t("imp.restoreTitle")}</DialogTitle>
-                    <DialogDescription>{t("imp.restoreDesc")}</DialogDescription>
-                  </DialogHeader>
-                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                      <p>{t("imp.restoreWarn")}</p>
-                    </div>
-                  </div>
-                  {restorePreview ? (
-                    <div className="rounded-lg border bg-muted/20 p-4 text-sm">
-                      <p className="font-medium">{t("imp.selectedBackup")}</p>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-muted-foreground">
-                        <span>{t("imp.bVersion", { v: restorePreview.schemaVersion })}</span>
-                        <span>
-                          {t("imp.bDate", {
-                            d: restorePreview.exportedAt
-                              ? new Date(restorePreview.exportedAt).toLocaleString(
-                                  locale === "en" ? "en-US" : "ru-RU"
-                                )
-                              : t("imp.dateNone")
-                          })}
-                        </span>
-                        <span>{t("imp.bAccounts", { n: restorePreview.accounts })}</span>
-                        <span>{t("imp.bCategories", { n: restorePreview.categories })}</span>
-                        <span>{t("imp.bTransactions", { n: restorePreview.transactions })}</span>
-                        <span>{t("imp.bBudgets", { n: restorePreview.budgets })}</span>
-                        <span>{t("imp.bGoals", { n: restorePreview.goals })}</span>
-                        <span>
-                          {t("imp.bRecurring", { n: restorePreview.recurringTransactions })}
-                        </span>
-                        <span>{t("imp.bPortfolio", { n: restorePreview.portfolioItems })}</span>
-                        <span>{t("imp.bWatchlist", { n: restorePreview.watchlistItems })}</span>
-                      </div>
-                    </div>
-                  ) : null}
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={pickBackupForRestore}
-                      disabled={restorePending}
-                    >
-                      {t("imp.pickFile")}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={confirmRestoreBackup}
-                      disabled={restorePending || !restorePayload}
-                    >
-                      {restorePending ? t("imp.restoring") : t("imp.restoreConfirm")}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <p className="text-xs text-muted-foreground">{t("imp.backupIncludes")}</p>
-          </CardContent>
-        </Card>
-      </section>
 
       {/* ── Reference table ──────────────────────────────────── */}
       <Card>

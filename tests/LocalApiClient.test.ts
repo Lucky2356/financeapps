@@ -911,7 +911,7 @@ describe("LocalApiClient", () => {
 });
 
 describe("LocalApiClient currency (plan C7)", () => {
-  it("changes the app currency and propagates it to accounts and page data", async () => {
+  it("changes the currency every total is shown in, converting rather than relabelling", async () => {
     const client = createClient();
     await seedAccount(client, { name: "Карта", balance: "1000" });
 
@@ -925,10 +925,13 @@ describe("LocalApiClient currency (plan C7)", () => {
     expect(settings.currency).toBe("USD");
 
     accounts = await client.get<AccountsPageData>("/accounts");
+    // The app's currency is what totals are shown in; the account keeps holding
+    // roubles, and the total is converted through the rate table rather than
+    // relabelled — 1 000 ₽ is not 1 000 $.
     expect(accounts.currency).toBe("USD");
-    expect(accounts.accounts[0].currency).toBe("USD");
-    // Single-currency model: amounts are not converted, only the label changes.
+    expect(accounts.accounts[0].currency).toBe("RUB");
     expect(accounts.accounts[0].balance).toBe(1000);
+    expect(accounts.totalBalance).toBeCloseTo(1000 / 90, 2);
   });
 
   it("ignores an unsupported currency code", async () => {

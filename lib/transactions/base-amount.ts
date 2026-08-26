@@ -1,4 +1,4 @@
-import { toBaseAmount, type CurrencyCode, type CurrencyRates } from "@/lib/currency";
+import { convert, type CurrencyCode, type CurrencyRates } from "@/lib/currency";
 import { roundMoney } from "@/lib/utils";
 
 // An operation is recorded in the currency of the account it happened on: a
@@ -50,7 +50,7 @@ export function countableAmount(row: { amount: number; baseAmount?: number }): n
 export function baseAmountOf(row: AmountRow, context: BaseAmountContext): number {
   const currency = context.currencyOf.get(row.account.id) ?? context.base;
   if (currency === context.base) return row.amount;
-  return roundMoney(toBaseAmount(row.amount, currency, context.rates));
+  return roundMoney(convert(row.amount, currency, context.base, context.rates));
 }
 
 /**

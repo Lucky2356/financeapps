@@ -31,11 +31,28 @@ export class DebtPayoffService {
   }
 
   // Total interest paid over the life of the debt at a fixed monthly payment.
+  //
+  // Walked month by month rather than "payments × months − debt": the last
+  // payment is almost always a partial one, and counting it as a full payment
+  // turned its remainder into interest. An interest-free debt of 100 000 ₽ paid
+  // 30 000 ₽ a month reported an overpayment of 20 000 ₽ — the change from the
+  // fourth payment — and a 12% one reported that same 20 000 ₽ instead of 2 248 ₽.
   totalInterest(balance: number, annualRatePct: number, monthlyPayment: number): number | null {
     const months = this.monthsToPayoff(balance, annualRatePct, monthlyPayment);
     if (months === null) return null;
     if (months === 0) return 0;
-    return Math.max(roundMoney(months * monthlyPayment - balance), 0);
+
+    const monthlyRate = annualRatePct / 100 / 12;
+    if (monthlyRate <= 0) return 0;
+
+    let outstanding = balance;
+    let interest = 0;
+    for (let month = 0; month < months && outstanding > 0; month += 1) {
+      const accrued = outstanding * monthlyRate;
+      interest += accrued;
+      outstanding = outstanding + accrued - monthlyPayment;
+    }
+    return Math.max(roundMoney(interest), 0);
   }
 
   // Payoff order: "avalanche" tackles the highest interest rate first (cheapest

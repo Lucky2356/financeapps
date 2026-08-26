@@ -39,7 +39,10 @@ export function ExpenseCategoryChart({ data }: { data: ChartDatum[] }) {
         </PieChart>
       </ResponsiveContainer>
 
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+      <div
+        data-testid="ring-total"
+        className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+      >
         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
           {t("chart.total")}
         </span>

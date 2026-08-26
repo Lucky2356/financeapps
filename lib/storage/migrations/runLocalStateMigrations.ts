@@ -7,6 +7,7 @@
 // version-specific structural changes.
 
 import { SEED_CATEGORY_ICONS } from "@/lib/categories/icons";
+import { storedTransactionDate } from "@/lib/transactions/date";
 import { LEGACY_CATEGORY_COLORS } from "@/lib/categories/palette";
 
 export type RawLocalState = Record<string, unknown> & { schemaVersion?: number };
@@ -17,7 +18,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 12;
+export const LATEST_LOCAL_STATE_VERSION = 13;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -164,6 +165,36 @@ export const localStateMigrations: LocalStateMigration[] = [
           const description = typeof row.description === "string" ? row.description.trim() : "";
           const liabilityId = byName.get(description.toLowerCase());
           return liabilityId ? { ...row, liabilityId } : row;
+        })
+      };
+    }
+  },
+  {
+    from: 12,
+    to: 13,
+    // v13 puts every operation back on the day it is shown on.
+    //
+    // An operation belongs to a calendar day, and everything that counts money
+    // reads that day off the stored text ("2026-09-01T…" → сентябрь) while the
+    // list on screen renders the same text in local time. Dates typed into a
+    // form were stored as UTC midnight and agreed with both. Dates the app
+    // produced itself — a CSV import, a materialised recurring payment, an
+    // automatic debt payment — were built in local time and serialised, which
+    // east of Greenwich lands on the evening of the day BEFORE: the row read
+    // «1 сентября» in the ledger and was counted in August by budgets, plan/fact
+    // and analytics. This rewrites those timestamps to UTC midnight of the day
+    // they are displayed on, so the two finally say the same thing.
+    migrate: (state) => {
+      const transactions = Array.isArray(state.transactions) ? state.transactions : [];
+      return {
+        ...state,
+        schemaVersion: 13,
+        transactions: transactions.map((raw) => {
+          if (!raw || typeof raw !== "object") return raw;
+          const row = raw as Record<string, unknown>;
+          if (typeof row.date !== "string" || !row.date) return row;
+          const normalized = storedTransactionDate(row.date);
+          return normalized === row.date ? row : { ...row, date: normalized };
         })
       };
     }

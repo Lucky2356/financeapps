@@ -17,8 +17,26 @@ const STORAGE_KEY = "transactions-analytics-open";
 
 // The ranked lists carry a share and an id the pie does not need; this is the
 // shape the chart draws.
-function toSlices(items: AnalyticsData["topExpenseCategories"]) {
-  return items.map((item) => ({ name: item.category, value: item.total, fill: item.color }));
+//
+// Every category is drawn, because the number in the middle of the ring says
+// «всего»: showing the six biggest made it 102 079 ₽ under a month that had
+// spent 111 234 ₽. Past the eighth the slices are thinner than the line around
+// them, so the tail is gathered into one — the total stays whole either way.
+const RINGED = 8;
+
+function toSlices(items: AnalyticsData["topExpenseCategories"], otherLabel: string) {
+  const slices = items
+    .slice(0, RINGED)
+    .map((item) => ({ name: item.category, value: item.total, fill: item.color }));
+  const rest = items.slice(RINGED).reduce((sum, item) => sum + item.total, 0);
+  if (rest > 0) {
+    slices.push({
+      name: otherLabel,
+      value: Math.round(rest * 100) / 100,
+      fill: "hsl(var(--muted-foreground))"
+    });
+  }
+  return slices;
 }
 
 // The numbers people look up while going through their operations — average
@@ -85,7 +103,11 @@ export function TransactionsAnalytics() {
   const metrics = data
     ? [
         { label: t("txa.avgIncome"), value: formatCurrency(data.avgMonthlyIncome, currency) },
-        { label: t("txa.avgExpense"), value: formatCurrency(data.avgMonthlyExpense, currency) },
+        {
+          label: t("txa.avgExpense"),
+          value: formatCurrency(data.avgMonthlyExpense, currency),
+          testId: "txa-expense"
+        },
         { label: t("txa.savingsRate"), value: `${data.avgSavingsRate.toFixed(1)}%` },
         { label: t("txa.bestMonth"), value: data.bestMonth }
       ]
@@ -124,7 +146,11 @@ export function TransactionsAnalytics() {
             <>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {metrics.map((metric) => (
-                  <div key={metric.label} className="rounded-lg border bg-muted/20 p-3">
+                  <div
+                    key={metric.label}
+                    data-testid={"testId" in metric ? metric.testId : undefined}
+                    className="rounded-lg border bg-muted/20 p-3"
+                  >
                     <p className="text-xs text-muted-foreground">{metric.label}</p>
                     <p className="num mt-1 text-lg font-semibold">{metric.value}</p>
                   </div>
@@ -138,12 +164,16 @@ export function TransactionsAnalytics() {
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-medium">{t("txa.byCategory")}</p>
-                  <ExpenseCategoryChart data={toSlices(data.topExpenseCategories)} />
+                  <ExpenseCategoryChart
+                    data={toSlices(data.topExpenseCategories, t("section.other"))}
+                  />
                 </div>
                 {data.topIncomeCategories.length > 0 ? (
                   <div>
                     <p className="mb-2 text-sm font-medium">{t("txa.incomeByCategory")}</p>
-                    <ExpenseCategoryChart data={toSlices(data.topIncomeCategories)} />
+                    <ExpenseCategoryChart
+                      data={toSlices(data.topIncomeCategories, t("section.other"))}
+                    />
                   </div>
                 ) : null}
               </div>

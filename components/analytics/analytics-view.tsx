@@ -301,26 +301,25 @@ function StructureCard({
   /** Rows open the ledger filtered to this category and this side of it. */
   linkType: "INCOME" | "EXPENSE";
 }) {
-  // The ranking keeps the six biggest categories, so the ring was drawn from a
-  // part of the period while its percentages counted the whole of it — the
-  // slices looked bigger than they were and the rest of the money was nowhere.
-  // Everything outside the top six comes back as one quiet slice, which keeps
-  // the ring whole and the legend a complete key to it.
-  const listedShare = slices.reduce((sum, item) => sum + item.share, 0);
-  const restShare = Math.round((100 - listedShare) * 10) / 10;
+  // A legend of twenty rows is not a legend, so this card names the six biggest
+  // categories and gathers everything else into one quiet slice — which keeps
+  // the ring whole and its percentages honest about the whole period.
+  const listed = slices.slice(0, 6);
+  const rest = slices.slice(6);
+  const restShare = Math.round(rest.reduce((sum, item) => sum + item.share, 0) * 10) / 10;
   const shown =
     restShare >= 0.5
       ? [
-          ...slices,
+          ...listed,
           {
             categoryId: "__rest__",
             category: otherLabel,
             color: "hsl(var(--muted-foreground))",
-            total: 0,
+            total: Math.round(rest.reduce((sum, item) => sum + item.total, 0) * 100) / 100,
             share: restShare
           }
         ]
-      : slices;
+      : listed;
 
   return (
     <Card>

@@ -21,6 +21,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -29,9 +30,9 @@ import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
-import { LocalModePanel } from "@/components/settings/local-mode-panel";
+import { ImportExportPanel } from "@/components/import/import-export-panel";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
-import type { SettingsPageData } from "@/lib/data";
+import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { AI_EFFORTS, AI_PROVIDERS, providerInfo, type AiProvider } from "@/lib/ai/models";
 import { APP_VERSION } from "@/lib/constants";
@@ -126,7 +127,16 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [settings, setSettings] = useState<EditableSettings>(() => toEditable(pageData));
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [activeId, setActiveId] = useState("general");
+  // A link may name the section to open — the ledger's «Данные» tab points
+  // straight here, so it has to land on the data section rather than on the
+  // first one.
+  const requestedSection = useSearchParams().get("section");
+  const [activeId, setActiveId] = useState(requestedSection || "general");
+  const [syncedSection, setSyncedSection] = useState(requestedSection);
+  if (syncedSection !== requestedSection) {
+    setSyncedSection(requestedSection);
+    if (requestedSection) setActiveId(requestedSection);
+  }
   const [query, setQuery] = useState("");
 
   // Re-sync controlled fields whenever fresh data arrives (e.g. the real values
@@ -704,8 +714,14 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               </Dialog>
             </CardContent>
           </Card>
-          {/* Desktop-only local snapshot tool + cloud-folder sync (self-hide on web). */}
-          <LocalModePanel />
+          {/* Everything that moves data in or out of the app lives here now:
+              the copy of it, the CSV import, the exports and the folder sync.
+              The import used to be a screen of its own, one menu entry away
+              from a settings tab doing the same kind of work. */}
+          <ImportExportPanel
+            data={{ source: "database", accounts: [], categories: [] } as ImportPageData}
+            transactions={[]}
+          />
           <CloudSyncPanel />
         </>
       )

@@ -10,27 +10,33 @@ test.describe("фильтры операций", () => {
     await seedExampleData(page);
   });
 
-  test("период применяется сразу и снимается чипсом", async ({ page }) => {
+  test("период — две даты, и по умолчанию это текущий месяц", async ({ page }) => {
     await openSettled(page, "/transactions");
 
-    // Nothing is filtered to begin with, so there are no chips.
-    await expect(page.getByTestId("filter-chips")).toHaveCount(0);
+    // The screen opens on the current month without being asked: the dates are
+    // in the URL, in the fields, and on a chip.
+    await expect(page).toHaveURL(/from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
+    const from = page.getByRole("textbox", { name: "С", exact: true });
+    const to = page.getByRole("textbox", { name: "По", exact: true });
+    const month = new Date();
+    const iso = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    await expect(from).toHaveValue(iso(new Date(month.getFullYear(), month.getMonth(), 1)));
+    await expect(to).toHaveValue(iso(new Date(month.getFullYear(), month.getMonth() + 1, 0)));
 
-    await page.getByRole("combobox", { name: "Период" }).click();
-    await page.getByRole("option", { name: "Этот месяц" }).click();
+    // Typing over one end keeps the other and applies at once.
+    await from.fill("2026-01-05");
+    await expect(page).toHaveURL(/from=2026-01-05/);
 
-    // The URL is the filter — no apply step in between.
-    await expect(page).toHaveURL(/from=\d{4}-\d{2}-\d{2}/);
     const chips = page.getByTestId("filter-chips");
     await expect(chips).toBeVisible();
-    await expect(chips.getByText("Этот месяц")).toBeVisible();
-
     await chips
       .getByRole("button", { name: /Убрать фильтр/ })
       .first()
       .click();
+    // Taking the period off means "за всё время", not "back to this month".
+    await expect(page).toHaveURL(/period=all/);
     await expect(page).not.toHaveURL(/from=/);
-    await expect(page.getByTestId("filter-chips")).toHaveCount(0);
   });
 
   test("тип фильтрует, включая переводы", async ({ page }) => {
@@ -73,6 +79,7 @@ test.describe("фильтры операций", () => {
     await openSettled(page, "/transactions?type=EXPENSE&q=кофе");
 
     const gear = page.getByRole("button", { name: "Фильтры" });
+    // Type and search — the period is a filter too, but this URL names none.
     await expect(gear).toContainText("2");
 
     // The panel is not a window: it carries the rare settings and applies them
