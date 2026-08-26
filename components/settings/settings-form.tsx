@@ -670,7 +670,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       label: t("set.section.data"),
       icon: Database,
       keywords:
-        "данные data демо demo очистить clear backup резервная копия снимок snapshot local синхронизация sync облако cloud папка folder dropbox drive",
+        "данные data импорт import csv выгрузка экспорт export загрузить restore демо demo очистить clear backup резервная копия snapshot синхронизация sync облако cloud папка folder dropbox drive",
       node: (
         <>
           <Card className="border-destructive/30">

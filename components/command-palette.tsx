@@ -86,7 +86,13 @@ const navCommands: Command[] = [
     group: "nav",
     icon: Tags
   },
-  { id: "nav-import", labelKey: "cmd.importExport", href: "/import", group: "nav", icon: Download },
+  {
+    id: "nav-import",
+    labelKey: "cmd.importExport",
+    href: "/settings?section=data",
+    group: "nav",
+    icon: Download
+  },
   { id: "nav-settings", labelKey: "nav.settings", href: "/settings", group: "nav", icon: Settings }
 ];
 

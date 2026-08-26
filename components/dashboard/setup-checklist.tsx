@@ -116,7 +116,7 @@ export function SetupChecklist() {
       title: t("sc.s5.title"),
       desc: t("sc.s5.desc"),
       cta: t("sc.s5.cta"),
-      href: "/import" as const
+      href: "/settings?section=data" as const
     }
   ];
   const doneCount = steps.filter((s) => s.done).length;
