@@ -10,7 +10,7 @@ export function ImportLinkButton() {
   const { t } = useI18n();
   return (
     <Button asChild variant="outline">
-      <Link href="/import">
+      <Link href="/settings?section=data">
         <Download className="size-4" />
         {t("nav.import")}
       </Link>
