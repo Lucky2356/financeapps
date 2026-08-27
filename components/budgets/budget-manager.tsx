@@ -64,6 +64,16 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   const confirm = useConfirm();
   const [categoryOpen, setCategoryOpen] = useState(false);
   const monthOptions = buildMonthOptions(locale);
+  // A limit belongs to a month, so the list it opens has to be that month —
+  // said in the address rather than left to the ledger's own default.
+  const ledgerLink = (categoryId: string) => {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const day = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const from = day(new Date(year, month - 1, 1));
+    const to = day(new Date(year, month, 0));
+    return `/transactions?categoryId=${encodeURIComponent(categoryId)}&type=EXPENSE&from=${from}&to=${to}`;
+  };
   const currentIndex = monthOptions.findIndex((option) => option.value === selectedMonth);
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < monthOptions.length - 1;
@@ -260,7 +270,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
                 >
                   <TableCell className="font-medium">
                     <Link
-                      href={`/transactions?categoryId=${encodeURIComponent(budget.categoryId)}&type=EXPENSE`}
+                      href={ledgerLink(budget.categoryId)}
                       className="inline-flex items-center gap-2 hover:text-primary hover:underline"
                       title={t("acc.showTransactions", { name: budget.category })}
                     >
@@ -330,7 +340,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
             >
               <div className="flex items-center justify-between gap-3">
                 <Link
-                  href={`/transactions?categoryId=${encodeURIComponent(budget.categoryId)}&type=EXPENSE`}
+                  href={ledgerLink(budget.categoryId)}
                   className="font-semibold hover:text-primary hover:underline"
                 >
                   {budget.category}

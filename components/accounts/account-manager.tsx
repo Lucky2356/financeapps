@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { earnsInterest, interestSchedule, totalInterest } from "@/lib/accounts/interest";
 import { apiClient } from "@/lib/api/client";
@@ -48,6 +49,9 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
   const { t } = useI18n();
   const { data: pageData, reload } = useApiPageData(data, "/accounts");
   const { run } = useApiMutation();
+  const [archivingAccount, setArchivingAccount] = useState<
+    AccountsPageData["accounts"][number] | null
+  >(null);
   const [addOpen, setAddOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountsPageData["accounts"][number] | null>(
     null
@@ -79,12 +83,45 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
     );
   }
 
-  async function removeAccount(id: string) {
+  async function removeAccount(account: AccountsPageData["accounts"][number]) {
+    // Archiving takes the account out of every total, so a balance still on it
+    // would drop out of capital with nothing to show for it. Where the money
+    // goes is asked first.
+    if (account.balance !== 0) {
+      setArchivingAccount(account);
+      return;
+    }
+    await archive(account.id);
+  }
+
+  async function archive(id: string) {
     await run(() => apiClient.delete(`/accounts?id=${encodeURIComponent(id)}`), {
       success: t("acc.toast.archived"),
       error: t("acc.toast.archiveError"),
-      onSuccess: refresh
+      onSuccess: async () => {
+        setArchivingAccount(null);
+        await refresh();
+      }
     });
+  }
+
+  async function archiveWithTransfer(account: AccountsPageData["accounts"][number], toId: string) {
+    if (toId !== "writeOff") {
+      try {
+        await apiClient.post("/transactions", {
+          action: "transfer",
+          amount: String(Math.abs(account.balance)),
+          fromAccountId: account.balance > 0 ? account.id : toId,
+          toAccountId: account.balance > 0 ? toId : account.id,
+          date: new Date().toISOString().slice(0, 10),
+          description: t("acc.archive.transferNote", { name: account.name })
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t("acc.toast.archiveError"));
+        return;
+      }
+    }
+    await archive(account.id);
   }
 
   return (
@@ -181,7 +218,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                             <form
                               onSubmit={(event) => {
                                 event.preventDefault();
-                                void removeAccount(account.id);
+                                void removeAccount(account);
                               }}
                             >
                               <Button
@@ -235,7 +272,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                       <form
                         onSubmit={(event) => {
                           event.preventDefault();
-                          void removeAccount(account.id);
+                          void removeAccount(account);
                         }}
                       >
                         <Button type="submit" variant="outline" size="sm">
@@ -267,7 +304,74 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
           />
         )}
       </Dialog>
+
+      <Dialog
+        open={archivingAccount !== null}
+        onOpenChange={(open) => {
+          if (!open) setArchivingAccount(null);
+        }}
+      >
+        {archivingAccount && (
+          <ArchiveAccountDialog
+            account={archivingAccount}
+            accounts={pageData.accounts.filter((item) => item.id !== archivingAccount.id)}
+            onConfirm={(destination) => void archiveWithTransfer(archivingAccount, destination)}
+          />
+        )}
+      </Dialog>
     </div>
+  );
+}
+
+// Archiving an account with money still on it asks where that money goes: onto
+// another account, or written off on purpose. Without the question the balance
+// simply left capital — the account is excluded from every total the moment it
+// is archived.
+function ArchiveAccountDialog({
+  account,
+  accounts,
+  onConfirm
+}: {
+  account: AccountsPageData["accounts"][number];
+  accounts: AccountsPageData["accounts"];
+  onConfirm: (destination: string) => void;
+}) {
+  const { t } = useI18n();
+  const [destination, setDestination] = useState(accounts[0]?.id ?? "writeOff");
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{t("acc.archive.title")}</DialogTitle>
+      </DialogHeader>
+      <p className="text-sm text-muted-foreground">
+        {t("acc.archive.holding", {
+          name: account.name,
+          amount: formatCurrency(account.balance, account.currency)
+        })}
+      </p>
+      <div className="space-y-2">
+        <Label>{t("acc.archive.destination")}</Label>
+        <Select value={destination} onValueChange={setDestination}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.name}
+              </SelectItem>
+            ))}
+            <SelectItem value="writeOff">{t("acc.archive.writeOff")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <DialogFooter>
+        <Button variant="destructive" onClick={() => onConfirm(destination)}>
+          {t("common.archive")}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }
 

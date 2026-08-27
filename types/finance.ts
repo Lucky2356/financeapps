@@ -256,6 +256,12 @@ export type BudgetRow = {
   category: string;
   color: string;
   icon?: string;
+  /**
+   * The month this limit belongs to ("ГГГГ-ММ"). A limit holds from the month it
+   * was set in until it is changed; records written before limits had a month
+   * carry none and act as the fallback for any month without its own.
+   */
+  month?: string;
   limitAmount: number;
   spent: number;
   progress: number;
@@ -289,6 +295,8 @@ export type WatchlistRow = {
   change30d: number;
   risk: SecurityRisk;
   comment: string;
+  /** Exchange lot — the smallest number of shares that can be bought at once. */
+  lotSize?: number;
 };
 
 /** One purchase of a security — see `lib/investments/lots.ts`. */

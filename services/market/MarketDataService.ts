@@ -11,6 +11,11 @@ export type MarketSecurity = {
   price: number;
   changeDay: number;
   change30d: number;
+  /**
+   * How many shares trade as one lot on the exchange. Advice to buy 7 SBER is
+   * advice nobody can follow — the lot is 10. Absent means one.
+   */
+  lotSize?: number;
 };
 
 export type HistoricalPrice = {

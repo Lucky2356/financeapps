@@ -10,6 +10,8 @@ import { progressiveInvestmentTax } from "@/services/InvestmentTaxService";
 
 export type RealizedEvent = {
   type: "SELL" | "DIVIDEND";
+  /** The currency the figures below are in; absent means the app's own. */
+  currency?: string;
   date: string; // YYYY-MM-DD
   quantity: number;
   sellPrice: number;
@@ -36,15 +38,25 @@ export function sellGain(event: RealizedEvent): number {
   return event.quantity * (event.sellPrice - event.buyPrice) - event.fee;
 }
 
-export function buildRealizedTaxReport(events: RealizedEvent[]): RealizedTaxReport {
+/**
+ * `toBase` converts a figure from an event's own currency into the one the
+ * report is shown in. The threshold this scale turns on (2,4 млн ₽) is a rouble
+ * one, so a sale booked in dollars had to be brought to the same unit before it
+ * could be added to anything — as it was, the two were summed as if a dollar
+ * were a rouble.
+ */
+export function buildRealizedTaxReport(
+  events: RealizedEvent[],
+  toBase: (amount: number, currency: string | undefined) => number = (amount) => amount
+): RealizedTaxReport {
   const byYear = new Map<number, { gain: number; dividends: number }>();
 
   for (const event of events) {
     const year = Number(event.date.slice(0, 4));
     if (!Number.isFinite(year) || year < 1970) continue;
     const bucket = byYear.get(year) ?? { gain: 0, dividends: 0 };
-    if (event.type === "SELL") bucket.gain += sellGain(event);
-    else bucket.dividends += event.amount;
+    if (event.type === "SELL") bucket.gain += toBase(sellGain(event), event.currency);
+    else bucket.dividends += toBase(event.amount, event.currency);
     byYear.set(year, bucket);
   }
 

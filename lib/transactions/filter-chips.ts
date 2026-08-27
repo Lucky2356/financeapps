@@ -116,7 +116,17 @@ export function applyPeriodPreset(
  * asks before writing that month in.
  */
 export function periodIsUnset(params: URLSearchParams): boolean {
-  return !params.get("from") && !params.get("to") && params.get("period") !== "all";
+  if (params.get("from") || params.get("to") || params.get("period") === "all") return false;
+  // A link that already says what to show has said everything it meant to. The
+  // ring on the analytics screen covers six months and links a category into
+  // this list; filling the current month in behind it opened «Долги 55 347 ₽»
+  // on a list of 4 000 ₽ — the same disagreement between a figure and the rows
+  // under it that this screen is supposed to settle. A month is a sensible
+  // default only for an address that asks for nothing in particular.
+  for (const key of ["categoryId", "accountId", "q", "type", "tag", "minAmount", "maxAmount"]) {
+    if (params.get(key)) return false;
+  }
+  return true;
 }
 
 /** A copy with one filter written in (empty value removes it), paging reset. */

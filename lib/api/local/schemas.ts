@@ -96,6 +96,15 @@ export const budgetRowSchema = z.object({
   progress: z.coerce.number().finite().min(0).default(0),
   isExceeded: z.boolean().default(false),
   suggestedLimit: z.coerce.number().finite().min(0).default(0),
+  /**
+   * The month this limit belongs to ("ГГГГ-ММ"). Absent on records written
+   * before limits were kept per month — those act as the limit for any month
+   * that has none of its own, so nothing needs rewriting.
+   */
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
   // Persisted carry-over flag (recomputed amount lives in rolloverAmount).
   rollover: z.boolean().default(false),
   rolloverAmount: z.coerce.number().finite().min(0).default(0)
@@ -145,7 +154,9 @@ export const watchlistRowSchema = z.object({
   changeDay: z.coerce.number().finite(),
   change30d: z.coerce.number().finite(),
   risk: z.enum(["LOW", "MEDIUM", "HIGH"]),
-  comment: z.string().trim().max(500).default("")
+  comment: z.string().trim().max(500).default(""),
+  /** Exchange lot, as the board reports it; absent on rows saved before it. */
+  lotSize: z.coerce.number().finite().positive().optional()
 });
 // One purchase of a security. Optional on a position: holdings entered before
 // v7 (and quick "add suggestion" buys) only carry the resulting average.
@@ -329,7 +340,8 @@ export const localStateSchema = z.object({
     z.literal(10),
     z.literal(11),
     z.literal(12),
-    z.literal(13)
+    z.literal(13),
+    z.literal(14)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed

@@ -46,6 +46,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
   const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalsPageData["goals"][number] | null>(null);
+  const [deletingGoal, setDeletingGoal] = useState<GoalsPageData["goals"][number] | null>(null);
 
   async function refresh() {
     await reload();
@@ -73,18 +74,37 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
     );
   }
 
-  async function removeGoal(id: string, title: string) {
+  async function removeGoal(goal: GoalsPageData["goals"][number]) {
+    // A goal holding money cannot simply disappear — that money left an account
+    // to get there. Where it goes back to is asked before anything is deleted.
+    if (goal.currentAmount > 0) {
+      setDeletingGoal(goal);
+      return;
+    }
     const confirmed = await confirm({
       title: t("goal.delete.title"),
-      description: t("goal.delete.desc", { title }),
+      description: t("goal.delete.desc", { title: goal.title }),
       confirmLabel: t("common.delete"),
       destructive: true
     });
     if (!confirmed) return;
-    await run(() => apiClient.delete(`/goals?id=${encodeURIComponent(id)}`), {
+    await run(() => apiClient.delete(`/goals?id=${encodeURIComponent(goal.id)}`), {
       success: t("goal.toast.deleted"),
       error: t("goal.toast.deleteError"),
       onSuccess: refresh
+    });
+  }
+
+  async function confirmDelete(goalId: string, destination: string) {
+    const query =
+      destination === "writeOff" ? `writeOff=1` : `accountId=${encodeURIComponent(destination)}`;
+    await run(() => apiClient.delete(`/goals?id=${encodeURIComponent(goalId)}&${query}`), {
+      success: t("goal.toast.deleted"),
+      error: t("goal.toast.deleteError"),
+      onSuccess: async () => {
+        setDeletingGoal(null);
+        await refresh();
+      }
     });
   }
 
@@ -98,7 +118,11 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
               {t("goal.add")}
             </Button>
           </DialogTrigger>
-          <GoalDialog title={t("goal.new")} onSubmit={(event) => submitGoal(event, "POST")} />
+          <GoalDialog
+            title={t("goal.new")}
+            currency={pageData.currency}
+            onSubmit={(event) => submitGoal(event, "POST")}
+          />
         </Dialog>
       </div>
 
@@ -150,7 +174,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                       <form
                         onSubmit={(event) => {
                           event.preventDefault();
-                          void removeGoal(goal.id, goal.title);
+                          void removeGoal(goal);
                         }}
                       >
                         <Button
@@ -226,11 +250,97 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
           <GoalDialog
             title={t("goal.edit")}
             goal={editingGoal}
+            currency={pageData.currency}
             onSubmit={(event) => submitGoal(event, "PUT")}
           />
         )}
       </Dialog>
+
+      <Dialog
+        open={deletingGoal !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingGoal(null);
+        }}
+      >
+        {deletingGoal && (
+          <DeleteGoalDialog
+            goal={deletingGoal}
+            currency={pageData.currency}
+            onConfirm={(destination) => void confirmDelete(deletingGoal.id, destination)}
+          />
+        )}
+      </Dialog>
     </div>
+  );
+}
+
+// Deleting a goal that still holds money asks the only question that matters:
+// where does the money go? Onto an account, or written off on purpose.
+function DeleteGoalDialog({
+  goal,
+  currency,
+  onConfirm
+}: {
+  goal: GoalsPageData["goals"][number];
+  currency: string;
+  onConfirm: (destination: string) => void;
+}) {
+  const { t } = useI18n();
+  const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
+  const [destination, setDestination] = useState(goal.linkedAccountId || "");
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiClient
+      .get<AccountsPageData>("/accounts")
+      .then((data) => {
+        if (cancelled) return;
+        setAccounts(data.accounts);
+        setDestination((current) => current || data.accounts[0]?.id || "writeOff");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{t("goal.delete.title")}</DialogTitle>
+      </DialogHeader>
+      <p className="text-sm text-muted-foreground">
+        {t("goal.delete.holding", {
+          title: goal.title,
+          amount: formatCurrency(goal.currentAmount, currency)
+        })}
+      </p>
+      <div className="space-y-2">
+        <Label>{t("goal.delete.destination")}</Label>
+        <Select value={destination} onValueChange={setDestination}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+                {account.name}
+              </SelectItem>
+            ))}
+            <SelectItem value="writeOff">{t("goal.delete.writeOff")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <DialogFooter>
+        <Button
+          variant="destructive"
+          disabled={!destination}
+          onClick={() => onConfirm(destination)}
+        >
+          {t("common.delete")}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 }
 
@@ -249,6 +359,10 @@ function DepositDialog({
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
   const [accountId, setAccountId] = useState("");
+  // Money goes into a jar and comes back out of it. Taking it back out was the
+  // one direction the app had no way to record: the figure had to be typed over
+  // in the edit form, which moved nothing and left capital wrong.
+  const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
 
   const remaining = goal.targetAmount - goal.currentAmount;
 
@@ -273,8 +387,8 @@ function DepositDialog({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const depositAmount = Number(amount);
-    if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
       toast.error(t("goal.deposit.enterAmount"));
       return;
     }
@@ -285,12 +399,12 @@ function DepositDialog({
     setLoading(true);
     try {
       await apiClient.post("/goals", {
-        action: "deposit",
+        action: mode,
         goalId: goal.id,
-        amount: String(depositAmount),
+        amount: String(value),
         accountId
       });
-      toast.success(t("goal.deposit.success"));
+      toast.success(mode === "deposit" ? t("goal.deposit.success") : t("goal.withdraw.success"));
       setOpen(false);
       setAmount("");
       await onSuccess();
@@ -324,11 +438,30 @@ function DepositDialog({
           })}
         </p>
         <form onSubmit={handleSubmit} className="grid gap-4">
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={mode === "deposit" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMode("deposit")}
+            >
+              {t("goal.move.deposit")}
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "withdraw" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMode("withdraw")}
+              disabled={goal.currentAmount <= 0}
+            >
+              {t("goal.move.withdraw")}
+            </Button>
+          </div>
           <div className="space-y-2">
             <Label>{t("goal.deposit.amount")}</Label>
             <AmountInput
-              min="1"
-              max={remaining > 0 ? remaining : undefined}
+              min="0.01"
+              max={mode === "withdraw" ? goal.currentAmount : remaining > 0 ? remaining : undefined}
               step="0.01"
               value={amount}
               onValueChange={setAmount}
@@ -337,7 +470,9 @@ function DepositDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>{t("goal.deposit.fromAccount")}</Label>
+            <Label>
+              {mode === "deposit" ? t("goal.deposit.fromAccount") : t("goal.withdraw.toAccount")}
+            </Label>
             {accounts.length > 0 ? (
               <Select value={accountId} onValueChange={setAccountId}>
                 <SelectTrigger>
@@ -358,7 +493,7 @@ function DepositDialog({
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading || accounts.length === 0}>
-              {t("goal.deposit.submit")}
+              {mode === "deposit" ? t("goal.deposit.submit") : t("goal.withdraw.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -370,14 +505,17 @@ function DepositDialog({
 function GoalDialog({
   title,
   goal,
+  currency,
   onSubmit
 }: {
   title: string;
   goal?: GoalsPageData["goals"][number];
+  currency: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useI18n();
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
+  const [saved, setSaved] = useState(String(goal?.currentAmount ?? 0));
 
   useEffect(() => {
     let cancelled = false;
@@ -421,7 +559,8 @@ function GoalDialog({
                 name="currentAmount"
                 min="0"
                 step="0.01"
-                defaultValue={goal.currentAmount}
+                value={saved}
+                onValueChange={setSaved}
                 required
               />
             </div>
@@ -432,6 +571,35 @@ function GoalDialog({
             <input type="hidden" name="currentAmount" value="0" />
           )}
         </div>
+        {/* A goal holds money that left an account, so a change to the figure
+            above is a top-up or a withdrawal — it has to say through which
+            account, or capital would grow from a number being typed. */}
+        {goal && Number(saved) !== goal.currentAmount ? (
+          <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <Label>{t("goal.edit.viaAccount")}</Label>
+            <Select name="accountId" defaultValue={goal.linkedAccountId || accounts[0]?.id || ""}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t("goal.edit.viaAccountHint", {
+                amount: formatCurrency(Math.abs(Number(saved) - goal.currentAmount), currency),
+                direction:
+                  Number(saved) > goal.currentAmount
+                    ? t("goal.edit.fromAccount")
+                    : t("goal.edit.toAccount")
+              })}
+            </p>
+          </div>
+        ) : null}
         <div className="space-y-2">
           <Label>{t("goal.dialog.deadline")}</Label>
           <Input
