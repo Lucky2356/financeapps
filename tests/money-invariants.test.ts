@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type { BudgetsPageData, GoalsPageData, LiabilitiesPageData } from "@/lib/data";
+import type { DashboardData } from "@/types/finance";
 import type { PlanFactPageData } from "@/types/finance";
 
 const USD_RATE = 90;
@@ -93,25 +94,119 @@ describe("putting money into a goal", () => {
   });
 });
 
-describe("a goal filled in by hand", () => {
-  it("does not add money to plan/fact that never left an account", async () => {
+describe("the money in a goal", () => {
+  it("cannot appear without leaving an account", async () => {
     const api = await client();
     await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "100000" });
-    const before = await api.get<PlanFactPageData>("/plan");
-    const monthBefore = before.months.find((entry) => entry.month === monthKey());
 
-    // A target whose current amount is typed in describes money that is still
-    // on an account — counting it beside the balances would count it twice.
-    await api.post("/goals", {
-      title: "Уже накоплено",
+    // A figure typed into a goal used to raise capital by itself — money out of
+    // nothing. Now it has to say which account it came from.
+    await expect(
+      api.post("/goals", {
+        title: "Уже накоплено",
+        targetAmount: "300000",
+        currentAmount: "50000",
+        deadline: new Date(new Date().getFullYear() + 1, 0, 1).toISOString().slice(0, 10)
+      })
+    ).rejects.toThrow(/счёт/i);
+  });
+
+  it("moves between the account and the goal, and back again", async () => {
+    const api = await client();
+    const account = await api.post<{ id: string }>("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "100000"
+    });
+    const capitalBefore = (await api.get<DashboardData>("/dashboard")).netWorth;
+
+    const goal = await api.post<{ id: string }>("/goals", {
+      title: "Отпуск",
       targetAmount: "300000",
       currentAmount: "50000",
+      accountId: account.id,
       deadline: new Date(new Date().getFullYear() + 1, 0, 1).toISOString().slice(0, 10)
     });
 
+    // Half the card is now in the jar; together they are what they were.
+    let accounts = await api.get<{ accounts: Array<{ id: string; balance: number }> }>("/accounts");
+    expect(accounts.accounts[0].balance).toBe(50_000);
+    expect((await api.get<GoalsPageData>("/goals")).goals[0]?.currentAmount).toBe(50_000);
+    expect((await api.get<DashboardData>("/dashboard")).netWorth).toBeCloseTo(capitalBefore, 2);
+
+    // And out again.
+    await api.post("/goals", {
+      action: "withdraw",
+      goalId: goal.id,
+      accountId: account.id,
+      amount: "20000"
+    });
+    accounts = await api.get<{ accounts: Array<{ id: string; balance: number }> }>("/accounts");
+    expect(accounts.accounts[0].balance).toBe(70_000);
+    expect((await api.get<GoalsPageData>("/goals")).goals[0]?.currentAmount).toBe(30_000);
+    expect((await api.get<DashboardData>("/dashboard")).netWorth).toBeCloseTo(capitalBefore, 2);
+  });
+
+  it("goes back to an account when the goal is deleted", async () => {
+    const api = await client();
+    const account = await api.post<{ id: string }>("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "100000"
+    });
+    const goal = await api.post<{ id: string }>("/goals", {
+      title: "Отпуск",
+      targetAmount: "300000",
+      currentAmount: "40000",
+      accountId: account.id,
+      deadline: new Date(new Date().getFullYear() + 1, 0, 1).toISOString().slice(0, 10)
+    });
+
+    await api.delete(`/goals?id=${goal.id}&accountId=${account.id}`);
+
+    const accounts = await api.get<{ accounts: Array<{ balance: number }> }>("/accounts");
+    // Deleting used to make the 40 000 ₽ vanish from capital with no account
+    // any better off.
+    expect(accounts.accounts[0].balance).toBe(100_000);
+    expect((await api.get<GoalsPageData>("/goals")).goals).toHaveLength(0);
+  });
+
+  it("stays visible in plan/fact after a top-up", async () => {
+    const api = await client();
+    const account = await api.post<{ id: string }>("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "100000"
+    });
+    const before = await api.get<PlanFactPageData>("/plan");
+    const monthBefore = before.months.find((entry) => entry.month === monthKey());
+    const totalBefore = (monthBefore?.opening.fact ?? 0) + (monthBefore?.savings.fact ?? 0);
+
+    const goal = await api.post<{ id: string }>("/goals", {
+      title: "Отпуск",
+      targetAmount: "300000",
+      currentAmount: "0",
+      deadline: new Date(new Date().getFullYear() + 1, 0, 1).toISOString().slice(0, 10)
+    });
+    await api.post("/goals", {
+      action: "deposit",
+      goalId: goal.id,
+      accountId: account.id,
+      amount: "25000"
+    });
+
+    // The opening row describes the START of the month, so a top-up made today
+    // must not move it at all. It used to drag the "everyday" half down by the
+    // amount — every earlier month read poorer for money that had only changed
+    // pocket.
     const after = await api.get<PlanFactPageData>("/plan");
     const monthAfter = after.months.find((entry) => entry.month === monthKey());
-    expect(monthAfter?.savings.fact).toBe(monthBefore?.savings.fact ?? 0);
+    expect(monthAfter?.opening.fact).toBe(monthBefore?.opening.fact);
+    expect(monthAfter?.savings.fact).toBe(monthBefore?.savings.fact);
+    expect((monthAfter?.opening.fact ?? 0) + (monthAfter?.savings.fact ?? 0)).toBeCloseTo(
+      totalBefore,
+      2
+    );
   });
 });
 

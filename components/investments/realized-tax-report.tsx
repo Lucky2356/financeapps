@@ -8,7 +8,9 @@ import { apiClient } from "@/lib/api/client";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { buildRealizedTaxReport } from "@/services/InvestmentTaxReportService";
+import { convert, DEFAULT_CURRENCY_RATES, type CurrencyRates } from "@/lib/currency";
 import type { RealizedInvestmentEvent } from "@/types/finance";
+import type { AccountsPageData } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +23,11 @@ import {
   SelectValue
 } from "@/components/ui/select";
 
-type EventsResponse = { events: RealizedInvestmentEvent[]; currency: string };
+type EventsResponse = {
+  events: RealizedInvestmentEvent[];
+  currency: string;
+  rates?: CurrencyRates;
+};
 
 // Desktop-only realized-income ledger + tax report: record sells and dividends,
 // see the year-by-year НДФЛ estimate on actually realized income. Kept separate
@@ -30,8 +36,13 @@ export function RealizedTaxReport() {
   const { t } = useI18n();
   const [events, setEvents] = useState<RealizedInvestmentEvent[]>([]);
   const [currency, setCurrency] = useState("RUB");
+  const [rates, setRates] = useState(DEFAULT_CURRENCY_RATES);
   const [type, setType] = useState<"SELL" | "DIVIDEND">("SELL");
   const [saving, setSaving] = useState(false);
+  // A sale takes the shares out of the portfolio; the money it brought in can
+  // land on an account, which is where the owner will look for it.
+  const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
+  const [accountId, setAccountId] = useState("none");
 
   const load = () =>
     apiClient
@@ -39,6 +50,7 @@ export function RealizedTaxReport() {
       .then((data) => {
         setEvents(data.events);
         setCurrency(data.currency || "RUB");
+        if (data.rates) setRates(data.rates);
       })
       .catch(() => {
         /* ignore */
@@ -46,6 +58,12 @@ export function RealizedTaxReport() {
 
   useEffect(() => {
     void load();
+    void apiClient
+      .get<AccountsPageData>("/accounts")
+      .then((data) => setAccounts(data.accounts))
+      .catch(() => {
+        /* offline or empty — the sale is recorded without an account */
+      });
   }, []);
 
   async function add(event: FormEvent<HTMLFormElement>) {
@@ -55,7 +73,11 @@ export function RealizedTaxReport() {
     if (!String(body.ticker ?? "").trim()) return toast.error(t("inv.rt.err.ticker"));
     try {
       setSaving(true);
-      await apiClient.post("/investments/events", { ...body, type });
+      await apiClient.post("/investments/events", {
+        ...body,
+        type,
+        ...(type === "SELL" && accountId !== "none" ? { accountId } : {})
+      });
       (event.target as HTMLFormElement).reset();
       await load();
       toast.success(t("inv.rt.added"));
@@ -75,7 +97,11 @@ export function RealizedTaxReport() {
     }
   }
 
-  const report = buildRealizedTaxReport(events);
+  // Events keep the currency they were booked in; the report is read in the
+  // app's, and the rouble threshold in the tax scale only means anything there.
+  const report = buildRealizedTaxReport(events, (amount, from) =>
+    convert(amount, from ?? currency, currency, rates)
+  );
 
   return (
     <CollapsibleCard title={t("inv.rt.title")} storageKey="inv-realized">
@@ -120,6 +146,22 @@ export function RealizedTaxReport() {
                 <Label htmlFor="rt-fee">{t("inv.rt.fee")}</Label>
                 <Input id="rt-fee" name="fee" type="number" step="any" min="0" defaultValue={0} />
               </div>
+              <div className="space-y-1">
+                <Label>{t("inv.rt.toAccount")}</Label>
+                <Select value={accountId} onValueChange={setAccountId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("inv.rt.noAccount")}</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </>
           ) : (
             <div className="space-y-1">
@@ -133,6 +175,11 @@ export function RealizedTaxReport() {
               {t("inv.rt.add")}
             </Button>
           </div>
+          {type === "SELL" ? (
+            <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-4">
+              {t("inv.rt.sellNote")}
+            </p>
+          ) : null}
         </form>
 
         {/* Per-year report */}

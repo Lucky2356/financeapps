@@ -130,6 +130,30 @@ async function runAutomation() {
     }
   }
 
+  if (settings.autoMaterializeRecurring) {
+    try {
+      // Auto-post every template whose due date has arrived.
+      await apiClient.post("/recurring/materialize-all");
+    } catch {
+      // Best-effort; ignore failures (e.g. no accounts yet).
+    }
+  }
+
+  try {
+    // Debts with auto-payment enabled: post the monthly payment once the due day
+    // has passed and reduce the balance (idempotent per month — see
+    // lib/debts/auto-pay). The tick box on the debt is the whole switch: it used
+    // to also need the general "post recurring payments" setting, so a debt
+    // marked for automatic payment quietly did nothing.
+    await apiClient.post("/debts/auto-pay");
+  } catch {
+    // Best-effort; ignore failures.
+  }
+
+  // Both of these describe the day, so they come after everything the app posts
+  // for itself: taken first, the snapshot recorded a capital that was about to
+  // change and the copy was written without the payments made a second later.
+
   // Record today's net worth snapshot once per load (plan B7) — best-effort,
   // both web and desktop. Builds an accurate capital history going forward.
   try {
@@ -151,24 +175,6 @@ async function runAutomation() {
     }
   } catch {
     // Best-effort; a failed backup must not break app startup.
-  }
-
-  if (settings.autoMaterializeRecurring) {
-    try {
-      // Auto-post every template whose due date has arrived.
-      await apiClient.post("/recurring/materialize-all");
-    } catch {
-      // Best-effort; ignore failures (e.g. no accounts yet).
-    }
-
-    try {
-      // Debts with auto-payment enabled: post the monthly payment once the due
-      // day has passed and reduce the balance (idempotent per month — see
-      // lib/debts/auto-pay).
-      await apiClient.post("/debts/auto-pay");
-    } catch {
-      // Best-effort; ignore failures.
-    }
   }
 
   if (settings.paymentReminders && typeof window !== "undefined" && "Notification" in window) {

@@ -18,7 +18,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 13;
+export const LATEST_LOCAL_STATE_VERSION = 14;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -198,6 +198,15 @@ export const localStateMigrations: LocalStateMigration[] = [
         })
       };
     }
+  },
+  {
+    from: 13,
+    to: 14,
+    // v14 gives a limit the month it was set in. A record without one goes on
+    // meaning "the limit for any month that has none of its own", which is
+    // exactly what a single limit per category meant before — so nothing is
+    // rewritten and every earlier month keeps reading the way it did.
+    migrate: (state) => ({ ...state, schemaVersion: 14 })
   }
 ];
 

@@ -196,7 +196,10 @@ export function ImportExportPanel({
   }
 
   async function exportCsv() {
-    const content = new ExportService().transactionsToCsv(transactionData.transactions);
+    const content = new ExportService().transactionsToCsv(
+      transactionData.transactions,
+      pageData.accounts
+    );
     await fileSystem.saveTextFile("transactions-export.csv", content, "text/csv;charset=utf-8");
   }
 

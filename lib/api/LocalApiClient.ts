@@ -72,7 +72,7 @@ import { createMarketDataProvider } from "@/services/market/createMarketDataProv
 import { historyRangeStart } from "@/lib/market/history-range";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
-import { effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
+import { budgetInForce, effectiveLimit, rolloverCarry } from "@/lib/budget-rollover";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
@@ -112,7 +112,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -584,7 +584,29 @@ export class LocalApiClient implements ApiClient {
     } else if (pathname === "/transactions" && itemId) {
       this.deleteTransaction(state, itemId);
     } else if (pathname === "/goals" && itemId) {
-      state.goals = state.goals.filter((goal) => goal.id !== itemId);
+      // Deleting a goal that still holds money used to make that money vanish:
+      // capital fell by the amount, no account got it back, and the record of
+      // how it got there stayed behind and kept being counted. The money goes
+      // somewhere first — onto a chosen account, or written off deliberately.
+      const goal = state.goals.find((item) => item.id === itemId);
+      if (goal && goal.currentAmount > 0) {
+        const writeOff = searchParams.get("writeOff") === "1";
+        const accountId = searchParams.get("accountId") || goal.linkedAccountId;
+        if (!writeOff) {
+          const account = this.goalAccount(state, accountId);
+          this.applyBalance(
+            state,
+            account.id,
+            roundMoney(
+              convert(goal.currentAmount, state.currency, account.currency, this.rates(state))
+            )
+          );
+        }
+      }
+      state.goals = state.goals.filter((item) => item.id !== itemId);
+      state.goalMovements = (state.goalMovements ?? []).filter(
+        (movement) => movement.goalId !== itemId
+      );
     } else if (pathname === "/debts" && itemId) {
       state.liabilities = state.liabilities.filter((liability) => liability.id !== itemId);
     } else if (pathname === "/investments/events" && itemId) {
@@ -661,6 +683,9 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertBudget(state, body));
     if (pathname === "/goals" && (body as { action?: unknown })?.action === "deposit") {
       return this.saveAndReturn<TResponse>(state, this.depositToGoal(state, body));
+    }
+    if (pathname === "/goals" && (body as { action?: unknown })?.action === "withdraw") {
+      return this.saveAndReturn<TResponse>(state, this.withdrawFromGoal(state, body));
     }
     if (pathname === "/goals")
       return this.saveAndReturn<TResponse>(state, this.upsertGoal(state, body, method));
@@ -977,39 +1002,80 @@ export class LocalApiClient implements ApiClient {
     if (!Number.isFinite(limit) || limit < 0) throw new Error("Введите лимит от нуля.");
     const monthKey = typeof input.month === "string" && input.month ? input.month : undefined;
 
-    // A zero limit means "reset" — remove the budget for this category.
+    // A limit belongs to the month it was set in and holds until it is changed
+    // (see budgetInForce). Saving one used to overwrite the single record a
+    // category had, so a figure typed in September changed August as well.
+    const month = monthKey ?? monthKeyOf(new Date());
+    const otherMonths = (item: BudgetsPageData["budgets"][number]) =>
+      item.categoryId !== category.id || (item.month ?? month) !== month;
+    const inForce = budgetInForce(state.budgets, category.id, month);
+
+    // A zero limit means "no limit this month". Simply dropping the record would
+    // let an earlier month's limit take its place, so the zero is written down.
     if (limit === 0) {
-      state.budgets = state.budgets.filter((item) => item.categoryId !== category.id);
+      const earlier = state.budgets.some(
+        (item) => item.categoryId === category.id && (item.month ?? "") !== month
+      );
+      state.budgets = state.budgets.filter(otherMonths);
+      if (earlier) {
+        state.budgets = [
+          this.buildBudgetRow(state, category, 0, month, inForce?.rollover ?? false),
+          ...state.budgets
+        ];
+      }
       return { removed: true };
     }
 
-    const existing = state.budgets.find((item) => item.categoryId === category.id);
     // Update rollover only when explicitly provided (so saving a limit doesn't
     // silently turn it off). toFormObject stringifies values.
     const rolloverProvided = input.rollover === "true" || input.rollover === "false";
-    const rollover = rolloverProvided ? input.rollover === "true" : (existing?.rollover ?? false);
+    const rollover = rolloverProvided ? input.rollover === "true" : (inForce?.rollover ?? false);
 
-    const row = this.buildBudgetRow(state, category, limit, monthKey, rollover);
-    state.budgets = [row, ...state.budgets.filter((item) => item.categoryId !== category.id)];
+    const row = this.buildBudgetRow(state, category, limit, month, rollover);
+    state.budgets = [row, ...state.budgets.filter(otherMonths)];
     return row;
   }
 
   private upsertGoal(state: LocalState, body: unknown, method: "POST" | "PUT") {
     const input = toFormObject(body);
+    const previous =
+      method === "PUT" && input.id ? state.goals.find((item) => item.id === input.id) : undefined;
+    const linkedAccountId = input.linkedAccountId?.trim() || undefined;
+    // What is in a goal is money that left an account, so the "saved" figure is
+    // not a field to be typed over: a number written straight into it made
+    // capital grow out of nothing. The form still shows it, and a change to it
+    // is carried out as a top-up or a withdrawal — through the account the goal
+    // is tied to, or one named in the payload.
+    const requested = Number(input.currentAmount ?? previous?.currentAmount ?? 0);
+    const wanted = Number.isFinite(requested) ? Math.max(requested, 0) : 0;
+    const held = previous?.currentAmount ?? 0;
+    const difference = roundMoney(wanted - held);
+
     const row = recomputeGoal({
-      id: method === "PUT" && input.id ? input.id : id("goal"),
+      id: previous?.id ?? id("goal"),
       title: input.title?.trim() || "Новая цель",
       targetAmount: Number(input.targetAmount),
-      currentAmount: Number(input.currentAmount ?? 0),
+      // The money side is settled below, never here.
+      currentAmount: held,
       deadline: new Date(input.deadline).toISOString(),
-      linkedAccountId: input.linkedAccountId?.trim() || undefined,
+      linkedAccountId,
       plannedContribution: Math.max(Number(input.plannedContribution ?? 0), 0)
     });
-    state.goals =
-      method === "PUT"
-        ? state.goals.map((item) => (item.id === row.id ? row : item))
-        : [...state.goals, row];
-    return row;
+    state.goals = previous
+      ? state.goals.map((item) => (item.id === row.id ? row : item))
+      : [...state.goals, row];
+    if (difference === 0) return row;
+
+    const account = this.goalAccount(state, input.accountId || linkedAccountId);
+    const accountDelta = roundMoney(
+      convert(difference, state.currency, account.currency, this.rates(state))
+    );
+    if (difference > 0 && accountDelta > account.balance)
+      throw new Error("Недостаточно средств на счёте.");
+    return this.applyGoalMovement(state, row, account, {
+      accountDelta: -accountDelta,
+      goalDelta: difference
+    });
   }
 
   private upsertLiability(state: LocalState, body: unknown, method: "POST" | "PUT") {
@@ -1072,31 +1138,79 @@ export class LocalApiClient implements ApiClient {
   // worth (which counts goal savings) conserved.
   private depositToGoal(state: LocalState, body: unknown) {
     const input = toFormObject(body);
-    const goal = state.goals.find((item) => item.id === input.goalId);
-    if (!goal) throw new Error("Цель не найдена.");
+    const goal = this.goalById(state, input.goalId);
+    const account = this.goalAccount(state, input.accountId || goal.linkedAccountId);
     const amount = Number(input.amount);
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
-    if (!input.accountId) throw new Error("Выберите счёт для пополнения.");
-    const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
-    if (!account) throw new Error("Выберите существующий активный счёт.");
     if (amount > account.balance) throw new Error("Недостаточно средств на счёте.");
 
-    this.applyBalance(state, account.id, -amount);
-    // The amount is entered in the account's own currency; a goal is kept in the
-    // app's, like every other total.
-    const credited = roundMoney(
-      convert(amount, account.currency, state.currency, this.rates(state))
-    );
-    // A top-up moves money out of a balance and into a goal without recording an
-    // operation, so plan/fact — which winds today's balances back through the
-    // operations — could not see it and reported every earlier month short by
-    // the amount. The movement is written down here so it can.
+    // The amount is typed in the account's own currency — that is the money the
+    // owner is looking at — and a goal is kept in the app's, like every total.
+    return this.applyGoalMovement(state, goal, account, {
+      accountDelta: -amount,
+      goalDelta: roundMoney(convert(amount, account.currency, state.currency, this.rates(state)))
+    });
+  }
+
+  /** The other direction: money comes back out of a goal onto an account. */
+  private withdrawFromGoal(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const goal = this.goalById(state, input.goalId);
+    const account = this.goalAccount(state, input.accountId || goal.linkedAccountId);
+    // Typed on the goal's side here: it is the jar being emptied, and the jar is
+    // counted in the app's currency.
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
+    if (amount > goal.currentAmount) throw new Error("В цели меньше денег, чем вы снимаете.");
+
+    return this.applyGoalMovement(state, goal, account, {
+      accountDelta: roundMoney(
+        convert(amount, state.currency, account.currency, this.rates(state))
+      ),
+      goalDelta: -amount
+    });
+  }
+
+  private goalById(state: LocalState, goalId: string | undefined) {
+    const goal = state.goals.find((item) => item.id === goalId);
+    if (!goal) throw new Error("Цель не найдена.");
+    return goal;
+  }
+
+  private goalAccount(state: LocalState, accountId: string | undefined) {
+    if (!accountId) throw new Error("Выберите счёт.");
+    const account = state.accounts.find((item) => item.id === accountId && !item.isArchived);
+    if (!account) throw new Error("Выберите существующий активный счёт.");
+    return account;
+  }
+
+  /**
+   * One move of money between an account and a goal, both sides at once.
+   *
+   * A goal is an envelope: what is in it got there from a balance, and every
+   * figure in the app is built on that. So the two sides are always applied
+   * together and written down — plan/fact winds today's balances back through
+   * the record, and without it a top-up made every earlier month read short by
+   * its amount.
+   *
+   * `accountDelta` is in the account's currency (negative = money leaves it);
+   * `goalDelta` is in the app's (positive = the goal grows). Both are given by
+   * the caller rather than derived from one another, so the side the owner
+   * typed is stored to the kopeck they typed.
+   */
+  private applyGoalMovement(
+    state: LocalState,
+    goal: GoalsPageData["goals"][number],
+    account: { id: string; currency: string },
+    sides: { accountDelta: number; goalDelta: number }
+  ) {
+    this.applyBalance(state, account.id, sides.accountDelta);
     state.goalMovements = [
       {
         id: id("goalmove"),
         goalId: goal.id,
         accountId: account.id,
-        amount: credited,
+        amount: sides.goalDelta,
         date: storedTransactionDate(new Date())
       },
       ...(state.goalMovements ?? [])
@@ -1104,7 +1218,10 @@ export class LocalApiClient implements ApiClient {
     // Spread the goal rather than rebuilding it from five fields: the funding
     // account and the planned contribution live on it too, and listing the
     // fields by hand erased both on every top-up.
-    const updated = recomputeGoal({ ...goal, currentAmount: goal.currentAmount + credited });
+    const updated = recomputeGoal({
+      ...goal,
+      currentAmount: roundMoney(goal.currentAmount + sides.goalDelta)
+    });
     state.goals = state.goals.map((item) => (item.id === goal.id ? updated : item));
     return updated;
   }
@@ -1658,8 +1775,15 @@ export class LocalApiClient implements ApiClient {
   private investmentEventsPage(state: LocalState): {
     events: RealizedInvestmentEvent[];
     currency: string;
+    rates: CurrencyRates;
   } {
-    return { events: state.realizedInvestmentEvents ?? [], currency: state.currency };
+    // The rates travel with the events: a sale booked in dollars has to be
+    // brought to the app's currency before the tax scale means anything.
+    return {
+      events: state.realizedInvestmentEvents ?? [],
+      currency: state.currency,
+      rates: this.rates(state)
+    };
   }
 
   private addRealizedEvent(state: LocalState, body: unknown): RealizedInvestmentEvent {
@@ -1682,7 +1806,78 @@ export class LocalApiClient implements ApiClient {
       currency: isSupportedCurrency(requestedCurrency) ? requestedCurrency : state.currency
     };
     state.realizedInvestmentEvents = [event, ...(state.realizedInvestmentEvents ?? [])];
+    if (event.type === "SELL") this.applySale(state, event, input.accountId);
     return event;
+  }
+
+  /**
+   * A sale leaves the portfolio as well as the tax ledger.
+   *
+   * Recording one used to do neither: the shares stayed in the holdings, the
+   * money never arrived anywhere, and the same gain was counted twice — once as
+   * realized in the report and again in the "if you sold today" estimate, which
+   * values what is still held. The position is written down here, oldest lots
+   * first (a share bought in 2023 is the one being sold, and that is what the
+   * tax on it is based on), and the proceeds can land on a chosen account as an
+   * ordinary income row so the money is somewhere the owner can see it.
+   */
+  private applySale(state: LocalState, event: RealizedInvestmentEvent, accountId?: string) {
+    const position = state.investments.portfolio.find((item) => item.ticker === event.ticker);
+    if (!position || event.quantity <= 0) return;
+    if (event.quantity > position.quantity)
+      throw new Error(`В портфеле ${position.quantity} ${position.ticker}, продать больше нельзя.`);
+
+    const left = roundMoney(position.quantity - event.quantity);
+    // The lots the sold shares came out of, oldest first.
+    let remaining = event.quantity;
+    const lots = sortLots(position.lots ?? [])
+      .map((lot) => {
+        if (remaining <= 0) return lot;
+        const taken = Math.min(lot.quantity, remaining);
+        remaining = roundMoney(remaining - taken);
+        return { ...lot, quantity: roundMoney(lot.quantity - taken) };
+      })
+      .filter((lot) => lot.quantity > 0);
+
+    state.investments = {
+      ...state.investments,
+      portfolio:
+        left > 0
+          ? state.investments.portfolio.map((item) =>
+              item.ticker === position.ticker
+                ? {
+                    ...item,
+                    quantity: left,
+                    currentValue: roundMoney(item.currentPrice * left),
+                    pnl: roundMoney((item.currentPrice - item.averageBuyPrice) * left),
+                    ...(lots.length ? { lots } : {})
+                  }
+                : item
+            )
+          : state.investments.portfolio.filter((item) => item.ticker !== position.ticker)
+    };
+
+    // Where the money went, if the owner said. Without an account the sale is
+    // still recorded — some people keep the cash with the broker and track it
+    // as a position of its own.
+    if (!accountId) return;
+    const account = state.accounts.find((item) => item.id === accountId && !item.isArchived);
+    if (!account) return;
+    const proceeds = roundMoney(event.quantity * event.sellPrice - event.fee);
+    if (proceeds <= 0) return;
+    const category = this.findOrCreateCategory(state, "Инвестиции", "INCOME");
+    this.upsertTransaction(
+      state,
+      {
+        amount: String(convert(proceeds, event.currency, account.currency, this.rates(state))),
+        type: "INCOME",
+        accountId: account.id,
+        categoryId: category.id,
+        date: event.date,
+        description: `Продажа ${event.ticker}`
+      },
+      "POST"
+    );
   }
 
   private addExpectedDividend(state: LocalState, body: unknown): ExpectedDividend {
@@ -1860,17 +2055,20 @@ export class LocalApiClient implements ApiClient {
     // category, so the previous limit equals the current limit.
     const [y, m] = month.split("-").map(Number);
     const prevMonthKey = monthKeyOf(new Date(y, m - 2, 1));
+    // What was left over is last month's limit against last month's spending —
+    // and last month may well have had a different limit.
     const carried = rolloverCarry(
       rollover,
-      limitAmount,
+      budgetInForce(state.budgets, category.id, prevMonthKey)?.limitAmount ?? limitAmount,
       this.spentInMonth(state, category.id, prevMonthKey)
     );
     const effective = effectiveLimit(limitAmount, carried);
     return {
-      id: `budget-${category.id}`,
+      id: `budget-${category.id}-${month}`,
       categoryId: category.id,
       category: category.label,
       color: category.color,
+      month,
       limitAmount,
       spent: roundMoney(spent),
       rollover,
@@ -1884,16 +2082,17 @@ export class LocalApiClient implements ApiClient {
   }
 
   private budgetRows(state: LocalState, monthKey?: string) {
+    const month = monthKey ?? monthKeyOf(new Date());
     return state.categories
       .filter((category) => category.kind === "EXPENSE")
       .map((category) => {
-        const existing = state.budgets.find((budget) => budget.categoryId === category.id);
+        const inForce = budgetInForce(state.budgets, category.id, month);
         return this.buildBudgetRow(
           state,
           category,
-          existing?.limitAmount ?? 0,
-          monthKey,
-          existing?.rollover ?? false
+          inForce?.limitAmount ?? 0,
+          month,
+          inForce?.rollover ?? false
         );
       });
   }
@@ -2618,10 +2817,11 @@ export class LocalApiClient implements ApiClient {
     // jar, and counting only the balances made the row drop by the size of every
     // top-up with nothing on the income or spending side to explain it.
     //
-    // What the app actually moved, not what a goal says it holds: a target
-    // whose current amount was typed in by hand is money still sitting on some
-    // account, and counting it here would count it twice.
-    for (const movement of state.goalMovements ?? []) now.savings += movement.amount;
+    // What the goal holds, not the movements behind it: a top-up made before the
+    // app started writing them down has no record, and counting only records
+    // would have gone on hiding exactly the money this is here to show. Capital
+    // counts goals the same way, so the two screens agree.
+    for (const goal of state.goals) now.savings += goal.currentAmount;
 
     // Everything recorded since, per month and per group — in base currency, or
     // a foreign-currency account would be wound back by raw units of its own.

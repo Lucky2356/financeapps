@@ -143,7 +143,7 @@ export const BOARDS: BoardSpec[] = [
     // Shares and exchange-traded funds share this board — SECTYPE tells them
     // apart, so a fund is labelled a fund rather than an odd-looking share.
     assetKind: null,
-    securityColumns: ["SECID", "SHORTNAME", "SECTYPE"],
+    securityColumns: ["SECID", "SHORTNAME", "SECTYPE", "LOTSIZE"],
     marketColumns: STOCK_MARKET_COLUMNS
   },
   {
@@ -212,6 +212,8 @@ type SnapshotRow = {
   changeDay: number;
   name: string;
   assetKind: AssetKind;
+  /** Exchange lot: the smallest number of shares that can actually be bought. */
+  lotSize: number;
   board: BoardSpec;
 };
 // Per-ticker daily stats from history: the official last close (what brokers show
@@ -296,7 +298,8 @@ export class MoexMarketDataProvider implements MarketDataService {
           // Use the live intraday change while trading; otherwise the official
           // close-over-close change from history (LASTTOPREVPRICE is 0 off-hours).
           changeDay: row && row.live > 0 ? row.changeDay : (stat?.changeDay ?? row?.changeDay ?? 0),
-          change30d: stat?.change30d ?? 0
+          change30d: stat?.change30d ?? 0,
+          lotSize: row?.lotSize ?? 1
         });
       }
 
@@ -421,10 +424,12 @@ export class MoexMarketDataProvider implements MarketDataService {
           : quote;
 
       const pct = md["LASTTOPREVPRICE"]; // intraday day change in %
+      const lot = numberOf(security?.["LOTSIZE"]);
       rows.set(secid, {
         live: toRoubles(quotedLive),
         marketPrice: toRoubles(quotedMarket),
         changeDay: typeof pct === "number" ? Number(pct.toFixed(2)) : 0,
+        lotSize: lot > 0 ? lot : 1,
         name: String(security?.["SHORTNAME"] ?? ""),
         assetKind: spec.assetKind ?? kindFromSecType(String(security?.["SECTYPE"] ?? "")),
         board: spec
@@ -458,7 +463,8 @@ export class MoexMarketDataProvider implements MarketDataService {
             "Цены и изменение — с Московской биржи (MOEX). Не инвестиционный совет.",
           price,
           changeDay: row.changeDay,
-          change30d: 0
+          change30d: 0,
+          lotSize: row.lotSize
         });
         if (matches.length >= limit) break;
       }

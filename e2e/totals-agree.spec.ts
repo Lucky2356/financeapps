@@ -45,3 +45,26 @@ test("категории на главной идут по убыванию", as
   const sorted = [...amounts].sort((left, right) => right - left);
   expect(amounts).toEqual(sorted);
 });
+
+// A link into the ledger already says what to show. Filling the current month in
+// behind it opened a six-month category on a list of this month — the figure and
+// the rows under it disagreeing again, one release after that was settled.
+test("ссылка из аналитики открывает тот же период, что и кольцо", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/analytics");
+
+  const row = page.locator('a[href*="/transactions?categoryId="]').first();
+  await expect(row).toBeVisible({ timeout: 20_000 });
+  await row.click();
+
+  await expect(page).toHaveURL(/categoryId=/);
+  // No dates were asked for, so none are added.
+  await expect(page).not.toHaveURL(/from=/);
+});
+
+// The screen still opens on the current month when nothing is asked of it.
+test("пустой адрес журнала открывает текущий месяц", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/transactions");
+  await expect(page).toHaveURL(/from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}/);
+});

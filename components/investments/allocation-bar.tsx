@@ -24,10 +24,14 @@ export function AllocationBar({ data }: { data: ChartDatum[] }) {
     color: CHART_PALETTE[index % CHART_PALETTE.length]
   }));
   if (restValue > 0) {
+    // A colour none of the named slices took, so "Прочее" cannot come out the
+    // same shade as one of them and read as part of it.
+    const taken = new Set(segments.map((segment) => segment.color));
+    const free = CHART_PALETTE.find((color) => !taken.has(color));
     segments.push({
       name: t("inv.hero.allocationOther"),
       value: restValue,
-      color: CHART_PALETTE[CHART_PALETTE.length - 1]
+      color: free ?? CHART_PALETTE[CHART_PALETTE.length - 1]
     });
   }
   const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;

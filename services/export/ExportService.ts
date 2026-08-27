@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 
-import type { TransactionRow } from "@/types/finance";
+import type { AccountRow, TransactionRow } from "@/types/finance";
 import type { PeriodReport } from "@/lib/reports/period-report";
 
 // CSV formula-injection guard: a spreadsheet treats a cell starting with = + - @
@@ -11,11 +11,18 @@ function escapeCsvField(value: string): string {
 }
 
 export class ExportService {
-  transactionsToCsv(transactions: TransactionRow[]) {
+  /**
+   * `accounts` names the currency each row is in. An operation is recorded in
+   * the currency of its account, so a file of bare numbers put dollars and
+   * roubles in one column with nothing to tell them apart.
+   */
+  transactionsToCsv(transactions: TransactionRow[], accounts: AccountRow[] = []) {
+    const currencyOf = new Map(accounts.map((account) => [account.id, account.currency]));
     const csv = Papa.unparse(
       transactions.map((transaction) => ({
         date: transaction.date,
         amount: transaction.type === "INCOME" ? transaction.amount : -transaction.amount,
+        currency: currencyOf.get(transaction.account.id) ?? "",
         type: transaction.type,
         category: escapeCsvField(transaction.category.label),
         account: escapeCsvField(transaction.account.label),

@@ -9,6 +9,8 @@ export type InvestmentSuggestion = {
   sector: string;
   price: number;
   risk: SecurityRisk;
+  /** Exchange lot the quantity is a whole multiple of. */
+  lotSize: number;
   suggestedQuantity: number;
   suggestedAmount: number;
   rationale: string;
@@ -82,7 +84,11 @@ export class InvestmentSuggestionService {
     return scored
       .map(({ security, score, isNewSector }) => {
         const amount = budget * (score / scoreSum);
-        const suggestedQuantity = Math.floor(amount / security.price);
+        // Shares trade in lots — ten SBER at a time, a hundred of some others.
+        // Advice to buy seven of a ten-share lot is advice nobody can act on,
+        // so the number is rounded down to whole lots.
+        const lot = Math.max(1, Math.round(security.lotSize ?? 1));
+        const suggestedQuantity = Math.floor(amount / (security.price * lot)) * lot;
         const reasons: string[] = [];
         if (isNewSector)
           reasons.push(translate(locale, "inv.suggest.newSector", { sector: security.sector }));
@@ -99,6 +105,7 @@ export class InvestmentSuggestionService {
           sector: security.sector,
           price: security.price,
           risk: security.risk,
+          lotSize: lot,
           suggestedQuantity,
           suggestedAmount: Math.round(suggestedQuantity * security.price),
           rationale: reasons.join(", ")
