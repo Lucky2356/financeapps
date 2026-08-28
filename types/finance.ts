@@ -413,6 +413,18 @@ export type RealizedInvestmentEvent = {
   amount: number;
   fee: number;
   currency: string;
+  /**
+   * What recording this sale took out of the portfolio, kept so that deleting
+   * it puts the same thing back: the lots it drained, the average the position
+   * had before, the whole row when the sale emptied it, and the income row the
+   * proceeds were posted as. Written by the app, never by the form.
+   */
+  soldFrom?: {
+    averageBuyPrice: number;
+    lots?: PurchaseLot[];
+    position?: PortfolioRow;
+    transactionId?: string;
+  };
 };
 
 export type ExpectedDividend = {

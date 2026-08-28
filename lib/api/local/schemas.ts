@@ -206,7 +206,21 @@ export const realizedEventSchema = z.object({
   buyPrice: z.coerce.number().finite().min(0).default(0),
   amount: z.coerce.number().finite().min(0).default(0),
   fee: z.coerce.number().finite().min(0).default(0),
-  currency: z.enum(CURRENCY_CODES).default("RUB")
+  currency: z.enum(CURRENCY_CODES).default("RUB"),
+  /**
+   * What a sale took out of the portfolio, so deleting the record can put it
+   * back: the lots it drained, the average the position had before it, the row
+   * itself when the sale emptied it, and the income row the money arrived as.
+   * Absent on dividends and on sales of a ticker that was not held.
+   */
+  soldFrom: z
+    .object({
+      averageBuyPrice: z.coerce.number().finite().min(0).default(0),
+      lots: z.array(purchaseLotSchema).optional(),
+      position: portfolioRowSchema.optional(),
+      transactionId: z.string().min(1).optional()
+    })
+    .optional()
 });
 
 export const expectedDividendSchema = z.object({

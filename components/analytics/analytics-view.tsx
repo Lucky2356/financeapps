@@ -262,6 +262,8 @@ export function AnalyticsView({
         empty={t("an.noData6m")}
         currency={data.currency}
         linkType="EXPENSE"
+        from={data.from}
+        to={data.to}
       />
 
       {/* The same for money coming in. Spending alone says how it was used;
@@ -274,6 +276,8 @@ export function AnalyticsView({
         empty={t("an.noIncome6m")}
         currency={data.currency}
         linkType="INCOME"
+        from={data.from}
+        to={data.to}
       />
 
       <CategoryTrendsSection currency={data.currency} />
@@ -290,7 +294,9 @@ function StructureCard({
   otherLabel,
   empty,
   currency,
-  linkType
+  linkType,
+  from,
+  to
 }: {
   title: string;
   slices: AnalyticsData["topExpenseCategories"];
@@ -300,6 +306,13 @@ function StructureCard({
   currency: string;
   /** Rows open the ledger filtered to this category and this side of it. */
   linkType: "INCOME" | "EXPENSE";
+  /**
+   * The six months this card is drawn over. The link carries them, so the sum
+   * of the rows the ledger shows is the sum the legend quotes — without them
+   * the ledger answered with all of history under a figure about half a year.
+   */
+  from: string;
+  to: string;
 }) {
   // A legend of twenty rows is not a legend, so this card names the six biggest
   // categories and gathers everything else into one quiet slice — which keeps
@@ -388,7 +401,7 @@ function StructureCard({
                 ) : (
                   <Link
                     key={cat.category}
-                    href={`/transactions?categoryId=${encodeURIComponent(cat.categoryId)}&type=${linkType}`}
+                    href={`/transactions?categoryId=${encodeURIComponent(cat.categoryId)}&type=${linkType}&from=${from}&to=${to}`}
                     className="block rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
                   >
                     {row}

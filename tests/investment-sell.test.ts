@@ -105,4 +105,88 @@ describe("recording a sale", () => {
     const ledger = await api.get<TransactionsPageData>("/transactions?limit=all");
     expect(ledger.transactions.some((row) => row.description === "Продажа SBER")).toBe(true);
   });
+
+  it("re-prices what is left from the purchases it still stands on", async () => {
+    const { api } = await withPosition();
+
+    // 60 bought at 200 and 40 at 325 average out to 250. Selling the 60 oldest
+    // leaves shares that cost 325 apiece — carrying 250 forward reported a
+    // profit of 75 a share that nobody ever earned.
+    await api.post("/investments/events", {
+      type: "SELL",
+      ticker: "SBER",
+      quantity: "60",
+      sellPrice: "300",
+      buyPrice: "200",
+      fee: "0",
+      date: "2026-08-01"
+    });
+
+    const data = await api.get<InvestmentData>("/investments");
+    const position = data.portfolio.find((row) => row.ticker === "SBER");
+    expect(position?.averageBuyPrice).toBe(325);
+  });
+});
+
+describe("deleting a sale", () => {
+  const soldEverything = async () => {
+    const { api, accountId } = await withPosition();
+    await api.post("/investments/events", {
+      type: "SELL",
+      ticker: "SBER",
+      quantity: "100",
+      sellPrice: "300",
+      buyPrice: "250",
+      fee: "0",
+      accountId,
+      date: "2026-08-01"
+    });
+    return { api, accountId };
+  };
+
+  it("puts the shares back and takes the money away again", async () => {
+    const { api, accountId } = await soldEverything();
+    const [event] = (await api.get<{ events: Array<{ id: string }> }>("/investments/events"))
+      .events;
+
+    await api.delete(`/investments/events?id=${event.id}`);
+
+    const data = await api.get<InvestmentData>("/investments");
+    const position = data.portfolio.find((row) => row.ticker === "SBER");
+    expect(position?.quantity).toBe(100);
+    expect(position?.averageBuyPrice).toBe(250);
+    expect(position?.lots).toEqual([
+      { date: "2024-01-10", quantity: 60, price: 200 },
+      { date: "2025-06-01", quantity: 40, price: 325 }
+    ]);
+
+    const accounts = await api.get<{ accounts: Array<{ id: string; balance: number }> }>(
+      "/accounts"
+    );
+    expect(accounts.accounts.find((item) => item.id === accountId)?.balance).toBe(0);
+    const ledger = await api.get<TransactionsPageData>("/transactions?limit=all");
+    expect(ledger.transactions.some((row) => row.description === "Продажа SBER")).toBe(false);
+  });
+
+  it("puts back only what it took, when part of the position was sold", async () => {
+    const { api } = await withPosition();
+    await api.post("/investments/events", {
+      type: "SELL",
+      ticker: "SBER",
+      quantity: "70",
+      sellPrice: "300",
+      buyPrice: "250",
+      fee: "0",
+      date: "2026-08-01"
+    });
+    const [event] = (await api.get<{ events: Array<{ id: string }> }>("/investments/events"))
+      .events;
+
+    await api.delete(`/investments/events?id=${event.id}`);
+
+    const data = await api.get<InvestmentData>("/investments");
+    const position = data.portfolio.find((row) => row.ticker === "SBER");
+    expect(position?.quantity).toBe(100);
+    expect(position?.averageBuyPrice).toBe(250);
+  });
 });

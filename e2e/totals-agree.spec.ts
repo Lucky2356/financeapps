@@ -46,9 +46,10 @@ test("категории на главной идут по убыванию", as
   expect(amounts).toEqual(sorted);
 });
 
-// A link into the ledger already says what to show. Filling the current month in
-// behind it opened a six-month category on a list of this month — the figure and
-// the rows under it disagreeing again, one release after that was settled.
+// A link into the ledger has to say which period it means. Saying nothing got it
+// the current month behind a six-month figure; saying nothing after that was
+// fixed got it all of history behind the same figure. It carries the ring's own
+// six months, so the rows add up to the number that was clicked.
 test("ссылка из аналитики открывает тот же период, что и кольцо", async ({ page }) => {
   await seedExampleData(page);
   await openSettled(page, "/analytics");
@@ -58,8 +59,17 @@ test("ссылка из аналитики открывает тот же пер
   await row.click();
 
   await expect(page).toHaveURL(/categoryId=/);
-  // No dates were asked for, so none are added.
-  await expect(page).not.toHaveURL(/from=/);
+  const params = new URL(page.url()).searchParams;
+  const from = params.get("from") ?? "";
+  const to = params.get("to") ?? "";
+  expect(from).toMatch(/^\d{4}-\d{2}-01$/);
+  expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  const monthsApart = (left: string, right: string) => {
+    const [ly, lm] = left.split("-").map(Number);
+    const [ry, rm] = right.split("-").map(Number);
+    return ry * 12 + rm - (ly * 12 + lm);
+  };
+  expect(monthsApart(from, to)).toBe(5);
 });
 
 // The screen still opens on the current month when nothing is asked of it.

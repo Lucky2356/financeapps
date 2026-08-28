@@ -5,6 +5,8 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { budgetInForce } from "@/lib/budget-rollover";
 import type { BudgetsPageData } from "@/lib/data";
 
+const STATE_KEY = "localFinanceState_profile-default";
+
 // A limit belongs to a month. The screen has always offered a month picker; the
 // figure under it had no month at all, so one typed in September rewrote August.
 describe("which limit is in force", () => {
@@ -53,6 +55,37 @@ describe("setting a limit while looking at a month", () => {
     expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-07"), foodId)).toBe(20_000);
     expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-08"), foodId)).toBe(20_000);
     expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-09"), foodId)).toBe(30_000);
+  });
+
+  it("leaves a limit set before limits had months alone", async () => {
+    // What an upgraded document looks like: one record with no month at all,
+    // meaning "the limit, whichever month you are looking at". Saving a new
+    // figure in September used to consume that record, and every earlier month
+    // fell to no limit — the opposite of what the migration promises.
+    const storage = new MemoryStorageAdapter();
+    const first = new LocalApiClient(storage);
+    const categories = await first.get<{ categories: Array<{ id: string; name: string }> }>(
+      "/categories"
+    );
+    const foodId = categories.categories.find((category) => category.name === "Продукты")?.id ?? "";
+    await first.post("/budgets", { categoryId: foodId, limitAmount: "20000" });
+
+    const stored = await storage.getItem<{ budgets: Array<Record<string, unknown>> }>(STATE_KEY);
+    await storage.setItem(STATE_KEY, {
+      ...stored,
+      budgets: (stored?.budgets ?? []).map((budget) => {
+        const rest = { ...budget };
+        delete rest.month;
+        return rest;
+      })
+    });
+
+    const api = new LocalApiClient(storage);
+    await api.post("/budgets", { categoryId: foodId, limitAmount: "30000", month: "2026-09" });
+
+    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-05"), foodId)).toBe(20_000);
+    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-09"), foodId)).toBe(30_000);
+    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-11"), foodId)).toBe(30_000);
   });
 
   it("a zero means no limit that month, not the earlier one coming back", async () => {
