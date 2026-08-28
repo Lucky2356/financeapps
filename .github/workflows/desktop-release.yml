@@ -334,19 +334,25 @@ jobs:
           echo "apksigner: $apksigner"
 
           # The whole of what the tool says, printed before anything is read out
-          # of it. The first version of this step matched one exact line and got
-          # an empty string, which is indistinguishable in the log from a wrong
-          # key — the run said "подпись не та" while the real answer was "я не
-          # понял ответа". stderr is captured too: "DOES NOT VERIFY" goes there.
-          report="$("$apksigner" verify --print-certs "$out" 2>&1 || true)"
+          # of it, and its verdict kept apart from its wording: an APK that does
+          # not verify is a different failure from one whose report we could not
+          # parse, and the first version of this step reported both as "не тот
+          # ключ". stderr is captured too — "DOES NOT VERIFY" goes there.
           echo "----- apksigner verify --print-certs -----"
+          if ! report="$("$apksigner" verify --print-certs "$out" 2>&1)"; then
+            echo "$report"
+            echo "::error::apksigner не подтвердил подпись APK — см. текст выше."
+            exit 1
+          fi
           echo "$report"
           echo "------------------------------------------"
 
-          # Take the digest by shape, not by the exact wording of the line around
-          # it: 64 hex characters on the SHA-256 line of the first signer.
+          # Take the digest by shape rather than by the sentence around it. The
+          # sentence is not stable: build-tools 36 says "Signer #1 certificate
+          # SHA-256 digest:" and build-tools 37 says "V2 Signer: certificate
+          # SHA-256 digest:", and the runner picks whichever it has.
           got="$(printf '%s\n' "$report" \
-            | grep -iE 'signer #1 .*sha-?256 digest' \
+            | grep -iE 'certificate sha-?256 digest' \
             | grep -oiE '[0-9a-f]{64}' \
             | head -1 \
             | tr 'A-F' 'a-f')"
