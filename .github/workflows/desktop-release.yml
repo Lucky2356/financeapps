@@ -327,7 +327,33 @@ jobs:
           mv "$src" "$out"
 
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
-          got="$("$apksigner" verify --print-certs "$out" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          if [ -z "$apksigner" ]; then
+            echo "::error::apksigner не найден в $ANDROID_HOME/build-tools — проверить подпись нечем."
+            exit 1
+          fi
+          echo "apksigner: $apksigner"
+
+          # The whole of what the tool says, printed before anything is read out
+          # of it. The first version of this step matched one exact line and got
+          # an empty string, which is indistinguishable in the log from a wrong
+          # key — the run said "подпись не та" while the real answer was "я не
+          # понял ответа". stderr is captured too: "DOES NOT VERIFY" goes there.
+          report="$("$apksigner" verify --print-certs "$out" 2>&1 || true)"
+          echo "----- apksigner verify --print-certs -----"
+          echo "$report"
+          echo "------------------------------------------"
+
+          # Take the digest by shape, not by the exact wording of the line around
+          # it: 64 hex characters on the SHA-256 line of the first signer.
+          got="$(printf '%s\n' "$report" \
+            | grep -iE 'signer #1 .*sha-?256 digest' \
+            | grep -oiE '[0-9a-f]{64}' \
+            | head -1 \
+            | tr 'A-F' 'a-f')"
+          if [ -z "$got" ]; then
+            echo "::error::Из вывода apksigner не удалось прочитать отпечаток — см. текст выше."
+            exit 1
+          fi
           echo "Отпечаток сертификата: $got"
           if [ "$got" != "$EXPECTED_CERT_SHA256" ]; then
             echo "::error::Подпись APK не совпадает с подписью установленных копий ($EXPECTED_CERT_SHA256)."
