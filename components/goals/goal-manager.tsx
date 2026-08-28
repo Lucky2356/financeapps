@@ -274,6 +274,18 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
   );
 }
 
+// The account a goal's money moves through by default. "Связанный счёт" is the
+// owner's own answer to that question, so it wins — but only while it is still
+// an account money can move to: an archived one is not offered anywhere else
+// either, and picking it would fail on submit.
+function defaultAccountId(
+  accounts: AccountsPageData["accounts"],
+  linkedAccountId: string | undefined
+): string {
+  const linked = accounts.find((account) => account.id === linkedAccountId);
+  return linked?.id ?? accounts[0]?.id ?? "";
+}
+
 // Deleting a goal that still holds money asks the only question that matters:
 // where does the money go? Onto an account, or written off on purpose.
 function DeleteGoalDialog({
@@ -287,7 +299,7 @@ function DeleteGoalDialog({
 }) {
   const { t } = useI18n();
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
-  const [destination, setDestination] = useState(goal.linkedAccountId || "");
+  const [destination, setDestination] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -296,13 +308,13 @@ function DeleteGoalDialog({
       .then((data) => {
         if (cancelled) return;
         setAccounts(data.accounts);
-        setDestination((current) => current || data.accounts[0]?.id || "writeOff");
+        setDestination(defaultAccountId(data.accounts, goal.linkedAccountId) || "writeOff");
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [goal.linkedAccountId]);
 
   return (
     <DialogContent>
@@ -377,13 +389,13 @@ function DepositDialog({
         if (cancelled) return;
         // The /accounts endpoint already excludes archived accounts.
         setAccounts(data.accounts);
-        setAccountId((current) => current || data.accounts[0]?.id || "");
+        setAccountId((current) => current || defaultAccountId(data.accounts, goal.linkedAccountId));
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, goal.linkedAccountId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -577,7 +589,10 @@ function GoalDialog({
         {goal && Number(saved) !== goal.currentAmount ? (
           <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <Label>{t("goal.edit.viaAccount")}</Label>
-            <Select name="accountId" defaultValue={goal.linkedAccountId || accounts[0]?.id || ""}>
+            <Select
+              name="accountId"
+              defaultValue={defaultAccountId(accounts, goal.linkedAccountId)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

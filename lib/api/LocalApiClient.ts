@@ -39,7 +39,7 @@ import {
   type CurrencyRates
 } from "@/lib/currency";
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatInputDate } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
 import {
   LATEST_LOCAL_STATE_VERSION,
@@ -96,6 +96,7 @@ import type {
   PlanFactColumn,
   PlanFactMonth,
   PlanFactPageData,
+  PurchaseLot,
   RealizedInvestmentEvent,
   TargetAllocation,
   TransactionRow
@@ -610,8 +611,13 @@ export class LocalApiClient implements ApiClient {
     } else if (pathname === "/debts" && itemId) {
       state.liabilities = state.liabilities.filter((liability) => liability.id !== itemId);
     } else if (pathname === "/investments/events" && itemId) {
+      // Recording a sale takes the shares out of the portfolio and puts the
+      // money on an account, so deleting the record has to undo both — see
+      // undoSale.
+      const event = (state.realizedInvestmentEvents ?? []).find((item) => item.id === itemId);
+      if (event?.type === "SELL") this.undoSale(state, event);
       state.realizedInvestmentEvents = (state.realizedInvestmentEvents ?? []).filter(
-        (event) => event.id !== itemId
+        (item) => item.id !== itemId
       );
     } else if (pathname === "/market/alerts" && itemId) {
       state.marketAlerts = (state.marketAlerts ?? []).filter((alert) => alert.id !== itemId);
@@ -1006,8 +1012,12 @@ export class LocalApiClient implements ApiClient {
     // (see budgetInForce). Saving one used to overwrite the single record a
     // category had, so a figure typed in September changed August as well.
     const month = monthKey ?? monthKeyOf(new Date());
+    // Only this month's own record gives way. A record written before limits
+    // had a month is the limit for every month that has none of its own, so
+    // treating it as this month's and replacing it dropped every earlier month
+    // to "no limit" the first time a figure was saved after the update.
     const otherMonths = (item: BudgetsPageData["budgets"][number]) =>
-      item.categoryId !== category.id || (item.month ?? month) !== month;
+      item.categoryId !== category.id || (item.month ?? "") !== month;
     const inForce = budgetInForce(state.budgets, category.id, month);
 
     // A zero limit means "no limit this month". Simply dropping the record would
@@ -1828,16 +1838,24 @@ export class LocalApiClient implements ApiClient {
       throw new Error(`В портфеле ${position.quantity} ${position.ticker}, продать больше нельзя.`);
 
     const left = roundMoney(position.quantity - event.quantity);
-    // The lots the sold shares came out of, oldest first.
+    // The lots the sold shares came out of, oldest first. Both halves are kept:
+    // what stays in the position, and what left it — the latter so deleting the
+    // record can put the shares back where they were.
     let remaining = event.quantity;
-    const lots = sortLots(position.lots ?? [])
-      .map((lot) => {
-        if (remaining <= 0) return lot;
-        const taken = Math.min(lot.quantity, remaining);
-        remaining = roundMoney(remaining - taken);
-        return { ...lot, quantity: roundMoney(lot.quantity - taken) };
-      })
-      .filter((lot) => lot.quantity > 0);
+    const kept: PurchaseLot[] = [];
+    const taken: PurchaseLot[] = [];
+    for (const lot of sortLots(position.lots ?? [])) {
+      const off = Math.min(lot.quantity, Math.max(remaining, 0));
+      remaining = roundMoney(remaining - off);
+      if (off > 0) taken.push({ ...lot, quantity: off });
+      const rest = roundMoney(lot.quantity - off);
+      if (rest > 0) kept.push({ ...lot, quantity: rest });
+    }
+    // What is left cost what the lots behind it cost. Selling the oldest — the
+    // cheapest, as a rule — raises the average of everything still held, and
+    // carrying the old average forward reported a profit on shares that never
+    // earned it.
+    const average = kept.length ? summarizeLots(kept).averageBuyPrice : position.averageBuyPrice;
 
     state.investments = {
       ...state.investments,
@@ -1848,28 +1866,41 @@ export class LocalApiClient implements ApiClient {
                 ? {
                     ...item,
                     quantity: left,
+                    averageBuyPrice: average,
                     currentValue: roundMoney(item.currentPrice * left),
-                    pnl: roundMoney((item.currentPrice - item.averageBuyPrice) * left),
-                    ...(lots.length ? { lots } : {})
+                    pnl: roundMoney((item.currentPrice - average) * left),
+                    ...(kept.length ? { lots: kept } : {})
                   }
                 : item
             )
           : state.investments.portfolio.filter((item) => item.ticker !== position.ticker)
+    };
+    // Everything the sale changed, so it can be changed back — a sale typed by
+    // mistake used to be undeletable in the only way that mattered: the record
+    // went, the shares did not come back.
+    event.soldFrom = {
+      averageBuyPrice: position.averageBuyPrice,
+      ...(taken.length ? { lots: taken } : {}),
+      ...(left > 0 ? {} : { position })
     };
 
     // Where the money went, if the owner said. Without an account the sale is
     // still recorded — some people keep the cash with the broker and track it
     // as a position of its own.
     if (!accountId) return;
+    // Named an account that no longer takes money? Say so. Passing over it left
+    // the shares sold and the proceeds nowhere at all.
     const account = state.accounts.find((item) => item.id === accountId && !item.isArchived);
-    if (!account) return;
+    if (!account) throw new Error("Выберите существующий активный счёт.");
     const proceeds = roundMoney(event.quantity * event.sellPrice - event.fee);
     if (proceeds <= 0) return;
     const category = this.findOrCreateCategory(state, "Инвестиции", "INCOME");
-    this.upsertTransaction(
+    const posted = this.upsertTransaction(
       state,
       {
-        amount: String(convert(proceeds, event.currency, account.currency, this.rates(state))),
+        amount: String(
+          roundMoney(convert(proceeds, event.currency, account.currency, this.rates(state)))
+        ),
         type: "INCOME",
         accountId: account.id,
         categoryId: category.id,
@@ -1878,6 +1909,55 @@ export class LocalApiClient implements ApiClient {
       },
       "POST"
     );
+    event.soldFrom = { ...event.soldFrom, transactionId: posted.id };
+  }
+
+  /**
+   * Deleting a sale puts back what recording it took away.
+   *
+   * Until this existed the two halves disagreed: creating the record emptied
+   * the position and posted the money, deleting it only dropped a line from the
+   * tax ledger. A mistyped sale could be removed from the report and still be
+   * missing from the portfolio for good.
+   */
+  private undoSale(state: LocalState, event: RealizedInvestmentEvent) {
+    const sold = event.soldFrom;
+    if (!sold) return;
+    if (sold.transactionId) this.deleteTransaction(state, sold.transactionId);
+
+    const current = state.investments.portfolio.find((item) => item.ticker === event.ticker);
+    if (!current) {
+      // The sale emptied the position out of the portfolio, so the row itself
+      // is what comes back.
+      if (sold.position)
+        state.investments = {
+          ...state.investments,
+          portfolio: [...state.investments.portfolio, sold.position]
+        };
+      return;
+    }
+
+    // Merge the lots back only when the position still keeps lots — half a set
+    // of them would not add up to the quantity beside it.
+    const lots =
+      current.lots && sold.lots?.length ? sortLots([...current.lots, ...sold.lots]) : current.lots;
+    const quantity = roundMoney(current.quantity + event.quantity);
+    const average = lots?.length ? summarizeLots(lots).averageBuyPrice : sold.averageBuyPrice;
+    state.investments = {
+      ...state.investments,
+      portfolio: state.investments.portfolio.map((item) =>
+        item.ticker === event.ticker
+          ? {
+              ...item,
+              quantity,
+              averageBuyPrice: average,
+              currentValue: roundMoney(item.currentPrice * quantity),
+              pnl: roundMoney((item.currentPrice - average) * quantity),
+              ...(lots?.length ? { lots } : {})
+            }
+          : item
+      )
+    };
   }
 
   private addExpectedDividend(state: LocalState, body: unknown): ExpectedDividend {
@@ -3020,9 +3100,14 @@ export class LocalApiClient implements ApiClient {
       colorOf: (categoryId) => state.categories.find((item) => item.id === categoryId)?.color
     });
 
+    const [lastYear, lastMonth] = lastKey.split("-").map(Number);
     return {
       source: "database",
       currency: state.currency,
+      // The exact window everything above was taken over, so a legend row can
+      // open the ledger on the same six months rather than on all of history.
+      from: `${firstKey}-01`,
+      to: formatInputDate(new Date(lastYear, lastMonth, 0)),
       monthlyCashflow,
       topExpenseCategories,
       topIncomeCategories,

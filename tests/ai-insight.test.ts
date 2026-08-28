@@ -7,6 +7,8 @@ import type { AnalyticsData } from "@/lib/data";
 const analytics: AnalyticsData = {
   source: "database",
   currency: "RUB",
+  from: "2026-05-01",
+  to: "2026-06-30",
   monthlyCashflow: [
     { month: "2026-05", income: 100000, expense: 70000, savings: 30000, savingsRate: 30 },
     { month: "2026-06", income: 100000, expense: 80000, savings: 20000, savingsRate: 20 }

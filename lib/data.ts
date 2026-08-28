@@ -196,6 +196,13 @@ export type CategoriesPageData = {
 export type AnalyticsData = {
   source: DataSource;
   currency: string;
+  /**
+   * The window every figure on the screen is taken over — six months, first day
+   * to last. It travels with the data so a row that opens the ledger can ask
+   * for the same period it is quoting, instead of leaving the ledger to guess.
+   */
+  from: string;
+  to: string;
   monthlyCashflow: Array<{
     month: string;
     income: number;
@@ -412,6 +419,8 @@ function buildAnalyticsFromTransactions(
   return {
     source,
     currency,
+    from: formatInputDate(startOfMonth(months[0])),
+    to: formatInputDate(endOfMonth(months[months.length - 1])),
     monthlyCashflow,
     topExpenseCategories,
     topIncomeCategories,
