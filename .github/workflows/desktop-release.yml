@@ -19,6 +19,13 @@ jobs:
     name: Build Windows installer
     runs-on: windows-latest
 
+    # The Android job publishes into the release this job creates, so it takes
+    # the tag from here rather than resolving it a second time and risking a
+    # different answer.
+    outputs:
+      tag: ${{ steps.rel.outputs.tag }}
+      publish: ${{ steps.rel.outputs.publish }}
+
     env:
       # True only when an updater signing key secret is configured. Gates the
       # signed-build + manifest path so the workflow still produces a plain
@@ -191,3 +198,166 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/*.sig
             src-tauri/target/release/bundle/nsis/latest.json
+
+  # ---------------------------------------------------------------------------
+  # The phone build. It used to happen on the owner's own machine — Android
+  # Studio, a keystore in a folder, `gh release upload` typed by hand — so a
+  # release could only be cut from that one computer. Everything it needs is
+  # here now: the keystore arrives as a secret, the APK is signed, its
+  # certificate is checked against the one already on the phone, and only then
+  # is it attached to the release the job above published.
+  # ---------------------------------------------------------------------------
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: build-windows
+    timeout-minutes: 90
+
+    permissions:
+      contents: write
+
+    env:
+      # No keystore secret, no APK. An unsigned release APK will not install on
+      # a phone, so building one would only produce something misleading.
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      # The certificate every installed copy was signed with. Android refuses to
+      # update an app whose signature changed, so the wrong key here does not
+      # mean "a bad build" — it means every phone has to uninstall and lose its
+      # data. Checked before anything is published.
+      EXPECTED_CERT_SHA256: 08521a60a60424a1cd8a0ad31cab8685951dea9438dfdbdd34714046e281230e
+      TAG: ${{ needs.build-windows.outputs.tag }}
+      PUBLISH: ${{ needs.build-windows.outputs.publish }}
+
+    steps:
+      - name: Say plainly that there is no keystore
+        if: env.HAS_KEYSTORE != 'true'
+        run: |
+          echo "::warning::Секрет ANDROID_KEYSTORE_BASE64 не задан — APK не собирается."
+          echo "См. docs/ANDROID.md, раздел «Сборка в GitHub Actions»."
+
+      - name: Checkout
+        if: env.HAS_KEYSTORE == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        if: env.HAS_KEYSTORE == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Setup Rust with the Android targets
+        if: env.HAS_KEYSTORE == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      # A universal APK is four cross-compilations of the same Rust code. Cached,
+      # a re-run costs minutes instead of the better part of an hour.
+      - name: Cache Rust build
+        if: env.HAS_KEYSTORE == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # The runner already carries a JDK, an SDK and an NDK. Point the build at
+      # them by the names scripts/tauri-android.mjs looks for — its own fallbacks
+      # are Windows paths and find nothing here.
+      - name: Point the build at the runner's toolchain
+        if: env.HAS_KEYSTORE == 'true'
+        run: |
+          set -euo pipefail
+          ndk="${ANDROID_NDK_LATEST_HOME:-${ANDROID_NDK_HOME:-}}"
+          if [ -z "$ndk" ]; then
+            echo "::error::На раннере не нашлось NDK — без него Rust не собрать под Android."
+            exit 1
+          fi
+          echo "JAVA_HOME=${JAVA_HOME_17_X64:-${JAVA_HOME:-}}" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        if: env.HAS_KEYSTORE == 'true'
+        run: npm ci
+
+      # The keystore never touches the repository: it is written to the runner's
+      # temp folder, used, and goes away with the runner. keystore.properties is
+      # git-ignored, so nothing here can be committed by accident.
+      - name: Write the signing keystore
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          store="$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$store"
+          if [ ! -s "$store" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 не разворачивается в файл — это должен быть base64 от .jks."
+            exit 1
+          fi
+          cat > src-tauri/gen/android/keystore.properties <<PROPS
+          storeFile=$store
+          storePassword=$STORE_PASSWORD
+          keyPassword=${KEY_PASSWORD:-$STORE_PASSWORD}
+          keyAlias=${KEY_ALIAS:-financeapps}
+          PROPS
+
+      - name: Build the signed APK
+        if: env.HAS_KEYSTORE == 'true'
+        run: npm run android:build
+
+      # GATE. The name is not cosmetic — latest.json points at exactly this file
+      # name — and the certificate is what lets a new version install over the
+      # old one. Both are settled before the upload, not after it.
+      - name: Name the APK and check its signature
+        if: env.HAS_KEYSTORE == 'true'
+        run: |
+          set -euo pipefail
+          ver="${TAG#v}"
+          src="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          out="financial-assistant_${ver}_universal.apk"
+          mv "$src" "$out"
+
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          got="$("$apksigner" verify --print-certs "$out" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          echo "Отпечаток сертификата: $got"
+          if [ "$got" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::Подпись APK не совпадает с подписью установленных копий ($EXPECTED_CERT_SHA256)."
+            echo "::error::Обновление поверх установленного приложения не встанет. Публикация отменена."
+            exit 1
+          fi
+          echo "APK_NAME=$out" >> "$GITHUB_ENV"
+
+      - name: Upload the APK artifact
+        if: env.HAS_KEYSTORE == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: financial-assistant-android
+          path: ${{ env.APK_NAME }}
+          if-no-files-found: error
+
+      - name: Attach the APK to the release
+        if: env.HAS_KEYSTORE == 'true' && env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$TAG" "$APK_NAME" --clobber
+
+      # GATE. latest.json names the APK before it exists, so the only proof that
+      # a phone will find it is asking for the published file the way the phone
+      # asks. A 404 here is a release that quietly cannot update anyone — which
+      # is what used to be checked by hand, and only when somebody remembered.
+      - name: Check the published manifest the way a phone reads it
+        if: env.HAS_KEYSTORE == 'true' && env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          node scripts/verify-latest-json.mjs "$base/latest.json" "$TAG"
+          node scripts/verify-release-assets.mjs "$base/latest.json"
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" src-tauri/gen/android/keystore.properties
