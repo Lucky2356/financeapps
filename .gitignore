@@ -31,3 +31,6 @@ shots/
 
 # Screenshots produced by e2e/shots.spec.ts on demand
 /shots/
+
+# CodeGraph's local index — a cache of this checkout, rebuilt on demand.
+.codegraph/

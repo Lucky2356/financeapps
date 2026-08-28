@@ -317,7 +317,11 @@ jobs:
         if: env.HAS_KEYSTORE == 'true'
         run: |
           set -euo pipefail
+          # On a dry run (workflow_dispatch with no version) there is no tag, and
+          # the APK still deserves its real name — that is the run the owner uses
+          # to prove the signing chain works before it is needed.
           ver="${TAG#v}"
+          [ -n "$ver" ] || ver="$(node -p "require('./package.json').version")"
           src="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
           out="financial-assistant_${ver}_universal.apk"
           mv "$src" "$out"
