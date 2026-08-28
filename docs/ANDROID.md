@@ -128,7 +128,7 @@ APK собирается тем же тегом `v*`, что и установщ
 base64 считается в памяти, на диск ничего не ложится):
 
 ```powershell
-gh secret set ANDROID_KEYSTORE_BASE64 --body ([Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\путьinanceapps-release.jks")))
+gh secret set ANDROID_KEYSTORE_BASE64 --body ([Convert]::ToBase64String([IO.File]::ReadAllBytes("C:/Users/<вы>/keys/financeapps-release.jks")))
 gh secret set ANDROID_KEYSTORE_PASSWORD
 gh secret set ANDROID_KEY_ALIAS --body financeapps
 ```
