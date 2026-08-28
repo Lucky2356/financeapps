@@ -41,16 +41,18 @@ with `npm install --package-lock-only`, add the CHANGELOG section, commit, then
 
 ## Android
 
-- Have `src-tauri/gen/android/keystore.properties` in place (see `docs/ANDROID.md`), then
-  run `npm run android:build`.
-- The APK lands in
-  `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`;
-  rename it to `financial-assistant_<version>_universal.apk` before uploading.
-- Attach it to the Release the Windows workflow created:
-  `gh release upload v<version> <apk>`.
-- Install it on a phone and check: the header clears the status bar, the bottom bar clears the
-  gesture area, a backup exported on the PC restores here, and a backup exported here restores
-  on the PC.
+Nothing to do by hand. The same `v*` tag builds and attaches the APK: the
+`Build Android APK` job signs it with the keystore held in GitHub secrets,
+refuses to publish if the certificate is not the one already on the phone, and
+checks that the manifest's links actually resolve. See `docs/ANDROID.md`,
+«Сборка в GitHub Actions», for the four secrets it reads.
+
+Building locally is still possible and unchanged (`npm run android:build`), but
+it is now the fallback, not the route.
+
+- After the workflow finishes, install the APK on a phone and check: the header
+  clears the status bar, the bottom bar clears the gesture area, a backup
+  exported on the PC restores here, and a backup exported here restores on the PC.
 
 ## Security
 
