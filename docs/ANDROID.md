@@ -124,23 +124,25 @@ APK собирается тем же тегом `v*`, что и установщ
 
 ### Как их задать
 
-Из папки, где лежит хранилище:
-
-```bash
-base64 -w0 financeapps-release.jks > keystore.b64
-gh secret set ANDROID_KEYSTORE_BASE64 < keystore.b64
-gh secret set ANDROID_KEYSTORE_PASSWORD
-gh secret set ANDROID_KEY_ALIAS --body financeapps
-rm keystore.b64
-```
-
-В PowerShell вместо `base64`:
+В PowerShell (в нём нет ни `base64`, ни `<` для ввода из файла — обе из bash;
+base64 считается в памяти, на диск ничего не ложится):
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("financeapps-release.jks")) | Set-Content keystore.b64 -NoNewline
+gh secret set ANDROID_KEYSTORE_BASE64 --body ([Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\путьinanceapps-release.jks")))
+gh secret set ANDROID_KEYSTORE_PASSWORD
+gh secret set ANDROID_KEY_ALIAS --body financeapps
 ```
 
-Две команды без `<` и без `--body` спросят значение и не покажут его на экране.
+В bash — из папки, где лежит хранилище:
+
+```bash
+gh secret set ANDROID_KEYSTORE_BASE64 --body "$(base64 -w0 financeapps-release.jks)"
+gh secret set ANDROID_KEYSTORE_PASSWORD
+gh secret set ANDROID_KEY_ALIAS --body financeapps
+```
+
+Команда без `--body` спросит значение сама и не покажет его на экране. Путь к
+хранилищу и псевдоним ключа записаны в `src-tauri/gen/android/keystore.properties`.
 
 ### Проверка подписи
 
