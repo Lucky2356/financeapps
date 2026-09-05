@@ -143,15 +143,34 @@ export function CashflowCalendar({
                 >
                   {format(day, "d")}
                 </span>
+                {/* На телефоне в клетке остаётся около тридцати пикселей: семь
+                    колонок на 328 px ширины. Сумма в них обрезалась до огрызка
+                    вроде «+1…», то есть до нечитаемого — а календарь и
+                    открывают ради того, чтобы увидеть, где деньги приходят и
+                    уходят. Ниже sm вместо цифры полоска нужного цвета: день с
+                    приходом виден сразу, а сумма читается по нажатию на день,
+                    и для чтения с экрана она никуда не девается. */}
                 {bucket?.income ? (
-                  <span className="truncate rounded bg-success/15 px-1 text-[10px] font-medium text-success">
-                    +{compact(bucket.income, t("cal.thousand"))}
-                  </span>
+                  <>
+                    <span className="hidden truncate rounded bg-success/15 px-1 text-[10px] font-medium text-success sm:block">
+                      +{compact(bucket.income, t("cal.thousand"))}
+                    </span>
+                    <span aria-hidden className="h-1.5 rounded-full bg-success/70 sm:hidden" />
+                    <span className="sr-only sm:hidden">
+                      +{compact(bucket.income, t("cal.thousand"))}
+                    </span>
+                  </>
                 ) : null}
                 {bucket?.expense ? (
-                  <span className="truncate rounded bg-destructive/12 px-1 text-[10px] font-medium text-destructive">
-                    −{compact(bucket.expense, t("cal.thousand"))}
-                  </span>
+                  <>
+                    <span className="hidden truncate rounded bg-destructive/12 px-1 text-[10px] font-medium text-destructive sm:block">
+                      −{compact(bucket.expense, t("cal.thousand"))}
+                    </span>
+                    <span aria-hidden className="h-1.5 rounded-full bg-destructive/70 sm:hidden" />
+                    <span className="sr-only sm:hidden">
+                      −{compact(bucket.expense, t("cal.thousand"))}
+                    </span>
+                  </>
                 ) : null}
                 {dayMarkers ? (
                   <span className="mt-auto flex flex-wrap gap-0.5 pt-0.5">

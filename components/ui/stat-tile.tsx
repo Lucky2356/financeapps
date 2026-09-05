@@ -41,8 +41,13 @@ export function StatTile({
       <div className="flex items-start justify-between gap-2">
         {/* Two lines, always reserved: "Доходы за месяц" does not fit one line
             in a half-width tile, and a fixed height keeps the figures on the
-            same baseline across the row. */}
-        <p className="line-clamp-2 min-h-[2.6em] min-w-0 text-[13px] leading-[1.3] text-muted-foreground">
+            same baseline across the row.
+            Двух строк хватало не всем: «Прогноз через 90 дней» в плитке
+            шириной в пол-экрана обрывался на «Прогноз через 90…» — обрезанным
+            оказывался сам заголовок, а не пояснение под ним. Две строки
+            по-прежнему зарезервированы (ряд стоит на одной базовой линии),
+            третья разрешена тем, кому не хватило. */}
+        <p className="line-clamp-3 min-h-[2.6em] min-w-0 text-[13px] leading-[1.3] text-muted-foreground">
           {label}
         </p>
         {visual ??
@@ -58,7 +63,14 @@ export function StatTile({
           ) : null)}
       </div>
       <p className="stat num mt-2 truncate text-lg sm:text-xl">{value}</p>
-      {caption ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{caption}</p> : null}
+      {/* Пояснение переносится, а не обрывается. Одной строкой оно на телефоне
+          превращалось в «Текущий календарн…», «Доходы минус расх…», «Цели
+          требуют боль…» — то есть не говорило ничего. В отличие от суммы выше,
+          обрезать которую нельзя вовсе, здесь дешевле отдать лишнюю строку:
+          ряд всё равно выравнивается по самой высокой плитке. */}
+      {caption ? (
+        <p className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">{caption}</p>
+      ) : null}
     </>
   );
 

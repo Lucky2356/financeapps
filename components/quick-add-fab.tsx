@@ -307,7 +307,7 @@ export function QuickAddFab({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("qa.title")}</DialogTitle>
           </DialogHeader>

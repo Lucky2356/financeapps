@@ -192,7 +192,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                 </CardHeader>
                 <CardContent>
                   <Progress value={goal.progress} />
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                     <div>
                       <p className="text-xs text-muted-foreground">{t("goal.saved")}</p>
                       <p className="text-sm font-semibold">

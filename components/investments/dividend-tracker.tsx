@@ -104,7 +104,7 @@ export function DividendTracker() {
         ) : null}
 
         {/* Add an expected payout */}
-        <form onSubmit={add} className="grid gap-3 sm:grid-cols-4">
+        <form onSubmit={add} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
             <Label htmlFor="div-ticker">{t("inv.div.ticker")}</Label>
             <Input id="div-ticker" name="ticker" placeholder="SBER" required />
@@ -141,7 +141,7 @@ export function DividendTracker() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-7 shrink-0"
+                  className="tap-target size-7 shrink-0"
                   onClick={() => void remove(dividend.id)}
                   aria-label={t("common.delete")}
                 >

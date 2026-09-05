@@ -105,7 +105,7 @@ export function AiGoalPlanButton({ goal, currency }: { goal: GoalLike; currency:
               {t("aigoal.loading")}
             </div>
           ) : plan ? (
-            <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-lg border bg-muted/20 p-3 text-sm leading-relaxed">
+            <div className="whitespace-pre-wrap break-words rounded-lg border bg-muted/20 p-3 text-sm leading-relaxed">
               {plan}
             </div>
           ) : null}

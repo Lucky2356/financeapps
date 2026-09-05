@@ -48,13 +48,22 @@ const DialogContent = React.forwardRef<
             // A dialog taller than the screen used to overflow in BOTH
             // directions, putting its heading and its save button out of reach
             // on a phone. Cap the height and scroll inside instead.
+            //
+            // Слой выше не прокручивается, поэтому этот предел — единственное,
+            // что держит диалог в экране, и переопределять его с места вызова
+            // нельзя: cn() — это twMerge, и любой свой max-h-* или overflow-*
+            // СТИРАЕТ написанное здесь. Так командная строка осталась без
+            // прокрутки и обрезала 75 px наглухо. Стережёт tests/dialog-fits.test.ts.
             "pointer-events-auto relative grid max-h-[calc(100svh-2rem)] w-full max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-lg bg-card p-6 shadow-soft-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             className
           )}
           {...props}
         >
           {children}
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
+          {/* Крестик рисуется маленьким, а нажимается большим: отрицательный
+              внешний отступ гасит собственные поля, так что иконка остаётся на
+              прежнем месте, а площадь под палец растёт наружу. */}
+          <DialogPrimitive.Close className="tap-target absolute right-4 top-4 -m-2 rounded-sm p-2 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
             <X className="size-4" />
             <span className="sr-only">{t("common.close")}</span>
           </DialogPrimitive.Close>
@@ -65,8 +74,11 @@ const DialogContent = React.forwardRef<
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
+// Правое поле — под крестик: он лежит absolute поверх содержимого, и без
+// зарезервированного места первая строка заголовка уходила под него. Заголовки
+// здесь подставные («Пополнить: {цель}»), длину не угадать.
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 text-left", className)} {...props} />
+  <div className={cn("flex flex-col space-y-1.5 pr-8 text-left", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 
@@ -84,7 +96,9 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none", className)}
+    // leading-tight, а не leading-none: на узком экране заголовок с подставленным
+    // именем переносится на две строки, и при нулевом межстрочном они слипались.
+    className={cn("text-lg font-semibold leading-tight", className)}
     {...props}
   />
 ));

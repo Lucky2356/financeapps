@@ -81,7 +81,7 @@ export function HoldingCard({
 
       {expanded ? (
         <div className="border-t p-4">
-          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
             <Detail label={t("inv.col.qty")} value={position.quantity.toLocaleString()} />
             <Detail
               label={t("inv.col.avg")}

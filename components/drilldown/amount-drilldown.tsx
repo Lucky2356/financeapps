@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+import { DataView, type DataColumn } from "@/components/ui/data-view";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
-import { cn } from "@/lib/utils";
 import type { TransactionsPageData } from "@/lib/data";
 import type { TransactionRow } from "@/types/finance";
 
@@ -95,36 +95,35 @@ export function AmountDrilldown({
   // header and again in the body. An operation without a description is the
   // common case — the category is what it was filed under, so that stands in
   // for a name.
-  const columns = [
+  //
+  // Через общий вид: на телефоне это карточки, а не таблица. Прежде таблица
+  // прокручивалась вбок внутри диалога, который прокручивается вниз, — сумма,
+  // ради которой расшифровку и открывают, начиналась за правым краем.
+  const columns: Array<DataColumn<TransactionRow>> = [
     {
-      label: t("drill.date"),
-      head: "pr-3 text-left",
-      body: "num whitespace-nowrap pr-3",
-      of: (row: TransactionRow) => formatDate(row.date)
+      header: t("drill.date"),
+      cell: (row) => <span className="num whitespace-nowrap">{formatDate(row.date)}</span>
+    },
+    { header: t("drill.account"), cell: (row) => row.account.label },
+    {
+      header: t("drill.description"),
+      primary: true,
+      cell: (row) => row.description || row.category.label
     },
     {
-      label: t("drill.account"),
-      head: "pr-3 text-left",
-      body: "pr-3",
-      of: (row: TransactionRow) => row.account.label
-    },
-    {
-      label: t("drill.description"),
-      head: "pr-3 text-left",
-      body: "pr-3",
-      of: (row: TransactionRow) => row.description || row.category.label
-    },
-    {
-      label: t("drill.amount"),
-      head: "text-right",
-      body: "num whitespace-nowrap text-right font-medium",
-      of: (row: TransactionRow) => formatCurrency(row.amount, currency)
+      header: t("drill.amount"),
+      align: "right",
+      cell: (row) => (
+        <span className="num whitespace-nowrap font-medium">
+          {formatCurrency(row.amount, currency)}
+        </span>
+      )
     }
   ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto" data-testid="drilldown">
+      <DialogContent className="max-w-2xl" data-testid="drilldown">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -133,41 +132,22 @@ export function AmountDrilldown({
         {nothingToShow !== null || rows === null ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{nothingToShow}</p>
         ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    {columns.map((column) => (
-                      <th key={column.label} className={cn("py-2 font-medium", column.head)}>
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} className="border-b last:border-0">
-                      {columns.map((column) => (
-                        <td key={column.label} className={cn("py-1.5", column.body)}>
-                          {column.of(row)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {/* The sum of what is listed, so it can be held against the figure
-                that was clicked. A mismatch means the filters behind the two
-                differ, and that is worth seeing rather than hiding. */}
-            <div className="flex items-center justify-between border-t pt-3 text-sm font-semibold">
-              <span>{t("drill.total", { n: rows.length })}</span>
-              <span className="num" data-testid="drill-total">
-                {formatCurrency(total, currency)}
-              </span>
-            </div>
-          </>
+          <DataView
+            rows={rows}
+            rowKey={(row) => row.id}
+            columns={columns}
+            /* The sum of what is listed, so it can be held against the figure
+               that was clicked. A mismatch means the filters behind the two
+               differ, and that is worth seeing rather than hiding. */
+            footer={
+              <div className="flex items-center justify-between text-sm font-semibold">
+                <span>{t("drill.total", { n: rows.length })}</span>
+                <span className="num" data-testid="drill-total">
+                  {formatCurrency(total, currency)}
+                </span>
+              </div>
+            }
+          />
         )}
       </DialogContent>
     </Dialog>

@@ -238,9 +238,16 @@ export function CommandPalette() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="top-[15%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-lg">
+      {/* Ни top-, ни overflow-, ни max-h- здесь быть не должно: cn() их не
+          добавляет к примитиву, а заменяет собой. top-[15%] остался от старого
+          центрирования через translate и просто сдвигал строку на 91 px вниз, а
+          overflow-hidden снимал прокрутку — в альбомной ориентации 75 px списка
+          становились недостижимы. */}
+      <DialogContent className="gap-0 p-0 sm:max-w-lg">
         <DialogTitle className="sr-only">{t("cmd.title")}</DialogTitle>
-        <div className="flex items-center gap-2 border-b px-3">
+        {/* Правое поле — под крестик: диалог без внутренних полей, и ✕ ложился
+            прямо на поле ввода, накрывая набранный текст. */}
+        <div className="flex items-center gap-2 border-b py-1 pl-3 pr-12">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             autoFocus

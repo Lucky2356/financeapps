@@ -12,6 +12,7 @@ import { convert, DEFAULT_CURRENCY_RATES, type CurrencyRates } from "@/lib/curre
 import type { RealizedInvestmentEvent } from "@/types/finance";
 import type { AccountsPageData } from "@/lib/data";
 import { Button } from "@/components/ui/button";
+import { DataView } from "@/components/ui/data-view";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -185,34 +186,36 @@ export function RealizedTaxReport() {
         {/* Per-year report */}
         {report.years.length > 0 ? (
           <div className="space-y-3">
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-xs text-muted-foreground">
-                  <tr>
-                    <th className="p-2 text-left">{t("inv.rt.year")}</th>
-                    <th className="p-2 text-right">{t("inv.rt.gain")}</th>
-                    <th className="p-2 text-right">{t("inv.rt.dividends")}</th>
-                    <th className="p-2 text-right">{t("inv.rt.tax")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.years.map((y) => (
-                    <tr key={y.year} className="border-t">
-                      <td className="p-2 font-medium">{y.year}</td>
-                      <td className="p-2 text-right tabular-nums">
-                        {formatCurrency(y.realizedGain, currency)}
-                      </td>
-                      <td className="p-2 text-right tabular-nums">
-                        {formatCurrency(y.dividends, currency)}
-                      </td>
-                      <td className="p-2 text-right font-semibold tabular-nums">
-                        {formatCurrency(y.estimatedTax, currency)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataView
+              rows={report.years}
+              rowKey={(y) => String(y.year)}
+              columns={[
+                { header: t("inv.rt.year"), primary: true, cell: (y) => y.year },
+                {
+                  header: t("inv.rt.gain"),
+                  align: "right",
+                  cell: (y) => (
+                    <span className="tabular-nums">{formatCurrency(y.realizedGain, currency)}</span>
+                  )
+                },
+                {
+                  header: t("inv.rt.dividends"),
+                  align: "right",
+                  cell: (y) => (
+                    <span className="tabular-nums">{formatCurrency(y.dividends, currency)}</span>
+                  )
+                },
+                {
+                  header: t("inv.rt.tax"),
+                  align: "right",
+                  cell: (y) => (
+                    <span className="font-semibold tabular-nums">
+                      {formatCurrency(y.estimatedTax, currency)}
+                    </span>
+                  )
+                }
+              ]}
+            />
             <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
               {t("inv.rt.disclaimer")}
             </p>
@@ -240,7 +243,7 @@ export function RealizedTaxReport() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-7 shrink-0"
+                  className="tap-target size-7 shrink-0"
                   onClick={() => void remove(e.id)}
                   aria-label={t("common.delete")}
                 >

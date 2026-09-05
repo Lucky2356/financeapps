@@ -681,8 +681,14 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         className="min-w-0 flex-1 text-left"
                       >
                         <p className="text-sm font-semibold">{transaction.category.label}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {formatDate(transaction.date)} · {transaction.account.label}
+                        {/* Обрезается название счёта, а не дата: одной строкой
+                            на телефоне пропадало и то и другое сразу —
+                            «05 сент. 2026 · Дебетовая ка…». Дата короткая и
+                            всегда одной длины, ей место есть. */}
+                        <p className="mt-0.5 flex min-w-0 gap-1 text-xs text-muted-foreground">
+                          <span className="shrink-0">{formatDate(transaction.date)}</span>
+                          <span aria-hidden>·</span>
+                          <span className="truncate">{transaction.account.label}</span>
                         </p>
                         <p className="mt-1 truncate text-[13px] text-muted-foreground">
                           {transaction.description ?? t("tx.noDescription")}
@@ -721,7 +727,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                           aria-label={t("common.delete")}
                           disabled={isMutating}
                           onClick={() => void removeTransaction(transaction)}
-                          className="p-1 text-muted-foreground transition-colors hover:text-destructive"
+                          className="tap-target inline-flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-destructive"
                         >
                           <Trash2 className="size-4" />
                         </button>

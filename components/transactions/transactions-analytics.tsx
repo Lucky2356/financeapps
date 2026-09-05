@@ -157,7 +157,7 @@ export function TransactionsAnalytics() {
                 ))}
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <div>
                   <p className="mb-2 text-sm font-medium">{t("txa.cashflow")}</p>
                   <CashflowChart data={data.monthlyCashflow} />
