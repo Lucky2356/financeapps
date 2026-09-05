@@ -14,13 +14,12 @@ import { suggestCategoryId } from "@/lib/category-suggest";
 import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
-import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
-import { isFutureDay } from "@/lib/transactions/date";
+import { formatCurrency, formatInputDate } from "@/lib/format";
+import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { AmountInput } from "@/components/ui/amount-input";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { CategoryOptionLabel } from "@/components/category-option";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,7 +61,7 @@ export function QuickAddFab({
   categories: CategoryOption[];
 }) {
   const router = useRouter();
-  const confirm = useConfirm();
+  const confirmFutureDate = useConfirmFutureDate();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   // A transfer is the third thing people actually record here: money moving
@@ -185,23 +184,6 @@ export function QuickAddFab({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("tx.toast.categoryCreateError"));
     }
-  }
-
-  /**
-   * Saving an operation dated ahead of today takes the money out of the balance
-   * and the net worth at once, as if it were already spent. Post-dating on
-   * purpose is a real thing, so this asks rather than refuses — but it does ask:
-   * the year is one keystroke wide, and the figure it moves is the one on the
-   * home screen.
-   */
-  async function confirmFutureDate(value: FormDataEntryValue | undefined): Promise<boolean> {
-    const day = String(value ?? "");
-    if (!day || !isFutureDay(day)) return true;
-    return confirm({
-      title: t("tx.future.confirm.title"),
-      description: t("tx.future.confirm.desc", { date: formatDate(day) }),
-      confirmLabel: t("tx.future.confirm.ok")
-    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

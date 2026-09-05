@@ -24,7 +24,7 @@ import type { TransactionsPageData } from "@/lib/data";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
-import { isFutureDay } from "@/lib/transactions/date";
+import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { EmptyState } from "@/components/empty-state";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const criteria = criteriaFromParams(searchParams);
   const { run, pending: isMutating } = useApiMutation();
   const confirm = useConfirm();
+  const confirmFutureDate = useConfirmFutureDate();
   const [editingTransaction, setEditingTransaction] = useState<
     TransactionsPageData["transactions"][number] | null
   >(null);
@@ -168,18 +169,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
 
     // Editing the date into the future counts the money out of the balance the
     // same way adding it does, so the same question is asked here.
-    const day = String(payload.date ?? "");
-    if (
-      day &&
-      isFutureDay(day) &&
-      !(await confirm({
-        title: t("tx.future.confirm.title"),
-        description: t("tx.future.confirm.desc", { date: formatDate(day) }),
-        confirmLabel: t("tx.future.confirm.ok")
-      }))
-    ) {
-      return;
-    }
+    if (!(await confirmFutureDate(payload.date))) return;
 
     await run(() => apiClient.put<{ budgetWarning?: BudgetWarning }>("/transactions", payload), {
       success: t("tx.toast.updated"),
