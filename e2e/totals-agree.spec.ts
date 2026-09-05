@@ -39,7 +39,9 @@ test("категории на главной идут по убыванию", as
 
   const legend = page.getByTestId("breakdown-legend").last();
   await expect(legend).toBeVisible({ timeout: 20_000 });
-  const rows = await legend.locator("> div").allInnerTexts();
+  // Two stacks, largest first down the left one and then down the right; read
+  // back in DOM order that is still one descending run.
+  const rows = await legend.locator("> div > button").allInnerTexts();
   const amounts = rows.map(digits).filter((value) => Number.isFinite(value));
   expect(amounts.length).toBeGreaterThan(2);
   const sorted = [...amounts].sort((left, right) => right - left);

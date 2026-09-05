@@ -6,7 +6,13 @@ import { roundMoney } from "@/lib/utils";
 // which is why the dashboard could show where money went but never where it
 // came from.
 
-export type CategorySlice = { name: string; value: number; fill: string };
+export type CategorySlice = {
+  /** Which category this slice is — the ring is clickable, and a label is not an id. */
+  categoryId: string;
+  name: string;
+  value: number;
+  fill: string;
+};
 
 type Row = {
   type: string;
@@ -31,7 +37,7 @@ export function categoryBreakdown(
     colorOf: (categoryId: string) => string | undefined;
   }
 ): CategorySlice[] {
-  const totals = new Map<string, { name: string; value: number; fill: string }>();
+  const totals = new Map<string, CategorySlice>();
 
   for (const row of rows) {
     if (row.type !== options.type) continue;
@@ -43,6 +49,7 @@ export function categoryBreakdown(
     if (existing) existing.value += row.amount;
     else {
       totals.set(key, {
+        categoryId: key,
         name: row.category.label,
         value: row.amount,
         fill: options.colorOf(key) || DEFAULT_CATEGORY_COLOR

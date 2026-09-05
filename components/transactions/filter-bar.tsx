@@ -188,6 +188,26 @@ export function TransactionFilterBar({
           onGo={go}
           onSetParam={setParam}
         />
+
+        {/* Resetting was reachable from two places nobody looks: inside the
+            gear, and at the tail of the chip list below, after however many
+            lines the chips happen to wrap onto. It sits with the controls that
+            set the filters now — and only when there is something to reset, an
+            always-visible button that usually does nothing being its own kind
+            of noise. Clearing goes back to the current month, the state the
+            screen opens in. */}
+        {count > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 gap-1.5 px-2.5 text-muted-foreground"
+            onClick={() => go("")}
+          >
+            <X className="size-4" />
+            {t("tx.filters.clearAll")}
+          </Button>
+        ) : null}
       </div>
 
       <div className="relative">
@@ -219,13 +239,10 @@ export function TransactionFilterBar({
               </button>
             </span>
           ))}
-          <button
-            type="button"
-            onClick={() => go("")}
-            className="rounded-full px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-secondary"
-          >
-            {t("tx.filters.clearAll")}
-          </button>
+          {/* Resetting everything used to live here too, at the end of a list
+              that wraps onto its own lines — the last place the eye lands. It
+              is on the bar itself now, beside the controls that set the
+              filters; each chip keeps its own ✕ for dropping just one. */}
         </div>
       ) : null}
     </div>
@@ -358,6 +375,9 @@ function MoreFilters({
   // the control sat there empty until something was picked. Whatever size is
   // actually in force is listed, even when it is not one of the three.
   const pageSize = params.get("limit") ?? String(defaultLimit);
+  // "all" is a size the list understands but the picker cannot show, so the
+  // checkbox below owns that state and the picker is left inert while it holds.
+  const onePage = pageSize === "all";
   const pageSizes = [...new Set([pageSize, "20", "50", "100"])]
     .filter((size) => Number(size) > 0)
     .sort((a, b) => Number(a) - Number(b));
@@ -449,7 +469,11 @@ function MoreFilters({
               <Label htmlFor="flt-limit" className="text-xs">
                 {t("tx.perPage")}
               </Label>
-              <Select value={pageSize} onValueChange={(value) => onSetParam("limit", value)}>
+              <Select
+                value={pageSize}
+                disabled={onePage}
+                onValueChange={(value) => onSetParam("limit", value)}
+              >
                 <SelectTrigger id="flt-limit" className="h-9">
                   <SelectValue />
                 </SelectTrigger>
@@ -463,6 +487,23 @@ function MoreFilters({
               </Select>
             </div>
           </div>
+
+          {/* Everything on one screen, for reading a whole month at once or
+              printing it. `limit=all` is what the ledger already understood —
+              export and duplicate search ask for it — so this only puts the
+              switch where the owner can reach it. The page-size list goes
+              inert meanwhile rather than disappearing, so it stays obvious
+              what the checkbox is overriding. */}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              className="size-4 rounded border accent-primary"
+              checked={onePage}
+              data-testid="one-page-toggle"
+              onChange={(event) => onSetParam("limit", event.target.checked ? "all" : "")}
+            />
+            <span>{t("tx.onePage")}</span>
+          </label>
 
           <SavedFilters
             currentParams={paramsString}

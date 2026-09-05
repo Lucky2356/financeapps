@@ -20,8 +20,10 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
+import { AmountDrilldown } from "@/components/drilldown/amount-drilldown";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
+import { legendColumns } from "@/lib/charts/legend";
 import {
   DEFAULT_LAYOUT,
   isHidden,
@@ -32,6 +34,7 @@ import {
   type DashboardWidget
 } from "@/lib/dashboard/layout";
 import { formatCurrency } from "@/lib/format";
+import { periodRange } from "@/lib/transactions/filter-chips";
 import { useI18n } from "@/lib/i18n/context";
 import type { DashboardData, ForecastData } from "@/types/finance";
 
@@ -57,6 +60,10 @@ export function DashboardClient({
   const { data } = useApiPageData(initialData, `/dashboard${transfersQuery(includeTransfers)}`);
   const { data: forecast } = useApiPageData(initialForecast, "/forecast");
   const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT);
+  // Which slice of the rings is being looked into. Both rings cover the month
+  // in progress, so the period is the same for every one of them.
+  const [drill, setDrill] = useState<{ title: string; categoryIds: string[] } | null>(null);
+  const month = periodRange("thisMonth");
 
   useEffect(() => {
     let saved: DashboardLayout | null = null;
@@ -116,12 +123,14 @@ export function DashboardClient({
               empty={t("dash.categoryIncome.empty")}
               data={data.categoryIncome}
               currency={data.currency}
+              onDrill={setDrill}
             />
             <CategoryBreakdownCard
               title={t("dash.categoryExpenses")}
               empty={t("dash.categoryExpenses.empty")}
               data={data.categoryExpenses}
               currency={data.currency}
+              onDrill={setDrill}
             />
           </div>
 
@@ -159,6 +168,26 @@ export function DashboardClient({
       <div className="flex justify-end">
         <CustomizeDialog layout={layout} onChange={persist} />
       </div>
+
+      {/* A slice of the ring, opened out into the operations it is made of. */}
+      <AmountDrilldown
+        open={drill !== null}
+        onOpenChange={(next) => {
+          if (!next) setDrill(null);
+        }}
+        title={drill?.title ?? ""}
+        query={
+          drill
+            ? new URLSearchParams({
+                from: month?.from ?? "",
+                to: month?.to ?? "",
+                categoryId: drill.categoryIds.join(",")
+              }).toString()
+            : ""
+        }
+        excludeTransfers={!includeTransfers}
+        currency={data.currency}
+      />
     </>
   );
 }
@@ -169,13 +198,16 @@ function CategoryBreakdownCard({
   title,
   empty,
   data,
-  currency
+  currency,
+  onDrill
 }: {
   title: string;
   empty: string;
+  onDrill: (target: { title: string; categoryIds: string[] }) => void;
   data: DashboardData["categoryExpenses"];
   currency: string;
 }) {
+  const { t } = useI18n();
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
   return (
@@ -192,25 +224,52 @@ function CategoryBreakdownCard({
             {/* Every slice drawn gets a line here. The legend used to stop at
                 six, so a category could sit in the ring — with its own colour
                 and its own share of the money — and be nowhere in the list
-                explaining what the colours mean. */}
-            <div className="mt-2 grid gap-2 sm:grid-cols-2" data-testid="breakdown-legend">
-              {data.map((item) => (
-                <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: item.fill }}
-                    />
-                    <span className="truncate">{item.name}</span>
-                  </span>
-                  <span className="flex shrink-0 items-baseline gap-1.5">
-                    <span className="num font-medium">{formatCurrency(item.value, currency)}</span>
-                    {/* The share is the thing the ring is drawn to show; without
-                        it the legend only repeats what the tooltip says. */}
-                    <span className="num w-9 text-right text-xs text-muted-foreground">
-                      {total > 0 ? `${Math.round((item.value / total) * 100)}%` : ""}
-                    </span>
-                  </span>
+                explaining what the colours mean.
+                The order reads DOWN the left column and then down the right,
+                largest first. A two-column CSS grid fills across instead, which
+                put the second-largest category at the top of the right column
+                and the third at the left of row two — so neither column was a
+                ranking, and the eye had to zig-zag to find the next amount.
+                Two explicit stacks make the halves themselves the columns; on a
+                phone they sit one under the other and the whole list is still
+                one descending run. */}
+            <div
+              className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2"
+              data-testid="breakdown-legend"
+            >
+              {legendColumns(data).map((column, index) => (
+                <div key={index} className="space-y-2">
+                  {column.map((item) => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      disabled={!item.categoryId}
+                      title={item.categoryId ? t("drill.open") : undefined}
+                      onClick={() =>
+                        item.categoryId &&
+                        onDrill({ title: item.name, categoryIds: [item.categoryId] })
+                      }
+                      className="flex w-full items-center justify-between gap-3 rounded px-1 text-left text-sm transition-colors enabled:hover:bg-muted/60 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: item.fill }}
+                        />
+                        <span className="truncate">{item.name}</span>
+                      </span>
+                      <span className="flex shrink-0 items-baseline gap-1.5">
+                        <span className="num font-medium">
+                          {formatCurrency(item.value, currency)}
+                        </span>
+                        {/* The share is the thing the ring is drawn to show; without
+                            it the legend only repeats what the tooltip says. */}
+                        <span className="num w-9 text-right text-xs text-muted-foreground">
+                          {total > 0 ? `${Math.round((item.value / total) * 100)}%` : ""}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
               ))}
             </div>

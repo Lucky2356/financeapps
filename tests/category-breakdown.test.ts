@@ -22,21 +22,36 @@ const colors: Record<string, string> = { sal: "#9184d9", fre: "#6fc3ad" };
 const colorOf = (id: string) => colors[id];
 
 describe("category breakdown", () => {
+  // The id travels with the slice because the ring is clickable now: two
+  // categories can share a label — one on each side of the ledger — and a
+  // rename would silently change what the click filters on.
+  it("names which category each slice is", () => {
+    const [top] = categoryBreakdown(rows, { type: "INCOME", month: "2026-08", colorOf });
+    expect(top.categoryId).toBe("sal");
+  });
+
   it("adds up one month of one kind, largest slice first", () => {
     expect(categoryBreakdown(rows, { type: "INCOME", month: "2026-08", colorOf })).toEqual([
-      { name: "Зарплата", value: 92000, fill: "#9184d9" },
-      { name: "Подработка", value: 30000, fill: "#6fc3ad" }
+      { categoryId: "sal", name: "Зарплата", value: 92000, fill: "#9184d9" },
+      { categoryId: "fre", name: "Подработка", value: 30000, fill: "#6fc3ad" }
     ]);
   });
 
   it("keeps expenses and income apart", () => {
     const expenses = categoryBreakdown(rows, { type: "EXPENSE", month: "2026-08", colorOf });
-    expect(expenses).toEqual([{ name: "Продукты", value: 5000, fill: DEFAULT_CATEGORY_COLOR }]);
+    expect(expenses).toEqual([
+      { categoryId: "food", name: "Продукты", value: 5000, fill: DEFAULT_CATEGORY_COLOR }
+    ]);
   });
 
   it("counts every row when no month is given", () => {
     const all = categoryBreakdown(rows, { type: "INCOME", colorOf });
-    expect(all[0]).toEqual({ name: "Зарплата", value: 191000, fill: "#9184d9" });
+    expect(all[0]).toEqual({
+      categoryId: "sal",
+      name: "Зарплата",
+      value: 191000,
+      fill: "#9184d9"
+    });
   });
 
   // A slice with no colour would render invisible against the card, which reads

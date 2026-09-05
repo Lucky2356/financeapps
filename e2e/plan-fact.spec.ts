@@ -8,9 +8,16 @@ import { openSettled, seedExampleData } from "./helpers";
 
 const digits = (text: string) => Number(text.replace(/[^\d-]/g, ""));
 
-// The newest month is the first row of each band.
+// The newest month is the first group in the table, so the first row of a band
+// belongs to it.
 const cell = (page: Page, band: string, column: string) =>
   page.locator(`tr[data-band="${band}"]`).first().locator(`td[data-column="${column}"]`);
+
+// The grid opens on the month in progress. Tests that count months, or work
+// with one that is years away, have to widen it back out first.
+async function showEveryMonth(page: Page) {
+  await page.getByRole("button", { name: "Показать все месяцы" }).click();
+}
 
 test("план вводится, факт и разница считаются", async ({ page }) => {
   await seedExampleData(page);
@@ -61,6 +68,8 @@ test("план сохраняется и месяц можно добавить 
   // A month with nothing in it appears only on request — and the request now
   // works in both directions, so an earlier month can be planned too.
   const rows = page.locator('tr[data-band="plan"]');
+  await showEveryMonth(page);
+  await expect.poll(() => rows.count(), { timeout: 20_000 }).toBeGreaterThan(0);
   const before = await rows.count();
   await page.getByRole("button", { name: "Добавить месяц" }).click();
   const picker = page.getByTestId("add-month-dialog");
@@ -72,6 +81,7 @@ test("план сохраняется и месяц можно добавить 
 
   // A pinned month belongs to the data, not to the session.
   await openSettled(page, "/plan");
+  await showEveryMonth(page);
   await expect.poll(() => rows.count(), { timeout: 20_000 }).toBe(before + 1);
 });
 
@@ -80,6 +90,7 @@ test("месяц можно добавить назад, отфильтрова�
   await openSettled(page, "/plan");
 
   const rows = page.locator('tr[data-band="plan"]');
+  await showEveryMonth(page);
   await expect.poll(() => rows.count(), { timeout: 20_000 }).toBeGreaterThan(0);
   const before = await rows.count();
 
@@ -98,16 +109,18 @@ test("месяц можно добавить назад, отфильтрова�
   expect(oldest).toBeTruthy();
 
   // The period filter hides everything outside it — the point of it on a table
-  // that grows by a row a month.
-  await page.getByRole("combobox", { name: "Период: по какой месяц" }).click();
-  await page.getByRole("option").last().click();
+  // that grows by a row a month. It is two dates, like every other period in
+  // the app; a month is shown when the period touches any part of it.
+  await page.locator('input[aria-label="Период: с какой даты"]').fill(`${oldest}-01`);
+  await page.locator('input[aria-label="Период: по какую дату"]').fill(`${oldest}-28`);
   await expect.poll(() => rows.count(), { timeout: 10_000 }).toBe(1);
-  await page.getByRole("button", { name: "Показать все месяцы" }).click();
+  await showEveryMonth(page);
   await expect.poll(() => rows.count(), { timeout: 10_000 }).toBe(before + 1);
 
-  // And it can be taken away again.
+  // And it can be taken away again — from the month's own heading, which is
+  // where the month itself now lives rather than repeated on every band.
   await page
-    .locator(`tr[data-band="plan"][data-month="${oldest}"]`)
+    .locator(`tbody[data-month="${oldest}"]`)
     .getByRole("button", { name: /Удалить месяц/ })
     .click();
   await page.getByRole("button", { name: "Удалить" }).last().click();

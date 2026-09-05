@@ -56,7 +56,14 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   const { t, locale } = useI18n();
   // Month selection is purely client-side — no URL params needed.
   // This keeps the budget page statically exportable for Tauri/Capacitor builds.
-  const [selectedMonth, setSelectedMonth] = useState(data.selectedMonth);
+  //
+  // And that is exactly why the month cannot come from `data`: the shell is
+  // rendered when the app is BUILT, so `data.selectedMonth` is the month of the
+  // release, not the month it is opened in. An app built in August opened the
+  // limits on August for the whole of September — while the month list beside
+  // it, which reads the real clock, already offered September. The device's own
+  // date is the only one that means anything here.
+  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
   const apiPath = `/budgets?month=${selectedMonth}`;
   const { data: pageData, reload } = useApiPageData(data, apiPath);
 

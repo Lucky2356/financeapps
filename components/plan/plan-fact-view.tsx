@@ -4,20 +4,13 @@ import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
 import { toast } from "sonner";
 
+import { AmountDrilldown } from "@/components/drilldown/amount-drilldown";
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { CategoryIcon } from "@/components/category-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Input } from "@/components/ui/input";
-import {
-  ALL_OPTION,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -32,18 +25,27 @@ import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfe
 import { apiClient } from "@/lib/api/client";
 import { OPENING_BALANCE_ID, SAVINGS_BALANCE_ID } from "@/lib/api/LocalApiClient";
 import { formatCurrency } from "@/lib/format";
+import { periodRange } from "@/lib/transactions/filter-chips";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type {
   PlanFactCell,
   PlanFactColumn,
   PlanFactMonth,
-  PlanFactPageData
+  PlanFactPageData,
+  PlanFactSplit
 } from "@/types/finance";
 
 /** "2026-08" for a date, the same key the plan grid is indexed by. */
 function monthKeyOf(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** The first and last day of a "2026-08" month, as the operations list wants them. */
+function monthRange(key: string): { from: string; to: string } {
+  const [year, index] = key.split("-").map(Number);
+  const last = new Date(year, index, 0).getDate();
+  return { from: `${key}-01`, to: `${key}-${String(last).padStart(2, "0")}` };
 }
 
 // Plan against fact, laid out like the spreadsheet this screen replaces: every
@@ -65,16 +67,30 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
 
   // Which months are on screen. The grid holds every month the ledger touches,
   // and after a year of use that is a long table to scroll through to reach the
-  // one being planned.
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  // one being planned — so it opens on the month in progress, the one the
+  // question is nearly always about, rather than on all of them at once.
+  //
+  // The ends are dates, like every other period in the app, even though the
+  // rows are months: a month is shown when the period touches any part of it.
+  // Two month dropdowns made this the one screen where a period meant something
+  // else than it does everywhere else.
+  const thisMonth = periodRange("thisMonth");
+  const [from, setFrom] = useState(thisMonth?.from ?? "");
+  const [to, setTo] = useState(thisMonth?.to ?? "");
+
+  // One dialog for the whole grid rather than one per cell: a month of a dozen
+  // categories is a few hundred cells, and each carrying its own closed dialog
+  // is a few hundred subscriptions for the one that gets opened.
+  const [drill, setDrill] = useState<DrilldownTarget | null>(null);
 
   const income = data.columns.filter((column) => column.kind === "INCOME");
   const expense = data.columns.filter((column) => column.kind === "EXPENSE");
-  const width = income.length + expense.length + 7;
+  // month + opening(2) + income cols + income total(2) + expense cols +
+  // expense total(2) + result(2) + note
+  const width = income.length + expense.length + 10;
 
   const months = data.months.filter(
-    (month) => (!from || month.month >= from) && (!to || month.month <= to)
+    (month) => (!from || month.month >= from.slice(0, 7)) && (!to || month.month <= to.slice(0, 7))
   );
   async function addMonth(month: string) {
     await run(() => apiClient.post("/plan", { action: "addMonth", month }), {
@@ -150,22 +166,22 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
               looked it. The lists carry the months the grid actually has. */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-muted-foreground">{t("plan.period")}</span>
-            <MonthSelect
-              label={t("plan.periodFrom")}
+            <Input
+              type="date"
+              aria-label={t("plan.periodFrom")}
               value={from}
-              months={data.months.map((month) => month.month)}
-              monthLabel={monthLabel}
-              anyLabel={t("plan.periodAny")}
-              onChange={setFrom}
+              max={to || undefined}
+              onChange={(event) => setFrom(event.target.value)}
+              className="h-9 w-[9.5rem] px-2"
             />
             <span className="text-muted-foreground">—</span>
-            <MonthSelect
-              label={t("plan.periodTo")}
+            <Input
+              type="date"
+              aria-label={t("plan.periodTo")}
               value={to}
-              months={data.months.map((month) => month.month)}
-              monthLabel={monthLabel}
-              anyLabel={t("plan.periodAny")}
-              onChange={setTo}
+              min={from || undefined}
+              onChange={(event) => setTo(event.target.value)}
+              className="h-9 w-[9.5rem] px-2"
             />
             {from || to ? (
               <Button
@@ -219,13 +235,13 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                     >
                       {t("plan.opening")}
                     </Head>
-                    <Head colSpan={income.length + 1} className="border-l text-center">
+                    <Head colSpan={income.length + 2} className="border-l text-center">
                       {t("plan.income")}
                     </Head>
-                    <Head colSpan={expense.length + 1} className="border-l text-center">
+                    <Head colSpan={expense.length + 2} className="border-l text-center">
                       {t("plan.expense")}
                     </Head>
-                    <Head rowSpan={2} className="border-l text-right">
+                    <Head colSpan={2} className="border-l text-center">
                       {t("plan.result")}
                     </Head>
                     <Head rowSpan={2} className="border-l text-left">
@@ -242,7 +258,7 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                         className={index === 0 ? "border-l" : undefined}
                       />
                     ))}
-                    <Head className="text-right font-semibold">{t("plan.total")}</Head>
+                    <TotalHead />
                     {expense.map((column, index) => (
                       <ColumnHead
                         key={column.categoryId}
@@ -250,32 +266,52 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                         className={index === 0 ? "border-l" : undefined}
                       />
                     ))}
-                    <Head className="text-right font-semibold">{t("plan.total")}</Head>
+                    <TotalHead />
+                    <Head className="border-l text-right">{t("plan.opening.main")}</Head>
+                    <Head className="text-right">{t("plan.opening.savings")}</Head>
                   </tr>
                 </thead>
 
-                {(["plan", "fact", "diff"] as const).map((band) => (
-                  <tbody key={band}>
+                {/* Grouped by month, not by band. Three bands each listing every
+                    month put a month's plan at the top of the table and its
+                    difference two screens below — the one comparison the screen
+                    exists to make was the one thing you could not see at once.
+                    Now each month carries its own plan, fact and difference,
+                    directly under each other. */}
+                {months.map((month) => (
+                  <tbody key={month.month} data-month={month.month}>
                     <tr>
                       <th
                         scope="rowgroup"
                         className="sticky left-0 z-20 whitespace-nowrap border-y bg-muted px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide"
                       >
-                        {t(`plan.${band}`)}
+                        <span className="flex items-center gap-1.5">
+                          {monthLabel(month.month)}
+                          <button
+                            type="button"
+                            aria-label={`${t("plan.removeMonth")}: ${monthLabel(month.month)}`}
+                            title={t("plan.removeMonth")}
+                            onClick={() => void removeMonth(month.month)}
+                            className="text-muted-foreground/60 transition-colors hover:text-destructive"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </span>
                       </th>
                       <td className="border-y bg-muted" colSpan={width - 1} />
                     </tr>
-                    {months.map((month) => (
+                    {(["plan", "fact", "diff"] as const).map((band) => (
                       <BandRow
                         key={`${band}-${month.month}`}
                         band={band}
                         month={month}
                         income={income}
                         expense={expense}
-                        label={monthLabel(month.month)}
+                        label={t(`plan.${band}`)}
+                        monthLabel={monthLabel(month.month)}
                         money={money}
                         onSave={save}
-                        onRemove={band === "plan" ? () => void removeMonth(month.month) : undefined}
+                        onDrill={setDrill}
                       />
                     ))}
                   </tbody>
@@ -285,49 +321,27 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
           </CardContent>
         </Card>
       )}
+
+      {/* What a fact figure is made of. Opened from the grid, closed back to it
+          — the ledger itself is a screen away and rebuilding these filters by
+          hand is where the answer used to get lost. */}
+      <AmountDrilldown
+        open={drill !== null}
+        onOpenChange={(next) => {
+          if (!next) setDrill(null);
+        }}
+        title={drill?.title ?? ""}
+        subtitle={drill?.subtitle}
+        query={drill?.query ?? ""}
+        excludeTransfers={!includeTransfers}
+        currency={data.currency}
+      />
     </div>
   );
 }
 
-/**
- * One end of the period, as the app's own dropdown rather than the browser's
- * month field. It offers the months the grid actually holds — anything else
- * would filter to nothing.
- */
-function MonthSelect({
-  label,
-  value,
-  months,
-  monthLabel,
-  anyLabel,
-  onChange
-}: {
-  label: string;
-  value: string;
-  months: string[];
-  monthLabel: (key: string) => string;
-  anyLabel: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <Select
-      value={value || ALL_OPTION}
-      onValueChange={(next) => onChange(next === ALL_OPTION ? "" : next)}
-    >
-      <SelectTrigger className="h-9 w-auto min-w-[9rem]" aria-label={label}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL_OPTION}>{anyLabel}</SelectItem>
-        {months.map((month) => (
-          <SelectItem key={month} value={month}>
-            {monthLabel(month)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
+/** What the grid hands the dialog when a fact figure is clicked. */
+type DrilldownTarget = { title: string; subtitle?: string; query: string };
 
 /**
  * "Добавить месяц" and the months to choose from. A year forward and a year and
@@ -447,6 +461,120 @@ function Head({
   );
 }
 
+/**
+ * The two sub-columns under a total: what went through cash and cards, and what
+ * went through savings.
+ *
+ * "Итого" alone answered how much, never where it ended up — and the two pools
+ * are the whole point of a month for someone who is trying to put money aside.
+ */
+function TotalHead() {
+  const { t } = useI18n();
+  return (
+    <>
+      {(["plan.opening.main", "plan.opening.savings"] as const).map((key, index) => (
+        <Head key={key} className={cn("text-right font-semibold", index === 0 && "border-l")}>
+          <span className="flex flex-col items-end leading-tight">
+            <span>{t("plan.total")}</span>
+            <span className="text-[10px] font-normal text-muted-foreground/80">{t(key)}</span>
+          </span>
+        </Head>
+      ))}
+    </>
+  );
+}
+
+/**
+ * One total, in the two sub-columns the header promises.
+ *
+ * Only the fact band can fill both. A plan is typed against a category and
+ * carries no account, so there is no pool to put it in, and the difference
+ * between a split figure and an unsplit one is not a split figure either.
+ * Those two bands span the pair with the single number they honestly have,
+ * rather than showing an invented half.
+ */
+function TotalCells({
+  band,
+  column,
+  cell,
+  split,
+  money,
+  tone,
+  className,
+  onDrill
+}: {
+  band: "plan" | "fact" | "diff";
+  column: string;
+  cell: PlanFactCell;
+  split: PlanFactSplit;
+  money: (value: number) => string;
+  tone?: string;
+  className?: string;
+  /** Absent on the closing balance: it is a balance, not a sum of rows. */
+  onDrill?: () => void;
+}) {
+  if (band !== "fact") {
+    return (
+      <Cell className={cn("font-semibold", className)} column={column} colSpan={2}>
+        <Figure value={cell[band]} money={money} tone={tone} />
+      </Cell>
+    );
+  }
+
+  const pools = [
+    { pool: "main", value: split.main },
+    { pool: "savings", value: split.savings }
+  ] as const;
+
+  return (
+    <>
+      {pools.map(({ pool, value }, index) => (
+        <Cell
+          key={pool}
+          className={cn("font-semibold", index === 0 && className)}
+          column={`${column}-${pool}`}
+        >
+          {onDrill ? (
+            <DrillFigure value={value} money={money} onOpen={onDrill} />
+          ) : (
+            <Figure value={value} money={money} />
+          )}
+        </Cell>
+      ))}
+    </>
+  );
+}
+
+/**
+ * A fact figure that opens the operations behind it.
+ *
+ * A zero is left as plain text: there is nothing under it to show, and a button
+ * that opens an empty list teaches the owner not to press the others.
+ */
+function DrillFigure({
+  value,
+  money,
+  onOpen
+}: {
+  value: number;
+  money: (value: number) => string;
+  onOpen: () => void;
+}) {
+  const { t } = useI18n();
+  if (value === 0) return <Figure value={value} money={money} />;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={t("drill.open")}
+      className="rounded underline decoration-dotted underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Figure value={value} money={money} />
+    </button>
+  );
+}
+
 // A category column keeps its own colour and icon in the header — the same
 // marks it carries everywhere else, so a column is recognised without reading.
 function ColumnHead({ column, className }: { column: PlanFactColumn; className?: string }) {
@@ -468,31 +596,46 @@ function ColumnHead({ column, className }: { column: PlanFactColumn; className?:
   );
 }
 
-// One month inside one band. The plan band is made of fields; fact and
-// difference are the same row read off the ledger.
+// One band of one month. The plan band is made of fields; fact and difference
+// are the same row read off the ledger.
 function BandRow({
   band,
   month,
   income,
   expense,
   label,
+  monthLabel,
   money,
   onSave,
-  onRemove
+  onDrill
 }: {
   band: "plan" | "fact" | "diff";
   month: PlanFactMonth;
   income: PlanFactColumn[];
   expense: PlanFactColumn[];
   label: string;
+  /** The month spelled out, for the dialog's own heading. */
+  monthLabel: string;
   money: (value: number) => string;
   onSave: (body: Record<string, string>) => Promise<void>;
-  /** Given only on the plan band: the month's own row is where it is removed. */
-  onRemove?: () => void;
+  onDrill: (target: DrilldownTarget) => void;
 }) {
   const { t } = useI18n();
   const editable = band === "plan";
   const empty: PlanFactCell = { plan: 0, fact: 0, diff: 0 };
+  const range = monthRange(month.month);
+
+  /** The operations behind a fact figure, as the list page would filter them. */
+  const drillTo = (title: string, categoryIds: string[]) =>
+    onDrill({
+      title,
+      subtitle: monthLabel,
+      query: new URLSearchParams({
+        from: range.from,
+        to: range.to,
+        categoryId: categoryIds.join(",")
+      }).toString()
+    });
 
   const categoryCell = (column: PlanFactColumn, index: number) => {
     const figures = month.cells[column.categoryId] ?? empty;
@@ -510,6 +653,12 @@ function BandRow({
               onSave({ month: month.month, categoryId: column.categoryId, amount: String(amount) })
             }
           />
+        ) : band === "fact" ? (
+          <DrillFigure
+            value={figures.fact}
+            money={money}
+            onOpen={() => drillTo(column.label, [column.categoryId])}
+          />
         ) : (
           <Figure
             value={figures[band]}
@@ -525,22 +674,9 @@ function BandRow({
     <tr className="hover:bg-muted/30" data-band={band} data-month={month.month}>
       <th
         scope="row"
-        className="sticky left-0 z-10 whitespace-nowrap border-b bg-card px-3 py-1.5 text-left font-medium"
+        className="sticky left-0 z-10 whitespace-nowrap border-b bg-card px-3 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
       >
-        <span className="flex items-center gap-1.5">
-          {label}
-          {onRemove ? (
-            <button
-              type="button"
-              aria-label={`${t("plan.removeMonth")}: ${label}`}
-              title={t("plan.removeMonth")}
-              onClick={onRemove}
-              className="text-muted-foreground/60 transition-colors hover:text-destructive"
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
-        </span>
+        {label}
       </th>
       <Cell className="border-l" column="opening">
         {editable ? (
@@ -578,30 +714,46 @@ function BandRow({
       </Cell>
 
       {income.map(categoryCell)}
-      <Cell className="font-semibold" column="income-total">
-        <Figure
-          value={month.income[band]}
-          money={money}
-          tone={band === "diff" ? diffTone(month.income, true) : undefined}
-        />
-      </Cell>
+      <TotalCells
+        band={band}
+        column="income-total"
+        cell={month.income}
+        split={month.incomeBy}
+        money={money}
+        tone={band === "diff" ? diffTone(month.income, true) : undefined}
+        onDrill={() =>
+          drillTo(
+            t("plan.income"),
+            income.map((column) => column.categoryId)
+          )
+        }
+      />
 
       {expense.map(categoryCell)}
-      <Cell className="font-semibold" column="expense-total">
-        <Figure
-          value={month.expense[band]}
-          money={money}
-          tone={band === "diff" ? diffTone(month.expense, false) : undefined}
-        />
-      </Cell>
+      <TotalCells
+        band={band}
+        column="expense-total"
+        cell={month.expense}
+        split={month.expenseBy}
+        money={money}
+        tone={band === "diff" ? diffTone(month.expense, false) : undefined}
+        onDrill={() =>
+          drillTo(
+            t("plan.expense"),
+            expense.map((column) => column.categoryId)
+          )
+        }
+      />
 
-      <Cell className="border-l font-semibold" column="result">
-        <Figure
-          value={month.result[band]}
-          money={money}
-          tone={band === "diff" ? diffTone(month.result, true) : undefined}
-        />
-      </Cell>
+      <TotalCells
+        band={band}
+        column="result"
+        cell={month.result}
+        split={month.resultBy}
+        money={money}
+        className="border-l"
+        tone={band === "diff" ? diffTone(month.result, true) : undefined}
+      />
 
       <td className="border-b border-l px-3 py-1.5">
         {band === "diff" ? null : (
@@ -622,15 +774,18 @@ function BandRow({
 function Cell({
   children,
   className,
-  column
+  column,
+  colSpan
 }: {
   children: ReactNode;
   className?: string;
   column?: string;
+  colSpan?: number;
 }) {
   return (
     <td
       data-column={column}
+      colSpan={colSpan}
       className={cn("num whitespace-nowrap border-b px-3 py-1.5 text-right", className)}
     >
       {children}

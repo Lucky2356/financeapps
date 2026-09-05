@@ -36,6 +36,13 @@ export type ChartDatum = {
   name: string;
   value: number;
   fill?: string;
+  /**
+   * Set where the datum stands for a category — the ring on the dashboard is
+   * clickable, and the label alone cannot be filtered on: two categories may
+   * share a name (one on each side of the ledger), and renaming one would
+   * silently change what the click asks for.
+   */
+  categoryId?: string;
 };
 
 export type MonthlyCashflowDatum = {
@@ -356,6 +363,20 @@ export type PlanFactCell = {
   diff: number;
 };
 
+/**
+ * A fact-side figure split by which pool of accounts the money passed through.
+ *
+ * Only the fact side has one. A planned amount is typed against a category and
+ * carries no account, so splitting it would mean inventing the half the owner
+ * never stated.
+ */
+export type PlanFactSplit = {
+  /** Cash and cards. */
+  main: number;
+  /** Savings and brokerage accounts, plus what the goals hold. */
+  savings: number;
+};
+
 /** One month — a row in each of the three bands (plan, fact, difference). */
 export type PlanFactMonth = {
   /** "YYYY-MM". */
@@ -368,6 +389,16 @@ export type PlanFactMonth = {
   cells: Record<string, PlanFactCell>;
   income: PlanFactCell;
   expense: PlanFactCell;
+  /** Fact only: the month's income, by the pool it landed in. */
+  incomeBy: PlanFactSplit;
+  /** Fact only: the month's spending, by the pool it left. */
+  expenseBy: PlanFactSplit;
+  /**
+   * Fact only: what each pool held when the month ended — the same figure the
+   * next month opens with, so the two rows agree by construction rather than by
+   * arithmetic that a transfer between pools would break.
+   */
+  resultBy: PlanFactSplit;
   /** opening + savings + income − expense. */
   result: PlanFactCell;
   /** The owner's note against the plan band. */
