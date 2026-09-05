@@ -15,8 +15,13 @@ import { cn } from "@/lib/utils";
 // таблице становится подписью поля в карточке. Дублировать разметку больше не
 // нужно, и разъехаться двум видам негде.
 export type DataColumn<T> = {
-  /** Заголовок колонки в таблице; он же — подпись поля в карточке. */
-  header: ReactNode;
+  /**
+   * Заголовок колонки в таблице; он же — подпись поля в карточке. Строка, а не
+   * произвольная разметка: она же служит ключом строки списка, а ключ по номеру
+   * в массиве React запрещает не из вредности — при изменении набора колонок он
+   * сопоставляет старое состояние с чужой колонкой.
+   */
+  header: string;
   cell: (row: T) => ReactNode;
   align?: "left" | "right";
   /**
@@ -67,9 +72,9 @@ export function DataView<T>({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-muted-foreground">
-              {columns.map((column, index) => (
+              {columns.map((column) => (
                 <th
-                  key={index}
+                  key={column.header}
                   className={cn("py-2", column.align === "right" && "text-right", column.className)}
                 >
                   {column.header}
@@ -81,8 +86,11 @@ export function DataView<T>({
           <tbody>
             {rows.map((row) => (
               <tr key={rowKey(row)} className="border-b last:border-0">
-                {columns.map((column, index) => (
-                  <td key={index} className={cn("py-2", column.align === "right" && "text-right")}>
+                {columns.map((column) => (
+                  <td
+                    key={column.header}
+                    className={cn("py-2", column.align === "right" && "text-right")}
+                  >
                     {column.cell(row)}
                   </td>
                 ))}
@@ -107,8 +115,8 @@ export function DataView<T>({
               </div>
             ) : null}
             <dl className={cn("grid gap-x-3 gap-y-1 text-sm", (primary || cardAction) && "mt-2")}>
-              {rest.map((column, index) => (
-                <div key={index} className="flex items-baseline justify-between gap-3">
+              {rest.map((column) => (
+                <div key={column.header} className="flex items-baseline justify-between gap-3">
                   <dt className="shrink-0 text-xs text-muted-foreground">{column.header}</dt>
                   <dd className="min-w-0 text-right">{column.cell(row)}</dd>
                 </div>
