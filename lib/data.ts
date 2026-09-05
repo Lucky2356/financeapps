@@ -55,6 +55,12 @@ export type TransactionsPageData = {
   accounts: AccountRow[];
   categories: CategoryOption[];
   rules: CategorizationRule[];
+  /**
+   * Operations dated ahead of today, across the whole ledger — `net` is signed
+   * (income positive). Their money is already out of the balance, so the screen
+   * has to be able to say how much of the headline figure has not happened yet.
+   */
+  futureDated: { count: number; net: number };
   filters: {
     from?: string;
     to?: string;
@@ -524,6 +530,7 @@ export async function getTransactionsPageData(
     accounts: [],
     categories: [],
     rules: [],
+    futureDated: { count: 0, net: 0 },
     filters: parsed,
     pagination: {
       page: parsed.page,

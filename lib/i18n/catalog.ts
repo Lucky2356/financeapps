@@ -513,9 +513,20 @@ const ru: Messages = {
   "tx.bulk.rulesApplied": "Правила применены к операциям: {count}",
   "tx.bulk.aiCategorize": "Разобрать ИИ",
   "tx.bulk.aiCategorized": "ИИ проставил категории: {applied}",
+  "tx.bulk.aiConfirm.title": "Описания уйдут провайдеру",
+  "tx.bulk.aiConfirm.desc":
+    "Чтобы расставить категории, описания выбранных операций ({count}) будут отправлены в {provider} как есть — вместе с именами людей и магазинов, если они там написаны. Суммы и счета не отправляются. Продолжить?",
+  "tx.bulk.aiConfirm.ok": "Отправить",
   "tx.bulk.noRules": "Нет правил категоризации",
   "tx.perPage": "На странице",
   "tx.onePage": "На одной странице",
+  "tx.future.notice":
+    "Операций с датой в будущем: {count}, на {sum}. Они уже учтены в остатке и капитале.",
+  "tx.future.show": "Показать их",
+  "tx.future.confirm.title": "Дата ещё не наступила",
+  "tx.future.confirm.desc":
+    "{date} — это будущее. Сумма уйдёт из остатка и капитала сразу, как будто уже потрачена. Сохранить с этой датой?",
+  "tx.future.confirm.ok": "Да, дата верная",
   "tx.apply": "Применить",
   "tx.reset": "Сбросить",
   "tx.sumIncome": "Доходы в выборке",
@@ -1550,6 +1561,8 @@ const ru: Messages = {
   "set.ai.provider": "Провайдер ИИ",
   "set.ai.provider.hint":
     "Выберите нейросеть: Claude (Anthropic), ChatGPT (OpenAI) или DeepSeek. Нужен API-ключ выбранного провайдера.",
+  "set.ai.key.storage":
+    "Ключ хранится на этом устройстве без шифрования и не попадает в резервную копию — на новом компьютере его нужно ввести заново.",
   "set.ai.key": "API-ключ",
   "set.ai.key.hint":
     "Ключ хранится только на вашем устройстве и используется для запросов к выбранному провайдеру.",
@@ -2293,9 +2306,20 @@ const en: Messages = {
   "tx.bulk.rulesApplied": "Rules applied to transactions: {count}",
   "tx.bulk.aiCategorize": "Categorize with AI",
   "tx.bulk.aiCategorized": "AI set categories: {applied}",
+  "tx.bulk.aiConfirm.title": "Descriptions will leave the device",
+  "tx.bulk.aiConfirm.desc":
+    "To assign categories, the descriptions of the selected operations ({count}) are sent to {provider} verbatim — including any names of people and shops written in them. Amounts and accounts are not sent. Continue?",
+  "tx.bulk.aiConfirm.ok": "Send",
   "tx.bulk.noRules": "No categorization rules",
   "tx.perPage": "Per page",
   "tx.onePage": "On one page",
+  "tx.future.notice":
+    "Operations dated in the future: {count}, for {sum}. They already count against the balance.",
+  "tx.future.show": "Show them",
+  "tx.future.confirm.title": "That day has not arrived",
+  "tx.future.confirm.desc":
+    "{date} is in the future. The amount leaves the balance and the net worth at once, as if already spent. Save with this date?",
+  "tx.future.confirm.ok": "Yes, the date is right",
   "tx.apply": "Apply",
   "tx.reset": "Reset",
   "tx.sumIncome": "Income in selection",
@@ -3325,6 +3349,8 @@ const en: Messages = {
   "set.ai.provider": "AI provider",
   "set.ai.provider.hint":
     "Choose the AI: Claude (Anthropic), ChatGPT (OpenAI) or DeepSeek. Requires an API key for the selected provider.",
+  "set.ai.key.storage":
+    "The key is stored on this device unencrypted and is kept out of the backup file — enter it again on a new computer.",
   "set.ai.key": "API key",
   "set.ai.key.hint":
     "The key is stored only on your device and used for requests to the selected provider.",

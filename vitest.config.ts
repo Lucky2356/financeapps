@@ -23,14 +23,16 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary", "json", "html"],
-      // Floor thresholds — intentionally set just below the current baseline so CI
-      // fails on regressions, not on the existing gap. Raise these as B2 (component
-      // tests) and B3 (route/error tests) land. See plan milestone B4.
+      // Floor thresholds, kept a couple of points under the real figure so CI
+      // fails on a regression rather than on ordinary noise. They had been left
+      // at the baseline of a much younger suite — twenty points of slack, enough
+      // to delete a fifth of the tests without CI noticing.
+      // Measured 05.09.2026: 70.22 / 61.59 / 61.59 / 72.42.
       thresholds: {
-        statements: 50,
-        branches: 45,
-        functions: 40,
-        lines: 52
+        statements: 68,
+        branches: 59,
+        functions: 59,
+        lines: 70
       }
     }
   }

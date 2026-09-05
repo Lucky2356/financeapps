@@ -13,13 +13,13 @@ const monthKey = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
 
-async function client() {
+async function client_() {
   return new LocalApiClient(new MemoryStorageAdapter());
 }
 
 describe("moving money between own accounts", () => {
   it("does not create or destroy any of it across currencies", async () => {
-    const api = await client();
+    const api = await client_();
     const roubles = await api.post<{ id: string }>("/accounts", {
       name: "Рубли",
       type: "DEBIT_CARD",
@@ -57,7 +57,7 @@ describe("moving money between own accounts", () => {
 
 describe("putting money into a goal", () => {
   it("credits the goal in the app's currency and stays visible in plan/fact", async () => {
-    const api = await client();
+    const api = await client_();
     const dollars = await api.post<{ id: string }>("/accounts", {
       name: "Доллары",
       type: "DEBIT_CARD",
@@ -96,7 +96,7 @@ describe("putting money into a goal", () => {
 
 describe("the money in a goal", () => {
   it("cannot appear without leaving an account", async () => {
-    const api = await client();
+    const api = await client_();
     await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "100000" });
 
     // A figure typed into a goal used to raise capital by itself — money out of
@@ -112,7 +112,7 @@ describe("the money in a goal", () => {
   });
 
   it("moves between the account and the goal, and back again", async () => {
-    const api = await client();
+    const api = await client_();
     const account = await api.post<{ id: string }>("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
@@ -148,7 +148,7 @@ describe("the money in a goal", () => {
   });
 
   it("goes back to an account when the goal is deleted", async () => {
-    const api = await client();
+    const api = await client_();
     const account = await api.post<{ id: string }>("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
@@ -172,7 +172,7 @@ describe("the money in a goal", () => {
   });
 
   it("stays visible in plan/fact after a top-up", async () => {
-    const api = await client();
+    const api = await client_();
     const account = await api.post<{ id: string }>("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
@@ -212,7 +212,7 @@ describe("the money in a goal", () => {
 
 describe("the head of the debts screen", () => {
   it("names the next payment by the calendar and converts what is owed", async () => {
-    const api = await client();
+    const api = await client_();
     const now = new Date();
     // Two debts: one due earlier in the month than today, one later.
     const earlier = Math.max(1, now.getDate() - 3);
@@ -252,7 +252,7 @@ describe("the head of the debts screen", () => {
 
 describe("limits", () => {
   it("are not eaten by moving money between own accounts", async () => {
-    const api = await client();
+    const api = await client_();
     const from = await api.post<{ id: string }>("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
@@ -274,5 +274,71 @@ describe("limits", () => {
     const budgets = await api.get<BudgetsPageData>("/budgets");
     const spentAnywhere = budgets.budgets.reduce((sum, budget) => sum + budget.spent, 0);
     expect(spentAnywhere).toBe(0);
+  });
+});
+
+// A stuck zero used to sail through: 99 999 999 999 999 999 was accepted and
+// came back as -99 999 999 999 999 020, because past 2^53 hundredths a double
+// no longer holds every integer. The number stored was not the number typed,
+// and nothing on screen said so.
+describe("верхняя граница суммы", () => {
+  async function ledger() {
+    const client = await client_();
+    const account = await client.post<{ id: string }>("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "1000"
+    });
+    const category = await client.post<{ id: string }>("/categories", {
+      name: "Граница-тест",
+      kind: "EXPENSE"
+    });
+    return { client, account, category };
+  }
+
+  it("отклоняет сумму за пределом точности", async () => {
+    const { client, account, category } = await ledger();
+    await expect(
+      client.post("/transactions", {
+        amount: "99999999999999999",
+        type: "EXPENSE",
+        accountId: account.id,
+        categoryId: category.id,
+        date: today()
+      })
+    ).rejects.toThrow(/опечатка/i);
+  });
+
+  it("отклоняет её же в переводе", async () => {
+    const { client, account } = await ledger();
+    const second = await client.post<{ id: string }>("/accounts", {
+      name: "Вклад",
+      type: "SAVINGS",
+      balance: "0"
+    });
+    await expect(
+      client.post("/transactions", {
+        action: "transfer",
+        amount: "99999999999999999",
+        fromAccountId: account.id,
+        toAccountId: second.id,
+        date: today()
+      })
+    ).rejects.toThrow(/опечатка/i);
+  });
+
+  // The ceiling is far above any real balance: a legitimately large operation
+  // must still go through, or the guard has replaced one wrong answer with another.
+  it("пропускает крупную, но настоящую сумму", async () => {
+    const { client, account, category } = await ledger();
+    await expect(
+      client.post("/transactions", {
+        amount: "9000000000",
+        type: "EXPENSE",
+        accountId: account.id,
+        categoryId: category.id,
+        date: today()
+      })
+    ).resolves.toBeDefined();
   });
 });

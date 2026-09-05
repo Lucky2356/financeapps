@@ -24,6 +24,7 @@ import type { TransactionsPageData } from "@/lib/data";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { isFutureDay } from "@/lib/transactions/date";
 import { EmptyState } from "@/components/empty-state";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
@@ -164,6 +165,21 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     const payload = normalizeSelectValues(
       Object.fromEntries(new FormData(event.currentTarget).entries())
     );
+
+    // Editing the date into the future counts the money out of the balance the
+    // same way adding it does, so the same question is asked here.
+    const day = String(payload.date ?? "");
+    if (
+      day &&
+      isFutureDay(day) &&
+      !(await confirm({
+        title: t("tx.future.confirm.title"),
+        description: t("tx.future.confirm.desc", { date: formatDate(day) }),
+        confirmLabel: t("tx.future.confirm.ok")
+      }))
+    ) {
+      return;
+    }
 
     await run(() => apiClient.put<{ budgetWarning?: BudgetWarning }>("/transactions", payload), {
       success: t("tx.toast.updated"),
@@ -331,6 +347,22 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   async function bulkAiCategorize() {
     const targets = visibleTransactions.filter((tx) => selectedIds.has(tx.id));
     if (targets.length === 0) return;
+
+    // Descriptions leave the device verbatim, and a description is where the
+    // counterparty's name lives — "5к, Ларисе" goes as it is written. The
+    // insight features send an aggregate instead (averages, savings rate, top
+    // categories) and need no such warning; this one does, and it names the
+    // provider rather than saying "the AI".
+    const confirmed = await confirm({
+      title: t("tx.bulk.aiConfirm.title"),
+      description: t("tx.bulk.aiConfirm.desc", {
+        count: targets.length,
+        provider: aiSettings?.aiProvider || "anthropic"
+      }),
+      confirmLabel: t("tx.bulk.aiConfirm.ok")
+    });
+    if (!confirmed) return;
+
     const items = targets.map((tx) => ({
       id: tx.id,
       description: tx.description ?? "",
@@ -413,6 +445,38 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
               {t("tx.sumNet")}: {formatCurrency(net)}
             </span>
           </p>
+
+          {/* Money that has already left the balance for a day that has not
+              arrived. Counted over the whole ledger rather than the rows below:
+              the screen opens on the current month, so an operation dated a
+              year out is not on the page at all — while the home screen has
+              already subtracted it. Deliberate post-dating is a real thing, so
+              this states the fact and offers the rows; it does not scold. */}
+          {pageData.futureDated.count > 0 ? (
+            <p
+              data-testid="future-dated-notice"
+              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm"
+            >
+              <span>
+                {t("tx.future.notice", {
+                  count: pageData.futureDated.count,
+                  sum: formatCurrency(Math.abs(pageData.futureDated.net))
+                })}
+              </span>
+              <button
+                type="button"
+                className="font-medium text-primary underline underline-offset-4"
+                onClick={() => {
+                  const from = new Date();
+                  from.setDate(from.getDate() + 1);
+                  const iso = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
+                  router.push(`/transactions?from=${iso}&to=2999-12-31`);
+                }}
+              >
+                {t("tx.future.show")}
+              </button>
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent>
           {visibleTransactions.length === 0 ? (

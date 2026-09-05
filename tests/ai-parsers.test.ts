@@ -37,6 +37,31 @@ describe("parseCategorizeReply", () => {
   it("returns [] on non-JSON", () => {
     expect(parseCategorizeReply("no json here", items, cats)).toEqual([]);
   });
+
+  // The commonest real failure: the reply is cut at the token limit, mid-array.
+  // Half a JSON document must yield nothing rather than a half-applied pass over
+  // the ledger — categories written from a truncated answer are indistinguishable
+  // afterwards from ones the owner chose.
+  it("даёт пустой список на оборванном ответе", () => {
+    const truncated = '[{"id":"t1","categoryId":"c-food"},{"id":"t2","categoryI';
+    expect(parseCategorizeReply(truncated, items, cats)).toEqual([]);
+  });
+
+  it("не принимает объект вместо массива", () => {
+    expect(parseCategorizeReply('{"id":"t1","categoryId":"c-food"}', items, cats)).toEqual([]);
+  });
+
+  it("не падает на пустом ответе", () => {
+    expect(parseCategorizeReply("", items, cats)).toEqual([]);
+    expect(parseCategorizeReply("[]", items, cats)).toEqual([]);
+  });
+
+  // A model that answers with the right shape but the wrong types must not put
+  // a number or a null where a category id belongs.
+  it("отбрасывает строки с неверными типами", () => {
+    const reply = '[{"id":"t1","categoryId":42},{"id":null,"categoryId":"c-food"}]';
+    expect(parseCategorizeReply(reply, items, cats)).toEqual([]);
+  });
 });
 
 describe("buildCategorizePrompt", () => {

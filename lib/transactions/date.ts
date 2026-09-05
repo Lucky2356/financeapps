@@ -1,3 +1,5 @@
+import { roundMoney } from "@/lib/utils";
+
 // The one place that decides what a stored operation date looks like.
 //
 // An operation belongs to a calendar DAY, not to a moment: "продукты, 1 сентября".
@@ -27,4 +29,41 @@ export function storedTransactionDate(value: string | Date | undefined | null): 
 /** The day an already-stored date belongs to, as "YYYY-MM-DD". */
 export function storedDay(value: string): string {
   return value.slice(0, 10);
+}
+
+/** Today as "YYYY-MM-DD" in the local calendar — the day a person is living in. */
+export function todayDay(now: Date = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate()
+  ).padStart(2, "0")}`;
+}
+
+/** True when a stored date belongs to a day that has not arrived yet. */
+export function isFutureDay(value: string, now: Date = new Date()): boolean {
+  return storedDay(value) > todayDay(now);
+}
+
+/**
+ * What the ledger holds ahead of today.
+ *
+ * An operation dated in the future is counted like any other the moment it is
+ * saved: it leaves the account balance and the net worth on the home screen
+ * straight away. That is right for someone who deliberately posts an operation
+ * forward, and wrong — silently — for someone who typed 2027 instead of 2026.
+ * The screen can only say so if somebody counts them, and it has to be counted
+ * over the WHOLE ledger: the list opens on the current month, where a row a year
+ * out is not merely easy to miss, it is not on the page at all.
+ */
+export function futureDated(
+  rows: Array<{ date: string; amount: number; type: string }>,
+  now: Date = new Date()
+): { count: number; net: number } {
+  let count = 0;
+  let net = 0;
+  for (const row of rows) {
+    if (!isFutureDay(row.date, now)) continue;
+    count += 1;
+    net += row.type === "INCOME" ? row.amount : -row.amount;
+  }
+  return { count, net: roundMoney(net) };
 }

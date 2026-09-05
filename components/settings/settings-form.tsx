@@ -555,6 +555,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                       <p className="text-xs text-muted-foreground">
                         {t(activeProvider.keyHintKey)}
                       </p>
+                      {/* Where the key lives, said plainly. It is stored beside
+                          the ledger without encryption, and since 1.24.0 it is
+                          the one thing kept OUT of the backup file — which is
+                          worth knowing before moving to a second computer. */}
+                      <p className="text-xs text-muted-foreground">{t("set.ai.key.storage")}</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
