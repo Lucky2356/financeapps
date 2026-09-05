@@ -147,11 +147,10 @@ export function SecuritySearch({
   if (loading && results.length === 0 && !showingSuggestions) insteadOfRows = t("inv.searching");
   else if (rows.length === 0) insteadOfRows = t("cmd.nothingFound");
 
-  const { activeIndex, setActiveIndex, onKeyDown } = useListKeyboard(
-    rows,
-    choose,
-    `${query}|${kind}`
-  );
+  // Наведение мышью подсветку не двигает — как и в командной строке
+  // приложения. Иначе задетая мышь уводит позицию клавиатуры, и следующая
+  // стрелка идёт не оттуда, откуда человек её ждёт.
+  const { activeIndex, onKeyDown } = useListKeyboard(rows, choose, `${query}|${kind}`);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Подсвеченная стрелками строка обязана быть на виду, иначе клавиатура
@@ -215,7 +214,6 @@ export function SecuritySearch({
                   key={row.ticker}
                   type="button"
                   data-active={index === activeIndex}
-                  onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => choose(row)}
                   className={cn(
                     "flex w-full items-center justify-between gap-3 border-b px-3 py-2 text-left text-sm last:border-b-0",
