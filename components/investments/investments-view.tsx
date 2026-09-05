@@ -619,10 +619,14 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
  * держат, и заставлять набирать тикер целиком ради этого незачем.
  */
 function ownedSecurities(data: InvestmentData): Array<{ ticker: string; name: string }> {
-  const seen = new Set<string>();
-  return [...data.portfolio, ...data.watchlist]
-    .filter((row) => !seen.has(row.ticker) && seen.add(row.ticker))
-    .map((row) => ({ ticker: row.ticker, name: row.name }));
+  // Одна бумага может быть и в портфеле, и в списке наблюдения — в подсказках
+  // она нужна один раз. Обычным циклом, а не отбором с побочным действием
+  // внутри: `filter`, который заодно пополняет множество, читается как загадка.
+  const byTicker = new Map<string, { ticker: string; name: string }>();
+  for (const row of [...data.portfolio, ...data.watchlist]) {
+    if (!byTicker.has(row.ticker)) byTicker.set(row.ticker, { ticker: row.ticker, name: row.name });
+  }
+  return [...byTicker.values()];
 }
 
 function WatchlistDialog({

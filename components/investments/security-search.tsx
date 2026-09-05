@@ -139,6 +139,14 @@ export function SecuritySearch({
     })();
   }
 
+  // Два состояния, в которых показывать нечего, и строка, которая говорит какое.
+  // Названо, а не вложено в цепочку тернарников: порядок проверок важен —
+  // «ищем» и «ничего не нашлось» выглядят одинаково пусто, и увидеть второе,
+  // пока идёт первое, значит решить, что бумаги нет.
+  let insteadOfRows: string | null = null;
+  if (loading && results.length === 0 && !showingSuggestions) insteadOfRows = t("inv.searching");
+  else if (rows.length === 0) insteadOfRows = t("cmd.nothingFound");
+
   const { activeIndex, setActiveIndex, onKeyDown } = useListKeyboard(
     rows,
     choose,
@@ -199,14 +207,8 @@ export function SecuritySearch({
             </p>
           ) : null}
           <div ref={listRef} data-testid="security-search-results">
-            {loading && results.length === 0 && !showingSuggestions ? (
-              <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                {t("inv.searching")}
-              </p>
-            ) : rows.length === 0 ? (
-              <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                {t("cmd.nothingFound")}
-              </p>
+            {insteadOfRows !== null ? (
+              <p className="px-3 py-4 text-center text-sm text-muted-foreground">{insteadOfRows}</p>
             ) : (
               rows.map((row, index) => (
                 <button
