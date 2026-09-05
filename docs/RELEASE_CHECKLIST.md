@@ -25,6 +25,24 @@ npm audit --omit=dev
 - Try restoring an invalid JSON backup and verify the app rejects it without replacing local data.
 - Open `/investments` and verify the disclaimer, watchlist, portfolio, sector structure and market refresh.
 
+## What the automated tests do not cover
+
+Every e2e scenario runs against the static shell in Chromium. Nothing exercises the
+built Tauri app, so four things ship unverified by CI: the filesystem plugin, the
+native dialogs, the updater, and the CSP as WebView2 actually enforces it. A break in
+any of them looks exactly like a green build.
+
+Closing that properly means driving the packaged app from a Windows runner — worth it
+for a wider audience, not for this one. Until then it is a known risk paid down by
+hand: after installing a release, open the app once and check the four seams.
+
+- Import a CSV — the file dialog opens and the rows land.
+- Export a backup — the save dialog opens and the file appears where it was put.
+- Open the releases link from settings — the browser opens on the pinned URL.
+- Check for updates — the answer is "you are up to date", not an error.
+
+Five minutes, and it covers precisely what the suite cannot reach.
+
 ## Version bump
 
 Four files must agree: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`
