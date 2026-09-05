@@ -1,6 +1,7 @@
 import { format, subDays } from "date-fns";
 
 import type { AssetKind } from "@/types/enums";
+import { rankSecurities } from "@/lib/investments/security-match";
 import { sectorForTicker } from "@/lib/market/sectors";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 import { MockMarketDataProvider } from "./MockMarketDataProvider";
@@ -439,41 +440,49 @@ export class MoexMarketDataProvider implements MarketDataService {
   }
 
   async searchSecurities(query: string, limit = 20, kind?: AssetKind): Promise<MarketSecurity[]> {
-    const q = query.trim().toUpperCase();
-    if (!q) return [];
+    if (!query.trim()) return [];
     try {
       const snapshot = await this.getSnapshot();
-      const matches: MarketSecurity[] = [];
+
+      // Сначала оцениваются ВСЕ бумаги доски и только потом список обрезается.
+      // Прежний код набирал первые `limit` совпадений и выходил из цикла, а
+      // точное совпадение тикера поднимал уже после — так что при большом
+      // числе совпадений запрос «SBER» мог не показать SBER вовсе.
+      //
+      // Цена в отборе не участвует: раньше бумага без сегодняшней сделки
+      // отбрасывалась (`price <= 0`), то есть облигацию, которую и искали,
+      // чтобы добавить в портфель, найти было нельзя.
+      const candidates: Array<{ ticker: string; name: string; row: SnapshotRow }> = [];
       for (const [secid, row] of snapshot) {
         if (kind && row.assetKind !== kind) continue;
-        if (!secid.includes(q) && !row.name.toUpperCase().includes(q)) continue;
-        const meta = STATIC_META[secid as Ticker];
-        // Search spans the whole board, so we don't fetch per-ticker history here:
-        // use the live price, falling back to the weighted-average market price.
-        const price = row.live > 0 ? row.live : row.marketPrice;
-        if (price <= 0) continue;
-        matches.push({
+        candidates.push({
           ticker: secid,
-          name: row.name || meta?.name || secid,
+          name: row.name || STATIC_META[secid as Ticker]?.name || secid,
+          row
+        });
+      }
+
+      const matches = rankSecurities(candidates, query, limit).map(({ ticker, name, row }) => {
+        const meta = STATIC_META[ticker as Ticker];
+        // Поиск идёт по всей доске, поэтому историю по каждому тикеру здесь не
+        // тянем: берём живую цену, а если торгов не было — средневзвешенную.
+        // Ноль означает «цены нет», и это честнее, чем спрятать бумагу.
+        return {
+          ticker,
+          name,
           assetKind: row.assetKind,
-          sector: sectorForTicker(secid, row.assetKind),
+          sector: sectorForTicker(ticker, row.assetKind),
           risk: meta?.risk ?? "MEDIUM",
           comment:
             meta?.comment ??
             "Цены и изменение — с Московской биржи (MOEX). Не инвестиционный совет.",
-          price,
+          price: row.live > 0 ? row.live : row.marketPrice,
           changeDay: row.changeDay,
           change30d: 0,
           lotSize: row.lotSize
-        });
-        if (matches.length >= limit) break;
-      }
-      // Exact-ticker matches first, then alphabetical.
-      matches.sort((a, b) => {
-        if (a.ticker === q) return -1;
-        if (b.ticker === q) return 1;
-        return a.ticker.localeCompare(b.ticker);
+        } satisfies MarketSecurity;
       });
+
       return matches.length > 0 ? matches : this.fallback.searchSecurities(query, limit, kind);
     } catch {
       return this.fallback.searchSecurities(query, limit, kind);

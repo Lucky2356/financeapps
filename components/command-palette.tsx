@@ -18,10 +18,11 @@ import {
   Wallet
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, CategoriesPageData, TransactionsPageData } from "@/lib/data";
+import { useListKeyboard } from "@/hooks/use-list-keyboard";
 import { useI18n } from "@/lib/i18n/context";
 import { formatCurrency } from "@/lib/format";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -107,7 +108,6 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [dynamic, setDynamic] = useState<Command[]>([]);
   const [txResults, setTxResults] = useState<Command[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
 
   // Global Ctrl/Cmd+K toggle. event.code is layout-independent (works on the
   // Russian keyboard layout too, where KeyK prints "л").
@@ -226,14 +226,6 @@ export function CommandPalette() {
     return q.length >= 2 ? [...matchedBase, ...txResults] : matchedBase;
   }, [actionCommands, dynamic, query, txResults, labelOf]);
 
-  // Reset highlight when the query changes (set-state-during-render pattern).
-  const [lastQuery, setLastQuery] = useState(query);
-  if (lastQuery !== query) {
-    setLastQuery(query);
-    setActiveIndex(0);
-  }
-  const safeIndex = Math.min(activeIndex, Math.max(0, filtered.length - 1));
-
   function run(command: Command) {
     setOpen(false);
     setQuery("");
@@ -241,19 +233,8 @@ export function CommandPalette() {
     else if (command.href) router.push(command.href);
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setActiveIndex((index) => Math.min(index + 1, filtered.length - 1));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setActiveIndex((index) => Math.max(index - 1, 0));
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      const command = filtered[safeIndex];
-      if (command) run(command);
-    }
-  }
+  // Стрелки и Enter — общий механизм, тот же, что в поиске бумаг.
+  const { activeIndex, setActiveIndex, onKeyDown } = useListKeyboard(filtered, run, query);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -286,7 +267,7 @@ export function CommandPalette() {
                   onMouseMove={() => setActiveIndex(index)}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm",
-                    index === safeIndex ? "bg-primary/10 text-primary" : "text-foreground"
+                    index === activeIndex ? "bg-primary/10 text-primary" : "text-foreground"
                   )}
                 >
                   <Icon className="size-4 shrink-0 opacity-80" />

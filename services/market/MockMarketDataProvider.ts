@@ -1,5 +1,6 @@
 import { addDays, startOfDay, subDays } from "date-fns";
 
+import { rankSecurities } from "@/lib/investments/security-match";
 import type { AssetKind } from "@/types/enums";
 import { sectorForTicker } from "@/lib/market/sectors";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
@@ -232,14 +233,12 @@ export class MockMarketDataProvider implements MarketDataService {
   }
 
   async searchSecurities(query: string, limit = 20, kind?: AssetKind): Promise<MarketSecurity[]> {
-    const q = query.trim().toUpperCase();
-    if (!q) return [];
+    if (!query.trim()) return [];
     // Everything here is a share, so asking for anything else honestly returns
     // nothing rather than shares wearing the wrong label.
     if (kind && kind !== "STOCK") return [];
-    const all = await this.getSecurities();
-    return all
-      .filter((s) => s.ticker.includes(q) || s.name.toUpperCase().includes(q))
-      .slice(0, limit);
+    // Тот же ранжировщик, что и у биржевого провайдера: без сети поиск обязан
+    // вести себя так же, иначе разница вскроется ровно тогда, когда сети нет.
+    return rankSecurities(await this.getSecurities(), query, limit);
   }
 }

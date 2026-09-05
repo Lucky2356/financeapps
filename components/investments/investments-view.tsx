@@ -403,7 +403,11 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                       {t("inv.addWatchlist")}
                     </Button>
                   </DialogTrigger>
-                  <WatchlistDialog currency={data.currency} onAddTicker={addWatchlistTicker} />
+                  <WatchlistDialog
+                    currency={data.currency}
+                    owned={ownedSecurities(data)}
+                    onAddTicker={addWatchlistTicker}
+                  />
                 </Dialog>
               </div>
             </CardHeader>
@@ -579,6 +583,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             description={t("inv.addPosition.desc")}
             data={data}
             currency={data.currency}
+            owned={ownedSecurities(data)}
             onSubmit={submitPosition}
           />
         )}
@@ -597,6 +602,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             description={t("inv.editDesc")}
             data={data}
             currency={data.currency}
+            owned={ownedSecurities(data)}
             position={editingPosition}
             onSubmit={submitPosition}
           />
@@ -606,11 +612,26 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   );
 }
 
+/**
+ * Бумаги, которые у человека уже есть, — портфель и список наблюдения.
+ *
+ * Ими открывается поиск, пока не набрано ни буквы: чаще всего ищут то, что уже
+ * держат, и заставлять набирать тикер целиком ради этого незачем.
+ */
+function ownedSecurities(data: InvestmentData): Array<{ ticker: string; name: string }> {
+  const seen = new Set<string>();
+  return [...data.portfolio, ...data.watchlist]
+    .filter((row) => !seen.has(row.ticker) && seen.add(row.ticker))
+    .map((row) => ({ ticker: row.ticker, name: row.name }));
+}
+
 function WatchlistDialog({
   currency,
+  owned,
   onAddTicker
 }: {
   currency: string;
+  owned: Array<{ ticker: string; name: string }>;
   onAddTicker: (ticker: string) => void;
 }) {
   const { t } = useI18n();
@@ -620,7 +641,7 @@ function WatchlistDialog({
         <DialogTitle>{t("inv.addWatchlist")}</DialogTitle>
         <DialogDescription>{t("inv.watchlistDialog.desc")}</DialogDescription>
       </DialogHeader>
-      <SecuritySearch currency={currency} onSelect={(s) => onAddTicker(s.ticker)} />
+      <SecuritySearch currency={currency} owned={owned} onSelect={(s) => onAddTicker(s.ticker)} />
     </DialogContent>
   );
 }
@@ -630,6 +651,7 @@ function PositionDialog({
   description,
   position,
   currency,
+  owned,
   onSubmit
 }: {
   title: string;
@@ -637,6 +659,7 @@ function PositionDialog({
   data: InvestmentData;
   position?: InvestmentData["portfolio"][number];
   currency: string;
+  owned: Array<{ ticker: string; name: string }>;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useI18n();
@@ -705,6 +728,7 @@ function PositionDialog({
           ) : (
             <SecuritySearch
               currency={currency}
+              owned={owned}
               onSelect={(s) => setChosen({ ticker: s.ticker, name: s.name })}
             />
           )}

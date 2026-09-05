@@ -1118,6 +1118,8 @@ const ru: Messages = {
   "inv.disclaimer":
     "Котировки — Московская биржа (MOEX). Данные носят информационный характер и не являются индивидуальной инвестиционной рекомендацией.",
   "inv.searchPlaceholder": "Поиск по тикеру или названию (напр. SBER, ОФЗ)…",
+  "inv.search.yours": "Ваши бумаги и недавние",
+  "inv.noPrice": "Нет сделок",
   "inv.searching": "Поиск…",
   // Quick-add FAB
   "qa.fabAria": "Быстрое добавление операции",
@@ -2910,6 +2912,8 @@ const en: Messages = {
   "inv.disclaimer":
     "Quotes — Moscow Exchange (MOEX). The data is informational and is not individual investment advice.",
   "inv.searchPlaceholder": "Search by ticker or name (e.g. SBER, OFZ)…",
+  "inv.search.yours": "Yours and recent",
+  "inv.noPrice": "Not traded",
   "inv.searching": "Searching…",
   // Quick-add FAB
   "qa.fabAria": "Quick-add a transaction",
