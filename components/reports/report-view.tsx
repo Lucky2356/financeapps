@@ -10,7 +10,7 @@ import { CashflowChart } from "@/components/charts/lazy";
 import { PrintHeader } from "@/components/reports/print-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataView } from "@/components/ui/data-view";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
@@ -123,7 +123,7 @@ export function ReportView({
             <CardTitle className="text-base">{t("rep.structure")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <DataView
+            <ResponsiveTable
               rows={analytics.topExpenseCategories}
               rowKey={(cat) => cat.categoryId}
               empty={<p className="text-sm text-muted-foreground">{t("rep.noExpenses")}</p>}
@@ -178,7 +178,7 @@ export function ReportView({
             <CardTitle className="text-base">{t("rep.cashflowByMonth")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <DataView
+            <ResponsiveTable
               rows={analytics.monthlyCashflow}
               rowKey={(m) => m.month}
               columns={[

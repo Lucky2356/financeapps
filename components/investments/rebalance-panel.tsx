@@ -11,7 +11,7 @@ import { computeRebalance } from "@/lib/investments/rebalance";
 import type { PortfolioRow, TargetAllocation } from "@/types/finance";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
-import { DataView } from "@/components/ui/data-view";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Input } from "@/components/ui/input";
 
 // Rebalancing helper: set a target weight per sector and see how much to
@@ -20,13 +20,14 @@ import { Input } from "@/components/ui/input";
 // Раньше в комментарии стояло «только для компьютера», но панель всё равно
 // рисовалась на телефоне — четырьмя колонками, из которых последняя содержит
 // целое предложение («Купить на 12 300 ₽»). Теперь на узком экране это
-// карточки (components/ui/data-view.tsx).
+// карточки (components/ui/responsive-table.tsx).
 
 /** Цвет действия: покупать — в плюс, продавать — в минус, ровно — молчим. */
 function actionTone(delta: number): string {
   if (Math.abs(delta) < 1) return "text-muted-foreground";
   return delta > 0 ? "font-medium text-success" : "font-medium text-destructive";
 }
+
 export function RebalancePanel({
   positions,
   currency
@@ -67,6 +68,13 @@ export function RebalancePanel({
     targetList
   );
   const actionable = rows.filter((row) => row.targetPct > 0 || row.currentValue > 0);
+
+  /** Что делать с сектором: цепочка проверок названа, а не вложена в тернарники. */
+  function actionLabel(delta: number): string {
+    if (Math.abs(delta) < 1) return t("inv.reb.balanced");
+    if (delta > 0) return t("inv.reb.buy", { amount: formatCurrency(delta, currency) });
+    return t("inv.reb.sell", { amount: formatCurrency(Math.abs(delta), currency) });
+  }
 
   async function save() {
     try {
@@ -119,7 +127,7 @@ export function RebalancePanel({
         </div>
 
         {targetList.length > 0 ? (
-          <DataView
+          <ResponsiveTable
             rows={actionable}
             rowKey={(row) => row.sector}
             columns={[
@@ -138,15 +146,7 @@ export function RebalancePanel({
                 header: t("inv.reb.action"),
                 align: "right",
                 cell: (row) => (
-                  <span className={actionTone(row.deltaValue)}>
-                    {Math.abs(row.deltaValue) < 1
-                      ? t("inv.reb.balanced")
-                      : row.deltaValue > 0
-                        ? t("inv.reb.buy", { amount: formatCurrency(row.deltaValue, currency) })
-                        : t("inv.reb.sell", {
-                            amount: formatCurrency(Math.abs(row.deltaValue), currency)
-                          })}
-                  </span>
+                  <span className={actionTone(row.deltaValue)}>{actionLabel(row.deltaValue)}</span>
                 )
               }
             ]}

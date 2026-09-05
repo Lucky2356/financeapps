@@ -12,7 +12,7 @@ import { convert, DEFAULT_CURRENCY_RATES, type CurrencyRates } from "@/lib/curre
 import type { RealizedInvestmentEvent } from "@/types/finance";
 import type { AccountsPageData } from "@/lib/data";
 import { Button } from "@/components/ui/button";
-import { DataView } from "@/components/ui/data-view";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -186,7 +186,7 @@ export function RealizedTaxReport() {
         {/* Per-year report */}
         {report.years.length > 0 ? (
           <div className="space-y-3">
-            <DataView
+            <ResponsiveTable
               rows={report.years}
               rowKey={(y) => String(y.year)}
               columns={[

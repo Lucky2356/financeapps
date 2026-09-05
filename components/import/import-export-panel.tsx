@@ -22,7 +22,7 @@ import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataView } from "@/components/ui/data-view";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   ALL_OPTION,
   Select,
@@ -762,7 +762,7 @@ export function ImportExportPanel({
                   без пары для узкого экрана — на телефоне третий шаг импорта
                   показывал кнопку «Ввезти» и ни одной строки из того, что
                   сейчас ляжет в книгу. Теперь на телефоне это карточки. */}
-              <DataView
+              <ResponsiveTable
                 rows={rows.slice(0, 6).map((row, index) => ({ row, index }))}
                 rowKey={({ index }) => String(index)}
                 columns={fields.slice(0, 5).map((f, order) => ({

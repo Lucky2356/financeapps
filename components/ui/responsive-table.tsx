@@ -14,7 +14,10 @@ import { cn } from "@/lib/utils";
 // Здесь колонка описывается один раз и знает оба своих вида: заголовок в
 // таблице становится подписью поля в карточке. Дублировать разметку больше не
 // нужно, и разъехаться двум видам негде.
-export type DataColumn<T> = {
+//
+// Имя не DataView: так называется встроенный объект JavaScript для работы с
+// двоичными буферами, и своё такое же затеняет его в пределах модуля.
+export type ResponsiveColumn<T> = {
   /**
    * Заголовок колонки в таблице; он же — подпись поля в карточке. Строка, а не
    * произвольная разметка: она же служит ключом строки списка, а ключ по номеру
@@ -38,7 +41,7 @@ export type DataColumn<T> = {
   className?: string;
 };
 
-export function DataView<T>({
+export function ResponsiveTable<T>({
   columns,
   rows,
   rowKey,
@@ -46,7 +49,7 @@ export function DataView<T>({
   footer,
   cardAction
 }: {
-  columns: Array<DataColumn<T>>;
+  columns: Array<ResponsiveColumn<T>>;
   rows: T[];
   rowKey: (row: T) => string;
   /** Что показать вместо всего, когда строк нет. */

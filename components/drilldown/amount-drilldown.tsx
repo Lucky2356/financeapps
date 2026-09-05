@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { DataView, type DataColumn } from "@/components/ui/data-view";
+import { ResponsiveTable, type ResponsiveColumn } from "@/components/ui/responsive-table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -99,7 +99,7 @@ export function AmountDrilldown({
   // Через общий вид: на телефоне это карточки, а не таблица. Прежде таблица
   // прокручивалась вбок внутри диалога, который прокручивается вниз, — сумма,
   // ради которой расшифровку и открывают, начиналась за правым краем.
-  const columns: Array<DataColumn<TransactionRow>> = [
+  const columns: Array<ResponsiveColumn<TransactionRow>> = [
     {
       header: t("drill.date"),
       cell: (row) => <span className="num whitespace-nowrap">{formatDate(row.date)}</span>
@@ -132,7 +132,7 @@ export function AmountDrilldown({
         {nothingToShow !== null || rows === null ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{nothingToShow}</p>
         ) : (
-          <DataView
+          <ResponsiveTable
             rows={rows}
             rowKey={(row) => row.id}
             columns={columns}
