@@ -10,7 +10,6 @@ import type {
   AccountsPageData,
   BudgetsPageData,
   GoalsPageData,
-  ImportPageData,
   TransactionsPageData
 } from "@/lib/data";
 import { Button } from "@/components/ui/button";
@@ -23,11 +22,16 @@ type Counts = {
   transactions: number;
   budgets: number;
   goals: number;
-  backupFresh: boolean;
 };
 
 // Tracks the first-setup progress from real data and guides the next action.
 // Auto-hides once every step is done (or when dismissed).
+//
+// Резервной копии здесь намеренно нет, хотя раньше была. Этот блок закрывается
+// навсегда одним крестиком — приемлемо для подсказок «с чего начать» и никуда
+// не годится для единственного предупреждения о том, что данные ничем не
+// защищены. Копией теперь владеет BackupNotice: у неё нет крестика, и она
+// возвращается сама.
 export function SetupChecklist() {
   const { t } = useI18n();
   const [counts, setCounts] = useState<Counts | null>(null);
@@ -38,19 +42,17 @@ export function SetupChecklist() {
   });
 
   const loadCounts = useCallback(async () => {
-    const [accounts, transactions, budgets, goals, importRefs] = await Promise.all([
+    const [accounts, transactions, budgets, goals] = await Promise.all([
       apiClient.get<AccountsPageData>("/accounts").catch(() => null),
       apiClient.get<TransactionsPageData>("/transactions").catch(() => null),
       apiClient.get<BudgetsPageData>("/budgets").catch(() => null),
-      apiClient.get<GoalsPageData>("/goals").catch(() => null),
-      apiClient.get<ImportPageData>("/import").catch(() => null)
+      apiClient.get<GoalsPageData>("/goals").catch(() => null)
     ]);
     setCounts({
       accounts: accounts?.accounts.length ?? 0,
       transactions: transactions?.pagination.total ?? transactions?.transactions.length ?? 0,
       budgets: budgets?.budgets.filter((b) => b.limitAmount > 0).length ?? 0,
-      goals: goals?.goals.length ?? 0,
-      backupFresh: importRefs?.backupReminderDue === false
+      goals: goals?.goals.length ?? 0
     });
   }, []);
 
@@ -110,13 +112,6 @@ export function SetupChecklist() {
       desc: t("sc.s4.desc"),
       cta: t("sc.s4.cta"),
       href: "/goals" as const
-    },
-    {
-      done: counts.backupFresh,
-      title: t("sc.s5.title"),
-      desc: t("sc.s5.desc"),
-      cta: t("sc.s5.cta"),
-      href: "/settings?section=data" as const
     }
   ];
   const doneCount = steps.filter((s) => s.done).length;

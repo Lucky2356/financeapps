@@ -522,6 +522,11 @@ const ru: Messages = {
   "tx.onePage": "На одной странице",
   "tx.future.notice":
     "Операций с датой в будущем: {count}, на {sum}. Они уже учтены в остатке и капитале.",
+  "backup.notice.never":
+    "Резервной копии нет. Все данные живут только на этом устройстве — переустановка системы или поломка диска сотрёт их без следа.",
+  "backup.notice.stale":
+    "Последняя резервная копия — {date}. Всё, что записано после неё, есть только на этом устройстве.",
+  "backup.notice.cta": "Сделать копию",
   "tx.future.show": "Показать их",
   "tx.future.confirm.title": "Дата ещё не наступила",
   "tx.future.confirm.desc":
@@ -988,9 +993,6 @@ const ru: Messages = {
   "sc.s4.title": "Создайте цель",
   "sc.s4.desc": "Накопления на крупную покупку",
   "sc.s4.cta": "К целям",
-  "sc.s5.title": "Сохраните backup",
-  "sc.s5.desc": "Резервная копия ваших данных",
-  "sc.s5.cta": "К импорту",
   "dash.netWorthTrend": "Динамика чистого капитала",
   "dash.customize": "Настроить",
   "dash.customize.title": "Настройка дашборда",
@@ -2315,6 +2317,11 @@ const en: Messages = {
   "tx.onePage": "On one page",
   "tx.future.notice":
     "Operations dated in the future: {count}, for {sum}. They already count against the balance.",
+  "backup.notice.never":
+    "There is no backup. Everything lives on this device alone — a reinstall or a dead disk takes it with no trace.",
+  "backup.notice.stale":
+    "Last backup: {date}. Everything recorded since then exists on this device only.",
+  "backup.notice.cta": "Make a backup",
   "tx.future.show": "Show them",
   "tx.future.confirm.title": "That day has not arrived",
   "tx.future.confirm.desc":
@@ -2778,9 +2785,6 @@ const en: Messages = {
   "sc.s4.title": "Create a goal",
   "sc.s4.desc": "Savings for a big purchase",
   "sc.s4.cta": "Go to goals",
-  "sc.s5.title": "Save a backup",
-  "sc.s5.desc": "A backup of your data",
-  "sc.s5.cta": "Go to import",
   "dash.netWorthTrend": "Net worth trend",
   "dash.customize": "Customize",
   "dash.customize.title": "Customize dashboard",
