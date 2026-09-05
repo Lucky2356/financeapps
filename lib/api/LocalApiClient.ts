@@ -22,7 +22,7 @@ import type {
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
-import { storedTransactionDate } from "@/lib/transactions/date";
+import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
@@ -47,7 +47,7 @@ import {
   type RawLocalState
 } from "@/lib/storage/migrations/runLocalStateMigrations";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
-import { clamp, percent, roundMoney } from "@/lib/utils";
+import { clamp, isUsableMoney, MONEY_RANGE_ERROR, percent, roundMoney } from "@/lib/utils";
 import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
@@ -771,7 +771,16 @@ export class LocalApiClient implements ApiClient {
       throw new Error(
         "Файл не похож на резервную копию приложения — выберите файл, сохранённый кнопкой «Скачать backup»."
       );
-    await this.save(migrateLocalState(parsed.data));
+    const restored = migrateLocalState(parsed.data);
+
+    // The key does not travel in the file (see `backup`), so a copy carries an
+    // empty one. Writing that over the key set on THIS machine would quietly
+    // switch the AI features off on every restore, and the owner would go
+    // looking for the fault in the wrong place. The machine keeps its own.
+    const current = await this.state();
+    if (!restored.aiApiKey) restored.aiApiKey = current.aiApiKey ?? "";
+
+    await this.save(restored);
     return { restored: true } as TResponse;
   }
 
@@ -787,8 +796,14 @@ export class LocalApiClient implements ApiClient {
    * show.
    */
   private async backup(state: LocalState): Promise<LocalState & { appVersion: string }> {
+    // The AI provider key is a secret and does NOT travel with the data. A copy
+    // is written to a cloud folder on a schedule and moved between devices by
+    // whatever is at hand — a cable, a messenger — and a key that rides along
+    // ends up wherever the file does. It is also the one thing in here nobody
+    // needs restored: it belongs to the machine, not to the ledger.
     return {
       ...state,
+      aiApiKey: "",
       appVersion: APP_VERSION,
       accounts: state.accounts.map((account) => ({ ...account })),
       categories: state.categories.map((category) => ({ ...category })),
@@ -867,7 +882,7 @@ export class LocalApiClient implements ApiClient {
     // Checked here because the stored schema demands a positive number: a zero
     // or a stray letter used to be written happily and made the whole document
     // unreadable on the next start.
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
+    if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
     const linkedRecurringId = recurringId ?? previous?.recurringId;
     const linkedLiabilityId =
@@ -944,7 +959,7 @@ export class LocalApiClient implements ApiClient {
       throw new Error("Выберите существующие активные счета для перевода.");
     if (fromAccount.id === toAccount.id)
       throw new Error("Счета списания и зачисления должны отличаться.");
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
+    if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
 
     // Money moving between currencies is still the same money: 100 $ leaving a
     // dollar card arrives as roubles, not as 100 ₽. Both halves used to carry
@@ -1164,7 +1179,7 @@ export class LocalApiClient implements ApiClient {
     const goal = this.goalById(state, input.goalId);
     const account = this.goalAccount(state, input.accountId || goal.linkedAccountId);
     const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
+    if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
     if (amount > account.balance) throw new Error("Недостаточно средств на счёте.");
 
     // The amount is typed in the account's own currency — that is the money the
@@ -1183,7 +1198,7 @@ export class LocalApiClient implements ApiClient {
     // Typed on the goal's side here: it is the jar being emptied, and the jar is
     // counted in the app's currency.
     const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Введите сумму больше нуля.");
+    if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
     if (amount > goal.currentAmount) throw new Error("В цели меньше денег, чем вы снимаете.");
 
     return this.applyGoalMovement(state, goal, account, {
@@ -2093,6 +2108,11 @@ export class LocalApiClient implements ApiClient {
       categories: state.categories,
       rules: state.rules,
       filters,
+      // Counted over the WHOLE ledger, not the filtered page: the screen opens
+      // on the current month, so an operation dated a year out is not merely
+      // easy to miss — it is not on the page at all, while its money has
+      // already left the balance.
+      futureDated: futureDated(state.transactions),
       pagination: {
         page,
         limit: wantsEverything ? filtered.length : limit,

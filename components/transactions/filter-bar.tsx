@@ -118,6 +118,26 @@ export function TransactionFilterBar({
       <div className="flex flex-wrap items-center gap-2">
         {title ? <div className="mr-auto">{title}</div> : null}
 
+        {/* Resetting was reachable from two places nobody looks: inside the
+            gear, and at the tail of the chip list below, after however many
+            lines the chips happen to wrap onto. It opens the row now, ahead of
+            the controls it undoes — and only when there is something to reset,
+            an always-visible button that usually does nothing being its own
+            kind of noise. Clearing goes back to the current month, the state
+            the screen opens in. */}
+        {count > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 gap-1.5 px-2.5 text-muted-foreground"
+            onClick={() => go("")}
+          >
+            <X className="size-4" />
+            {t("tx.filters.clearAll")}
+          </Button>
+        ) : null}
+
         <CategoryFilter
           categories={categories}
           selected={selectedCategories}
@@ -188,26 +208,6 @@ export function TransactionFilterBar({
           onGo={go}
           onSetParam={setParam}
         />
-
-        {/* Resetting was reachable from two places nobody looks: inside the
-            gear, and at the tail of the chip list below, after however many
-            lines the chips happen to wrap onto. It sits with the controls that
-            set the filters now — and only when there is something to reset, an
-            always-visible button that usually does nothing being its own kind
-            of noise. Clearing goes back to the current month, the state the
-            screen opens in. */}
-        {count > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-9 gap-1.5 px-2.5 text-muted-foreground"
-            onClick={() => go("")}
-          >
-            <X className="size-4" />
-            {t("tx.filters.clearAll")}
-          </Button>
-        ) : null}
       </div>
 
       <div className="relative">

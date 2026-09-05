@@ -1,10 +1,22 @@
 import { z } from "zod";
 
 import { CURRENCY_CODES } from "@/lib/currency";
+import { MAX_MONEY, MONEY_RANGE_ERROR } from "@/lib/utils";
 
 const optionalId = z.string().trim().optional();
-const positiveMoney = z.coerce.number().finite().positive("Введите сумму больше нуля");
-const nonNegativeMoney = z.coerce.number().finite().min(0, "Сумма не может быть отрицательной");
+// The same ceiling the ledger itself enforces (lib/utils): past it a double
+// stops holding every hundredth, and a stuck zero comes back as a different
+// number than the one typed.
+const positiveMoney = z.coerce
+  .number()
+  .finite()
+  .positive("Введите сумму больше нуля")
+  .max(MAX_MONEY, MONEY_RANGE_ERROR);
+const nonNegativeMoney = z.coerce
+  .number()
+  .finite()
+  .min(0, "Сумма не может быть отрицательной")
+  .max(MAX_MONEY, MONEY_RANGE_ERROR);
 
 export const transactionSchema = z.object({
   id: optionalId,

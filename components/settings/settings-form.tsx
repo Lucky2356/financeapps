@@ -322,51 +322,37 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         "основные general валюта currency демо demo тип type операции transaction доход income расход expense по умолчанию default",
       node: (
         <SectionCard title={t("set.general.title")} fields>
-          <div className="space-y-2">
-            <Label>{t("set.currency")}</Label>
-            <Select
-              value={settings.currency}
-              onValueChange={(value) => void persist({ currency: value as CurrencyCode })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SUPPORTED_CURRENCIES.map((item) => (
-                  <SelectItem key={item.code} value={item.code}>
-                    {item.code} — {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{t("set.currency.hint")}</p>
-          </div>
+          <SelectField
+            label={t("set.currency")}
+            value={settings.currency}
+            onValueChange={(value) => void persist({ currency: value as CurrencyCode })}
+            hint={t("set.currency.hint")}
+          >
+            {SUPPORTED_CURRENCIES.map((item) => (
+              <SelectItem key={item.code} value={item.code}>
+                {item.code} — {item.label}
+              </SelectItem>
+            ))}
+          </SelectField>
           <ToggleRow
             title={t("set.demo.title")}
             description={t("set.demo.desc")}
             checked={settings.demoMode}
             onChange={(v) => void persist({ demoMode: v })}
           />
-          <div className="space-y-2">
-            <Label>{t("set.defaultType")}</Label>
-            <Select
-              value={settings.defaultTransactionType}
-              onValueChange={(value) =>
-                void persist({
-                  defaultTransactionType: value as EditableSettings["defaultTransactionType"]
-                })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="EXPENSE">{t("set.type.expense")}</SelectItem>
-                <SelectItem value="INCOME">{t("set.type.income")}</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{t("set.defaultType.hint")}</p>
-          </div>
+          <SelectField
+            label={t("set.defaultType")}
+            value={settings.defaultTransactionType}
+            onValueChange={(value) =>
+              void persist({
+                defaultTransactionType: value as EditableSettings["defaultTransactionType"]
+              })
+            }
+            hint={t("set.defaultType.hint")}
+          >
+            <SelectItem value="EXPENSE">{t("set.type.expense")}</SelectItem>
+            <SelectItem value="INCOME">{t("set.type.income")}</SelectItem>
+          </SelectField>
         </SectionCard>
       )
     });
@@ -518,29 +504,23 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 const activeProvider = providerInfo(settings.aiProvider);
                 return (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-provider">{t("set.ai.provider")}</Label>
-                      <Select
-                        value={activeProvider.id}
-                        onValueChange={(value) => {
-                          // Switching provider resets the model to that
-                          // provider's default (empty = its default model).
-                          void persist({ aiProvider: value as AiProvider, aiModel: "" });
-                        }}
-                      >
-                        <SelectTrigger id="ai-provider">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AI_PROVIDERS.map((provider) => (
-                            <SelectItem key={provider.id} value={provider.id}>
-                              {provider.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">{t("set.ai.provider.hint")}</p>
-                    </div>
+                    <SelectField
+                      id="ai-provider"
+                      label={t("set.ai.provider")}
+                      value={activeProvider.id}
+                      onValueChange={(value) => {
+                        // Switching provider resets the model to that provider's
+                        // default (empty = its default model).
+                        void persist({ aiProvider: value as AiProvider, aiModel: "" });
+                      }}
+                      hint={t("set.ai.provider.hint")}
+                    >
+                      {AI_PROVIDERS.map((provider) => (
+                        <SelectItem key={provider.id} value={provider.id}>
+                          {provider.label}
+                        </SelectItem>
+                      ))}
+                    </SelectField>
                     <div className="space-y-2">
                       <Label htmlFor="ai-key">{t("set.ai.key")}</Label>
                       <Input
@@ -555,48 +535,41 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                       <p className="text-xs text-muted-foreground">
                         {t(activeProvider.keyHintKey)}
                       </p>
+                      {/* Where the key lives, said plainly. It is stored beside
+                          the ledger without encryption, and since 1.24.0 it is
+                          the one thing kept OUT of the backup file — which is
+                          worth knowing before moving to a second computer. */}
+                      <p className="text-xs text-muted-foreground">{t("set.ai.key.storage")}</p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-model">{t("set.ai.model")}</Label>
-                      <Select
-                        value={settings.aiModel || ALL_OPTION}
-                        onValueChange={(value) =>
-                          void persist({ aiModel: value === ALL_OPTION ? "" : value })
-                        }
-                      >
-                        <SelectTrigger id="ai-model">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
-                          {activeProvider.models.map((model) => (
-                            <SelectItem key={model.id} value={model.id}>
-                              {model.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">{t("set.ai.model.hint")}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-effort">{t("set.ai.effort")}</Label>
-                      <Select
-                        value={settings.aiEffort || "medium"}
-                        onValueChange={(value) => void persist({ aiEffort: value })}
-                      >
-                        <SelectTrigger id="ai-effort">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AI_EFFORTS.map((effort) => (
-                            <SelectItem key={effort} value={effort}>
-                              {t(`set.ai.effort.${effort}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">{t("set.ai.effort.hint")}</p>
-                    </div>
+                    <SelectField
+                      id="ai-model"
+                      label={t("set.ai.model")}
+                      value={settings.aiModel || ALL_OPTION}
+                      onValueChange={(value) =>
+                        void persist({ aiModel: value === ALL_OPTION ? "" : value })
+                      }
+                      hint={t("set.ai.model.hint")}
+                    >
+                      <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
+                      {activeProvider.models.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.label}
+                        </SelectItem>
+                      ))}
+                    </SelectField>
+                    <SelectField
+                      id="ai-effort"
+                      label={t("set.ai.effort")}
+                      value={settings.aiEffort || "medium"}
+                      onValueChange={(value) => void persist({ aiEffort: value })}
+                      hint={t("set.ai.effort.hint")}
+                    >
+                      {AI_EFFORTS.map((effort) => (
+                        <SelectItem key={effort} value={effort}>
+                          {t(`set.ai.effort.${effort}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectField>
                   </>
                 );
               })()}
@@ -617,50 +590,42 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         "риск risk профиль profile подушка cushion резерв reserve emergency fund инвестиции investments",
       node: (
         <SectionCard title={t("set.risk.title")} fields>
-          <div className="space-y-2">
-            <Label className="inline-flex items-center gap-1">
-              {t("set.risk.profile")} <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
-            </Label>
-            <Select
-              value={settings.riskProfileCode}
-              onValueChange={(value) =>
-                void persist({
-                  riskProfileCode: value as EditableSettings["riskProfileCode"]
-                })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {pageData.riskProfiles.map((profile) => (
-                  <SelectItem key={profile.id} value={profile.code}>
-                    {t(`riskProfile.${profile.code}`)} — {t(`riskProfile.${profile.code}.desc`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{t("set.risk.profile.hint")}</p>
-          </div>
-          <div className="space-y-2">
-            <Label className="inline-flex items-center gap-1">
-              {t("set.risk.fund")} <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
-            </Label>
-            <Select
-              value={String(settings.emergencyFundMonthsTarget)}
-              onValueChange={(value) => void persist({ emergencyFundMonthsTarget: Number(value) })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="3">{t("set.risk.fund.months", { n: 3 })}</SelectItem>
-                <SelectItem value="6">{t("set.risk.fund.months12", { n: 6 })}</SelectItem>
-                <SelectItem value="12">{t("set.risk.fund.months12", { n: 12 })}</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{t("set.risk.fund.hint")}</p>
-          </div>
+          <SelectField
+            labelClassName="inline-flex items-center gap-1"
+            label={
+              <>
+                {t("set.risk.profile")} <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
+              </>
+            }
+            value={settings.riskProfileCode}
+            onValueChange={(value) =>
+              void persist({
+                riskProfileCode: value as EditableSettings["riskProfileCode"]
+              })
+            }
+            hint={t("set.risk.profile.hint")}
+          >
+            {pageData.riskProfiles.map((profile) => (
+              <SelectItem key={profile.id} value={profile.code}>
+                {t(`riskProfile.${profile.code}`)} — {t(`riskProfile.${profile.code}.desc`)}
+              </SelectItem>
+            ))}
+          </SelectField>
+          <SelectField
+            labelClassName="inline-flex items-center gap-1"
+            label={
+              <>
+                {t("set.risk.fund")} <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
+              </>
+            }
+            value={String(settings.emergencyFundMonthsTarget)}
+            onValueChange={(value) => void persist({ emergencyFundMonthsTarget: Number(value) })}
+            hint={t("set.risk.fund.hint")}
+          >
+            <SelectItem value="3">{t("set.risk.fund.months", { n: 3 })}</SelectItem>
+            <SelectItem value="6">{t("set.risk.fund.months12", { n: 6 })}</SelectItem>
+            <SelectItem value="12">{t("set.risk.fund.months12", { n: 12 })}</SelectItem>
+          </SelectField>
         </SectionCard>
       )
     });
@@ -914,6 +879,44 @@ function SectionCard({
         {children}
       </CardContent>
     </Card>
+  );
+}
+
+// A setting that is chosen from a list. Seven of them sit across this screen,
+// and every one is the same four parts: a label, a select, the options, and a
+// line of explanation under it. Written out seven times, that shape drifted —
+// one field would get an `htmlFor` and its neighbour would not — so it is one
+// component now, and the call sites carry only what actually differs.
+function SelectField({
+  id,
+  label,
+  labelClassName,
+  value,
+  onValueChange,
+  hint,
+  children
+}: {
+  id?: string;
+  label: React.ReactNode;
+  labelClassName?: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id} className={labelClassName}>
+        {label}
+      </Label>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger id={id}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>{children}</SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
   );
 }
 

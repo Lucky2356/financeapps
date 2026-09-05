@@ -15,6 +15,7 @@ import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
+import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
@@ -60,6 +61,7 @@ export function QuickAddFab({
   categories: CategoryOption[];
 }) {
   const router = useRouter();
+  const confirmFutureDate = useConfirmFutureDate();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   // A transfer is the third thing people actually record here: money moving
@@ -188,6 +190,7 @@ export function QuickAddFab({
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
+    if (!(await confirmFutureDate(payload.date))) return;
     if (type === "TRANSFER") return submitTransfer(payload);
     if (!accountId) return toast.error(t("qa.err.account"));
     if (!categoryId) return toast.error(t("qa.err.category"));

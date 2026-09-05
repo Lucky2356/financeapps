@@ -31,6 +31,7 @@ const data: TransactionsPageData = {
     { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#16a34a" }
   ],
   rules: [{ id: "rule-1", match: "Пятёрочка", categoryId: "cat-fun" }],
+  futureDated: { count: 0, net: 0 },
   filters: {},
   pagination: { page: 1, limit: 20, total: 0, hasPreviousPage: false, hasNextPage: false }
 } as TransactionsPageData;

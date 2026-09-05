@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Desktop permissions for CSV/JSON import/export and cloud-folder sync. The opener scope is pinned to this project's releases: the command permission alone is not enough, the plugin also matches the URL against this list.",
+  "description": "Desktop permissions for CSV/JSON import/export and cloud-folder sync. The opener scope is pinned to this project's releases: the command permission alone is not enough, the plugin also matches the URL against this list. The home directory stays in the allow list because that is where cloud folders actually live (YandexDisk, Dropbox, OneDrive sit next to it, not under Documents), and a folder picked once has to stay readable for the scheduled backup after a restart. What does NOT belong to a finance app is denied outright — deny wins over allow — so credentials, keys and application data are out of reach even though the folder above them is not.",
   "platforms": ["windows", "macOS", "linux"],
   "windows": ["main"],
   "permissions": [
@@ -29,7 +29,23 @@
     },
     {
       "identifier": "fs:scope",
-      "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**", "$HOME/**"]
+      "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**", "$HOME/**"],
+      "deny": [
+        "$HOME/.ssh/**",
+        "$HOME/.gnupg/**",
+        "$HOME/.aws/**",
+        "$HOME/.azure/**",
+        "$HOME/.kube/**",
+        "$HOME/.docker/**",
+        "$HOME/.config/**",
+        "$HOME/.local/share/keyrings/**",
+        "$HOME/.git-credentials",
+        "$HOME/.netrc",
+        "$HOME/.npmrc",
+        "$HOME/.pypirc",
+        "$HOME/AppData/**",
+        "$HOME/Library/Keychains/**"
+      ]
     },
     {
       "identifier": "http:default",

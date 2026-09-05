@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import { sampleDate } from "@/lib/sample-data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type {
   AccountsPageData,
@@ -35,5 +36,26 @@ describe("sample data seeding", () => {
     const clearedAccounts = await client.get<AccountsPageData>("/accounts");
     expect(cleared.netWorth).toBe(0);
     expect(clearedAccounts.accounts).toHaveLength(0);
+  });
+});
+
+// The sample days are fixed (the 6th, the 12th, the 20th), so in the current
+// month they depend on when the example is loaded. Loaded early in the month,
+// most of them landed after today: the example's own balance counted money that
+// had not been spent, and the app reported future-dated operations on a ledger
+// the owner had not typed a line into.
+describe("даты примера не убегают в будущее", () => {
+  it("день текущего месяца не позже сегодняшнего", () => {
+    const today = new Date();
+    for (const day of [1, 6, 12, 20, 28]) {
+      const resolved = sampleDate(0, day);
+      expect(resolved.getTime()).toBeLessThanOrEqual(
+        new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).getTime()
+      );
+    }
+  });
+
+  it("прошлые месяцы берут свой день как есть", () => {
+    expect(sampleDate(-1, 20).getDate()).toBe(20);
   });
 });

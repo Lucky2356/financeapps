@@ -278,10 +278,20 @@ export const SAMPLE_GOALS: SampleGoal[] = [
   }
 ];
 
-// Resolve a sample relative month/day into a concrete date (noon to avoid TZ edge cases).
+/**
+ * Resolve a sample relative month/day into a concrete date (noon to avoid TZ
+ * edge cases).
+ *
+ * The days are fixed — the 6th, the 12th, the 20th — so in the CURRENT month
+ * they depend on when the example is loaded. Loaded on the 5th, six of the eight
+ * rows landed after today: the example's own balance counted money that had not
+ * been spent, and the screen said so, on a ledger the owner had not typed a
+ * single line into. A sample of the month so far never runs past today.
+ */
 export function sampleDate(monthOffset: number, day: number): Date {
   const date = new Date();
-  date.setMonth(date.getMonth() + monthOffset, day);
+  const dayInMonth = monthOffset === 0 ? Math.min(day, date.getDate()) : day;
+  date.setMonth(date.getMonth() + monthOffset, dayInMonth);
   date.setHours(12, 0, 0, 0);
   return date;
 }

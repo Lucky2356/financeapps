@@ -142,6 +142,7 @@ export function ImportExportPanel({
         accounts: data.accounts,
         categories: data.categories,
         rules: [],
+        futureDated: { count: 0, net: 0 },
         filters: {},
         pagination: {
           page: 1,
