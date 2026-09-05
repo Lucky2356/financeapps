@@ -296,17 +296,20 @@ describe("верхняя граница суммы", () => {
     return { client, account, category };
   }
 
+  /** Записать расход на заданную сумму — единственное, чем эти проверки различаются. */
+  const spend = (l: Awaited<ReturnType<typeof ledger>>, amount: string) =>
+    l.client.post("/transactions", {
+      amount,
+      type: "EXPENSE",
+      accountId: l.account.id,
+      categoryId: l.category.id,
+      date: today()
+    });
+
+  const OVER_PRECISION = "99999999999999999";
+
   it("отклоняет сумму за пределом точности", async () => {
-    const { client, account, category } = await ledger();
-    await expect(
-      client.post("/transactions", {
-        amount: "99999999999999999",
-        type: "EXPENSE",
-        accountId: account.id,
-        categoryId: category.id,
-        date: today()
-      })
-    ).rejects.toThrow(/опечатка/i);
+    await expect(spend(await ledger(), OVER_PRECISION)).rejects.toThrow(/опечатка/i);
   });
 
   it("отклоняет её же в переводе", async () => {
@@ -319,7 +322,7 @@ describe("верхняя граница суммы", () => {
     await expect(
       client.post("/transactions", {
         action: "transfer",
-        amount: "99999999999999999",
+        amount: OVER_PRECISION,
         fromAccountId: account.id,
         toAccountId: second.id,
         date: today()
@@ -330,15 +333,6 @@ describe("верхняя граница суммы", () => {
   // The ceiling is far above any real balance: a legitimately large operation
   // must still go through, or the guard has replaced one wrong answer with another.
   it("пропускает крупную, но настоящую сумму", async () => {
-    const { client, account, category } = await ledger();
-    await expect(
-      client.post("/transactions", {
-        amount: "9000000000",
-        type: "EXPENSE",
-        accountId: account.id,
-        categoryId: category.id,
-        date: today()
-      })
-    ).resolves.toBeDefined();
+    await expect(spend(await ledger(), "9000000000")).resolves.toBeDefined();
   });
 });
