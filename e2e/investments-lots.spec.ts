@@ -69,5 +69,9 @@ test("форма добавления бумаги открывается чис
   await page.getByRole("button", { name: "Добавить первую бумагу" }).click();
   // A search field, not a chosen security.
   await expect(dialog.getByRole("textbox").first()).toBeVisible();
-  await expect(dialog.getByText("Сбербанк")).toHaveCount(0);
+  // Проверяется отсутствие ВЫБРАННОЙ бумаги, а не отсутствие её названия на
+  // экране. С 1.26.0 пустой поиск показывает недавно выбранные — «Сбербанк»
+  // там теперь есть, и это не остаток прежнего диалога, а подсказка. Признак
+  // выбранной бумаги один: рядом с ней стоит кнопка «Изменить».
+  await expect(dialog.getByRole("button", { name: "Изменить" })).toHaveCount(0);
 });
