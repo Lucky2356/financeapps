@@ -406,6 +406,17 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                   <p className="font-semibold">
                     -{formatCurrency(payment.amount, pageData.currency)}
                   </p>
+                  {/* The row itself says where it is changed. The card's header
+                      has always carried a link to the debts page, but nothing
+                      tied it to the payment in front of you: the list looks
+                      exactly like the editable one above it, so the reasonable
+                      conclusion was that these simply cannot be edited. */}
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/debts" title={t("rec.debts.editHint")}>
+                      <Edit2 className="size-4" />
+                      {t("common.edit")}
+                    </Link>
+                  </Button>
                 </div>
               </div>
             ))}

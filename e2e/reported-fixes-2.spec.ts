@@ -94,7 +94,7 @@ test("легенда описывает каждую долю круга, вкл
 
   const sectors = await card.locator("path.recharts-sector").count();
   expect(sectors).toBeGreaterThan(6);
-  const legendRows = await card.getByTestId("breakdown-legend").locator("> div").count();
+  const legendRows = await card.getByTestId("breakdown-legend").locator("> div > button").count();
   expect(legendRows).toBe(sectors);
   await expect(card.getByTestId("breakdown-legend").getByText("Личные")).toBeVisible();
 });

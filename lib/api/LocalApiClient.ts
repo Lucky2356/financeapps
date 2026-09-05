@@ -38,7 +38,7 @@ import {
   type CurrencyCode,
   type CurrencyRates
 } from "@/lib/currency";
-import { RISK_PROFILE_LABELS } from "@/lib/constants";
+import { APP_VERSION, RISK_PROFILE_LABELS } from "@/lib/constants";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
 import {
@@ -96,6 +96,7 @@ import type {
   PlanFactColumn,
   PlanFactMonth,
   PlanFactPageData,
+  PlanFactSplit,
   PurchaseLot,
   RealizedInvestmentEvent,
   TargetAllocation,
@@ -774,9 +775,21 @@ export class LocalApiClient implements ApiClient {
     return { restored: true } as TResponse;
   }
 
-  private async backup(state: LocalState): Promise<LocalState> {
+  /**
+   * The exported document, plus the version of the app that wrote it.
+   *
+   * The restore window used to show `schemaVersion` under the word "Версия",
+   * and that number — 14 — is the internal shape of the data, not the release.
+   * It answered a question nobody asks with an answer nobody can use. The
+   * release goes in beside it; restore ignores the extra field (the state
+   * schema drops what it does not declare), so older builds read these files
+   * unchanged and files written before this change simply have no version to
+   * show.
+   */
+  private async backup(state: LocalState): Promise<LocalState & { appVersion: string }> {
     return {
       ...state,
+      appVersion: APP_VERSION,
       accounts: state.accounts.map((account) => ({ ...account })),
       categories: state.categories.map((category) => ({ ...category })),
       transactions: state.transactions.map((transaction) => ({ ...transaction })),
@@ -2737,6 +2750,15 @@ export class LocalApiClient implements ApiClient {
     // Both sides collected as month → category → amount, so a month row is one
     // lookup rather than another pass over every operation.
     const fact = new Map<string, Map<string, number>>();
+    // The same money again, split by which pool of accounts it passed through.
+    // Only the fact side can carry this: a planned figure is typed against a
+    // category and has no account behind it, so there is nothing to split.
+    const savingsAccounts = new Set(
+      state.accounts
+        .filter((account) => !account.isArchived && SAVINGS_ACCOUNT_TYPES.includes(account.type))
+        .map((account) => account.id)
+    );
+    const pools = new Map<string, { income: PlanFactSplit; expense: PlanFactSplit }>();
     for (const transaction of countableRows(state.transactions, includeTransfers)) {
       const month = transaction.date.slice(0, 7);
       const byCategory = fact.get(month) ?? new Map<string, number>();
@@ -2745,6 +2767,15 @@ export class LocalApiClient implements ApiClient {
         (byCategory.get(transaction.category.id) ?? 0) + transaction.amount
       );
       fact.set(month, byCategory);
+
+      const pool = pools.get(month) ?? {
+        income: { main: 0, savings: 0 },
+        expense: { main: 0, savings: 0 }
+      };
+      const side = transaction.type === "INCOME" ? pool.income : pool.expense;
+      if (savingsAccounts.has(transaction.account.id)) side.savings += transaction.amount;
+      else side.main += transaction.amount;
+      pools.set(month, pool);
     }
 
     const plan = new Map<string, Map<string, number>>();
@@ -2845,6 +2876,15 @@ export class LocalApiClient implements ApiClient {
       const savings = cellOf(planOf?.get(SAVINGS_BALANCE_ID) ?? 0, openingOf(month, true));
       const income = cellOf(incomePlan, incomeFact);
       const expense = cellOf(expensePlan, expenseFact);
+      const pool = pools.get(month);
+
+      // What each pool was left holding when the month ended — which is the
+      // same figure as what it starts the next one with. Taken from the wound
+      // back balances rather than from opening + income − expense, because a
+      // transfer between the two pools moves both halves without being income
+      // or spending on either: derive it and the two numbers disagree with
+      // next month's opening row directly above them.
+      const next = shiftMonth(month, 1);
 
       return {
         month,
@@ -2853,6 +2893,9 @@ export class LocalApiClient implements ApiClient {
         cells,
         income,
         expense,
+        incomeBy: pool?.income ?? { main: 0, savings: 0 },
+        expenseBy: pool?.expense ?? { main: 0, savings: 0 },
+        resultBy: { main: openingOf(next, false), savings: openingOf(next, true) },
         result: cellOf(
           opening.plan + savings.plan + income.plan - expense.plan,
           opening.fact + savings.fact + income.fact - expense.fact

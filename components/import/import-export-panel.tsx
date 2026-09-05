@@ -61,6 +61,8 @@ const emptyMapping: CsvColumnMapping = {
 };
 
 type BackupPreview = {
+  /** The release that wrote the file. Absent in anything exported before 1.22.3. */
+  appVersion: string | null;
   schemaVersion: string;
   exportedAt: string | null;
   accounts: number;
@@ -104,6 +106,7 @@ function summarizeBackupPayload(payload: unknown): BackupPreview {
   ) as Record<string, unknown>;
 
   return {
+    appVersion: typeof data.appVersion === "string" ? data.appVersion : null,
     schemaVersion: String(data.schemaVersion ?? "—"),
     exportedAt:
       typeof envelope.exportedAt === "string"
@@ -407,7 +410,12 @@ export function ImportExportPanel({
                   <div className="rounded-lg border bg-muted/20 p-4 text-sm">
                     <p className="font-medium">{t("imp.selectedBackup")}</p>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-muted-foreground">
-                      <span>{t("imp.bVersion", { v: restorePreview.schemaVersion })}</span>
+                      {/* Two different numbers, and only one of them means
+                          anything to a person: the release that wrote the file.
+                          The schema number is what restore actually checks, so
+                          it stays — under its own name, not under "Версия". */}
+                      <span>{t("imp.bVersion", { v: restorePreview.appVersion ?? "—" })}</span>
+                      <span>{t("imp.bSchema", { v: restorePreview.schemaVersion })}</span>
                       <span>
                         {t("imp.bDate", {
                           d: restorePreview.exportedAt
