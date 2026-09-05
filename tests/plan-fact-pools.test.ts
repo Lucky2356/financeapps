@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { PlanFactPageData } from "@/types/finance";
+import type { PlanFactMonth, PlanFactPageData, PlanFactSplit } from "@/types/finance";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const monthKey = () => {
@@ -11,6 +11,28 @@ const monthKey = () => {
 };
 
 const api = () => new LocalApiClient(new MemoryStorageAdapter());
+
+/**
+ * One operation, as the ledger takes it. Written once because the shape is the
+ * same every time and only the four values differ; spelled out per call it read
+ * as five near-identical blocks that said nothing to anyone.
+ */
+async function record(
+  client: LocalApiClient,
+  fields: { accountId: string; categoryId: string; type: "INCOME" | "EXPENSE"; amount: number }
+) {
+  await client.post("/transactions", {
+    accountId: fields.accountId,
+    categoryId: fields.categoryId,
+    type: fields.type,
+    amount: String(fields.amount),
+    date: today()
+  });
+}
+
+/** A category of the given side, named so it cannot clash with the built-in ones. */
+const category = (client: LocalApiClient, name: string, kind: "INCOME" | "EXPENSE") =>
+  client.post<{ id: string }>("/categories", { name, kind });
 
 /** One account in each pool — the whole point of the split is telling them apart. */
 async function twoPools(client: LocalApiClient) {
@@ -25,6 +47,12 @@ async function twoPools(client: LocalApiClient) {
     balance: "0"
   });
   return { card, deposit };
+}
+
+/** Both halves of both flows, in one assertion — the pair is always read together. */
+function expectPools(month: PlanFactMonth, income: PlanFactSplit, expense: PlanFactSplit) {
+  expect(month.incomeBy).toEqual(income);
+  expect(month.expenseBy).toEqual(expense);
 }
 
 async function thisMonth(client: LocalApiClient) {
@@ -43,36 +71,34 @@ describe("month totals split by pool", () => {
     const client = api();
     const { card, deposit } = await twoPools(client);
     const [salary, percent, food] = await Promise.all([
-      client.post<{ id: string }>("/categories", { name: "Оклад-тест", kind: "INCOME" }),
-      client.post<{ id: string }>("/categories", { name: "Проценты-тест", kind: "INCOME" }),
-      client.post<{ id: string }>("/categories", { name: "Еда-тест", kind: "EXPENSE" })
+      category(client, "Оклад-тест", "INCOME"),
+      category(client, "Проценты-тест", "INCOME"),
+      category(client, "Еда-тест", "EXPENSE")
     ]);
 
-    await client.post("/transactions", {
+    // Wages onto the card, bank interest onto the deposit, groceries off the
+    // card: one of each, so every corner of the split has something in it.
+    await record(client, {
       accountId: card.id,
       categoryId: salary.id,
       type: "INCOME",
-      amount: "80000",
-      date: today()
+      amount: 80000
     });
-    await client.post("/transactions", {
+    await record(client, {
       accountId: deposit.id,
       categoryId: percent.id,
       type: "INCOME",
-      amount: "1500",
-      date: today()
+      amount: 1500
     });
-    await client.post("/transactions", {
+    await record(client, {
       accountId: card.id,
       categoryId: food.id,
       type: "EXPENSE",
-      amount: "5000",
-      date: today()
+      amount: 5000
     });
 
     const month = await thisMonth(client);
-    expect(month.incomeBy).toEqual({ main: 80000, savings: 1500 });
-    expect(month.expenseBy).toEqual({ main: 5000, savings: 0 });
+    expectPools(month, { main: 80000, savings: 1500 }, { main: 5000, savings: 0 });
 
     // The two halves are the whole: a split that does not add back up to the
     // figure it came from is worse than no split at all.
@@ -87,17 +113,13 @@ describe("month totals split by pool", () => {
   it("closes each pool where the next month opens it, transfers included", async () => {
     const client = api();
     const { card, deposit } = await twoPools(client);
-    const salary = await client.post<{ id: string }>("/categories", {
-      name: "Оклад-тест",
-      kind: "INCOME"
-    });
+    const salary = await category(client, "Оклад-тест", "INCOME");
 
-    await client.post("/transactions", {
+    await record(client, {
       accountId: card.id,
       categoryId: salary.id,
       type: "INCOME",
-      amount: "100000",
-      date: today()
+      amount: 100000
     });
     await client.post("/transactions", {
       action: "transfer",
@@ -121,7 +143,6 @@ describe("month totals split by pool", () => {
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "0" });
 
     const month = await thisMonth(client);
-    expect(month.incomeBy).toEqual({ main: 0, savings: 0 });
-    expect(month.expenseBy).toEqual({ main: 0, savings: 0 });
+    expectPools(month, { main: 0, savings: 0 }, { main: 0, savings: 0 });
   });
 });

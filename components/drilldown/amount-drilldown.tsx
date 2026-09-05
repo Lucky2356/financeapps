@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { cn } from "@/lib/utils";
 import type { TransactionsPageData } from "@/lib/data";
 import type { TransactionRow } from "@/types/finance";
 
@@ -80,6 +81,37 @@ export function AmountDrilldown({
 
   const total = (rows ?? []).reduce((sum, row) => sum + row.amount, 0);
 
+  // The four columns described once rather than spelled out twice, in the
+  // header and again in the body. An operation without a description is the
+  // common case — the category is what it was filed under, so that stands in
+  // for a name.
+  const columns = [
+    {
+      label: t("drill.date"),
+      head: "pr-3 text-left",
+      body: "num whitespace-nowrap pr-3",
+      of: (row: TransactionRow) => formatDate(row.date)
+    },
+    {
+      label: t("drill.account"),
+      head: "pr-3 text-left",
+      body: "pr-3",
+      of: (row: TransactionRow) => row.account.label
+    },
+    {
+      label: t("drill.description"),
+      head: "pr-3 text-left",
+      body: "pr-3",
+      of: (row: TransactionRow) => row.description || row.category.label
+    },
+    {
+      label: t("drill.amount"),
+      head: "text-right",
+      body: "num whitespace-nowrap text-right font-medium",
+      of: (row: TransactionRow) => formatCurrency(row.amount, currency)
+    }
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto" data-testid="drilldown">
@@ -88,36 +120,31 @@ export function AmountDrilldown({
         </DialogHeader>
         {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
 
-        {failed ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("drill.failed")}</p>
-        ) : rows === null ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("drill.loading")}</p>
-        ) : rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("drill.empty")}</p>
+        {failed || rows === null || rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {t(failed ? "drill.failed" : rows === null ? "drill.loading" : "drill.empty")}
+          </p>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-xs text-muted-foreground">
-                    <th className="py-2 pr-3 text-left font-medium">{t("drill.date")}</th>
-                    <th className="py-2 pr-3 text-left font-medium">{t("drill.account")}</th>
-                    <th className="py-2 pr-3 text-left font-medium">{t("drill.description")}</th>
-                    <th className="py-2 text-right font-medium">{t("drill.amount")}</th>
+                    {columns.map((column) => (
+                      <th key={column.label} className={cn("py-2 font-medium", column.head)}>
+                        {column.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id} className="border-b last:border-0">
-                      <td className="num whitespace-nowrap py-1.5 pr-3">{formatDate(row.date)}</td>
-                      <td className="py-1.5 pr-3">{row.account.label}</td>
-                      {/* An operation without a description is the common case —
-                          the category is what it was filed under, so that is
-                          what stands in for a name here. */}
-                      <td className="py-1.5 pr-3">{row.description || row.category.label}</td>
-                      <td className="num whitespace-nowrap py-1.5 text-right font-medium">
-                        {formatCurrency(row.amount, currency)}
-                      </td>
+                      {columns.map((column) => (
+                        <td key={column.label} className={cn("py-1.5", column.body)}>
+                          {column.of(row)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
