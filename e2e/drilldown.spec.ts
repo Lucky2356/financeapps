@@ -1,6 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { openSettled, seedExampleData } from "./helpers";
+
+/** A fact cell of the newest month in the plan grid. */
+const factCell = (page: Page, column: string) =>
+  page.locator('tr[data-band="fact"]').first().locator(`td[data-column="${column}"]`);
+
+/** Clicks the figure in a cell and hands back the dialog it opened. */
+async function openDrilldown(page: Page, cell: Locator) {
+  const figure = cell.getByRole("button");
+  await expect(figure).toBeVisible({ timeout: 20_000 });
+  await figure.click();
+  const dialog = page.getByTestId("drilldown");
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
 
 // Every total in the app is a sum of rows in the ledger, and until now the only
 // way to see which rows was to leave the screen and rebuild the same filters by
@@ -11,15 +25,12 @@ test("число факта в плане раскрывается в опера
   await seedExampleData(page);
   await openSettled(page, "/plan");
 
-  const fact = page.locator('tr[data-band="fact"]').first().locator('td[data-column="Продукты"]');
-  const figure = fact.getByRole("button");
-  await expect(figure).toBeVisible({ timeout: 20_000 });
+  const fact = factCell(page, "Продукты");
+  await expect(fact.getByRole("button")).toBeVisible({ timeout: 20_000 });
   const shown = Number((await fact.innerText()).replace(/[^\d-]/g, ""));
   expect(shown).toBeGreaterThan(0);
 
-  await figure.click();
-  const dialog = page.getByTestId("drilldown");
-  await expect(dialog).toBeVisible();
+  const dialog = await openDrilldown(page, fact);
   await expect(dialog.getByRole("heading", { name: "Продукты" })).toBeVisible();
 
   // The sum of the rows listed has to be the figure that was clicked; a list
@@ -37,16 +48,7 @@ test("итог расходов раскрывается так же, как о�
   await seedExampleData(page);
   await openSettled(page, "/plan");
 
-  const total = page
-    .locator('tr[data-band="fact"]')
-    .first()
-    .locator('td[data-column="expense-total-main"]');
-  const figure = total.getByRole("button");
-  await expect(figure).toBeVisible({ timeout: 20_000 });
-  await figure.click();
-
-  const dialog = page.getByTestId("drilldown");
-  await expect(dialog).toBeVisible();
+  const dialog = await openDrilldown(page, factCell(page, "expense-total-main"));
   await expect(dialog.getByRole("heading", { name: "Расходы" })).toBeVisible();
   await expect(dialog.getByText("Загружаем операции…")).toBeHidden({ timeout: 15_000 });
   expect(await dialog.locator("tbody tr").count()).toBeGreaterThan(0);

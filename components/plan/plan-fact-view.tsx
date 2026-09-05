@@ -521,22 +521,26 @@ function TotalCells({
     );
   }
 
+  const pools = [
+    { pool: "main", value: split.main },
+    { pool: "savings", value: split.savings }
+  ] as const;
+
   return (
     <>
-      <Cell className={cn("font-semibold", className)} column={`${column}-main`}>
-        {onDrill ? (
-          <DrillFigure value={split.main} money={money} onOpen={onDrill} />
-        ) : (
-          <Figure value={split.main} money={money} />
-        )}
-      </Cell>
-      <Cell className="font-semibold" column={`${column}-savings`}>
-        {onDrill ? (
-          <DrillFigure value={split.savings} money={money} onOpen={onDrill} />
-        ) : (
-          <Figure value={split.savings} money={money} />
-        )}
-      </Cell>
+      {pools.map(({ pool, value }, index) => (
+        <Cell
+          key={pool}
+          className={cn("font-semibold", index === 0 && className)}
+          column={`${column}-${pool}`}
+        >
+          {onDrill ? (
+            <DrillFigure value={value} money={money} onOpen={onDrill} />
+          ) : (
+            <Figure value={value} money={money} />
+          )}
+        </Cell>
+      ))}
     </>
   );
 }

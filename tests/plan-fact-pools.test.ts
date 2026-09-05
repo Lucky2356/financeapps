@@ -12,6 +12,21 @@ const monthKey = () => {
 
 const api = () => new LocalApiClient(new MemoryStorageAdapter());
 
+/** One account in each pool — the whole point of the split is telling them apart. */
+async function twoPools(client: LocalApiClient) {
+  const card = await client.post<{ id: string }>("/accounts", {
+    name: "Карта",
+    type: "DEBIT_CARD",
+    balance: "0"
+  });
+  const deposit = await client.post<{ id: string }>("/accounts", {
+    name: "Вклад",
+    type: "SAVINGS",
+    balance: "0"
+  });
+  return { card, deposit };
+}
+
 async function thisMonth(client: LocalApiClient) {
   const page = await client.get<PlanFactPageData>("/plan");
   const month = page.months.find((entry) => entry.month === monthKey());
@@ -26,16 +41,7 @@ async function thisMonth(client: LocalApiClient) {
 describe("month totals split by pool", () => {
   it("files income and spending under the pool of the account they touched", async () => {
     const client = api();
-    const card = await client.post<{ id: string }>("/accounts", {
-      name: "Карта",
-      type: "DEBIT_CARD",
-      balance: "0"
-    });
-    const deposit = await client.post<{ id: string }>("/accounts", {
-      name: "Вклад",
-      type: "SAVINGS",
-      balance: "0"
-    });
+    const { card, deposit } = await twoPools(client);
     const [salary, percent, food] = await Promise.all([
       client.post<{ id: string }>("/categories", { name: "Оклад-тест", kind: "INCOME" }),
       client.post<{ id: string }>("/categories", { name: "Проценты-тест", kind: "INCOME" }),
@@ -80,16 +86,7 @@ describe("month totals split by pool", () => {
   // actually opens with. It is read off the balances instead.
   it("closes each pool where the next month opens it, transfers included", async () => {
     const client = api();
-    const card = await client.post<{ id: string }>("/accounts", {
-      name: "Карта",
-      type: "DEBIT_CARD",
-      balance: "0"
-    });
-    const deposit = await client.post<{ id: string }>("/accounts", {
-      name: "Вклад",
-      type: "SAVINGS",
-      balance: "0"
-    });
+    const { card, deposit } = await twoPools(client);
     const salary = await client.post<{ id: string }>("/categories", {
       name: "Оклад-тест",
       kind: "INCOME"
