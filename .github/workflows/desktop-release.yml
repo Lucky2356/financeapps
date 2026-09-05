@@ -71,6 +71,18 @@ jobs:
           node-version: "24"
           cache: "npm"
 
+      # GATE: the tag is where latest.json gets its version, and package.json is
+      # where the app gets its own. When they disagree the release still goes out
+      # green and then every install offers the same update forever, because the
+      # copy it installs still reports the old number. Checked here, next to the
+      # tag validation and for the same reason: seconds, not after the build.
+      - name: Verify the tag matches the version in the files
+        if: steps.rel.outputs.publish == 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: node scripts/verify-release-version.mjs "$TAG"
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
