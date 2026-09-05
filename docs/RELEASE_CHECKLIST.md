@@ -32,6 +32,14 @@ and the `financial-assistant` entry in `src-tauri/Cargo.lock`. Regenerate `packa
 with `npm install --package-lock-only`, add the CHANGELOG section, commit, then
 `git tag -a vX.Y.Z` and push the tag.
 
+This no longer rests on remembering. `scripts/verify-release-version.mjs` reads all four
+and refuses a disagreement; `npm run test` runs it against the repository on every pull
+request, and the release workflow runs it again with the tag before the build starts —
+`node scripts/verify-release-version.mjs vX.Y.Z` is the same check you can run by hand.
+The reason it is a gate: `latest.json` takes its version from the tag and the app takes
+its own from `package.json`, so a forgotten bump publishes green and then offers every
+PC and phone the same update forever, since installing it changes nothing.
+
 ## Windows
 
 - Run `npm run tauri:build`; installers land in `src-tauri/target/release/bundle/`.
