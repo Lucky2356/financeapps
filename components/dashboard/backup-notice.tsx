@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import type { ImportPageData } from "@/lib/data";
+import { NOTICE_ACTION_CLASS, NoticeLine } from "@/components/ui/notice-line";
 import { useI18n } from "@/lib/i18n/context";
 
 /**
@@ -53,18 +54,15 @@ export function BackupNotice() {
     : null;
 
   return (
-    <p
-      data-testid="backup-notice"
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm"
-    >
+    <NoticeLine testId="backup-notice">
       <span>{since ? t("backup.notice.stale", { date: since }) : t("backup.notice.never")}</span>
       <Link
         href="/settings?section=data"
-        className="font-medium text-primary underline underline-offset-4"
+        className={NOTICE_ACTION_CLASS}
         data-testid="backup-notice-link"
       >
         {t("backup.notice.cta")}
       </Link>
-    </p>
+    </NoticeLine>
   );
 }
