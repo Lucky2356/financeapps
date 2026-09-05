@@ -81,6 +81,16 @@ export function AmountDrilldown({
 
   const total = (rows ?? []).reduce((sum, row) => sum + row.amount, 0);
 
+  // Three states with nothing to draw a table for, and the one line that says
+  // which. Named rather than nested into a chain of ternaries: the order of the
+  // checks matters — a failed request has no rows either, and reading "empty"
+  // when the request fell over would send the owner looking for a bug in their
+  // own figures.
+  let nothingToShow: string | null = null;
+  if (failed) nothingToShow = t("drill.failed");
+  else if (rows === null) nothingToShow = t("drill.loading");
+  else if (rows.length === 0) nothingToShow = t("drill.empty");
+
   // The four columns described once rather than spelled out twice, in the
   // header and again in the body. An operation without a description is the
   // common case — the category is what it was filed under, so that stands in
@@ -120,10 +130,8 @@ export function AmountDrilldown({
         </DialogHeader>
         {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
 
-        {failed || rows === null || rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            {t(failed ? "drill.failed" : rows === null ? "drill.loading" : "drill.empty")}
-          </p>
+        {nothingToShow !== null || rows === null ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{nothingToShow}</p>
         ) : (
           <>
             <div className="overflow-x-auto">
