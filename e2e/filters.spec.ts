@@ -70,9 +70,23 @@ test.describe("фильтры операций", () => {
     await expect(page).toHaveURL(/q=/, { timeout: 5_000 });
     await expect(page.getByTestId("filter-chips").getByText(/аренда/)).toBeVisible();
 
-    // "Сбросить всё" puts the screen back to unfiltered.
+    // «Сбросить всё» возвращает экран к тому, с чего он открывается: текущий
+    // месяц и ничего сверх него.
+    //
+    // Раньше здесь проверялся голый /transactions — состояние, в котором экран
+    // не остаётся ни на кадр: увидев адрес без периода, filter-bar тут же
+    // дописывает текущий месяц через router.replace. Тест ловил промежуток
+    // между двумя рендерами и проходил или падал по везению планировщика.
+    // Проверяется то, чем сброс кончается, а не то, через что он проходит.
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
     await page.getByRole("button", { name: "Сбросить всё" }).click();
-    await expect(page).toHaveURL(/\/transactions$/);
+
+    await expect(page).toHaveURL(new RegExp(`from=${month}-01`));
+    await expect(page).not.toHaveURL(/q=/);
+    await expect(page.getByRole("textbox", { name: "Поиск", exact: true })).toHaveValue("");
+    await expect(page.getByTestId("filter-chips").getByText(/аренда/)).toHaveCount(0);
   });
 
   test("счётчик на шестерёнке считает то, что реально включено", async ({ page }) => {

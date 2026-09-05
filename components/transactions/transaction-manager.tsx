@@ -28,6 +28,7 @@ import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { EmptyState } from "@/components/empty-state";
 import { AmountInput } from "@/components/ui/amount-input";
 import { Button } from "@/components/ui/button";
+import { NOTICE_ACTION_CLASS, NoticeLine } from "@/components/ui/notice-line";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -443,10 +444,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
               already subtracted it. Deliberate post-dating is a real thing, so
               this states the fact and offers the rows; it does not scold. */}
           {pageData.futureDated.count > 0 ? (
-            <p
-              data-testid="future-dated-notice"
-              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm"
-            >
+            <NoticeLine testId="future-dated-notice">
               <span>
                 {t("tx.future.notice", {
                   count: pageData.futureDated.count,
@@ -455,7 +453,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
               </span>
               <button
                 type="button"
-                className="font-medium text-primary underline underline-offset-4"
+                className={NOTICE_ACTION_CLASS}
                 onClick={() => {
                   const from = new Date();
                   from.setDate(from.getDate() + 1);
@@ -465,7 +463,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
               >
                 {t("tx.future.show")}
               </button>
-            </p>
+            </NoticeLine>
           ) : null}
         </CardHeader>
         <CardContent>
