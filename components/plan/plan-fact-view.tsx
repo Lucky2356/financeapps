@@ -292,7 +292,7 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                             aria-label={`${t("plan.removeMonth")}: ${monthLabel(month.month)}`}
                             title={t("plan.removeMonth")}
                             onClick={() => void removeMonth(month.month)}
-                            className="text-muted-foreground/60 transition-colors hover:text-destructive"
+                            className="tap-target inline-flex items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-destructive"
                           >
                             <X className="size-3.5" />
                           </button>
@@ -411,7 +411,9 @@ function AddMonthDialog({
           </Button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        {/* Три колонки на 360 px дают 89 px под «сентябрь» — по два на узком,
+            по три от 420 px, как в шагах знакомства рядом. */}
+        <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
           {monthNames.map((name, index) => {
             const month = key(index);
             const already = present.has(month);
@@ -865,7 +867,7 @@ function PlanCell({
         onClick={() => edit(value ? String(value) : "")}
         aria-label={t("plan.plan")}
         className={cn(
-          "num w-full rounded px-1 py-0.5 text-right underline decoration-dotted decoration-1 underline-offset-4 hover:bg-accent/10",
+          "tap-target num w-full rounded px-1 py-0.5 text-right underline decoration-dotted decoration-1 underline-offset-4 hover:bg-accent/10",
           value === 0 && "text-muted-foreground/50"
         )}
       >

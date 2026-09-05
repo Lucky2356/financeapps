@@ -11,10 +11,23 @@ import { computeRebalance } from "@/lib/investments/rebalance";
 import type { PortfolioRow, TargetAllocation } from "@/types/finance";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Input } from "@/components/ui/input";
 
-// Desktop-only rebalancing helper: set a target weight per sector and see how
-// much to buy/sell to reach it. Targets persist in LocalState.
+// Rebalancing helper: set a target weight per sector and see how much to
+// buy/sell to reach it. Targets persist in LocalState.
+//
+// Раньше в комментарии стояло «только для компьютера», но панель всё равно
+// рисовалась на телефоне — четырьмя колонками, из которых последняя содержит
+// целое предложение («Купить на 12 300 ₽»). Теперь на узком экране это
+// карточки (components/ui/responsive-table.tsx).
+
+/** Цвет действия: покупать — в плюс, продавать — в минус, ровно — молчим. */
+function actionTone(delta: number): string {
+  if (Math.abs(delta) < 1) return "text-muted-foreground";
+  return delta > 0 ? "font-medium text-success" : "font-medium text-destructive";
+}
+
 export function RebalancePanel({
   positions,
   currency
@@ -55,6 +68,13 @@ export function RebalancePanel({
     targetList
   );
   const actionable = rows.filter((row) => row.targetPct > 0 || row.currentValue > 0);
+
+  /** Что делать с сектором: цепочка проверок названа, а не вложена в тернарники. */
+  function actionLabel(delta: number): string {
+    if (Math.abs(delta) < 1) return t("inv.reb.balanced");
+    if (delta > 0) return t("inv.reb.buy", { amount: formatCurrency(delta, currency) });
+    return t("inv.reb.sell", { amount: formatCurrency(Math.abs(delta), currency) });
+  }
 
   async function save() {
     try {
@@ -107,44 +127,30 @@ export function RebalancePanel({
         </div>
 
         {targetList.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-xs text-muted-foreground">
-                <tr>
-                  <th className="p-2 text-left">{t("inv.reb.sector")}</th>
-                  <th className="p-2 text-right">{t("inv.reb.actual")}</th>
-                  <th className="p-2 text-right">{t("inv.reb.target")}</th>
-                  <th className="p-2 text-right">{t("inv.reb.action")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {actionable.map((row) => (
-                  <tr key={row.sector} className="border-t">
-                    <td className="p-2 font-medium">{row.sector}</td>
-                    <td className="p-2 text-right tabular-nums">{row.actualPct.toFixed(1)}%</td>
-                    <td className="p-2 text-right tabular-nums">{row.targetPct.toFixed(0)}%</td>
-                    <td
-                      className={
-                        Math.abs(row.deltaValue) < 1
-                          ? "p-2 text-right text-muted-foreground"
-                          : row.deltaValue > 0
-                            ? "p-2 text-right font-medium text-success"
-                            : "p-2 text-right font-medium text-destructive"
-                      }
-                    >
-                      {Math.abs(row.deltaValue) < 1
-                        ? t("inv.reb.balanced")
-                        : row.deltaValue > 0
-                          ? t("inv.reb.buy", { amount: formatCurrency(row.deltaValue, currency) })
-                          : t("inv.reb.sell", {
-                              amount: formatCurrency(Math.abs(row.deltaValue), currency)
-                            })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            rows={actionable}
+            rowKey={(row) => row.sector}
+            columns={[
+              { header: t("inv.reb.sector"), primary: true, cell: (row) => row.sector },
+              {
+                header: t("inv.reb.actual"),
+                align: "right",
+                cell: (row) => <span className="tabular-nums">{row.actualPct.toFixed(1)}%</span>
+              },
+              {
+                header: t("inv.reb.target"),
+                align: "right",
+                cell: (row) => <span className="tabular-nums">{row.targetPct.toFixed(0)}%</span>
+              },
+              {
+                header: t("inv.reb.action"),
+                align: "right",
+                cell: (row) => (
+                  <span className={actionTone(row.deltaValue)}>{actionLabel(row.deltaValue)}</span>
+                )
+              }
+            ]}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">{t("inv.reb.empty")}</p>
         )}

@@ -22,6 +22,7 @@ import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   ALL_OPTION,
   Select,
@@ -40,14 +41,6 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
 import { CsvImportMapper, type CsvColumnMapping } from "@/services/import/CsvImportMapper";
 import { ExportService } from "@/services/export/ExportService";
 import { cn } from "@/lib/utils";
@@ -410,7 +403,7 @@ export function ImportExportPanel({
                 {restorePreview ? (
                   <div className="rounded-lg border bg-muted/20 p-4 text-sm">
                     <p className="font-medium">{t("imp.selectedBackup")}</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-muted-foreground">
+                    <div className="mt-3 grid gap-2 text-muted-foreground min-[420px]:grid-cols-2">
                       {/* Two different numbers, and only one of them means
                           anything to a person: the release that wrote the file.
                           The schema number is what restore actually checks, so
@@ -765,35 +758,31 @@ export function ImportExportPanel({
                 </label>
               )}
 
-              <div className="hidden overflow-x-auto rounded-lg border md:block">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {fields.slice(0, 5).map((f) => (
-                        <TableHead key={f} className="whitespace-nowrap">
-                          {f}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.slice(0, 6).map((row, i) => (
-                      <TableRow key={i}>
-                        {fields.slice(0, 5).map((f) => (
-                          <TableCell key={f} className="max-w-40 truncate text-xs">
-                            {String(row[f] ?? "")}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {rows.length > 6 && (
-                  <p className="py-2 text-center text-xs text-muted-foreground">
-                    {t("imp.moreRows", { n: rows.length - 6 })}
-                  </p>
-                )}
-              </div>
+              {/* Предпросмотр ввозимых строк. Он был помечен «hidden md:block»
+                  без пары для узкого экрана — на телефоне третий шаг импорта
+                  показывал кнопку «Ввезти» и ни одной строки из того, что
+                  сейчас ляжет в книгу. Теперь на телефоне это карточки. */}
+              <ResponsiveTable
+                rows={rows.slice(0, 6).map((row, index) => ({ row, index }))}
+                rowKey={({ index }) => String(index)}
+                columns={fields.slice(0, 5).map((f, order) => ({
+                  header: f,
+                  primary: order === 0,
+                  className: "whitespace-nowrap",
+                  cell: ({ row }: { row: Record<string, unknown> }) => (
+                    <span className="block max-w-40 truncate text-xs md:max-w-40">
+                      {String(row[f] ?? "")}
+                    </span>
+                  )
+                }))}
+                footer={
+                  rows.length > 6 ? (
+                    <p className="text-center text-xs text-muted-foreground">
+                      {t("imp.moreRows", { n: rows.length - 6 })}
+                    </p>
+                  ) : undefined
+                }
+              />
 
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setImportStep(2)}>

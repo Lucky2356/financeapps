@@ -10,6 +10,7 @@ import { CashflowChart } from "@/components/charts/lazy";
 import { PrintHeader } from "@/components/reports/print-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
@@ -60,7 +61,9 @@ export function ReportView({
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* По две на телефоне, как в «Обзоре» на всех остальных экранах: четыре
+          карточки в столбик — это четыре экрана прокрутки ради четырёх чисел. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label={t("rep.netWorth")} value={formatCurrency(netWorth, currency)} />
         <Stat
           label={t("rep.avgIncome")}
@@ -110,90 +113,100 @@ export function ReportView({
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("rep.structure")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {analytics.topExpenseCategories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("rep.noExpenses")}</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-2">{t("rep.col.category")}</th>
-                  <th className="py-2 text-right">{t("rep.col.amount")}</th>
-                  <th className="py-2 text-right">{t("rep.col.share")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analytics.topExpenseCategories.map((cat) => (
-                  <tr key={cat.categoryId} className="border-b last:border-0">
-                    <td className="py-2">
+      {/* Две таблицы отчёта — структура расходов и поток по месяцам — стояли
+          лентой одна под другой во всю ширину: на широком мониторе это метр
+          пустоты справа от четырёх колонок цифр. Рядом они помещаются с lg,
+          но обе довольно широкие, поэтому здесь именно xl. */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t("rep.structure")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveTable
+              rows={analytics.topExpenseCategories}
+              rowKey={(cat) => cat.categoryId}
+              empty={<p className="text-sm text-muted-foreground">{t("rep.noExpenses")}</p>}
+              columns={[
+                {
+                  header: t("rep.col.category"),
+                  primary: true,
+                  cell: (cat) => (
+                    <span className="flex items-center gap-2">
                       <span
-                        className="mr-2 inline-block size-2.5 rounded-full align-middle"
+                        className="inline-block size-2.5 shrink-0 rounded-full"
                         style={{ backgroundColor: cat.color }}
                       />
-                      {cat.category}
-                    </td>
-                    <td className="py-2 text-right">{formatCurrency(cat.total, currency)}</td>
-                    <td className="py-2 text-right">
-                      {/* The share as a number and as a length: on paper the bar
-                          is what makes the table readable at a glance. */}
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="h-2 w-24 overflow-hidden rounded-full bg-muted">
-                          <span
-                            className="block h-full rounded-full"
-                            style={{
-                              width: `${Math.min(100, Math.max(2, cat.share))}%`,
-                              backgroundColor: cat.color
-                            }}
-                          />
-                        </span>
-                        <span className="num w-9 text-right text-muted-foreground">
-                          {Math.round(cat.share)}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+                      <span className="min-w-0 break-words">{cat.category}</span>
+                    </span>
+                  )
+                },
+                {
+                  header: t("rep.col.amount"),
+                  align: "right",
+                  cell: (cat) => formatCurrency(cat.total, currency)
+                },
+                {
+                  header: t("rep.col.share"),
+                  align: "right",
+                  cell: (cat) => (
+                    /* The share as a number and as a length: on paper the bar
+                       is what makes the table readable at a glance. */
+                    <span className="flex items-center justify-end gap-2">
+                      <span className="h-2 w-16 overflow-hidden rounded-full bg-muted sm:w-24">
+                        <span
+                          className="block h-full rounded-full"
+                          style={{
+                            width: `${Math.min(100, Math.max(2, cat.share))}%`,
+                            backgroundColor: cat.color
+                          }}
+                        />
+                      </span>
+                      <span className="num w-9 text-right text-muted-foreground">
+                        {Math.round(cat.share)}%
+                      </span>
+                    </span>
+                  )
+                }
+              ]}
+            />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("rep.cashflowByMonth")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="py-2">{t("rep.col.month")}</th>
-                <th className="py-2 text-right">{t("rep.income")}</th>
-                <th className="py-2 text-right">{t("rep.expense")}</th>
-                <th className="py-2 text-right">{t("rep.savings")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analytics.monthlyCashflow.map((m) => (
-                <tr key={m.month} className="border-b last:border-0">
-                  <td className="py-2">{m.month}</td>
-                  <td className="py-2 text-right text-success">
-                    {formatCurrency(m.income, currency)}
-                  </td>
-                  <td className="py-2 text-right text-destructive">
-                    {formatCurrency(m.expense, currency)}
-                  </td>
-                  <td className="py-2 text-right">{formatCurrency(m.savings, currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t("rep.cashflowByMonth")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveTable
+              rows={analytics.monthlyCashflow}
+              rowKey={(m) => m.month}
+              columns={[
+                { header: t("rep.col.month"), primary: true, cell: (m) => m.month },
+                {
+                  header: t("rep.income"),
+                  align: "right",
+                  cell: (m) => (
+                    <span className="text-success">{formatCurrency(m.income, currency)}</span>
+                  )
+                },
+                {
+                  header: t("rep.expense"),
+                  align: "right",
+                  cell: (m) => (
+                    <span className="text-destructive">{formatCurrency(m.expense, currency)}</span>
+                  )
+                },
+                {
+                  header: t("rep.savings"),
+                  align: "right",
+                  cell: (m) => formatCurrency(m.savings, currency)
+                }
+              ]}
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       <ExtendedReport currency={currency} includeTransfers={includeTransfers} />
     </div>
@@ -305,7 +318,7 @@ function ExtendedReport({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <ReportStat
             label={t("rep.income")}
             value={formatCurrency(report.totals.income, currency)}

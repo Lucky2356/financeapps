@@ -122,7 +122,7 @@ export function NotificationBell() {
         <DialogHeader>
           <DialogTitle>{t("notif.title")}</DialogTitle>
         </DialogHeader>
-        <div className="max-h-[65vh] space-y-2 overflow-y-auto pr-1">
+        <div className="space-y-2">
           {items.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">{t("notif.empty")}</p>
           ) : (

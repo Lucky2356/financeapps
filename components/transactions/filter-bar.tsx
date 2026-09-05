@@ -147,14 +147,21 @@ export function TransactionFilterBar({
         {/* The period as the two dates it actually is. A named period fills
             both in (the gear holds the names); typing over one of them keeps
             the other. */}
-        <div className="flex items-center gap-1">
+        {/* Две даты по 9.5rem плюс тире — 326 px в ряду, который не переносится,
+            против 296 px содержимого на телефоне. Ряд теперь переносится, а поля
+            тянутся по месту.
+            basis, а не min-w: минимальная ширина запретила бы полю сжиматься, и
+            пара вылезала бы за правый край — ровно это и поймал сторож
+            e2e/responsive.spec.ts. Желаемая ширина есть, право ужаться —
+            тоже. */}
+        <div className="flex flex-wrap items-center gap-1">
           <Input
             type="date"
             aria-label={t("tx.from")}
             value={searchParams.get("from") ?? ""}
             max={searchParams.get("to") || undefined}
             onChange={(event) => setParam("from", event.target.value)}
-            className="h-9 w-[9.5rem] px-2"
+            className="h-9 w-auto min-w-0 flex-1 basis-[9.5rem] px-2"
           />
           <span className="text-muted-foreground">—</span>
           <Input
@@ -163,7 +170,7 @@ export function TransactionFilterBar({
             value={searchParams.get("to") ?? ""}
             min={searchParams.get("from") || undefined}
             onChange={(event) => setParam("to", event.target.value)}
-            className="h-9 w-[9.5rem] px-2"
+            className="h-9 w-auto min-w-0 flex-1 basis-[9.5rem] px-2"
           />
         </div>
 
@@ -233,7 +240,7 @@ export function TransactionFilterBar({
                 type="button"
                 aria-label={`${t("tx.filters.clearOne")}: ${chip.label}`}
                 onClick={() => go(chip.next)}
-                className="text-muted-foreground transition-colors hover:text-destructive"
+                className="tap-target inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-destructive"
               >
                 <X className="size-3.5" />
               </button>
@@ -595,7 +602,7 @@ function CategoryFilter({
       {open ? (
         <div
           data-testid="category-filter-menu"
-          className="absolute z-50 mt-1 max-h-72 w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+          className="absolute z-50 mt-1 max-h-72 w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
         >
           {categories.length === 0 ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("tx.allCategories")}</p>

@@ -101,7 +101,7 @@ export function OnboardingTour() {
         if (!value) finish();
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
             <Icon className="size-6" />

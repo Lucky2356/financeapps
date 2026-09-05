@@ -134,7 +134,7 @@ export function MarketAlertsPanel() {
         </div>
         <p className="text-sm text-muted-foreground">{t("alerts.hint")}</p>
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_1.4fr_auto_1fr_auto] sm:items-end">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1.4fr_auto_1fr_auto] lg:items-end">
           <div className="space-y-2">
             <Label htmlFor="alert-ticker">{t("alerts.ticker")}</Label>
             <Input

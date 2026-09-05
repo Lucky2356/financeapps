@@ -233,7 +233,7 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
                 </CardHeader>
                 <CardContent>
                   {liability.originalAmount > 0 ? <Progress value={liability.progress} /> : null}
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                     <div>
                       <p className="text-xs text-muted-foreground">{t("debt.balance")}</p>
                       <p className="text-sm font-semibold">

@@ -92,7 +92,7 @@ export function CategoryManager({ data }: { data: CategoriesPageData }) {
   return (
     // Two tables side by side need a wide window: at anything narrower the
     // right-hand card ran out of room and cut its own actions column off.
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       <CategoryColumn
         title={t("cat.income")}
         kind="INCOME"

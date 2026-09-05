@@ -558,7 +558,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           <DividendTracker />
           <RealizedTaxReport />
 
-          <section className="grid items-start gap-4 xl:grid-cols-2">
+          <section className="grid items-start gap-4 lg:grid-cols-2">
             <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />
             <RecommendationList titleKey="inv.educationTips" items={data.education} />
           </section>
