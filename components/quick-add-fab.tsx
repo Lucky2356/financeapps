@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { parseEntry, type ParsedEntry } from "@/lib/transactions/parse-entry";
 import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
@@ -84,6 +85,25 @@ export function QuickAddFab({
   const [manualCategory, setManualCategory] = useState(false);
   const [autoSuggested, setAutoSuggested] = useState(false);
   const [ledger, setLedger] = useState<TransactionsPageData | null>(null);
+  // Поля стали управляемыми: разбор строки пишет в них, а не только читает при
+  // отправке. Тело запроса от этого не изменилось — форма по-прежнему уходит
+  // через FormData.
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [date, setDate] = useState("");
+  const [tags, setTags] = useState("");
+  // То, что в поля вписал разбор. Поле остаётся «нашим», пока в нём стоит ровно
+  // это: тогда следующая набранная цифра его обновит. Стоит человеку поправить
+  // поле руками — значение перестаёт совпадать, и разбор туда больше не лезет.
+  const [filledIn, setFilledIn] = useState<{
+    amount: string;
+    accountId: string;
+    date: string;
+    tags: string;
+  }>({ amount: "", accountId: "", date: "", tags: "" });
+  // Описание, очищенное от суммы, даты, тегов и слова счёта, — то, что уйдёт в
+  // журнал. Показывается человеку, потому что расходится с набранным.
+  const [cleanedDescription, setCleanedDescription] = useState<string | null>(null);
 
   // The server props are empty on the desktop static build — the real accounts
   // and categories live in the client API (LocalApiClient/IndexedDB).
@@ -120,7 +140,8 @@ export function QuickAddFab({
       (account) => !(account as AccountOption & { isArchived?: boolean }).isArchived
     );
     const known = last && available.some((account) => account.id === last) ? last : null;
-    setAccountId(known ?? available[0]?.id ?? "");
+    const preselectedAccount = known ?? available[0]?.id ?? "";
+    setAccountId(preselectedAccount);
     // Honour the default transaction type from settings.
     try {
       const settings = await apiClient.get<SettingsPageData>("/settings");
@@ -130,6 +151,23 @@ export function QuickAddFab({
     }
     setShowNewAccount(false);
     setShowNewCategory(false);
+    // Диалог открывается чистым. Раньше это держалось на том, что Radix
+    // размонтирует содержимое, и поля в разметке возникали заново; теперь поля
+    // управляемые, и обнулять их нужно явно — иначе прошлая сумма встретила бы
+    // человека при следующем открытии.
+    const openedOn = formatInputDate(new Date());
+    setAmount("");
+    setDescription("");
+    setDate(openedOn);
+    setTags("");
+    // Счёт и дата открываются не пустыми: счёт — последний использованный, дата
+    // — сегодняшняя. Записываем их сюда же, иначе разбор счёл бы их чужими и
+    // «1200 продукты картой» не переставило бы счёт с подставленного.
+    setFilledIn({ amount: "", accountId: preselectedAccount, date: openedOn, tags: "" });
+    setCleanedDescription(null);
+    setCategoryId("");
+    setManualCategory(false);
+    setAutoSuggested(false);
     setOpen(true);
   }
 
@@ -146,7 +184,6 @@ export function QuickAddFab({
     (a) => !(a as AccountOption & { isArchived?: boolean }).isArchived
   );
   const filteredCategories = refs.categories.filter((c) => c.kind === type);
-  const today = formatInputDate(new Date());
 
   async function createAccount() {
     if (!newAccountName.trim()) return;
@@ -189,6 +226,10 @@ export function QuickAddFab({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+    // В журнал уходит описание без того, что разбор уже разложил по полям:
+    // «1200 продукты картой» сохраняется как «продукты». В поле осталось
+    // набранное целиком — намеренно, и под полем написано, что сохранится.
+    if (cleanedDescription !== null) payload.description = cleanedDescription;
 
     if (!(await confirmFutureDate(payload.date))) return;
     if (type === "TRANSFER") return submitTransfer(payload);
@@ -256,29 +297,109 @@ export function QuickAddFab({
     setAutoSuggested(false);
   }
 
+  /**
+   * Повтор последней операции: та же категория, тот же счёт, сегодняшняя дата.
+   * Сумму не подставляет — она и есть единственное, что каждый раз другое, и
+   * курсор уже стоит в ней.
+   *
+   * «Последняя» — верхняя строка журнала, отсортированного по дате. Времени
+   * создания у операции нет, поэтому среди операций одного дня наверху
+   * окажется свежедобавленная, а внесённая задним числом наверх не всплывёт.
+   * Это ровно то, что человек и понимает под словом «последняя».
+   */
+  const lastOperation = ledger?.transactions.find((transaction) => !transaction.transferId);
+
+  function repeatLast() {
+    if (!lastOperation) return;
+    setType(lastOperation.type === "INCOME" ? "INCOME" : "EXPENSE");
+    setCategoryId(lastOperation.category.id);
+    setManualCategory(true);
+    setAutoSuggested(false);
+    setAccountId(lastOperation.account.id);
+    setDate(formatInputDate(new Date()));
+    setAmount("");
+    setDescription(lastOperation.description ?? "");
+    setCleanedDescription(null);
+    document.getElementById("fab-amount")?.focus();
+  }
+
   function pickCategory(value: string) {
+    // Пустое значение — не выбор человека: пустого пункта в списке нет.
+    // Так Radix сообщает, что прежнее значение пропало из списка, а список
+    // меняется при смене типа операции. Без этой проверки «Повторить» с
+    // доходной категорией стирал сам себя: тип переключался на «Доход»,
+    // список пересобирался, и приходило onValueChange("") поверх только что
+    // поставленной категории — дважды.
+    if (!value) return;
     setCategoryId(value);
     setManualCategory(true);
     setAutoSuggested(false);
   }
 
+  /** Поле «наше», пока в нём стоит ровно то, что вписал разбор, или пусто. */
+  function ours(current: string, written: string): boolean {
+    return current === "" || current === written;
+  }
+
+  // Одна строка вместо формы. Человек пишет «1200 продукты картой» в описание —
+  // сумма, счёт, дата и теги расходятся по своим полям на глазах, и любое из
+  // них можно тут же поправить: с этого момента разбор в него не пишет.
+  //
+  // Само описание остаётся ровно таким, каким его набрали: подменять текст под
+  // курсором — верный способ испортить набор на середине слова. В журнал уйдёт
+  // очищенное, и об этом сказано строкой ниже поля.
+  //
   // A user-defined rule is an explicit mapping ("Пятёрочка" → Продукты), so it
   // wins even after a category was picked by hand. The history heuristic is a
   // softer guess and only fills in while nothing has been chosen.
-  function onDescriptionChange(value: string) {
-    if (type === "TRANSFER" || !ledger) return;
+  /** Раскладывает разобранное по полям, не трогая поправленное руками. */
+  function fillFromParsed(parsed: ParsedEntry) {
+    const written = { ...filledIn };
+    if (parsed.amount !== null && ours(amount, filledIn.amount)) {
+      written.amount = String(parsed.amount);
+      setAmount(written.amount);
+    }
+    if (parsed.accountId && ours(accountId, filledIn.accountId)) {
+      written.accountId = parsed.accountId;
+      setAccountId(parsed.accountId);
+    }
+    if (parsed.date && ours(date, filledIn.date)) {
+      written.date = parsed.date;
+      setDate(parsed.date);
+    }
+    if (parsed.tags.length > 0 && ours(tags, filledIn.tags)) {
+      written.tags = parsed.tags.join(", ");
+      setTags(written.tags);
+    }
+    setFilledIn(written);
+    // Знак перед суммой — единственное, что меняет тип: «+5000» это доход.
+    if (parsed.type && parsed.type !== type) setType(parsed.type);
+  }
+
+  /**
+   * Категория по тексту.
+   *
+   * A user-defined rule is an explicit mapping ("Пятёрочка" → Продукты), so it
+   * wins even after a category was picked by hand. The history heuristic is a
+   * softer guess and only fills in while nothing has been chosen.
+   */
+  function suggestCategoryFor(
+    text: string,
+    rules: TransactionsPageData["rules"],
+    history: TransactionsPageData["transactions"]
+  ) {
     const known = (id: string) => filteredCategories.some((category) => category.id === id);
 
-    const ruled = ledger.rules.length > 0 ? matchRule(value, ledger.rules) : null;
+    const ruled = rules.length > 0 ? matchRule(text, rules) : null;
     if (ruled && known(ruled)) {
       setCategoryId(ruled);
       setAutoSuggested(true);
       return;
     }
     if (manualCategory) return;
-    const suggestion = suggestCategoryId(value, ledger.transactions, {
+    const suggestion = suggestCategoryId(text, history, {
       type: type === "INCOME" ? "INCOME" : "EXPENSE",
-      rules: ledger.rules
+      rules
     });
     if (suggestion && known(suggestion)) {
       setCategoryId(suggestion);
@@ -286,6 +407,23 @@ export function QuickAddFab({
     } else {
       setAutoSuggested(false);
     }
+  }
+
+  function onDescriptionChange(value: string) {
+    setDescription(value);
+    if (type === "TRANSFER" || !ledger) return;
+
+    const parsed = parseEntry(value, {
+      accounts: activeAccounts.map((account) => ({ id: account.id, label: account.name })),
+      history: ledger.transactions,
+      rules: ledger.rules,
+      type: type === "INCOME" ? "INCOME" : "EXPENSE",
+      today: new Date()
+    });
+
+    fillFromParsed(parsed);
+    setCleanedDescription(parsed.description === value.trim() ? null : parsed.description);
+    suggestCategoryFor(parsed.description || value, ledger.rules, ledger.transactions);
   }
 
   return (
@@ -345,6 +483,25 @@ export function QuickAddFab({
               </div>
             </div>
 
+            {/* Одно нажатие вместо четырёх полей: чаще всего следующая операция
+                такая же, как предыдущая. Своей высоты у строки нет — она
+                появляется, только когда есть что повторять. */}
+            {lastOperation ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="justify-start"
+                data-testid="qa-repeat-last"
+                onClick={repeatLast}
+              >
+                {t("qa.repeatLast", {
+                  category: lastOperation.category.label,
+                  account: lastOperation.account.label
+                })}
+              </Button>
+            ) : null}
+
             <form onSubmit={handleSubmit} className="grid gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fab-amount">{t("common.amount")}</Label>
@@ -356,6 +513,8 @@ export function QuickAddFab({
                   placeholder="0.00"
                   autoFocus
                   required
+                  value={amount}
+                  onValueChange={setAmount}
                 />
               </div>
 
@@ -483,7 +642,14 @@ export function QuickAddFab({
 
               <div className="space-y-2">
                 <Label htmlFor="fab-date">{t("common.date")}</Label>
-                <Input id="fab-date" name="date" type="date" defaultValue={today} required />
+                <Input
+                  id="fab-date"
+                  name="date"
+                  type="date"
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                  required
+                />
               </div>
 
               <div className="space-y-2">
@@ -493,14 +659,31 @@ export function QuickAddFab({
                   name="description"
                   maxLength={180}
                   placeholder={t("qa.descPlaceholder")}
+                  value={description}
                   onChange={(event) => onDescriptionChange(event.target.value)}
                 />
+                {/* Набранное и сохранённое здесь расходятся: сумма, дата, теги
+                    и слово счёта разошлись по своим полям. Сказать об этом
+                    прямо честнее, чем тихо сохранить не то, что видно. */}
+                {cleanedDescription !== null ? (
+                  <p className="text-xs text-muted-foreground" data-testid="qa-cleaned">
+                    {cleanedDescription
+                      ? t("qa.parsed.willSave", { text: cleanedDescription })
+                      : t("qa.parsed.willSaveEmpty")}
+                  </p>
+                ) : null}
               </div>
 
               {type !== "TRANSFER" ? (
                 <div className="space-y-2">
                   <Label htmlFor="fab-tags">{t("tx.dialog.tags")}</Label>
-                  <Input id="fab-tags" name="tags" placeholder={t("tx.dialog.tagsPlaceholder")} />
+                  <Input
+                    id="fab-tags"
+                    name="tags"
+                    placeholder={t("tx.dialog.tagsPlaceholder")}
+                    value={tags}
+                    onChange={(event) => setTags(event.target.value)}
+                  />
                 </div>
               ) : null}
 

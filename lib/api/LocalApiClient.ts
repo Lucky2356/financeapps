@@ -20,6 +20,7 @@ import type {
   TransactionsPageData
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
+import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
@@ -537,17 +538,17 @@ export class LocalApiClient implements ApiClient {
       return invData as T;
     }
     if (pathname === "/investments/events") return this.investmentEventsPage(state) as T;
-    if (pathname === "/market/alerts") return { alerts: state.marketAlerts ?? [] } as T;
+    if (pathname === "/market/alerts") return { alerts: [...(state.marketAlerts ?? [])] } as T;
     if (pathname === "/investments/dividends")
       return {
-        dividends: state.expectedDividends ?? [],
+        dividends: [...(state.expectedDividends ?? [])],
         realized: (state.realizedInvestmentEvents ?? []).filter(
           (event) => event.type === "DIVIDEND"
         ),
         currency: state.currency
       } as T;
     if (pathname === "/investments/targets")
-      return { targets: state.targetAllocations ?? [], currency: state.currency } as T;
+      return { targets: [...(state.targetAllocations ?? [])], currency: state.currency } as T;
     if (pathname === "/categories") return this.categoriesPage(state) as T;
     if (pathname === "/analytics")
       return this.analyticsPage(this.inBase(state), searchParams.get("transfers") === "1") as T;
@@ -1505,7 +1506,7 @@ export class LocalApiClient implements ApiClient {
       } else {
         const suggestedId = suggestCategoryId(description, state.transactions, {
           type,
-          rules: state.rules
+          rules: [...state.rules]
         });
         category =
           (suggestedId
@@ -1818,7 +1819,7 @@ export class LocalApiClient implements ApiClient {
     // The rates travel with the events: a sale booked in dollars has to be
     // brought to the app's currency before the tax scale means anything.
     return {
-      events: state.realizedInvestmentEvents ?? [],
+      events: [...(state.realizedInvestmentEvents ?? [])],
       currency: state.currency,
       rates: this.rates(state)
     };
@@ -2105,8 +2106,8 @@ export class LocalApiClient implements ApiClient {
       source: "database",
       transactions: rows,
       accounts: this.accounts(state).accounts,
-      categories: state.categories,
-      rules: state.rules,
+      categories: [...state.categories],
+      rules: [...state.rules],
       filters,
       // Counted over the WHOLE ledger, not the filtered page: the screen opens
       // on the current month, so an operation dated a year out is not merely
@@ -2133,7 +2134,7 @@ export class LocalApiClient implements ApiClient {
     return {
       source: "database",
       budgets,
-      categories: state.categories,
+      categories: [...state.categories],
       recommendations: new FinanceRecommendationService()
         .build(finance, getClientLocale())
         .filter((item) => ["WARNING", "CRITICAL", "INFO"].includes(item.severity)),
@@ -2260,7 +2261,7 @@ export class LocalApiClient implements ApiClient {
   private rulesPage(state: LocalState): RulesPageData {
     return {
       source: "database",
-      rules: state.rules,
+      rules: [...state.rules],
       categories: state.categories.map((category) => ({
         id: category.id,
         label: category.label,
@@ -2322,7 +2323,7 @@ export class LocalApiClient implements ApiClient {
       source: "database",
       recurringTransactions: rows,
       accounts: this.accounts(state).accounts,
-      categories: state.categories,
+      categories: [...state.categories],
       budgetHints: state.budgets.map((budget) => ({
         categoryId: budget.categoryId,
         amount: budget.limitAmount
@@ -2596,7 +2597,7 @@ export class LocalApiClient implements ApiClient {
     });
     const netWorthTrend = buildNetWorthTrend({
       currentNetWorth: netWorth,
-      snapshots: state.netWorthSnapshots ?? [],
+      snapshots: [...(state.netWorthSnapshots ?? [])],
       transactions: state.transactions
     });
     const savingsBalance = this.sumInBase(
@@ -2741,7 +2742,7 @@ export class LocalApiClient implements ApiClient {
     return {
       source: "database",
       accounts: this.accounts(state).accounts,
-      categories: state.categories,
+      categories: [...state.categories],
       lastBackupAt: state.lastBackupAt,
       backupReminderDue: isBackupReminderDue(state.lastBackupAt)
     };
@@ -3356,7 +3357,7 @@ export class LocalApiClient implements ApiClient {
       if (migrated.schemaVersion !== (existing as { schemaVersion?: unknown })?.schemaVersion) {
         await this.storage.setItem(key, migrated);
       }
-      this.stateCache = { key, state: structuredClone(migrated) };
+      this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(migrated)) };
       return structuredClone(migrated);
     }
     // Nothing below may overwrite what is stored: the only reason we are here
@@ -3367,7 +3368,7 @@ export class LocalApiClient implements ApiClient {
     if (existing == null) {
       const initial = createInitialState();
       await this.storage.setItem(key, initial);
-      this.stateCache = { key, state: structuredClone(initial) };
+      this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(initial)) };
       return structuredClone(initial);
     }
 
@@ -3389,7 +3390,7 @@ export class LocalApiClient implements ApiClient {
 
     const migrated = migrateLocalState(salvaged.state);
     await this.storage.setItem(key, migrated);
-    this.stateCache = { key, state: structuredClone(migrated) };
+    this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(migrated)) };
     return structuredClone(migrated);
   }
 
@@ -3412,7 +3413,7 @@ export class LocalApiClient implements ApiClient {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
     await this.storage.setItem(key, state);
-    this.stateCache = { key, state: structuredClone(state) };
+    this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(state)) };
   }
 
   private async getActiveProfileId(): Promise<string> {
