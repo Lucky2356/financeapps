@@ -1130,6 +1130,9 @@ const ru: Messages = {
   "qa.err.sameAccount": "Счета списания и зачисления должны быть разными",
   "qa.transfer.needTwo": "Для перевода нужно минимум два счёта",
   "qa.err.category": "Выберите или создайте категорию",
+  "qa.repeatLast": "Повторить: {category} · {account}",
+  "qa.parsed.willSave": "В описание уйдёт: {text}",
+  "qa.parsed.willSaveEmpty": "Описание останется пустым",
   // Misc chrome
   "menu.logout": "Выйти",
   "layout.skipLink": "Перейти к содержимому",
@@ -2924,6 +2927,9 @@ const en: Messages = {
   "qa.err.sameAccount": "Pick two different accounts for a transfer",
   "qa.transfer.needTwo": "A transfer needs at least two accounts",
   "qa.err.category": "Select or create a category",
+  "qa.repeatLast": "Repeat: {category} · {account}",
+  "qa.parsed.willSave": "Will be saved as: {text}",
+  "qa.parsed.willSaveEmpty": "The description will stay empty",
   // Misc chrome
   "menu.logout": "Sign out",
   "layout.skipLink": "Skip to content",
