@@ -241,7 +241,11 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                     <Head colSpan={expense.length + 2} className="border-l text-center">
                       {t("plan.expense")}
                     </Head>
-                    <Head colSpan={2} className="border-l text-center">
+                    <Head
+                      colSpan={2}
+                      className="border-l text-center"
+                      title={t("plan.result.hint")}
+                    >
                       {t("plan.result")}
                     </Head>
                     <Head rowSpan={2} className="border-l text-left">
@@ -515,9 +519,21 @@ function TotalCells({
   /** Absent on the closing balance: it is a balance, not a sum of rows. */
   onDrill?: () => void;
 }) {
+  const { t } = useI18n();
+
   if (band !== "fact") {
+    // Посередине пары, а не по правому краю. Прижатая вправо, эта цифра
+    // вставала ровно под заголовком «Сбережения» и читалась как сбережения —
+    // на экране, где рядом стоит настоящая цифра сбережений, разойтись с ней
+    // на порядок и не заметить проще всего. Посередине она не принадлежит ни
+    // одной из двух колонок, чем и является.
     return (
-      <Cell className={cn("font-semibold", className)} column={column} colSpan={2}>
+      <Cell
+        className={cn("text-center font-semibold", className)}
+        column={column}
+        colSpan={2}
+        title={t("plan.unsplit")}
+      >
         <Figure value={cell[band]} money={money} tone={tone} />
       </Cell>
     );
@@ -777,17 +793,20 @@ function Cell({
   children,
   className,
   column,
-  colSpan
+  colSpan,
+  title
 }: {
   children: ReactNode;
   className?: string;
   column?: string;
   colSpan?: number;
+  title?: string;
 }) {
   return (
     <td
       data-column={column}
       colSpan={colSpan}
+      title={title}
       className={cn("num whitespace-nowrap border-b px-3 py-1.5 text-right", className)}
     >
       {children}

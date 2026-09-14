@@ -19,28 +19,49 @@ import { cn } from "@/lib/utils";
 
 // Keypad laid out like a phone's, so muscle memory works. `label` is what the
 // key shows; `insert` is what it appends to the expression.
-const KEYS: Array<{ label: string; insert?: string; action?: "clear" | "backspace" | "equals" }> = [
+//
+// Both decimal separators are here. Typing has always taken either — the
+// evaluator turns a comma into a dot before it reads anything — but the keys
+// offered only the comma, so the same field answered differently depending on
+// whether the number was typed or tapped. A numeric keypad has a dot on it and
+// a Russian layout types a comma; whichever hand the owner reaches with, the
+// key is on the board.
+//
+// `span` marks a key that takes two columns. Four rows of four leave three
+// cells over for twenty-one keys, and stretching the three keys that are read
+// as one wide button anyway — clear, backspace, zero — fills the grid without
+// a hole in it.
+const KEYS: Array<{
+  label: string;
+  insert?: string;
+  action?: "clear" | "backspace";
+  span?: boolean;
+}> = [
+  { label: "C", action: "clear", span: true },
+  { label: "⌫", action: "backspace", span: true },
+  { label: "(", insert: "(" },
+  { label: ")", insert: ")" },
+  { label: "%", insert: "%" },
+  { label: "÷", insert: "÷" },
   { label: "7", insert: "7" },
   { label: "8", insert: "8" },
   { label: "9", insert: "9" },
-  { label: "÷", insert: "÷" },
+  { label: "×", insert: "×" },
   { label: "4", insert: "4" },
   { label: "5", insert: "5" },
   { label: "6", insert: "6" },
-  { label: "×", insert: "×" },
+  { label: "−", insert: "−" },
   { label: "1", insert: "1" },
   { label: "2", insert: "2" },
   { label: "3", insert: "3" },
-  { label: "−", insert: "−" },
-  { label: "0", insert: "0" },
+  { label: "+", insert: "+" },
+  { label: "0", insert: "0", span: true },
   { label: ",", insert: "," },
-  { label: "(", insert: "(" },
-  { label: ")", insert: ")" },
-  { label: "C", action: "clear" },
-  { label: "⌫", action: "backspace" },
-  { label: "%", insert: "%" },
-  { label: "+", insert: "+" }
+  { label: ".", insert: "." }
 ];
+
+/** Digits and the two separators — the keys that spell the number itself. */
+const NUMBER_KEY = /^[0-9,.]$/;
 
 export function CalculatorDialog({
   initialValue,
@@ -112,9 +133,9 @@ export function CalculatorDialog({
           <Button
             key={key.label}
             type="button"
-            variant={key.insert && /[0-9,]/.test(key.label) ? "outline" : "secondary"}
+            variant={key.insert && NUMBER_KEY.test(key.label) ? "outline" : "secondary"}
             // h-12 keeps every key a comfortable tap target on a phone.
-            className="h-12 text-base font-medium"
+            className={cn("h-12 text-base font-medium", key.span && "col-span-2")}
             aria-label={
               key.action === "backspace"
                 ? t("calc.backspace")
