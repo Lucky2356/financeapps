@@ -170,6 +170,9 @@ const ru: Messages = {
   "plan.opening.savings": "Сбережения",
   "plan.opening.hint":
     "факт берётся из остатков: основные — наличные и карты, сбережения — накопительные и брокерские счета плюс деньги, отложенные в цели",
+  "plan.result.hint":
+    "факт — остатки на конец месяца, теми же двумя группами счетов; план и разница делению не поддаются и стоят одной цифрой на обе колонки",
+  "plan.unsplit": "одной цифрой на обе колонки: у плана нет счёта, только категория",
   "plan.note": "Комментарий",
   "plan.note.placeholder": "Например: гасим рассрочку полностью",
   "plan.saved": "Сохранено",
@@ -1970,6 +1973,9 @@ const en: Messages = {
   "plan.opening.savings": "Savings",
   "plan.opening.hint":
     "actual comes from balances: everyday is cash and cards, savings is deposit and brokerage accounts plus money set aside in goals",
+  "plan.result.hint":
+    "actual is the closing balance of the same two groups of accounts; the plan and the difference cannot be split and stand as one figure across both columns",
+  "plan.unsplit": "one figure across both columns: a plan carries a category, never an account",
   "plan.note": "Comment",
   "plan.note.placeholder": "E.g. paying the instalment off in full",
   "plan.saved": "Saved",

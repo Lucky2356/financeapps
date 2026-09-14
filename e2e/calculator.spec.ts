@@ -84,11 +84,37 @@ test("калькулятор целиком помещается на мален
 
   // Every key stays a comfortable tap target.
   const keys = calculator.locator(".grid-cols-4 button");
-  await expect(keys).toHaveCount(20);
+  await expect(keys).toHaveCount(21);
   for (const key of await keys.all()) {
     const size = await key.boundingBox();
     expect(size!.height, "клавиша слишком мелкая для пальца").toBeGreaterThanOrEqual(40);
   }
+});
+
+// Набранное с клавиатуры и нажатое мышкой должны давать одно и то же. Точку
+// поле принимало всегда, а на клавиатуре её не было — и тот же калькулятор
+// отвечал по-разному в зависимости от того, чем в него ввели число.
+test("дробную часть можно набрать и точкой, и запятой", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await seedExampleData(page);
+  await openSettled(page, "/transactions");
+
+  await page.getByRole("button", { name: "Быстрое добавление операции" }).click();
+  const form = page.getByRole("dialog");
+  await form.getByRole("button", { name: "Калькулятор" }).click();
+  const calculator = page.getByRole("dialog").filter({ hasText: "Калькулятор" }).last();
+
+  for (const key of ["1", "2", ".", "5"]) {
+    await calculator.getByRole("button", { name: key, exact: true }).click();
+  }
+  await expect(calculator.getByText("= 12.5")).toBeVisible();
+
+  await calculator.getByRole("button", { name: "Очистить", exact: true }).click();
+  for (const key of ["1", "2", ",", "5"]) {
+    await calculator.getByRole("button", { name: key, exact: true }).click();
+  }
+  await expect(calculator.getByText("= 12.5")).toBeVisible();
 });
 
 // Planning fields used to step by 100, and the browser refuses to submit a

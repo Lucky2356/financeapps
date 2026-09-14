@@ -138,6 +138,50 @@ describe("month totals split by pool", () => {
     expect(month.resultBy.main + month.resultBy.savings).toBeCloseTo(month.result.fact, 2);
   });
 
+  // The bottom line is shown as two pools and compared against the plan as one
+  // number. Those used to be worked out two different ways, and an operation on
+  // an account since archived pulled them apart: the money stays in the category
+  // column (it was spent, and the history says so) but leaves the balances the
+  // pools are wound back from. The difference band then measured the plan
+  // against a total that appeared nowhere on the screen.
+  it("closes on the balances even when the account of an operation is archived", async () => {
+    const client = api();
+    const { card } = await twoPools(client);
+    const closed = await client.post<{ id: string }>("/accounts", {
+      name: "Старая карта",
+      type: "DEBIT_CARD",
+      balance: "0"
+    });
+    const [salary, food] = await Promise.all([
+      category(client, "Оклад-тест", "INCOME"),
+      category(client, "Еда-тест", "EXPENSE")
+    ]);
+
+    await record(client, {
+      accountId: card.id,
+      categoryId: salary.id,
+      type: "INCOME",
+      amount: 90000
+    });
+    await record(client, {
+      accountId: closed.id,
+      categoryId: food.id,
+      type: "EXPENSE",
+      amount: 700
+    });
+    // Убрать счёт в архив — это и есть удаление счёта в приложении.
+    await client.delete(`/accounts?id=${closed.id}`);
+
+    const month = await thisMonth(client);
+
+    // Потраченное со старого счёта из колонки расходов никуда не делось.
+    expect(month.expense.fact).toBeCloseTo(700, 2);
+    // А нижняя строка — это остатки: 90 000 на карте, и всё.
+    expect(month.resultBy.main).toBeCloseTo(90000, 2);
+    expect(month.result.fact).toBeCloseTo(90000, 2);
+    expect(month.result.fact).toBeCloseTo(month.resultBy.main + month.resultBy.savings, 2);
+  });
+
   it("has both pools at zero for a month nothing was recorded in", async () => {
     const client = api();
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "0" });

@@ -159,6 +159,29 @@ test("окно приложения получает широкую раскла
   );
 });
 
+// Пара дат — один орган: «с» и «по» читаются вместе. Внутри неё перенос был
+// разрешён, и в окне приложения она рвалась пополам — «с» с тире на одной
+// строке, «по» на следующей, где единственное поле растягивалось во всю ширину
+// и оказывалось заметно шире первого. Ни одна прежняя проверка этого не видела:
+// за края ничто не вылезало и ничто не обрезалось. Переносить снаружи ряд
+// можно; пару — нет, она только ужимается.
+test.describe("пара дат", () => {
+  for (const size of [APP_WINDOW, { width: 360, height: 740 }]) {
+    test(`«с» и «по» стоят рядом и одной ширины (${size.width})`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await seedExampleData(page);
+      await openSettled(page, "/transactions");
+
+      const from = await page.getByLabel("С", { exact: true }).first().boundingBox();
+      const to = await page.getByLabel("По", { exact: true }).first().boundingBox();
+      expect(from, "поля «с» нет на экране").not.toBeNull();
+      expect(to, "поля «по» нет на экране").not.toBeNull();
+      expect(Math.abs(from!.y - to!.y), "поля дат оказались на разных строках").toBeLessThan(2);
+      expect(Math.abs(from!.width - to!.width), "поля дат вышли разной ширины").toBeLessThan(2);
+    });
+  }
+});
+
 test.describe("палец", () => {
   // Мобильная эмуляция Chromium — единственное, что включает pointer: coarse,
   // а правило про размер кнопок написано именно под него. Берутся только те

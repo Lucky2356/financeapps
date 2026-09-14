@@ -147,14 +147,18 @@ export function TransactionFilterBar({
         {/* The period as the two dates it actually is. A named period fills
             both in (the gear holds the names); typing over one of them keeps
             the other. */}
-        {/* Две даты по 9.5rem плюс тире — 326 px в ряду, который не переносится,
-            против 296 px содержимого на телефоне. Ряд теперь переносится, а поля
-            тянутся по месту.
-            basis, а не min-w: минимальная ширина запретила бы полю сжиматься, и
-            пара вылезала бы за правый край — ровно это и поймал сторож
-            e2e/responsive.spec.ts. Желаемая ширина есть, право ужаться —
-            тоже. */}
-        <div className="flex flex-wrap items-center gap-1">
+        {/* Две даты по 9.5rem плюс тире — 326 px, больше, чем остаётся в ряду
+            и на телефоне, и в окне приложения. Переносится тут только внешний
+            ряд: сама пара не переносится НИКОГДА (flex без wrap). Перенос
+            внутри пары разрывал её пополам — «от» с тире на одной строке, «до»
+            на следующей, и ширины у полей выходили разные, потому что вторая
+            строка тянула единственное поле во всю ширину.
+            Вместо переноса пара ужимается целиком: basis задаёт желаемую
+            ширину, min-w-0 разрешает стать уже (без него поле упёрлось бы в
+            свой контент и вылезло за правый край — ровно это и поймал сторож
+            e2e/responsive.spec.ts). Сжимаются оба поля поровну: одинаковый
+            basis при одинаковом shrink. */}
+        <div className="flex min-w-0 items-center gap-1">
           <Input
             type="date"
             aria-label={t("tx.from")}
@@ -163,7 +167,7 @@ export function TransactionFilterBar({
             onChange={(event) => setParam("from", event.target.value)}
             className="h-9 w-auto min-w-0 flex-1 basis-[9.5rem] px-2"
           />
-          <span className="text-muted-foreground">—</span>
+          <span className="shrink-0 text-muted-foreground">—</span>
           <Input
             type="date"
             aria-label={t("tx.to")}

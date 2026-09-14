@@ -2906,7 +2906,17 @@ export class LocalApiClient implements ApiClient {
       // or spending on either: derive it and the two numbers disagree with
       // next month's opening row directly above them.
       const next = shiftMonth(month, 1);
+      const resultBy = { main: openingOf(next, false), savings: openingOf(next, true) };
 
+      // The fact bottom line is the two pools added up — the very numbers the
+      // row above shows — and not the same sum worked out a second way from
+      // opening + income − expense. The second way quietly disagrees with the
+      // first: an operation on an account that has since been archived is still
+      // in the category totals (the money was spent, and the history says so)
+      // but is gone from the balances those pools are wound back from. The
+      // difference band is built on this figure, so the disagreement showed up
+      // where it hurts — as a "разница" measured against a total nobody could
+      // see. One number, one source.
       return {
         month,
         opening,
@@ -2916,10 +2926,10 @@ export class LocalApiClient implements ApiClient {
         expense,
         incomeBy: pool?.income ?? { main: 0, savings: 0 },
         expenseBy: pool?.expense ?? { main: 0, savings: 0 },
-        resultBy: { main: openingOf(next, false), savings: openingOf(next, true) },
+        resultBy,
         result: cellOf(
           opening.plan + savings.plan + income.plan - expense.plan,
-          opening.fact + savings.fact + income.fact - expense.fact
+          resultBy.main + resultBy.savings
         ),
         note: notes.get(month)?.note ?? "",
         factNote: notes.get(month)?.factNote ?? ""
