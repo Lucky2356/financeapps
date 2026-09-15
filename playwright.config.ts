@@ -8,12 +8,18 @@ const PORT = 4173;
 // Состояние устройства с заведённым замком — его пишет проект "setup".
 const VAULT_STATE = "e2e/.auth/vault.json";
 
+// shots.spec.ts is a camera, not a check: it writes PNGs and is run by hand
+// (`SHOTS=1 npx playwright test e2e/shots.spec.ts`), so it stays out of the
+// suite unless SHOTS asks for it.
+//
+// Отдельной постоянной — и она же подмешивается проекту ниже. testIgnore у
+// проекта ЗАМЕНЯЕТ общий, а не дополняет его: стоило прописать проекту своё,
+// и камера вернулась в набор, где принялась ходить на биржу за котировками.
+const IGNORED = process.env.SHOTS ? [] : ["**/shots.spec.ts"];
+
 export default defineConfig({
   testDir: "e2e",
-  // shots.spec.ts is a camera, not a check: it writes PNGs and is run by hand
-  // (`SHOTS=1 npx playwright test e2e/shots.spec.ts`), so it stays out of the
-  // suite unless SHOTS asks for it.
-  testIgnore: process.env.SHOTS ? [] : "**/shots.spec.ts",
+  testIgnore: IGNORED,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -37,7 +43,7 @@ export default defineConfig({
     { name: "setup", testMatch: /vault\.setup\.ts/ },
     {
       name: "chromium",
-      testIgnore: /vault\.setup\.ts/,
+      testIgnore: [...IGNORED, "**/vault.setup.ts"],
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"], storageState: VAULT_STATE }
     }
