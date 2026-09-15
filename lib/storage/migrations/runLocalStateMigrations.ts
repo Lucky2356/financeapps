@@ -18,7 +18,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 14;
+export const LATEST_LOCAL_STATE_VERSION = 15;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -207,6 +207,21 @@ export const localStateMigrations: LocalStateMigration[] = [
     // exactly what a single limit per category meant before — so nothing is
     // rewritten and every earlier month keeps reading the way it did.
     migrate: (state) => ({ ...state, schemaVersion: 14 })
+  },
+  {
+    from: 14,
+    to: 15,
+    // v15 завела строкам отметку времени последней правки (updatedAt) — она
+    // понадобится, чтобы слить книгу с телефона и книгу с компьютера.
+    //
+    // Строкам, которые уже лежат в книге, отметка НЕ проставляется, и это
+    // намеренно. Когда их правили на самом деле, не знает никто: времени правки
+    // в книге не было. Записать всем «время обновления приложения» значило бы
+    // сочинить историю, в которую слияние потом поверило бы и на её основании
+    // выбросило бы чью-то настоящую правку. Пустая отметка читается как «строка
+    // была здесь до отметок» — и при расхождении уступает любой настоящей.
+    // Дальше каждая тронутая строка отметится сама, в точке сохранения.
+    migrate: (state) => ({ ...state, schemaVersion: 15 })
   }
 ];
 

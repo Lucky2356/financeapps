@@ -7,8 +7,17 @@ import { CURRENCY_CODES, DEFAULT_CURRENCY_RATES } from "@/lib/currency";
 // extracted from LocalApiClient to keep the client a thinner router (plan A1).
 const currency = "RUB" as const;
 
+// Когда строку в последний раз правили (ISO). Ставится в единственной точке
+// сохранения — см. lib/sync/row-stamps.ts, — и хранится ради слияния двух копий
+// книги. ОТСУТСТВИЕ отметки значимо: «строка была здесь до отметок», а не
+// «правили в начале времён». Поле обязано быть в схеме — Zod выбрасывает
+// незаявленные ключи, и без этой строки отметка молча стиралась бы при каждом
+// чтении книги.
+const updatedAt = z.string().optional();
+
 export const transactionTypeSchema = z.enum(["INCOME", "EXPENSE"]);
 export const accountSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   name: z.string().trim().min(1).max(100),
   type: z.enum(["CASH", "DEBIT_CARD", "SAVINGS", "BROKERAGE"]),
@@ -21,6 +30,7 @@ export const accountSchema = z.object({
   interestCompounding: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]).optional()
 });
 export const liabilitySchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   name: z.string().trim().min(1).max(100),
   kind: z.enum(["CREDIT_CARD", "LOAN", "MORTGAGE", "INSTALLMENT", "OTHER"]),
@@ -42,11 +52,13 @@ export const liabilitySchema = z.object({
   settledAt: z.string().optional()
 });
 export const categorizationRuleSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   match: z.string().trim().min(1).max(100),
   categoryId: z.string().min(1)
 });
 export const categorySchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   label: z.string().trim().min(1).max(100),
   kind: transactionTypeSchema,
@@ -62,6 +74,7 @@ export const optionSchema = z.object({
   label: z.string().trim().min(1).max(100)
 });
 export const transactionRowSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   amount: z.coerce.number().finite().positive(),
   type: transactionTypeSchema,
@@ -87,6 +100,7 @@ export const transactionRowSchema = z.object({
   liabilityId: z.string().optional()
 });
 export const budgetRowSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   categoryId: z.string().min(1),
   category: z.string().trim().min(1).max(100),
@@ -110,6 +124,7 @@ export const budgetRowSchema = z.object({
   rolloverAmount: z.coerce.number().finite().min(0).default(0)
 });
 export const goalRowSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   title: z.string().trim().min(1).max(120),
   targetAmount: z.coerce.number().finite().positive(),
@@ -123,6 +138,7 @@ export const goalRowSchema = z.object({
   plannedContribution: z.coerce.number().finite().min(0).default(0)
 });
 export const recurringRowSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   amount: z.coerce.number().finite().positive(),
   type: transactionTypeSchema,
@@ -191,6 +207,7 @@ export const portfolioRowSchema = z.object({
 // A realized investment event for the tax report: a sale (with per-share buy/
 // sell prices) or a dividend. Kept separate from the current-holdings list.
 export const realizedEventSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   type: z.enum(["SELL", "DIVIDEND"]),
   ticker: z
@@ -224,6 +241,7 @@ export const realizedEventSchema = z.object({
 });
 
 export const expectedDividendSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   ticker: z
     .string()
@@ -240,6 +258,7 @@ export const expectedDividendSchema = z.object({
 // A user "flag" on a company fundamental: notify when the metric crosses a
 // threshold (e.g. ETLN debt_ebitda > 3.5). Desktop-only (needs the HTTP plugin).
 export const marketAlertSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   ticker: z
     .string()
@@ -254,6 +273,7 @@ export const marketAlertSchema = z.object({
 });
 
 export const targetAllocationSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   sector: z.string().trim().min(1).max(60),
   targetPct: z.coerce.number().finite().min(0).max(100)
@@ -320,6 +340,7 @@ export const investmentSchema = z.object({
 // category, except for OPENING_BALANCE_ID which holds the money the month was
 // started with — a figure the owner sets, since no operation records it.
 export const planEntrySchema = z.object({
+  updatedAt,
   month: z.string().regex(/^\d{4}-\d{2}$/),
   categoryId: z.string().min(1),
   amount: z.coerce.number().finite().min(0)
@@ -327,12 +348,14 @@ export const planEntrySchema = z.object({
 // Two comments per month, one against each band: what the plan was for, and
 // what the month turned out to be.
 export const planNoteSchema = z.object({
+  updatedAt,
   month: z.string().regex(/^\d{4}-\d{2}$/),
   note: z.string().trim().max(500),
   factNote: z.string().trim().max(500).default("")
 });
 
 export const goalMovementSchema = z.object({
+  updatedAt,
   id: z.string().min(1),
   goalId: z.string().min(1),
   accountId: z.string().min(1),
@@ -355,7 +378,8 @@ export const localStateSchema = z.object({
     z.literal(11),
     z.literal(12),
     z.literal(13),
-    z.literal(14)
+    z.literal(14),
+    z.literal(15)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
@@ -426,6 +450,7 @@ export const localStateSchema = z.object({
   importBatches: z
     .array(
       z.object({
+        updatedAt,
         id: z.string().min(1),
         importedAt: z.string().min(1),
         transactionIds: z.array(z.string().min(1))
