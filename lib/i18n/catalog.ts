@@ -165,6 +165,10 @@ const ru: Messages = {
   "plan.income": "Доходы",
   "plan.expense": "Расходы",
   "plan.result": "Итог месяца",
+  "plan.toSavings": "В сбережения",
+  "plan.toSavings.hint":
+    "план — сколько собираетесь отложить в этом месяце; факт — сколько переехало на сбережения на самом деле, включая пополнения целей. Именно эта строка и делит итог месяца на две группы: у статьи есть категория, но нет счёта",
+
   "plan.opening": "Остаток на начало",
   "plan.opening.main": "Основные",
   "plan.opening.savings": "Сбережения",
@@ -2025,6 +2029,10 @@ const en: Messages = {
   "plan.income": "Income",
   "plan.expense": "Expenses",
   "plan.result": "Month result",
+  "plan.toSavings": "To savings",
+  "plan.toSavings.hint":
+    "plan — how much you mean to set aside this month; fact — how much actually moved onto savings, goal top-ups included. This row is what splits the month's bottom line in two: a category has no account of its own",
+
   "plan.opening": "Opening balance",
   "plan.opening.main": "Everyday",
   "plan.opening.savings": "Savings",

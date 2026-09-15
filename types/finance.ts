@@ -377,6 +377,18 @@ export type PlanFactSplit = {
   savings: number;
 };
 
+/**
+ * Одна величина, разложенная по двум группам счетов, — и каждая половина со
+ * своим планом, фактом и разницей.
+ *
+ * Отдельно от PlanFactSplit, где лежат голые числа: там факт, который ни с чем
+ * не сравнивают, а здесь обе стороны, которые сравнивают между собой.
+ */
+export type PlanFactPoolCells = {
+  main: PlanFactCell;
+  savings: PlanFactCell;
+};
+
 /** One month — a row in each of the three bands (plan, fact, difference). */
 export type PlanFactMonth = {
   /** "YYYY-MM". */
@@ -394,11 +406,27 @@ export type PlanFactMonth = {
   /** Fact only: the month's spending, by the pool it left. */
   expenseBy: PlanFactSplit;
   /**
-   * Fact only: what each pool held when the month ended — the same figure the
-   * next month opens with, so the two rows agree by construction rather than by
-   * arithmetic that a transfer between pools would break.
+   * Сколько денег переезжает в сбережения за месяц.
+   *
+   * План — цифра владельца: сколько он собирается отложить. Факт — сколько
+   * переехало на самом деле, выведенное из остатков: конец − начало, минус то,
+   * что пришло на сбережения доходом, плюс то, что с них потратили. Остаток и
+   * есть переводы — в том числе пополнения целей.
+   *
+   * Без этой строки план не делился на две группы вовсе: у статьи нет счёта, и
+   * сказать, какая часть задуманного осядет на вкладе, было нечем.
    */
-  resultBy: PlanFactSplit;
+  toSavings: PlanFactCell;
+  /**
+   * Чем месяц кончился, по каждой группе счетов.
+   *
+   * Факт берётся из остатков, а не складывается заново из доходов и расходов:
+   * перевод между группами двигает обе половины, не будучи ни доходом, ни
+   * расходом ни для одной. План складывается — но с учётом отложенного:
+   * основные = остаток + доходы − расходы − отложенное, сбережения = остаток +
+   * отложенное.
+   */
+  resultBy: PlanFactPoolCells;
   /** opening + savings + income − expense. */
   result: PlanFactCell;
   /** The owner's note against the plan band. */
