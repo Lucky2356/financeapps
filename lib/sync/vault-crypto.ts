@@ -251,14 +251,35 @@ function roundsOf(vault: Vault): number {
     : VAULT_KDF_ITERATIONS;
 }
 
-/** Открывает книгу паролем. */
-export async function unlockWithPassword(vault: Vault, password: string): Promise<CryptoKey> {
-  return unlockWith(vault.password, password, roundsOf(vault), false);
+/**
+ * Открывает книгу паролем.
+ *
+ * По умолчанию ключ НЕИЗВЛЕКАЕМ: им можно шифровать и расшифровывать, а достать
+ * из него байты и куда-нибудь положить — нельзя. `extractable` просят там, где
+ * ключ собираются сохранить, — сегодня это одно место, галка «не спрашивать на
+ * этом устройстве». Пусть намерение сохранить ключ будет видно в коде, а не
+ * окажется случайным свойством ключа, который и так всем раздали.
+ */
+export async function unlockWithPassword(
+  vault: Vault,
+  password: string,
+  options: { extractable?: boolean } = {}
+): Promise<CryptoKey> {
+  return unlockWith(vault.password, password, roundsOf(vault), options.extractable ?? false);
 }
 
 /** Открывает книгу кодом восстановления — путь для забывшего пароль. */
-export async function unlockWithRecoveryCode(vault: Vault, code: string): Promise<CryptoKey> {
-  return unlockWith(vault.recovery, normalizeRecoveryCode(code), roundsOf(vault), false);
+export async function unlockWithRecoveryCode(
+  vault: Vault,
+  code: string,
+  options: { extractable?: boolean } = {}
+): Promise<CryptoKey> {
+  return unlockWith(
+    vault.recovery,
+    normalizeRecoveryCode(code),
+    roundsOf(vault),
+    options.extractable ?? false
+  );
 }
 
 /**

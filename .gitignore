@@ -13,6 +13,13 @@ prisma/migrations/dev.db
 src-tauri/target
 playwright-report
 test-results
+# Местный конфиг Playwright: указывает на браузер, уже стоящий в системе, чтобы
+# не тянуть свой. Путь у каждого свой, репозиторию он не нужен.
+pw.local.config.ts
+
+# Снимок устройства с заведённым замком — его пишет проект "setup" перед
+# прогоном (см. e2e/vault.setup.ts). Содержит ключ от тестовой книги.
+e2e/.auth/
 blob-report
 .playwright
 .playwright-mcp

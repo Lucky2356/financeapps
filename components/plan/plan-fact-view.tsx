@@ -23,18 +23,26 @@ import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
 import { apiClient } from "@/lib/api/client";
-import { OPENING_BALANCE_ID, SAVINGS_BALANCE_ID } from "@/lib/api/LocalApiClient";
+import {
+  OPENING_BALANCE_ID,
+  SAVINGS_BALANCE_ID,
+  SAVINGS_TRANSFER_ID
+} from "@/lib/api/LocalApiClient";
 import { formatCurrency } from "@/lib/format";
 import { periodRange } from "@/lib/transactions/filter-chips";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type {
   PlanFactCell,
+  PlanFactPoolCells,
   PlanFactColumn,
   PlanFactMonth,
   PlanFactPageData,
   PlanFactSplit
 } from "@/types/finance";
+
+/** Полоса таблицы: план, факт или разница между ними. */
+type Band = "plan" | "fact" | "diff";
 
 /** "2026-08" for a date, the same key the plan grid is indexed by. */
 function monthKeyOf(date: Date): string {
@@ -240,6 +248,13 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
                     </Head>
                     <Head colSpan={expense.length + 2} className="border-l text-center">
                       {t("plan.expense")}
+                    </Head>
+                    <Head
+                      rowSpan={2}
+                      className="border-l text-right"
+                      title={t("plan.toSavings.hint")}
+                    >
+                      {t("plan.toSavings")}
                     </Head>
                     <Head
                       colSpan={2}
@@ -491,6 +506,49 @@ function TotalHead() {
 }
 
 /**
+ * Итог месяца — две клетки, и в плане тоже.
+ *
+ * Делить план стало чем: владелец пишет, сколько собирается отложить, и обе
+ * половины считаются по-честному — основные теряют отложенное, сбережения его
+ * получают. Раньше здесь стояла одна цифра на обе колонки, потому что у статьи
+ * есть категория и нет счёта; строка «в сбережения» этот пробел и закрывает.
+ */
+function ResultCells({
+  band,
+  cells,
+  money,
+  className
+}: {
+  band: Band;
+  cells: PlanFactPoolCells;
+  money: (value: number) => string;
+  className?: string;
+}) {
+  const pools = [
+    { pool: "main", cell: cells.main },
+    { pool: "savings", cell: cells.savings }
+  ] as const;
+
+  return (
+    <>
+      {pools.map(({ pool, cell }, index) => (
+        <Cell
+          key={pool}
+          className={cn("font-semibold", index === 0 && className)}
+          column={`result-${pool}`}
+        >
+          <Figure
+            value={cell[band]}
+            money={money}
+            tone={band === "diff" ? diffTone(cell, true) : undefined}
+          />
+        </Cell>
+      ))}
+    </>
+  );
+}
+
+/**
  * One total, in the two sub-columns the header promises.
  *
  * Only the fact band can fill both. A plan is typed against a category and
@@ -498,6 +556,8 @@ function TotalHead() {
  * between a split figure and an unsplit one is not a split figure either.
  * Those two bands span the pair with the single number they honestly have,
  * rather than showing an invented half.
+ *
+ * Итог месяца этим больше не ограничен — см. ResultCells выше.
  */
 function TotalCells({
   band,
@@ -509,7 +569,7 @@ function TotalCells({
   className,
   onDrill
 }: {
-  band: "plan" | "fact" | "diff";
+  band: Band;
   column: string;
   cell: PlanFactCell;
   split: PlanFactSplit;
@@ -627,7 +687,7 @@ function BandRow({
   onSave,
   onDrill
 }: {
-  band: "plan" | "fact" | "diff";
+  band: Band;
   month: PlanFactMonth;
   income: PlanFactColumn[];
   expense: PlanFactColumn[];
@@ -763,15 +823,32 @@ function BandRow({
         }
       />
 
-      <TotalCells
-        band={band}
-        column="result"
-        cell={month.result}
-        split={month.resultBy}
-        money={money}
-        className="border-l"
-        tone={band === "diff" ? diffTone(month.result, true) : undefined}
-      />
+      {/* Перевод в сбережения: не доход и не расход, а переезд своих же денег
+          между своими же счетами. Потому и стоит отдельным столбцом, между
+          расходами и итогом, а не среди статей. */}
+      <Cell column="to-savings" className="border-l">
+        {editable ? (
+          <PlanCell
+            value={month.toSavings.plan}
+            money={money}
+            onSave={(amount) =>
+              onSave({
+                month: month.month,
+                categoryId: SAVINGS_TRANSFER_ID,
+                amount: String(amount)
+              })
+            }
+          />
+        ) : (
+          <Figure
+            value={month.toSavings[band]}
+            money={money}
+            tone={band === "diff" ? diffTone(month.toSavings, true) : undefined}
+          />
+        )}
+      </Cell>
+
+      <ResultCells band={band} cells={month.resultBy} money={money} className="border-l" />
 
       <td className="border-b border-l px-3 py-1.5">
         {band === "diff" ? null : (

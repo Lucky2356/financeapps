@@ -32,6 +32,18 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
     return this.write((store) => store.clear());
   }
 
+  async keys(): Promise<string[]> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const request = db
+        .transaction(this.storeName, "readonly")
+        .objectStore(this.storeName)
+        .getAllKeys();
+      request.onsuccess = () => resolve(request.result.map(String));
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   /**
    * Runs one write and resolves when the TRANSACTION has committed — not when
    * the request reported success.

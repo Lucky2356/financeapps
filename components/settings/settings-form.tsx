@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -30,6 +30,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
+import { VaultPanel } from "@/components/settings/vault-panel";
 import { ImportExportPanel } from "@/components/import/import-export-panel";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
@@ -52,6 +53,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   ALL_OPTION,
   Select,
@@ -321,7 +323,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       keywords:
         "основные general валюта currency демо demo тип type операции transaction доход income расход expense по умолчанию default",
       node: (
-        <SectionCard title={t("set.general.title")} fields>
+        <SectionCard id="set-general" title={t("set.general.title")}>
           <SelectField
             label={t("set.currency")}
             value={settings.currency}
@@ -364,7 +366,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       keywords:
         "автоматизация automation авто-проведение регулярные recurring напоминания reminders платежи payments уведомления notifications",
       node: (
-        <SectionCard title={t("set.automation.title")} fields>
+        <SectionCard id="set-automation" title={t("set.automation.title")}>
           <ToggleRow
             title={t("set.autoMaterialize.title")}
             description={t("set.autoMaterialize.desc")}
@@ -388,9 +390,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       keywords:
         "внешний вид appearance тема theme оформление светлая light тёмная dark системная system плотность density язык language русский english",
       node: (
-        <SectionCard title={t("set.appearance.title")} fields>
-          <div className="space-y-2">
-            <Label>{t("set.theme")}</Label>
+        <SectionCard id="set-appearance" title={t("set.appearance.title")}>
+          <SettingRow label={t("set.theme")} block>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
@@ -420,9 +421,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </label>
               ))}
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("set.density")}</Label>
+          </SettingRow>
+          <SettingRow label={t("set.density")} block>
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
@@ -450,9 +450,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </label>
               ))}
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("settings.language.title")}</Label>
+          </SettingRow>
+          <SettingRow label={t("settings.language.title")} block>
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
@@ -480,7 +479,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">{t("settings.language.hint")}</p>
-          </div>
+          </SettingRow>
         </SectionCard>
       )
     });
@@ -491,7 +490,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       icon: Sparkles,
       keywords: "ии ai claude ассистент assistant ключ key api модель model",
       node: (
-        <SectionCard title={t("set.ai.title")} icon={Sparkles}>
+        <SectionCard id="set-ai" title={t("set.ai.title")} icon={Sparkles}>
           <ToggleRow
             title={t("set.ai.enable.title")}
             description={t("set.ai.enable.desc")}
@@ -589,7 +588,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       keywords:
         "риск risk профиль profile подушка cushion резерв reserve emergency fund инвестиции investments",
       node: (
-        <SectionCard title={t("set.risk.title")} fields>
+        <SectionCard id="set-risk" title={t("set.risk.title")}>
           <SelectField
             labelClassName="inline-flex items-center gap-1"
             label={
@@ -637,7 +636,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       keywords:
         "данные data импорт import csv выгрузка экспорт export загрузить restore демо demo очистить clear backup резервная копия snapshot синхронизация sync облако cloud папка folder dropbox drive",
       node: (
-        <>
+        <div id="set-data" className="scroll-mt-24 space-y-4">
           <Card className="border-destructive/30">
             <CardHeader>
               <CardTitle className="text-destructive">{t("set.data.title")}</CardTitle>
@@ -688,7 +687,8 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             transactions={[]}
           />
           <CloudSyncPanel />
-        </>
+          <VaultPanel />
+        </div>
       )
     });
 
@@ -699,7 +699,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       keywords:
         "о приложении about версия version обновления updates горячие клавиши shortcuts обучение onboarding безопасность security интеграции integrations банк bank",
       node: (
-        <div className="space-y-4">
+        <div id="set-about" className="scroll-mt-24 space-y-4">
           <SectionCard title={t("set.about.shortcuts")} icon={Keyboard}>
             <div className="grid gap-2">
               {shortcuts.map((s) => (
@@ -747,6 +747,49 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, pageData, status, locale, loadingSample, clearing, checkingUpdate]);
 
+  // Оглавление слева подсвечивает раздел, который сейчас на виду.
+  //
+  // Наблюдателем, а не обработчиком прокрутки: обработчик срабатывает десятки
+  // раз в секунду и считает положение каждого раздела заново, наблюдатель —
+  // только когда раздел въехал в окно или выехал из него. Верхняя полоса
+  // отсечения поднята к шапке, нижняя опущена почти до низа, чтобы «текущим»
+  // считался тот раздел, который читают, а не тот, что мелькнул краем.
+  useEffect(() => {
+    const anchors = Array.from(document.querySelectorAll<HTMLElement>("[id^='set-']"));
+    if (anchors.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const seen = entries.filter((entry) => entry.isIntersecting);
+        if (seen.length === 0) return;
+        const topmost = seen.reduce((best, entry) =>
+          entry.boundingClientRect.top < best.boundingClientRect.top ? entry : best
+        );
+        setActiveId(topmost.target.id.replace(/^set-/, ""));
+      },
+      { rootMargin: "-88px 0px -55% 0px" }
+    );
+    for (const anchor of anchors) observer.observe(anchor);
+    return () => observer.disconnect();
+  }, [sections]);
+
+  // Ссылка вида /settings?section=data должна ОТКРЫВАТЬ нужный раздел, а не
+  // просто подсвечивать его в оглавлении. Пока показывался один раздел за раз,
+  // переход случался сам собой; теперь разделы идут лентой, и без прокрутки
+  // человек, пришедший из «Данных», попадал бы в её начало и искал глазами.
+  //
+  // Один раз на каждый запрошенный раздел, а не при каждой перерисовке: список
+  // разделов пересобирается на любое изменение настройки, и без этой памяти
+  // страница прыгала бы к якорю после каждого щелчка по переключателю.
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!requestedSection || scrolledTo.current === requestedSection) return;
+    const target = document.getElementById(`set-${requestedSection}`);
+    if (!target) return;
+    scrolledTo.current = requestedSection;
+    target.scrollIntoView({ block: "start" });
+  }, [requestedSection, sections]);
+
   const trimmedQuery = query.trim().toLowerCase();
   const matches = trimmedQuery
     ? sections.filter(
@@ -754,9 +797,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           s.label.toLowerCase().includes(trimmedQuery) ||
           s.keywords.toLowerCase().includes(trimmedQuery)
       )
-    : [];
-  const active = sections.find((s) => s.id === activeId) ?? sections[0];
-  const visible = trimmedQuery ? matches : active ? [active] : [];
+    : sections;
 
   return (
     <div className="space-y-4">
@@ -789,51 +830,52 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        {/* Section nav: vertical on desktop, wrapping chips on mobile — no
-            sideways scroll, so no section hides off the right edge of a phone. */}
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+        {/* Оглавление, а не переключатель экранов.
+            Раньше оно показывало один раздел за раз, и на широком экране две-три
+            настройки висели посреди пустоты, а чтобы увидеть остальные, надо было
+            щёлкнуть ещё шесть раз. Теперь разделы идут подряд одной лентой, а
+            это — список переходов, который подсвечивает то, что сейчас на виду.
+            На телефоне его нет вовсе: там он занимал четыре ряда и отодвигал
+            первую настройку на пол-экрана вниз, а искать удобнее поиском. */}
         <nav
           aria-label={t("set.sections")}
           data-testid="section-tabs"
-          className={cn(
-            "flex flex-wrap gap-1.5 lg:flex-col lg:flex-nowrap",
-            trimmedQuery && "pointer-events-none opacity-50"
-          )}
+          className="sticky top-20 hidden gap-1 lg:flex lg:flex-col"
         >
-          {sections.map((s) => {
-            const Icon = s.icon;
-            const isActive = !trimmedQuery && s.id === active?.id;
+          {sections.map((section) => {
+            const Icon = section.icon;
+            const isActive = section.id === activeId;
             return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setActiveId(s.id);
-                }}
-                aria-current={isActive ? "page" : undefined}
+              <a
+                key={section.id}
+                href={`#set-${section.id}`}
+                aria-current={isActive ? "true" : undefined}
                 className={cn(
-                  "flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs transition-colors",
-                  "sm:min-h-11 sm:gap-2.5 sm:px-3 sm:text-sm lg:w-full",
+                  "flex min-h-10 items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors",
                   isActive
                     ? "border-primary/30 bg-primary/10 font-medium text-primary"
                     : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 )}
               >
                 <Icon className="size-4 shrink-0" />
-                {s.label}
-              </button>
+                {section.label}
+              </a>
             );
           })}
         </nav>
 
         <div className="min-w-0 space-y-4">
-          {visible.length === 0 ? (
+          {matches.length === 0 ? (
             <p className="rounded-lg border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
               {t("set.nothingFound", { query })}
             </p>
           ) : (
-            visible.map((s) => <div key={s.id}>{s.node}</div>)
+            matches.map((section) => (
+              <div key={section.id} data-section={section.id}>
+                {section.node}
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -841,44 +883,76 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   );
 }
 
-// Compact reusable card wrapper for a settings section. `fields` lays the
-// controls out in a responsive 2-column grid so wide screens are used well
-// instead of stretching a single control across the whole width.
+// Раздел настроек: одна карточка, внутри — строки, разделённые волосками.
 //
-// No lid here on purpose: the nav on the left already shows one section at a
-// time, so folding would hide the very thing that was just selected.
+// Раньше здесь было три рамки вокруг одного выпадающего списка: карточка
+// раздела, внутри неё коробка поля, внутри неё сам список. Рамка означает
+// «отдельный предмет», и когда ею обведено всё подряд, она не означает уже
+// ничего — экран рассыпается на одинаковые коробочки, между которыми глазу не
+// за что зацепиться. Теперь предмет один, раздел, а строки внутри разделены
+// волоском: дёшево, тихо и ровно настолько заметно, насколько нужно.
 function SectionCard({
+  id,
   title,
   icon: Icon,
-  fields,
   children
 }: {
+  id?: string;
   title: string;
   icon?: LucideIcon;
-  fields?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className={Icon ? "flex items-center gap-2" : undefined}>
-          {Icon ? <Icon className="size-4" /> : null}
+    // scroll-mt — чтобы переход по якорю не прятал заголовок под шапку.
+    <Card id={id} className="scroll-mt-24">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          {Icon ? <Icon className="size-4 text-muted-foreground" /> : null}
           {title}
         </CardTitle>
       </CardHeader>
-      {/* Every setting gets the same box: a plain label-and-select sitting next
-          to a bordered toggle made the two columns look like two different
-          screens. */}
-      <CardContent
-        className={
-          fields
-            ? "grid items-start gap-3 lg:grid-cols-2 [&>div]:rounded-lg [&>div]:border [&>div]:bg-muted/10 [&>div]:p-4"
-            : "space-y-4"
-        }
-      >
-        {children}
-      </CardContent>
+      <CardContent className="divide-y divide-border/60 p-0">{children}</CardContent>
     </Card>
+  );
+}
+
+/**
+ * Одна настройка: слева — как она называется и что делает, справа — чем её
+ * меняют.
+ *
+ * `block` — для тех случаев, где управление само по себе широкое (сетка тем,
+ * поле ключа): такое под подписью читается лучше, чем ужатое в правую колонку.
+ */
+function SettingRow({
+  label,
+  hint,
+  htmlFor,
+  block,
+  children
+}: {
+  label: React.ReactNode;
+  hint?: string;
+  htmlFor?: string;
+  block?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "gap-x-6 gap-y-3 px-4 py-4 sm:px-5",
+        block ? "space-y-3" : "sm:flex sm:items-start sm:justify-between"
+      )}
+    >
+      <div className={cn("min-w-0 space-y-1", block ? undefined : "sm:max-w-md")}>
+        <Label htmlFor={htmlFor} className="text-sm font-medium">
+          {label}
+        </Label>
+        {hint ? <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p> : null}
+      </div>
+      <div className={cn("min-w-0", block ? "space-y-2" : "mt-3 sm:mt-0 sm:w-64 sm:shrink-0")}>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -905,22 +979,24 @@ function SelectField({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id} className={labelClassName}>
-        {label}
-      </Label>
+    <SettingRow label={<span className={labelClassName}>{label}</span>} hint={hint} htmlFor={id}>
       <Select value={value} onValueChange={onValueChange}>
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>{children}</SelectContent>
       </Select>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-    </div>
+    </SettingRow>
   );
 }
 
-// Reusable labelled toggle row.
+/**
+ * Строка-переключатель.
+ *
+ * Нажимается вся строка целиком, а не квадратик в её дальнем углу: на телефоне
+ * до квадратика ещё надо дотянуться, а промахнуться по нему легко. Поэтому
+ * обёртка — label: попадание по любому слову засчитывается переключателю.
+ */
 function ToggleRow({
   title,
   description,
@@ -933,17 +1009,12 @@ function ToggleRow({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border bg-muted/10 p-4 transition-colors hover:bg-muted/30">
-      <span>
+    <label className="flex cursor-pointer items-center justify-between gap-6 px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5">
+      <span className="min-w-0 space-y-1">
         <span className="block text-sm font-medium">{title}</span>
-        <span className="block text-xs text-muted-foreground">{description}</span>
+        <span className="block text-xs leading-relaxed text-muted-foreground">{description}</span>
       </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="size-5 accent-primary"
-      />
+      <Switch checked={checked} onChange={onChange} aria-label={title} />
     </label>
   );
 }

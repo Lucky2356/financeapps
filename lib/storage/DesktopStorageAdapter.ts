@@ -19,4 +19,8 @@ export class DesktopStorageAdapter implements StorageAdapter {
   async clear(): Promise<void> {
     await this.indexedDb.clear();
   }
+
+  async keys(): Promise<string[]> {
+    return this.indexedDb.keys();
+  }
 }

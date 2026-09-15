@@ -383,6 +383,14 @@ function isBackupReminderDue(lastBackupAt: string | null) {
 // not spending money, and adding it into one "остаток" made the figure useless.
 export const OPENING_BALANCE_ID = "__opening__";
 export const SAVINGS_BALANCE_ID = "__savings__";
+/**
+ * Псевдостатья плана: сколько владелец собирается отложить в сбережения.
+ *
+ * Не доход и не расход — перевод между своими же деньгами. Но без него план не
+ * делился на «основные» и «сбережения» вовсе: у статьи есть категория и нет
+ * счёта, и какая часть задуманного осядет на вкладе, взять было неоткуда.
+ */
+export const SAVINGS_TRANSFER_ID = "__toSavings__";
 const SAVINGS_ACCOUNT_TYPES = ["SAVINGS", "BROKERAGE"];
 const MONTH_KEY = /^\d{4}-\d{2}$/;
 
@@ -2911,7 +2919,25 @@ export class LocalApiClient implements ApiClient {
       // or spending on either: derive it and the two numbers disagree with
       // next month's opening row directly above them.
       const next = shiftMonth(month, 1);
-      const resultBy = { main: openingOf(next, false), savings: openingOf(next, true) };
+      const endMain = openingOf(next, false);
+      const endSavings = openingOf(next, true);
+
+      // Сколько переехало в сбережения на самом деле. Выводится из остатков:
+      // конец − начало, минус пришедшее на сбережения доходом, плюс потраченное
+      // с них. Что осталось — и есть переводы, включая пополнения целей.
+      const movedToSavings =
+        endSavings - savings.fact - (pool?.income.savings ?? 0) + (pool?.expense.savings ?? 0);
+      const toSavings = cellOf(planOf?.get(SAVINGS_TRANSFER_ID) ?? 0, roundMoney(movedToSavings));
+
+      // План раскладывается на две группы ровно так, как его задумывали:
+      // повседневные доходы и расходы идут через основные счета, а на вклад
+      // попадает то, что владелец собрался отложить. Факт по-прежнему берётся
+      // из остатков — складывать его заново значило бы разойтись со строкой
+      // «остаток на начало» следующего месяца, стоящей прямо над ним.
+      const resultBy = {
+        main: cellOf(opening.plan + income.plan - expense.plan - toSavings.plan, endMain),
+        savings: cellOf(savings.plan + toSavings.plan, endSavings)
+      };
 
       // The fact bottom line is the two pools added up — the very numbers the
       // row above shows — and not the same sum worked out a second way from
@@ -2931,10 +2957,13 @@ export class LocalApiClient implements ApiClient {
         expense,
         incomeBy: pool?.income ?? { main: 0, savings: 0 },
         expenseBy: pool?.expense ?? { main: 0, savings: 0 },
+        toSavings,
         resultBy,
+        // Итог — те же две половины, сложенные. Одно число из одного источника:
+        // считать его вторым способом значит однажды разойтись с первым.
         result: cellOf(
-          opening.plan + savings.plan + income.plan - expense.plan,
-          resultBy.main + resultBy.savings
+          resultBy.main.plan + resultBy.savings.plan,
+          resultBy.main.fact + resultBy.savings.fact
         ),
         note: notes.get(month)?.note ?? "",
         factNote: notes.get(month)?.factNote ?? ""
@@ -3066,6 +3095,7 @@ export class LocalApiClient implements ApiClient {
     if (
       categoryId !== OPENING_BALANCE_ID &&
       categoryId !== SAVINGS_BALANCE_ID &&
+      categoryId !== SAVINGS_TRANSFER_ID &&
       !state.categories.some((category) => category.id === categoryId)
     )
       throw new Error("Категория не найдена.");

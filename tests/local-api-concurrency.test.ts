@@ -25,6 +25,9 @@ function slowStorage(delayMs: number) {
     },
     async clear() {
       return inner.clear();
+    },
+    async keys() {
+      return inner.keys();
     }
   };
 }

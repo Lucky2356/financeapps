@@ -5,8 +5,15 @@ import { expect, type Page } from "@playwright/test";
 // charts and long category names that overflow, and they only exist with data.
 export async function seedExampleData(page: Page) {
   await page.goto("/");
-  const loadExample = page.getByRole("button", { name: "Загрузить пример" });
-  await loadExample.waitFor({ state: "visible", timeout: 30_000 });
+  await loadExample(page);
+}
+
+// The same click, on a page that is already open and already unlocked. Split
+// out because the lock screen appears on a fresh navigation (the book key lives
+// in the tab's memory), so a test that is mid-flow cannot afford the goto above.
+export async function loadExample(page: Page) {
+  const button = page.getByRole("button", { name: "Загрузить пример" });
+  await button.waitFor({ state: "visible", timeout: 30_000 });
 
   // Stamp the window before clicking: the app reloads itself once the example is
   // written to IndexedDB, and a reload wipes the stamp. Waiting for it to vanish
@@ -16,8 +23,8 @@ export async function seedExampleData(page: Page) {
   await page.evaluate(() => {
     (window as unknown as Record<string, unknown>).__seedMark = true;
   });
-  await loadExample.click();
-  await expect(loadExample).toBeHidden({ timeout: 30_000 });
+  await button.click();
+  await expect(button).toBeHidden({ timeout: 30_000 });
   await expect
     .poll(
       () =>

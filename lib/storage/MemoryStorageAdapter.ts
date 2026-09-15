@@ -18,4 +18,8 @@ export class MemoryStorageAdapter implements StorageAdapter {
   async clear(): Promise<void> {
     this.store.clear();
   }
+
+  async keys(): Promise<string[]> {
+    return [...this.store.keys()];
+  }
 }

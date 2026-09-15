@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import {
+  LocalApiClient,
+  OPENING_BALANCE_ID,
+  SAVINGS_BALANCE_ID,
+  SAVINGS_TRANSFER_ID
+} from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type { PlanFactMonth, PlanFactPageData, PlanFactSplit } from "@/types/finance";
 
@@ -130,12 +135,15 @@ describe("month totals split by pool", () => {
     });
 
     const month = await thisMonth(client);
-    expect(month.resultBy.main).toBeCloseTo(70000, 2);
-    expect(month.resultBy.savings).toBeCloseTo(30000, 2);
+    expect(month.resultBy.main.fact).toBeCloseTo(70000, 2);
+    expect(month.resultBy.savings.fact).toBeCloseTo(30000, 2);
 
     // Naive arithmetic would have put all 100 000 on the main side and nothing
     // in savings, because the transfer is neither income nor spending.
-    expect(month.resultBy.main + month.resultBy.savings).toBeCloseTo(month.result.fact, 2);
+    expect(month.resultBy.main.fact + month.resultBy.savings.fact).toBeCloseTo(
+      month.result.fact,
+      2
+    );
   });
 
   // The bottom line is shown as two pools and compared against the plan as one
@@ -177,9 +185,12 @@ describe("month totals split by pool", () => {
     // Потраченное со старого счёта из колонки расходов никуда не делось.
     expect(month.expense.fact).toBeCloseTo(700, 2);
     // А нижняя строка — это остатки: 90 000 на карте, и всё.
-    expect(month.resultBy.main).toBeCloseTo(90000, 2);
+    expect(month.resultBy.main.fact).toBeCloseTo(90000, 2);
     expect(month.result.fact).toBeCloseTo(90000, 2);
-    expect(month.result.fact).toBeCloseTo(month.resultBy.main + month.resultBy.savings, 2);
+    expect(month.result.fact).toBeCloseTo(
+      month.resultBy.main.fact + month.resultBy.savings.fact,
+      2
+    );
   });
 
   it("has both pools at zero for a month nothing was recorded in", async () => {
@@ -188,5 +199,141 @@ describe("month totals split by pool", () => {
 
     const month = await thisMonth(client);
     expectPools(month, { main: 0, savings: 0 }, { main: 0, savings: 0 });
+  });
+});
+
+// Планируемый перевод в сбережения — то, чем план вообще стало возможно
+// разделить на две группы. У статьи есть категория и нет счёта, поэтому
+// «сколько из задуманного осядет на вкладе» взять было неоткуда: обе колонки
+// плана показывали одну цифру на двоих.
+describe("планируемый перевод в сбережения", () => {
+  /** Ставит план по псевдостатье — так же, как это делает экран. */
+  const plan = (client: LocalApiClient, categoryId: string, amount: number) =>
+    client.post("/plan", { month: monthKey(), categoryId, amount: String(amount) });
+
+  it("делит план на две группы: отложенное уходит из основных в сбережения", async () => {
+    const client = api();
+    await twoPools(client);
+    const salary = await category(client, "Зарплата-тест", "INCOME");
+    const food = await category(client, "Еда-тест", "EXPENSE");
+
+    await plan(client, OPENING_BALANCE_ID, 10000);
+    await plan(client, SAVINGS_BALANCE_ID, 50000);
+    await plan(client, salary.id, 100000);
+    await plan(client, food.id, 30000);
+    await plan(client, SAVINGS_TRANSFER_ID, 20000);
+
+    const month = await thisMonth(client);
+    // 10 000 + 100 000 − 30 000 − 20 000
+    expect(month.resultBy.main.plan).toBeCloseTo(60000, 2);
+    // 50 000 + 20 000
+    expect(month.resultBy.savings.plan).toBeCloseTo(70000, 2);
+    // И итог — те же две половины сложенные, а не посчитанные заново.
+    expect(month.result.plan).toBeCloseTo(130000, 2);
+  });
+
+  it("без отложенного план сбережений — это просто остаток на начало", async () => {
+    const client = api();
+    await twoPools(client);
+    await plan(client, OPENING_BALANCE_ID, 10000);
+    await plan(client, SAVINGS_BALANCE_ID, 50000);
+
+    const month = await thisMonth(client);
+    expect(month.toSavings.plan).toBeCloseTo(0, 2);
+    expect(month.resultBy.savings.plan).toBeCloseTo(50000, 2);
+    expect(month.resultBy.main.plan).toBeCloseTo(10000, 2);
+  });
+
+  it("факт считает настоящий переезд денег, а не задуманный", async () => {
+    const client = api();
+    const { card, deposit } = await twoPools(client);
+    const salary = await category(client, "Зарплата-тест", "INCOME");
+
+    await record(client, {
+      accountId: card.id,
+      categoryId: salary.id,
+      type: "INCOME",
+      amount: 100000
+    });
+    await client.post("/transactions/transfer", {
+      fromAccountId: card.id,
+      toAccountId: deposit.id,
+      amount: "30000",
+      date: today()
+    });
+    await plan(client, SAVINGS_TRANSFER_ID, 20000);
+
+    const month = await thisMonth(client);
+    expect(month.toSavings.fact).toBeCloseTo(30000, 2);
+    // Собирался отложить 20 000, отложил 30 000 — разница отвечает на живой
+    // вопрос, а не на арифметический.
+    expect(month.toSavings.diff).toBeCloseTo(-10000, 2);
+  });
+
+  it("доход, пришедший прямо на вклад, переводом не считается", async () => {
+    // Иначе проценты по вкладу выглядели бы как перевод, которого не было.
+    const client = api();
+    const { deposit } = await twoPools(client);
+    const percent = await category(client, "Проценты-тест", "INCOME");
+
+    await record(client, {
+      accountId: deposit.id,
+      categoryId: percent.id,
+      type: "INCOME",
+      amount: 5000
+    });
+
+    const month = await thisMonth(client);
+    expect(month.incomeBy.savings).toBeCloseTo(5000, 2);
+    expect(month.toSavings.fact).toBeCloseTo(0, 2);
+  });
+
+  it("трата с вклада переводом тоже не считается", async () => {
+    const client = api();
+    const { deposit } = await twoPools(client);
+    const repair = await category(client, "Ремонт-тест", "EXPENSE");
+    await client.put(`/accounts?id=${deposit.id}`, {
+      id: deposit.id,
+      name: "Вклад",
+      type: "SAVINGS",
+      balance: "40000"
+    });
+
+    await record(client, {
+      accountId: deposit.id,
+      categoryId: repair.id,
+      type: "EXPENSE",
+      amount: 15000
+    });
+
+    const month = await thisMonth(client);
+    expect(month.expenseBy.savings).toBeCloseTo(15000, 2);
+    expect(month.toSavings.fact).toBeCloseTo(0, 2);
+  });
+
+  it("пополнение цели — это тоже переезд в сбережения", async () => {
+    const client = api();
+    const { card } = await twoPools(client);
+    const goal = await client.post<{ id: string }>("/goals", {
+      title: "Отпуск",
+      targetAmount: "100000",
+      currentAmount: "0",
+      deadline: "2027-01-01"
+    });
+    await client.put(`/accounts?id=${card.id}`, {
+      id: card.id,
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "50000"
+    });
+    await client.post("/goals", {
+      action: "deposit",
+      goalId: goal.id,
+      accountId: card.id,
+      amount: "12000"
+    });
+
+    const month = await thisMonth(client);
+    expect(month.toSavings.fact).toBeCloseTo(12000, 2);
   });
 });
