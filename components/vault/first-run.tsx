@@ -15,24 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
+import { pickTwo } from "@/lib/vault/pick-two";
 import { accountService } from "@/lib/vault/runtime";
 import { cn } from "@/lib/utils";
 
 const MIN_PASSWORD = 8;
-
-/**
- * Какие два слова спросить обратно. Всегда разные и всегда по возрастанию.
- *
- * Тем же генератором, что и сам код: предсказуемость тут ничем не грозит, но
- * держать рядом два источника случайности — один настоящий, другой «и так
- * сойдёт» — значит однажды перепутать, каким пользоваться.
- */
-function pickTwo(total: number): [number, number] {
-  const [a, b] = crypto.getRandomValues(new Uint32Array(2));
-  const first = a % (total - 1);
-  const second = first + 1 + (b % (total - first - 1));
-  return [first, second];
-}
 
 export function FirstRun({ onDone }: { onDone: () => void }) {
   const { t } = useI18n();

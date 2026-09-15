@@ -61,6 +61,10 @@ export function VaultPanel() {
             <Button
               type="button"
               variant="secondary"
+              // Надпись длинная, а кнопки не переносят строк: в окне 360 px
+              // она вылезала за правый край. На узком — во всю ширину и с
+              // переносом, на широком — по содержимому, как все остальные.
+              className="h-auto w-full whitespace-normal py-2 sm:w-auto"
               onClick={async () => {
                 await accountService.forgetDevice();
                 setRemembered(false);

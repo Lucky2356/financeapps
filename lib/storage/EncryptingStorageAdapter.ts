@@ -40,7 +40,10 @@ export function isBookLocked(error: unknown): boolean {
 }
 
 function sealed(value: unknown): value is SealedBook {
-  if (typeof value !== "object" || value === null) return false;
+  // Сначала null, потом typeof, а не наоборот: после первой проверки значение
+  // уже сужено до объекта, и сравнение сужённого с null читается как сравнение
+  // несопоставимых типов — на это и указал разбор кода.
+  if (value === null || typeof value !== "object") return false;
   const candidate = value as Partial<SealedBook>;
   return candidate.alg === "AES-GCM" && typeof candidate.ct === "string";
 }
