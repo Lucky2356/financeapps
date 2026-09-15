@@ -21,6 +21,7 @@ import type {
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
+import { stampRows, type Stamped } from "@/lib/sync/row-stamps";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
@@ -115,7 +116,7 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -124,9 +125,9 @@ type LocalState = {
   density: "comfortable" | "compact";
   defaultTransactionType: "INCOME" | "EXPENSE";
   lastBackupAt: string | null;
-  accounts: Array<AccountRow & { isArchived?: boolean }>;
-  liabilities: Array<Omit<LiabilityRow, "progress">>;
-  rules: CategorizationRule[];
+  accounts: Array<Stamped<AccountRow & { isArchived?: boolean }>>;
+  liabilities: Array<Stamped<Omit<LiabilityRow, "progress">>>;
+  rules: Array<Stamped<CategorizationRule>>;
   autoMaterializeRecurring: boolean;
   paymentReminders: boolean;
   aiEnabled: boolean;
@@ -137,28 +138,30 @@ type LocalState = {
   currencyRates: CurrencyRates;
   currencyRatesUpdatedAt: string | null;
   netWorthSnapshots: NetWorthSnapshot[];
-  realizedInvestmentEvents: RealizedInvestmentEvent[];
-  expectedDividends: ExpectedDividend[];
-  targetAllocations: TargetAllocation[];
-  marketAlerts: MarketAlert[];
-  categories: CategoryOption[];
-  plans: Array<{ month: string; categoryId: string; amount: number }>;
-  planNotes: Array<{ month: string; note: string; factNote: string }>;
+  realizedInvestmentEvents: Array<Stamped<RealizedInvestmentEvent>>;
+  expectedDividends: Array<Stamped<ExpectedDividend>>;
+  targetAllocations: Array<Stamped<TargetAllocation>>;
+  marketAlerts: Array<Stamped<MarketAlert>>;
+  categories: Array<Stamped<CategoryOption>>;
+  plans: Array<Stamped<{ month: string; categoryId: string; amount: number }>>;
+  planNotes: Array<Stamped<{ month: string; note: string; factNote: string }>>;
   /** Months pinned into the plan/fact grid by hand (see savePlan/addMonth). */
   planMonths?: string[];
   /** Top-ups of saving goals — a balance change with no operation behind it. */
-  goalMovements?: Array<{
-    id: string;
-    goalId: string;
-    accountId: string;
-    amount: number;
-    date: string;
-  }>;
-  transactions: Array<TransactionRow & { recurringId?: string }>;
-  budgets: BudgetsPageData["budgets"];
-  goals: GoalsPageData["goals"];
+  goalMovements?: Array<
+    Stamped<{
+      id: string;
+      goalId: string;
+      accountId: string;
+      amount: number;
+      date: string;
+    }>
+  >;
+  transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
+  budgets: Array<Stamped<BudgetsPageData["budgets"][number]>>;
+  goals: Array<Stamped<GoalsPageData["goals"][number]>>;
   recurringTransactions: Array<
-    RecurringTransactionsPageData["recurringTransactions"][number] & {
+    Stamped<RecurringTransactionsPageData["recurringTransactions"][number]> & {
       /**
        * Legacy: up to 1.4.0 a template posted its first operation immediately and
        * kept the link here. Nothing writes or reads it any more — kept so states
@@ -168,11 +171,13 @@ type LocalState = {
     }
   >;
   investments: InvestmentData;
-  importBatches?: Array<{
-    id: string;
-    importedAt: string;
-    transactionIds: string[];
-  }>;
+  importBatches?: Array<
+    Stamped<{
+      id: string;
+      importedAt: string;
+      transactionIds: string[];
+    }>
+  >;
 };
 
 const defaultCategories: CategoryOption[] = [
@@ -781,7 +786,7 @@ export class LocalApiClient implements ApiClient {
     const current = await this.state();
     if (!restored.aiApiKey) restored.aiApiKey = current.aiApiKey ?? "";
 
-    await this.save(restored);
+    await this.save(restored, { stamp: false });
     return { restored: true } as TResponse;
   }
 
@@ -3419,11 +3424,38 @@ export class LocalApiClient implements ApiClient {
     }
   }
 
-  private async save(state: LocalState) {
+  /**
+   * Единственная дверь, через которую книга попадает на диск.
+   *
+   * Здесь же строкам проставляется время последней правки: сличением с тем, что
+   * лежало до этого, — изменившиеся и новые получают текущее время, нетронутые
+   * сохраняют прежнее. Ставить отметки в обработчиках нельзя: их около
+   * восьмидесяти, и восемьдесят первый её не поставит. Здесь — не забудет никто.
+   *
+   * `stamp: false` — для восстановления из копии: там отметки уже есть в файле и
+   * означают, когда строку правили на самом деле. Переписать их на «сейчас»
+   * значило бы объявить трёхлетнюю книгу целиком свежей.
+   */
+  private async save(state: LocalState, options: { stamp?: boolean } = {}) {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
-    await this.storage.setItem(key, state);
-    this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(state)) };
+    const next =
+      options.stamp === false
+        ? state
+        : stampRows(state, await this.storedState(key), new Date().toISOString());
+    await this.storage.setItem(key, next);
+    this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
+  }
+
+  /**
+   * Книга, какой она лежит сейчас, — чтобы было с чем сличать. Почти всегда это
+   * уже прогретая память (её наполняет любое чтение перед записью); обращение к
+   * хранилищу остаётся на тот случай, когда запись идёт первой.
+   */
+  private async storedState(key: string): Promise<Record<string, unknown> | null> {
+    if (this.stateCache?.key === key) return this.stateCache.state as Record<string, unknown>;
+    const stored = await this.storage.getItem<Record<string, unknown>>(key);
+    return stored && typeof stored === "object" ? stored : null;
   }
 
   private async getActiveProfileId(): Promise<string> {

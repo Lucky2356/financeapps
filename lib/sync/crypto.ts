@@ -3,6 +3,8 @@
 // snapshot is written to the user's own cloud-synced folder, so only the owner
 // (who knows the passphrase) can read it. Pure and testable.
 
+import { fromBase64, toBase64 } from "@/lib/sync/bytes";
+
 const KDF_ITERATIONS = 200_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
@@ -16,19 +18,6 @@ export type EncryptedEnvelope = {
   iv: string;
   ct: string;
 };
-
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function fromBase64(value: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
 
 async function deriveKey(
   passphrase: string,
