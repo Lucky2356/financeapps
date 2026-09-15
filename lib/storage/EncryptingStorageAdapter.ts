@@ -1,0 +1,129 @@
+// Хранилище, которое умеет быть запертым.
+//
+// Обёртка над настоящим хранилищем устройства: наружу — тот же самый
+// StorageAdapter из четырёх методов, внутрь — книга, лежащая на диске
+// зашифрованной. LocalApiClient об этом не знает вовсе и не меняется ни на
+// строку; он и дальше кладёт и берёт свой документ по ключу. Тот же шов потом
+// заберёт себе синхронизация с сервером — она встанет сюда же, слоем рядом.
+//
+// Правило, что шифровать, — обратное привычному: шифруется ВСЁ, кроме явного
+// короткого списка исключений. Список «что шифровать» рано или поздно отстал бы
+// от жизни: кто-нибудь заведёт новый ключ в хранилище, забудет дописать его в
+// список, и данные лягут на диск открытыми — молча, потому что работать будет
+// ровно так же. Здесь забывчивость приводит к обратному: новый ключ шифруется
+// сам собой, а если его надо читать запертым — об этом придётся сказать вслух.
+//
+// Исключения — только то, без чего замок не отпереть: сама шкатулка с ключом
+// книги и пометка устройства. Ни в том, ни в другом содержимого книги нет.
+
+import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
+import { openBook, sealBook, type SealedBook } from "@/lib/sync/vault-crypto";
+
+/** Ключи, читаемые и запертыми: без них отпирать было бы нечем. */
+export const UNSEALED_KEYS: readonly string[] = ["financeVault", "financeDevice"];
+
+/**
+ * Попытка прочитать книгу, пока она заперта.
+ *
+ * Отдельный класс, а не просто Error: вызывающему надо отличать «заперто» от
+ * «сломалось», и по тексту ошибки такое не различают.
+ */
+export class BookLockedError extends Error {
+  constructor() {
+    super("Книга заперта — введите пароль.");
+    this.name = "BookLockedError";
+  }
+}
+
+export function isBookLocked(error: unknown): boolean {
+  return error instanceof BookLockedError;
+}
+
+function sealed(value: unknown): value is SealedBook {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<SealedBook>;
+  return candidate.alg === "AES-GCM" && typeof candidate.ct === "string";
+}
+
+export class EncryptingStorageAdapter implements StorageAdapter {
+  /** Ключ книги. null — заперто. В памяти и только в памяти. */
+  private bookKey: CryptoKey | null = null;
+
+  constructor(private readonly inner: StorageAdapter) {}
+
+  /** Отпирает хранилище ключом книги. */
+  unlock(bookKey: CryptoKey): void {
+    this.bookKey = bookKey;
+  }
+
+  /** Запирает обратно. Ключ из памяти уходит; на диске всё остаётся. */
+  lock(): void {
+    this.bookKey = null;
+  }
+
+  get unlocked(): boolean {
+    return this.bookKey !== null;
+  }
+
+  private require(): CryptoKey {
+    if (!this.bookKey) throw new BookLockedError();
+    return this.bookKey;
+  }
+
+  async getItem<T>(key: string): Promise<T | null> {
+    if (UNSEALED_KEYS.includes(key)) return this.inner.getItem<T>(key);
+
+    // Заперто — именно ОШИБКА, а не пустота. Пустота означала бы «книги нет»,
+    // и приложение завело бы поверх запертой книги новую, пустую: человек
+    // открыл бы его и увидел, что все его счета и операции исчезли. Ошибку
+    // экран замка поймает и покажет форму ввода пароля.
+    const bookKey = this.require();
+
+    const stored = await this.inner.getItem<unknown>(key);
+    if (stored == null) return null;
+    // Ещё не запечатанная книга читается как есть: так выглядит книга, которая
+    // лежала здесь до появления замка, и так же — книга посреди перевода в
+    // запечатанный вид, если он оборвался. Читать её надо, а не терять.
+    if (!sealed(stored)) return stored as T;
+
+    return JSON.parse(await openBook(stored, bookKey)) as T;
+  }
+
+  async setItem<T>(key: string, value: T): Promise<void> {
+    if (UNSEALED_KEYS.includes(key)) return this.inner.setItem(key, value);
+    const bookKey = this.require();
+    await this.inner.setItem(key, await sealBook(JSON.stringify(value), bookKey));
+  }
+
+  // Убрать можно и запертым: для этого читать нечего.
+  async removeItem(key: string): Promise<void> {
+    await this.inner.removeItem(key);
+  }
+
+  /**
+   * Стирает книгу — и НЕ трогает шкатулку.
+   *
+   * Правило, которое здесь держится: книга на диске и шкатулка от неё живут и
+   * умирают вместе, но «очистить хранилище» — это про книгу, а не про замок.
+   * Снеси оно заодно и шкатулку, вышло бы вот что: ключ остался бы в памяти,
+   * пустая книга легла бы на диск запечатанной им, а при следующем запуске
+   * шкатулки бы не нашлось — приложение сочло бы это первым запуском и стало
+   * бы запечатывать заново то, что уже запечатано ключом, которого больше нет.
+   * Получилась бы книга, которую не открыть ничем.
+   *
+   * Тому, кто потерял и пароль, и код, нужно другое — стереть вообще всё и
+   * начать с чистого листа. Это отдельное, ясно названное действие:
+   * AccountService.forgetEverything().
+   */
+  async clear(): Promise<void> {
+    for (const key of await this.inner.keys()) {
+      if (!UNSEALED_KEYS.includes(key)) await this.inner.removeItem(key);
+    }
+  }
+
+  // Имена ключей не шифруются — шифруется содержимое. Поэтому список отдаётся
+  // и запертым: по нему видно, что книга на устройстве есть, но не что в ней.
+  async keys(): Promise<string[]> {
+    return this.inner.keys();
+  }
+}
