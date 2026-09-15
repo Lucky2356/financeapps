@@ -41,6 +41,9 @@ import type {
   PlanFactSplit
 } from "@/types/finance";
 
+/** Полоса таблицы: план, факт или разница между ними. */
+type Band = "plan" | "fact" | "diff";
+
 /** "2026-08" for a date, the same key the plan grid is indexed by. */
 function monthKeyOf(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -516,7 +519,7 @@ function ResultCells({
   money,
   className
 }: {
-  band: "plan" | "fact" | "diff";
+  band: Band;
   cells: PlanFactPoolCells;
   money: (value: number) => string;
   className?: string;
@@ -566,7 +569,7 @@ function TotalCells({
   className,
   onDrill
 }: {
-  band: "plan" | "fact" | "diff";
+  band: Band;
   column: string;
   cell: PlanFactCell;
   split: PlanFactSplit;
@@ -684,7 +687,7 @@ function BandRow({
   onSave,
   onDrill
 }: {
-  band: "plan" | "fact" | "diff";
+  band: Band;
   month: PlanFactMonth;
   income: PlanFactColumn[];
   expense: PlanFactColumn[];
