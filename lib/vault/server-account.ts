@@ -53,19 +53,44 @@ async function ask(
   // сюда не доходит — а это вход и регистрация, то есть самый первый шаг.
   // Останься здесь fetch, чинить провод было бы незачем: до провода дело бы не
   // дошло вовсе.
-  const response = await shellFetch(`${root(base)}${path}`, {
-    method: init.method ?? "GET",
-    headers: {
-      ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
-      ...(init.body === undefined ? {} : { "content-type": "application/json" })
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body)
-  });
+  let response: Response;
+  try {
+    response = await shellFetch(`${root(base)}${path}`, {
+      method: init.method ?? "GET",
+      headers: {
+        ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
+        ...(init.body === undefined ? {} : { "content-type": "application/json" })
+      },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body)
+    });
+  } catch {
+    // До службы не дошли вовсе: не то имя, не поднялась, нет сети. Текст, что
+    // бросает сюда нижний слой, человеку не говорит ничего — он про разрешение
+    // имён и сокеты. А это ПЕРВОЕ, что человек видит, настраивая свой сервер, и
+    // по этой строке он решает, что чинить.
+    throw new ServerRefused(0, `Не удалось связаться со службой по адресу ${root(base)}.`);
+  }
+
   const text = await response.text();
-  return {
-    status: response.status,
-    data: text ? (JSON.parse(text) as Record<string, unknown>) : {}
-  };
+
+  // Ответ не JSON — почти всегда это посредник, а не служба: страница 502 от
+  // Caddy, заглушка хостинга, чужой сайт по опечатке в адресе. Разбери мы её
+  // как JSON, человек увидел бы «Unexpected token '<'» и не понял бы, что
+  // виноват адрес или проксирование.
+  let data: Record<string, unknown> = {};
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new ServerRefused(
+        response.status,
+        `По адресу ${root(base)} отвечает не служба (код ${response.status}). ` +
+          "Проверьте адрес и проксирование в Caddy."
+      );
+    }
+  }
+
+  return { status: response.status, data };
 }
 
 function refuse(status: number, data: Record<string, unknown>, fallback: string): never {
