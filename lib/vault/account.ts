@@ -16,6 +16,7 @@ import {
   UNSEALED_KEYS
 } from "@/lib/storage/EncryptingStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
+import { BASE_SUFFIX } from "@/lib/storage/SyncingStorageAdapter";
 import {
   changePassword as rewrapWithNewPassword,
   createVault,
@@ -250,7 +251,12 @@ async function importBookKey(base64: string): Promise<CryptoKey> {
  */
 async function sealableKeys(storage: StorageAdapter): Promise<string[]> {
   const all = await storage.keys();
-  return all.filter((key) => !UNSEALED_KEYS.includes(key) && !key.endsWith(":sealing"));
+  // `:base` — основа для слияния: она приехала с сервера уже запечатанной.
+  // Запечатай её ещё раз, и ключ книги не откроет её никогда.
+  return all.filter(
+    (key) =>
+      !UNSEALED_KEYS.includes(key) && !key.endsWith(":sealing") && !key.endsWith(BASE_SUFFIX)
+  );
 }
 
 /**

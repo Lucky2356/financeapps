@@ -6,6 +6,7 @@ import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { NotificationBell } from "@/components/notification-bell";
+import { SyncStatusIndicator } from "@/components/sync/sync-status";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useI18n } from "@/lib/i18n/context";
@@ -136,6 +137,7 @@ export function AppSidebar() {
             <p className="text-[11px] text-muted-foreground">{t("shell.themeAndNotifications")}</p>
           )}
           <div className={cn("flex items-center", collapsed ? "flex-col gap-1" : "gap-0.5")}>
+            <SyncStatusIndicator />
             <NotificationBell />
             <ThemeToggle />
           </div>

@@ -19,8 +19,22 @@
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { openBook, sealBook, type SealedBook } from "@/lib/sync/vault-crypto";
 
-/** Ключи, читаемые и запертыми: без них отпирать было бы нечем. */
-export const UNSEALED_KEYS: readonly string[] = ["financeVault", "financeDevice"];
+/**
+ * Ключи, которые не шифруются. Каждый — с причиной, и причина одна из двух.
+ *
+ *   financeVault, financeDevice — без них замок не отпереть: это сама шкатулка
+ *     с ключом книги и пометка устройства. Содержимого книги в них нет.
+ *   financeSync — номера версий ячеек на сервере, которые ведёт слой
+ *     синхронизации. Он стоит НИЖЕ шифрования и читает свою запись сам; запечатай
+ *     мы её, он прочитал бы вместо чисел шкатулку, счёл бы её книгой и принялся
+ *     бы синхронизировать собственную бухгалтерию. Ничего, кроме имён ячеек и
+ *     чисел, там не лежит, а имена ячеек и так не шифруются.
+ */
+export const UNSEALED_KEYS: readonly string[] = [
+  "financeVault",
+  "financeDevice",
+  "financeSync"
+];
 
 /**
  * Попытка прочитать книгу, пока она заперта.
@@ -71,6 +85,23 @@ export class EncryptingStorageAdapter implements StorageAdapter {
   private require(): CryptoKey {
     if (!this.bookKey) throw new BookLockedError();
     return this.bookKey;
+  }
+
+  /**
+   * Открыть чужую шкатулку и запечатать свою — для слияния.
+   *
+   * Слияние стоит НИЖЕ этого слоя и ключа не имеет; открыть две книги и
+   * сложить их может только тот, у кого ключ есть. Отдавать ему сам ключ было
+   * бы проще и хуже: ключ, однажды отданный наружу, оказывается в местах, про
+   * которые никто уже не помнит. Эти два действия — ровно то, что слиянию
+   * нужно, и ни байтом больше.
+   */
+  async open<T>(body: SealedBook): Promise<T> {
+    return JSON.parse(await openBook(body, this.require())) as T;
+  }
+
+  async seal<T>(value: T): Promise<SealedBook> {
+    return sealBook(JSON.stringify(value), this.require());
   }
 
   async getItem<T>(key: string): Promise<T | null> {
