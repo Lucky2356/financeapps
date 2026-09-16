@@ -1880,6 +1880,25 @@ const ru: Messages = {
   "lmp.saveFail": "Не удалось сохранить локальный снимок",
   "lmp.cleared": "Локальное хранилище очищено",
   "lmp.clearFail": "Не удалось очистить локальные данные",
+  // --- Свой сервер ---
+  "server.title": "Свой сервер",
+  "server.lead":
+    "Книга уезжает на сервер зашифрованной: открыть её он не может — ключа у него нет и взяться ему неоткуда. Пароль на сервер тоже не уходит, уходит выведенный из него секрет входа.",
+  "server.address": "Адрес службы",
+  "server.login": "Имя входа",
+  "server.password": "Пароль книги",
+  "server.passwordHint": "Тот самый, которым открывается книга на этом устройстве.",
+  "server.code": "Приглашение",
+  "server.codeHint": "Только для первой записи. Входите на второе устройство — оставьте пустым.",
+  "server.connect": "Подключить устройство",
+  "server.connecting": "Подключаем…",
+  "server.connected": "Устройство подключено к серверу.",
+  "server.disconnect": "Отвязать это устройство",
+  "server.disconnectNote":
+    "Отвязка — про связь, а не про данные: книга останется на этом устройстве целиком. Синхронизация просто прекратится.",
+  "server.disconnected": "Устройство отвязано. Книга на месте.",
+  "server.noVault": "Сначала задайте пароль книги на этом устройстве.",
+  "set.section.server": "Свой сервер",
   // --- Синхронизация с сервером ---
   "sync.status.synced": "Всё на сервере",
   "sync.status.sending": "Отправляем…",
@@ -3764,6 +3783,25 @@ const en: Messages = {
   "lmp.saveFail": "Could not save the local snapshot",
   "lmp.cleared": "Local storage cleared",
   "lmp.clearFail": "Could not clear local data",
+  // --- Your own server ---
+  "server.title": "Your own server",
+  "server.lead":
+    "Your book travels to the server encrypted: it cannot open it — there is no key there and nowhere for one to come from. Your password does not go to the server either; a sign-in secret derived from it does.",
+  "server.address": "Service address",
+  "server.login": "Login name",
+  "server.password": "Book password",
+  "server.passwordHint": "The same one that opens the book on this device.",
+  "server.code": "Invitation",
+  "server.codeHint": "Only for the first account. Signing in on a second device — leave it empty.",
+  "server.connect": "Connect this device",
+  "server.connecting": "Connecting…",
+  "server.connected": "This device is connected to the server.",
+  "server.disconnect": "Disconnect this device",
+  "server.disconnectNote":
+    "Disconnecting is about the link, not the data: the book stays on this device in full. Syncing simply stops.",
+  "server.disconnected": "Device disconnected. Your book is where it was.",
+  "server.noVault": "Set a book password on this device first.",
+  "set.section.server": "Your own server",
   // --- Sync with the server ---
   "sync.status.synced": "Everything is on the server",
   "sync.status.sending": "Sending…",

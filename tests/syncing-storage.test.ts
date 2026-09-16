@@ -53,6 +53,7 @@ describe("синхронизирующее хранилище", () => {
       // Сервер, который не отвечает вовсе, — так выглядит связь, которая
       // «есть», но висит. Запись обязана вернуться до него, а не после.
       const hanging = {
+        list: () => new Promise<never>(() => {}),
         pull: () => new Promise<never>(() => {}),
         push: () => new Promise<never>(() => {}),
         watch: () => () => {}
@@ -348,6 +349,9 @@ describe("синхронизирующее хранилище", () => {
     it("ошибка сервера — это не «нет связи»", async () => {
       const broken = {
         ...server,
+        list: vi.fn(async () => {
+          throw new Error("сервер сломался");
+        }),
         pull: vi.fn(async () => {
           throw new Error("сервер сломался");
         }),

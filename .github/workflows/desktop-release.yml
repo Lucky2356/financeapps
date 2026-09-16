@@ -193,11 +193,20 @@ jobs:
           fi
           echo "----- release body -----"; cat RELEASE_NOTES.md
 
-      # Publishes a GitHub Release with the installer attached so end users can
-      # download it from the Releases page. action-gh-release creates the tag if
-      # it does not exist yet. The .sig and latest.json are uploaded when signing
-      # so /releases/latest/download/latest.json resolves for the updater. The
-      # curated CHANGELOG body is prepended above the auto-generated commit list.
+      # Публикует выпуск ПРЕДВАРИТЕЛЬНЫМ — и это главное здесь.
+      #
+      # Обновлятор на компьютере, проверка на телефоне и запасной путь через API
+      # спрашивают у GitHub одно и то же: «последний выпуск». Последним GitHub
+      # считает последний НЕ предварительный, поэтому выпуск, помеченный здесь,
+      # не виден ни одному из трёх путей — ни на чьей машине.
+      #
+      # Раньше этой ступени не было вовсе: собранное сразу становилось последним
+      # и в тот же час уезжало всем. Проверить его на себе было негде — разве что
+      # успеть до чужой фоновой проверки.
+      #
+      # Делает выпуск общим отдельное действие — promote-release.yml. Оно ничего
+      # не пересобирает: наружу уходят ровно те файлы, которые проверялись, а не
+      # собранные заново «из того же кода».
       - name: Publish GitHub Release
         if: steps.rel.outputs.publish == 'true'
         uses: softprops/action-gh-release@v3
@@ -206,6 +215,11 @@ jobs:
           name: Финансовый помощник ${{ steps.rel.outputs.tag }}
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
+          prerelease: true
+          # Явно, хотя предварительный выпуск и так не становится последним:
+          # этот выпуск НЕ должен стать последним, и сказать это вслух дешевле,
+          # чем потом гадать, почему обновление уехало всем раньше времени.
+          make_latest: false
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/*.sig

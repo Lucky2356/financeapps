@@ -87,7 +87,11 @@ describe("следы удалений", () => {
     const before = { transactions: [{ id: "x" }], goals: [{ id: "x" }] };
     const after = track({ transactions: [], goals: [] }, before);
 
-    expect(marks(after).map((mark) => mark.collection).sort()).toEqual(["goals", "transactions"]);
+    expect(
+      marks(after)
+        .map((mark) => mark.collection)
+        .sort()
+    ).toEqual(["goals", "transactions"]);
   });
 });
 

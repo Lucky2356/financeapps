@@ -30,6 +30,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
+import { ServerPanel } from "@/components/settings/server-panel";
 import { VaultPanel } from "@/components/settings/vault-panel";
 import { ImportExportPanel } from "@/components/import/import-export-panel";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
@@ -687,6 +688,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             transactions={[]}
           />
           <CloudSyncPanel />
+          <ServerPanel />
           <VaultPanel />
         </div>
       )

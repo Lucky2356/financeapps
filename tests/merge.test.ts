@@ -86,7 +86,9 @@ describe("слияние книг", () => {
       const mine: Book = { transactions: [tx("t1"), tx("новая")] };
       const theirs: Book = { transactions: [tx("t1")] };
 
-      expect(rows(mergeBooks(null, mine, theirs).state)).toEqual(["novaya".replace("novaya", "новая"), "t1"].sort());
+      expect(rows(mergeBooks(null, mine, theirs).state)).toEqual(
+        ["novaya".replace("novaya", "новая"), "t1"].sort()
+      );
     });
 
     it("следы объединяются, иначе удалённое воскреснет на следующем круге", () => {
@@ -109,7 +111,11 @@ describe("слияние книг", () => {
       const { conflicts } = mergeBooks(base, mine, theirs);
 
       expect(conflicts).toHaveLength(1);
-      expect(conflicts[0]).toMatchObject({ collection: "transactions", key: "t1", chosen: "theirs" });
+      expect(conflicts[0]).toMatchObject({
+        collection: "transactions",
+        key: "t1",
+        chosen: "theirs"
+      });
       expect(conflicts[0].mine).toMatchObject({ amount: 250 });
       expect(conflicts[0].theirs).toMatchObject({ amount: 900 });
     });
@@ -180,9 +186,7 @@ describe("слияние книг", () => {
       };
 
       const { state } = mergeBooks(base, mine, theirs);
-      const tickers = (
-        (state.investments as { portfolio: Array<{ ticker: string }> }).portfolio
-      )
+      const tickers = (state.investments as { portfolio: Array<{ ticker: string }> }).portfolio
         .map((row) => row.ticker)
         .sort();
       expect(tickers).toEqual(["GAZP", "LKOH", "SBER"]);

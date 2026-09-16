@@ -41,6 +41,11 @@ jobs:
       - name: Unit tests + coverage thresholds
         run: npm run test:coverage
 
+      # Служба проверяется отдельно и своим прогонщиком: у неё ноль
+      # зависимостей, и тянуть в неё vitest значило бы завести первую.
+      - name: Проверки службы
+        run: npm run test:server
+
       - name: Build static shell
         run: npm run build:static
 

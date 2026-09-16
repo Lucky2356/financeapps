@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FirstRun } from "@/components/vault/first-run";
 import { UnlockScreen } from "@/components/vault/unlock-screen";
 import { useI18n } from "@/lib/i18n/context";
-import { accountService } from "@/lib/vault/runtime";
+import { accountService, resumeSync } from "@/lib/vault/runtime";
 
 type Phase = "checking" | "fresh" | "locked" | "open";
 
@@ -24,6 +24,20 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
     try {
       const { status } = await accountService.state();
       setPhase(status === "unlocked" ? "open" : status);
+
+      // Синхронизация поднимается ТОЛЬКО на отпертой книге, и это не порядок
+      // вызовов, а необходимость: слияние открывает две книги, а ключ живёт в
+      // памяти замка. Запущенная раньше, она уткнулась бы в запертое хранилище
+      // на первом же приехавшем изменении.
+      //
+      // Не ждём: сеть не имеет права задерживать появление приложения на
+      // экране, и привязки к серверу у большинства нет вовсе.
+      if (status === "unlocked") {
+        void resumeSync().catch(() => {
+          // Сервер недоступен или билет протух — приложение местное и работает
+          // без него. Значок связи скажет об этом сам, когда будет что сказать.
+        });
+      }
     } catch {
       // Хранилище не открылось вовсе (приватный режим, запрет на запись).
       // Замка в таком окне нет и быть не может — пускаем дальше, приложение

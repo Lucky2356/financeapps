@@ -1,0 +1,66 @@
+[Unit]
+Description=Финансовый помощник — служба синхронизации
+Documentation=https://github.com/Lucky2356/financeapps/blob/main/server/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=financeapps
+Group=financeapps
+
+WorkingDirectory=/opt/financeapps/server
+ExecStart=/usr/bin/node --experimental-strip-types src/start.ts
+Restart=on-failure
+RestartSec=5s
+
+# Настройки — здесь, а не в git. Пропуск управления и путь к базе меняются
+# правкой этого файла (или, лучше, отдельного drop-in через systemctl edit).
+Environment=FINANCE_DB=/var/lib/financeapps/finance.db
+Environment=FINANCE_PORT=8787
+# Пропуск управления. ТОЛЬКО ЛАТИНИЦА И ЦИФРЫ: он ездит в заголовке HTTP, а
+# заголовки не переносят ничего сверх Latin-1. Сделать: openssl rand -base64 32
+# Environment=FINANCE_ADMIN_TOKEN=сюда-строку-из-openssl
+# Пусто — управление выключено, и приглашений выдать нельзя.
+
+# ——— Ограничения. Служба ходит только в свою базу и в сеть ————————————
+#
+# Не украшение: если однажды в ней найдут дыру, всё это решает, останется беда
+# внутри одной папки или нет. Каждая строка здесь стоит дешевле любой из них.
+
+# Файловая система только для чтения, кроме одной папки под базу.
+ProtectSystem=strict
+StateDirectory=financeapps
+ReadWritePaths=/var/lib/financeapps
+PrivateTmp=yes
+
+# Чужие домашние папки не видны вовсе.
+ProtectHome=yes
+
+# Повышать права некуда и нечем.
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+# Из сети — только обычные сокеты. Ни сырых пакетов, ни чего-то ещё.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressAllow=localhost
+
+# Системные вызовы — только те, что нужны обычной службе.
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

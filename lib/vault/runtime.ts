@@ -23,10 +23,12 @@
 import { DesktopStorageAdapter } from "@/lib/storage/DesktopStorageAdapter";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
 import { SyncingStorageAdapter, type Merge } from "@/lib/storage/SyncingStorageAdapter";
+import { HttpSyncTransport } from "@/lib/sync/HttpSyncTransport";
 import { mergeBooks } from "@/lib/sync/merge";
 import type { SyncTransport } from "@/lib/sync/protocol";
 import { AccountService } from "@/lib/vault/account";
 import { ConflictStore } from "@/lib/vault/conflicts";
+import { ServerAccount } from "@/lib/vault/server-account";
 
 /** Настоящее хранилище устройства — пишет и читает как есть. */
 const device = new DesktopStorageAdapter();
@@ -61,16 +63,34 @@ const merge: Merge = async (slot, mine, theirs, base) => {
   return { body: await vaultStorage.seal(report.state), differs: report.differs };
 };
 
+/** Завести запись на своём сервере, войти, выйти. */
+export const serverAccount = new ServerAccount(syncStorage);
+
 /**
  * Включает синхронизацию.
  *
- * Отдельным вызовом, а не само собой при загрузке: без сервера (этап 06.6) и
- * без входа синхронизировать не с кем, и приложение обязано работать ровно так
- * же, как работало, — местно и без сети. Пока этот вызов никто не делает,
- * слой синхронизации остаётся обычным хранилищем.
+ * Отдельным вызовом, а не само собой: без входа синхронизировать не с кем, и
+ * приложение обязано работать ровно так же, как работало, — местно и без сети.
+ * Пока этот вызов никто не делает, слой синхронизации остаётся обычным
+ * хранилищем.
  */
 export async function startSync(transport: SyncTransport): Promise<void> {
   await syncStorage.start(transport, merge);
+}
+
+/**
+ * Поднять синхронизацию, если устройство уже привязано к службе.
+ *
+ * Возвращает `false`, когда привязки нет, — и это НЕ ошибка, а обычное
+ * положение дел у человека, который сервером не пользуется. Приложение местное:
+ * отсутствие сервера не должно ни мешать открытию, ни попадать в журнал как
+ * сбой.
+ */
+export async function resumeSync(): Promise<boolean> {
+  const link = await serverAccount.link();
+  if (!link) return false;
+  await startSync(new HttpSyncTransport({ base: link.base, token: link.token }));
+  return true;
 }
 
 export function stopSync(): void {

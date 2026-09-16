@@ -1,0 +1,13 @@
+{
+  "name": "financeapps-server",
+  "private": true,
+  "version": "1.33.0",
+  "type": "module",
+  "//": "Зависимостей нет и не должно появиться: вся служба стоит на стандартной библиотеке Node. Обновление на сервере — git pull и systemctl restart, без установки пакетов.",
+  "scripts": {
+    "start": "node --experimental-strip-types src/start.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

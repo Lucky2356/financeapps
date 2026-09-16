@@ -26,7 +26,9 @@ export function useApiMutation() {
       await options?.onSuccess?.(result);
       return result;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : options?.error ?? "Что-то пошло не так");
+      toast.error(
+        error instanceof Error ? error.message : (options?.error ?? "Что-то пошло не так")
+      );
       return undefined;
     } finally {
       setPending(false);
