@@ -21,7 +21,7 @@ import type {
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
-import { stampRows, type Stamped } from "@/lib/sync/row-stamps";
+import { stampRows, trackDeletions, type Stamped, type Tombstone } from "@/lib/sync/row-stamps";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
@@ -116,7 +116,9 @@ const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+  /** Следы удалённых строк — см. lib/sync/row-stamps. */
+  deletions?: Tombstone[];
   currency: CurrencyCode;
   demoMode: boolean;
   emergencyFundMonthsTarget: number;
@@ -3469,10 +3471,13 @@ export class LocalApiClient implements ApiClient {
   private async save(state: LocalState, options: { stamp?: boolean } = {}) {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
+    const previous = await this.storedState(key);
+    const now = new Date().toISOString();
+    // Отметки и следы удалений ставятся ВМЕСТЕ и от одного сличения: строка,
+    // исчезнувшая из книги, — это то же событие, что и правка, просто с другим
+    // исходом. Разведи их по разным местам — однажды поставится одно без другого.
     const next =
-      options.stamp === false
-        ? state
-        : stampRows(state, await this.storedState(key), new Date().toISOString());
+      options.stamp === false ? state : trackDeletions(stampRows(state, previous, now), previous, now);
     await this.storage.setItem(key, next);
     this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
   }

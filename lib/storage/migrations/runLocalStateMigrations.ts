@@ -18,7 +18,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 15;
+export const LATEST_LOCAL_STATE_VERSION = 16;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -222,6 +222,20 @@ export const localStateMigrations: LocalStateMigration[] = [
     // была здесь до отметок» — и при расхождении уступает любой настоящей.
     // Дальше каждая тронутая строка отметится сама, в точке сохранения.
     migrate: (state) => ({ ...state, schemaVersion: 15 })
+  },
+  {
+    from: 15,
+    to: 16,
+    // v16 завела следы удалённых строк (deletions) — без них слияние не отличит
+    // «у них удалили» от «у нас ещё не добавили», а разница между этими двумя —
+    // это разница между «операция ушла» и «операция вернулась из могилы».
+    //
+    // Список заводится пустым, и это не забывчивость. Что человек удалял до
+    // сегодняшнего дня, книга не помнит, и сочинить это неоткуда. Пустой список
+    // читается как «про прежние удаления неизвестно ничего» — ровно так, как
+    // пустая отметка времени в v15 читается как «когда правили, неизвестно».
+    // Дальше каждое удаление оставит след само, в точке сохранения.
+    migrate: (state) => ({ ...state, deletions: [], schemaVersion: 16 })
   }
 ];
 

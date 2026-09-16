@@ -379,9 +379,27 @@ export const localStateSchema = z.object({
     z.literal(12),
     z.literal(13),
     z.literal(14),
-    z.literal(15)
+    z.literal(15),
+    z.literal(16)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
+  /**
+   * Следы удалённых строк — см. lib/sync/row-stamps.
+   *
+   * Поле обязано быть ЗДЕСЬ, а не только в типе: z.object без strict молча
+   * срезает всё, чего не знает. Забудь мы его описать — след уходил бы в
+   * небытие при каждом разборе книги, и слияние возвращало бы удалённые
+   * операции обратно, а заметить это было бы нечем.
+   */
+  deletions: z
+    .array(
+      z.object({
+        collection: z.string().min(1),
+        key: z.string().min(1),
+        deletedAt: z.string().min(1)
+      })
+    )
+    .default([]),
   // Live FX rates (RUB per 1 unit of a currency), refreshed from the CBR feed
   // and cached here so cross-currency capital is a single honest number offline.
   currencyRates: z
