@@ -944,6 +944,11 @@ const ru: Messages = {
   "imp.restoreConfirm": "Восстановить выбранный backup",
   "imp.backupIncludes":
     "Включает настройки, счета, категории, операции, бюджеты, цели, портфель и watchlist.",
+  "imp.preUpgradeTitle": "Книга до последнего обновления",
+  "imp.preUpgradeLead":
+    "Обновление перевело книгу на новый формат, и прежняя версия приложения новый формат не откроет. Эта копия — книга такой, какой она была до перевода: выгрузите её файлом, и прежняя версия примет его обычным восстановлением.",
+  "imp.preUpgradeSave": "Выгрузить файлом",
+  "imp.preUpgradeFrom": "формат",
   "imp.refTitle": "Доступные счета и категории",
   "imp.refAccounts": "Счета",
   "imp.refExpenseCats": "Категории расходов",
@@ -2851,6 +2856,11 @@ const en: Messages = {
   "imp.restoreConfirm": "Restore selected backup",
   "imp.backupIncludes":
     "Includes settings, accounts, categories, transactions, budgets, goals, portfolio and watchlist.",
+  "imp.preUpgradeTitle": "The ledger before the last update",
+  "imp.preUpgradeLead":
+    "An update moved the ledger to a new format, and the previous version of the app cannot open it. This copy is the ledger as it was before that move: save it to a file and the previous version will take it through its usual restore.",
+  "imp.preUpgradeSave": "Save to a file",
+  "imp.preUpgradeFrom": "format",
   "imp.refTitle": "Available accounts and categories",
   "imp.refAccounts": "Accounts",
   "imp.refExpenseCats": "Expense categories",

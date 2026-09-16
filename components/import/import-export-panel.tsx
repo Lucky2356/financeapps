@@ -12,10 +12,11 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import type { PreUpgradeBackup } from "@/lib/api/LocalApiClient";
 import type { ImportPageData, TransactionsPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
@@ -155,6 +156,7 @@ export function ImportExportPanel({
   const [errors, setErrors] = useState<string[]>([]);
   const [mapping, setMapping] = useState<CsvColumnMapping>(emptyMapping);
   const [restorePending, setRestorePending] = useState(false);
+  const [preUpgrade, setPreUpgrade] = useState<PreUpgradeBackup | null>(null);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [restorePayload, setRestorePayload] = useState<unknown>(null);
   const [restorePreview, setRestorePreview] = useState<BackupPreview | null>(null);
@@ -240,6 +242,41 @@ export function ImportExportPanel({
       );
       toast.success(t("imp.toast.backupSaved"));
       await reloadReferences();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("imp.toast.backupError"));
+    }
+  }
+
+  // Книга, отложенная перед переводом на новый формат. Её может не быть вовсе —
+  // и это обычное дело: большинство обновлений формат не трогают.
+  useEffect(() => {
+    let alive = true;
+    void apiClient
+      .get<PreUpgradeBackup | null>("/backup/before-upgrade")
+      .then((found) => {
+        if (alive) setPreUpgrade(found);
+      })
+      .catch(() => {
+        /* копии нет или хранилище не ответило — блока просто не будет */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function exportPreUpgrade() {
+    if (!preUpgrade) return;
+    try {
+      await fileSystem.saveTextFile(
+        `financial-assistant-before-${preUpgrade.toVersion ?? "upgrade"}.json`,
+        JSON.stringify(
+          { exportedAt: new Date().toISOString(), backup: preUpgrade.backup },
+          null,
+          2
+        ),
+        "application/json;charset=utf-8"
+      );
+      toast.success(t("imp.toast.backupSaved"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("imp.toast.backupError"));
     }
@@ -454,6 +491,29 @@ export function ImportExportPanel({
             </Dialog>
           </div>
           <p className="text-xs text-muted-foreground">{t("imp.backupIncludes")}</p>
+
+          {preUpgrade ? (
+            <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
+              <p className="text-sm font-medium">{t("imp.preUpgradeTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("imp.preUpgradeLead")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("imp.preUpgradeFrom")} {preUpgrade.fromVersion} → {preUpgrade.toVersion}
+                {preUpgrade.savedAt
+                  ? ` · ${new Date(preUpgrade.savedAt).toLocaleDateString(locale)}`
+                  : ""}
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void exportPreUpgrade()}
+                className="h-auto w-full whitespace-normal py-2 sm:w-auto"
+              >
+                <Download className="size-4" />
+                {t("imp.preUpgradeSave")}
+              </Button>
+            </div>
+          ) : null}
 
           {/* A copy is for this app; these two are for anything else — kept
                 quiet and on one line, because that is how often they are used. */}

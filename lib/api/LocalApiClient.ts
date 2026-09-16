@@ -29,6 +29,7 @@ import {
   type Tombstone
 } from "@/lib/sync/row-stamps";
 import { localStateSchema } from "@/lib/api/local/schemas";
+import { PRE_UPGRADE_SUFFIX, RESCUE_SUFFIX } from "@/lib/storage/SyncingStorageAdapter";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
@@ -114,6 +115,14 @@ import type { ProfileList, UserProfile } from "@/types/profiles";
 
 const LEGACY_STATE_KEY = "localFinanceState";
 const PROFILE_LIST_KEY = "profileList";
+
+/** Книга до перевода на новую схему — то, что отдаёт `/backup/before-upgrade`. */
+export type PreUpgradeBackup = {
+  savedAt: string | null;
+  fromVersion: number | null;
+  toVersion: number | null;
+  backup: Record<string, unknown>;
+};
 
 function profileStateKey(profileId: string): string {
   return `localFinanceState_${profileId}`;
@@ -496,6 +505,7 @@ export class LocalApiClient implements ApiClient {
         this.countingState(this.inBase(state), searchParams.get("transfers") === "1")
       )) as T;
     if (pathname === "/settings") return this.settings(state) as T;
+    if (pathname === "/backup/before-upgrade") return (await this.preUpgradeBackup()) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") {
       // The exported file records when it was made, so the stamp goes into the
@@ -3408,7 +3418,18 @@ export class LocalApiClient implements ApiClient {
     const parsed = localStateSchema.safeParse(existing);
     if (parsed.success) {
       const migrated = migrateLocalState(parsed.data);
-      if (migrated.schemaVersion !== (existing as { schemaVersion?: unknown })?.schemaVersion) {
+      const storedVersion = (existing as { schemaVersion?: unknown })?.schemaVersion;
+      if (migrated.schemaVersion !== storedVersion) {
+        // Книга сейчас будет переписана в новом виде — и это единственная
+        // секунда, когда прежняя ещё существует. Отложить её надо ЗДЕСЬ:
+        // готовая выгрузка копии (`/backup`) читает книгу через это же место и
+        // получит уже переведённую, то есть поймать прежнюю не может в принципе.
+        await this.keepPreUpgradeCopy(
+          key,
+          existing,
+          typeof storedVersion === "number" ? storedVersion : 1,
+          migrated.schemaVersion
+        );
         await this.storage.setItem(key, migrated);
       }
       this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(migrated)) };
@@ -3453,13 +3474,83 @@ export class LocalApiClient implements ApiClient {
    * Written once: a second failure must not overwrite the first rescue, which
    * is the one closest to the moment things went wrong.
    */
+  /**
+   * Книга, какой она была до перевода на новую схему, — или ничего, если
+   * переводов ещё не было.
+   *
+   * Отдаётся в том же виде, что и обычная выгрузка, и это главное: в ней лежит
+   * СТАРАЯ схема, и прежняя версия приложения примет такой файл своим обычным
+   * «восстановить из копии». Ради этой одной возможности копия и держится.
+   */
+  private async preUpgradeBackup(): Promise<PreUpgradeBackup | null> {
+    const profileId = await this.getActiveProfileId();
+    const stored = await this.storage.getItem<unknown>(
+      `${profileStateKey(profileId)}${PRE_UPGRADE_SUFFIX}`
+    );
+    if (!stored || typeof stored !== "object") return null;
+
+    const record = stored as Record<string, unknown>;
+    if (!record.document || typeof record.document !== "object") return null;
+
+    // Ключ помощника из файла убирается — по той же причине, что и в обычной
+    // выгрузке: файл уходит с машины, а ключ принадлежит машине.
+    const document = { ...(record.document as Record<string, unknown>) };
+    delete document.aiApiKey;
+
+    return {
+      savedAt: typeof record.savedAt === "string" ? record.savedAt : null,
+      fromVersion: typeof record.fromVersion === "number" ? record.fromVersion : null,
+      toVersion: typeof record.toVersion === "number" ? record.toVersion : null,
+      backup: document
+    };
+  }
+
   private async keepRescueCopy(key: string, document: unknown) {
-    const rescueKey = `${key}:rescue`;
+    const rescueKey = `${key}${RESCUE_SUFFIX}`;
     try {
       if ((await this.storage.getItem<unknown>(rescueKey)) == null)
         await this.storage.setItem(rescueKey, document);
     } catch {
       /* storage refused the copy — the original is still where it was */
+    }
+  }
+
+  /**
+   * Откладывает книгу такой, какой она была до перевода на новую схему.
+   *
+   * Схемы едут только вперёд, и миграции необратимы: «сложить два поля в одно»
+   * нельзя разложить обратно, потому что раскладывать уже нечего. Значит
+   * единственный способ вернуться — сохранить то, что было, пока оно есть.
+   *
+   * Нужно это ровно в одном случае, зато в важном: человек поставил себе
+   * пробную сборку раньше остальных — а ради этого вся обкатка и заводилась, —
+   * и она оказалась плохой. Без копии откат означает «книга не открывается
+   * прежней версией»; с копией — «выгрузил файл, поставил прежнюю, развернул».
+   *
+   * Копия ОДНА и заменяется каждым переводом. Хранить все прежние ни к чему:
+   * вернуться можно на шаг назад, а не на пять — приложения, читающего схему
+   * пятилетней давности, всё равно уже нет, — и ряд копий рос бы без конца,
+   * удваивая книгу на каждом обновлении.
+   */
+  private async keepPreUpgradeCopy(
+    key: string,
+    document: unknown,
+    fromVersion: number,
+    toVersion: number
+  ) {
+    try {
+      await this.storage.setItem(`${key}${PRE_UPGRADE_SUFFIX}`, {
+        savedAt: new Date().toISOString(),
+        fromVersion,
+        toVersion,
+        document
+      });
+    } catch {
+      // Хранилище отказало — скорее всего кончилось место. Перевод всё равно
+      // продолжается: отказаться от него значило бы оставить человека с
+      // приложением, которое не открывается вовсе. Но сказать правду стоит:
+      // защиты на этот раз не будет, и узнает об этом только тот, кто читает
+      // этот комментарий. Дверь в настройках покажет, что копии нет.
     }
   }
 
