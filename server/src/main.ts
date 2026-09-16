@@ -28,6 +28,27 @@ import { EventBus } from "./events.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import { listSlots, readSlot, usageOf, writeSlot, MAX_BODY_BYTES } from "./vault.ts";
 
+/**
+ * Готовит пришедшее снаружи к записи в журнал.
+ *
+ * Журнал службы — это строки, разделённые переводом строки, и читает их
+ * человек, разбирающий поломку. Положи туда путь запроса как есть, и кто угодно
+ * допишет в журнал СВОИ строки: перевод строки в адресе — и рядом с настоящими
+ * записями появляются выдуманные, неотличимые от них. Это не порча данных, это
+ * порча того единственного, по чему разбирают случившееся.
+ *
+ * Поэтому: только видимые знаки, всё прочее — точкой, и длина ограничена, чтобы
+ * одним запросом нельзя было залить журнал целиком.
+ */
+export function forLog(value: string | undefined): string {
+  if (!value) return "\u2014";
+  // Разбор по знакам, а не по байтам: обрезка посреди суррогатной пары
+  // оставила бы в журнале половину знака.
+  return [...value.slice(0, 300)]
+    .map((sign) => (sign >= " " && sign !== "\u007f" ? sign : "."))
+    .join("");
+}
+
 export type AppOptions = {
   /** Путь к базе. ":memory:" — для проверок. */
   dbPath: string;
@@ -235,8 +256,9 @@ export function createApp(options: AppOptions) {
     route(req, res).catch((error: unknown) => {
       if (error instanceof AuthError) return send(res, error.status, { error: error.message });
       // Наружу — без подробностей: текст ошибки службы человеку не поможет, а
-      // нападающему расскажет об её устройстве. В журнал — полностью.
-      console.error("сбой запроса", req.method, req.url, error);
+      // нападающему расскажет об её устройстве. В журнал — полностью, но путь
+      // запроса приходит СНАРУЖИ, и класть его в журнал как есть нельзя.
+      console.error("сбой запроса", forLog(req.method), forLog(req.url), error);
       send(res, 500, { error: "Внутренняя ошибка." });
     });
   });

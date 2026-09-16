@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { createApp, type App } from "../src/main.ts";
+import { createApp, forLog, type App } from "../src/main.ts";
 
 // Только латиница: заголовки HTTP не переносят ничего сверх Latin-1, и
 // кириллический пропуск не отправить в принципе. То же и на живой машине —
@@ -79,6 +79,28 @@ describe("служба", () => {
 
   afterEach(async () => {
     await app.stop();
+  });
+
+  describe("журнал", () => {
+    it("пришедшее снаружи не дописывает в журнал своих строк", () => {
+      // Журнал — строки, разделённые переводом строки, и читает их человек,
+      // разбирающий поломку. Пропусти мы перевод строки из адреса, рядом с
+      // настоящими записями появились бы выдуманные, неотличимые от них.
+      const forged = "/vault/книга\nсбой запроса GET /всё-сломалось";
+      const safe = forLog(forged);
+
+      assert.ok(!safe.includes("\n"));
+      assert.ok(!safe.includes("\r"));
+      assert.ok(safe.startsWith("/vault/книга."));
+    });
+
+    it("одним запросом журнал не залить", () => {
+      assert.ok(forLog("а".repeat(100000)).length <= 300);
+    });
+
+    it("отсутствие значения не превращается в «undefined»", () => {
+      assert.equal(forLog(undefined), "—");
+    });
   });
 
   describe("живость", () => {
