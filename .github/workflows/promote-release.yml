@@ -1,0 +1,116 @@
+name: Promote Release
+
+# Делает предварительный выпуск общим.
+#
+# Зачем отдельное действие, а не галочка руками на странице выпуска: галочка
+# ничего не проверяет. Здесь же перед тем, как выпуск станет виден всем, ещё раз
+# спрашиваются те же ворота, что и при сборке, — манифест на месте, файлы, на
+# которые он указывает, отдаются. Разница в том, что теперь они спрашиваются у
+# ОПУБЛИКОВАННОГО выпуска, спустя дни после сборки: файл мог не долиться,
+# APK — не доехать, кто-то мог подчистить вложения руками.
+#
+# Ничего не пересобирается. Наружу уходят ровно те байты, которые вы проверяли
+# на себе. Пересборка «из того же кода» дала бы другой установщик с другой
+# подписью — и проверенным он был бы только на словах.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Какой выпуск сделать общим, напр. v1.33.0"
+        required: true
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Promote prerelease to latest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      # Та же проверка формы, что и при выпуске, и по той же причине: лишний
+      # пробел из буфера обмена не должен выясниться на середине.
+      - name: Resolve tag
+        id: rel
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          ver="$(printf '%s' "$INPUT_VERSION" | tr -d '[:space:]')"
+          if ! printf '%s' "$ver" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$'; then
+            echo "::error::Некорректная версия '$INPUT_VERSION'. Введите vX.Y.Z, например v1.33.0"
+            exit 1
+          fi
+          echo "tag=$ver" >> "$GITHUB_OUTPUT"
+          echo "Продвигаем: $ver"
+
+      # ВОРОТА. Выпуск должен существовать и быть именно предварительным.
+      #
+      # Отказ на «уже общем» — не придирка: если выпуск уже виден всем, значит
+      # его кто-то продвинул раньше, и повторный запуск означает, что двое
+      # считают себя единственным выпускающим. Молча согласиться здесь — потерять
+      # единственный признак того, что порядок нарушен.
+      - name: Check the release is a prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          state="$(gh release view "$TAG" --json isDraft,isPrerelease -q '.isDraft,.isPrerelease' | paste -sd, -)"
+          echo "черновик,предварительный = $state"
+          case "$state" in
+            false,true) echo "Выпуск предварительный — можно продвигать." ;;
+            true,*) echo "::error::$TAG — черновик. Его сначала надо опубликовать."; exit 1 ;;
+            false,false) echo "::error::$TAG уже общий. Продвигать нечего."; exit 1 ;;
+            *) echo "::error::Не понял состояние выпуска $TAG: $state"; exit 1 ;;
+          esac
+
+      # ВОРОТА. Манифест и файлы, на которые он указывает, спрашиваются по
+      # ЯВНОМУ тегу, а не по «последнему»: последний сейчас — прошлый выпуск, и
+      # проверка по нему прошла бы зелёной, не проверив ничего.
+      - name: Check the manifest and its files the way an installed copy does
+        env:
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          node scripts/verify-latest-json.mjs "$base/latest.json" "$TAG"
+          node scripts/verify-release-assets.mjs "$base/latest.json"
+
+      # С этой секунды выпуск виден всем: обновлятор на компьютере и проверка на
+      # телефоне спрашивают «последний», и ответом становится он.
+      - name: Make it the latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --prerelease=false --latest
+          echo "### $TAG теперь общий выпуск" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Обновление увидят все: и обновлятор на ПК, и проверка на телефоне." >> "$GITHUB_STEP_SUMMARY"
+
+      # Не доверяем собственному предыдущему шагу: спрашиваем у GitHub то же
+      # самое, что спросит обновлятор, и сверяем ответ с тем, что продвигали.
+      - name: Confirm the updater now sees it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rel.outputs.tag }}
+        run: |
+          set -euo pipefail
+          latest="$(gh release view --json tagName -q .tagName)"
+          echo "GitHub считает последним: $latest"
+          if [ "$latest" != "$TAG" ]; then
+            echo "::error::Продвинули $TAG, а последним числится $latest."
+            exit 1
+          fi
