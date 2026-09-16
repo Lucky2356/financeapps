@@ -262,7 +262,12 @@ export function createApp(options: AppOptions) {
       return send(res, 204);
     }
 
-    if (path === "/events" && method === "GET") return bus.attach(who.personId, res);
+    if (path === "/events" && method === "GET") {
+      // Отдельно от строки на «finish»: та придёт только при разрыве, а знать,
+      // что устройство на связи, нужно именно сейчас.
+      console.log("GET /events → поток открыт");
+      return bus.attach(who.personId, res);
+    }
 
     if (path === "/vault" && method === "GET") {
       return send(res, 200, { slots: listSlots(db, who.personId) });
@@ -295,7 +300,49 @@ export function createApp(options: AppOptions) {
     return send(res, 404, { error: "Нет такой ручки." });
   }
 
+  /**
+   * Одна строка в журнал на каждый запрос.
+   *
+   * До этого служба писала только о том, как поднялась, и о сбоях. Молчащий
+   * журнал при этом выглядит ровно так же, как журнал службы, к которой никто
+   * не обращался, — и различить «устройство не пришло» и «пришло и получило
+   * отказ» по нему нельзя. Вживую это стоило вечера: человек прислал журнал, в
+   * котором были только строки запуска, и он не значил ничего.
+   *
+   * В строке нет ничего, пришедшего снаружи: вид ручки и метод выбираются из
+   * постоянных наборов (см. whichRoute/whichMethod выше), код ответа и время —
+   * числа. Дописать в журнал свою строку переводом строки в адресе нельзя.
+   *
+   * Два конца, а не один. Обычный ответ заканчивается res.end(), и это
+   * «finish» — там есть код ответа. Поток событий не заканчивается никогда:
+   * его рвут с той стороны, end() не зовёт никто, и «finish» не приходит. Без
+   * второго конца самые долгие соединения — как раз те, из-за которых и лезут
+   * в журнал, — не оставляли бы следа вовсе.
+   *
+   * Проверка живости молчит: Caddy и следилки дёргают её раз в несколько
+   * секунд, и в журнале от неё остаётся только шум, из-за которого настоящие
+   * запросы приходится выискивать.
+   */
+  function note(req: IncomingMessage, res: ServerResponse): void {
+    const route = whichRoute(req.url);
+    if (route === "/health") return;
+
+    const started = Date.now();
+    let said = false;
+    function say(outcome: string): void {
+      // «close» приходит и после обычного «finish» — иначе каждый запрос
+      // попадал бы в журнал дважды, вторым разом с неверным исходом.
+      if (said) return;
+      said = true;
+      console.log(`${whichMethod(req.method)} ${route} → ${outcome} за ${Date.now() - started} мс`);
+    }
+
+    res.on("finish", () => say(String(res.statusCode)));
+    res.on("close", () => say("связь оборвана"));
+  }
+
   const server = createServer((req, res) => {
+    note(req, res);
     route(req, res).catch((error: unknown) => {
       if (error instanceof AuthError) return send(res, error.status, { error: error.message });
       // Наружу — без подробностей: текст ошибки службы человеку не поможет, а
