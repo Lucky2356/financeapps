@@ -10,6 +10,7 @@ import { HttpSyncTransport } from "@/lib/sync/HttpSyncTransport";
 import { mergeBooks } from "@/lib/sync/merge";
 import { isOffline } from "@/lib/sync/protocol";
 import { createVault } from "@/lib/sync/vault-crypto";
+import { AccountService } from "@/lib/vault/account";
 import { ServerAccount, SERVER_KEY } from "@/lib/vault/server-account";
 import { createApp, type App } from "../server/src/main.ts";
 
@@ -75,6 +76,47 @@ async function signUp(login: string) {
   return { token: session.token, bookKey };
 }
 
+/**
+ * Устройство, которое заводит книгу САМО — паролем, а не готовым ключом.
+ *
+ * Отличие от Device выше принципиальное, и именно в него всё и упёрлось.
+ * Device получает ключ книги в конструкторе, то есть уже минуя вход: так
+ * проверка «два устройства сходятся» обходила ровно тот шаг, который сломался.
+ * Здесь ключ берётся оттуда, откуда его берёт человек, — из шкатулки, поднятой
+ * паролем.
+ */
+class Owner {
+  readonly disk = new MemoryStorageAdapter();
+  readonly sync = new SyncingStorageAdapter(this.disk);
+  readonly vault = new EncryptingStorageAdapter(this.sync);
+  readonly account = new AccountService(this.sync, this.vault);
+  readonly server = new ServerAccount(this.sync);
+
+  get app(): LocalApiClient {
+    return new LocalApiClient(this.vault);
+  }
+
+  merge: Merge = async (_slot, mine, theirs, ancestor) => {
+    const ours = mine ? await this.vault.open<Record<string, unknown>>(mine) : {};
+    const incoming = await this.vault.open<Record<string, unknown>>(theirs);
+    const base = ancestor ? await this.vault.open<Record<string, unknown>>(ancestor) : null;
+    const report = mergeBooks(base, ours, incoming);
+    return { body: await this.vault.seal(report.state), differs: report.differs };
+  };
+
+  /** То же, что делает resumeSync в приложении. */
+  async resume(): Promise<boolean> {
+    const link = await this.server.link();
+    if (!link) return false;
+    await this.sync.start(
+      new HttpSyncTransport({ base: link.base, token: link.token }),
+      this.merge
+    );
+    await this.sync.flush();
+    return true;
+  }
+}
+
 describe("приложение через службу", () => {
   beforeEach(async () => {
     app = createApp({ dbPath: ":memory:", adminToken: ADMIN });
@@ -111,6 +153,65 @@ describe("приложение через службу", () => {
     await desktop.sync.flush();
 
     const seen = await desktop.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    expect(seen.accounts.map((row) => row.name)).toContain("Карта");
+  });
+
+  it("второе устройство входит паролем и получает книгу первого", async () => {
+    // Дорога целиком и ровно та, по которой идёт человек: первый компьютер
+    // регистрируется по приглашению и пишет операцию, второе устройство входит
+    // ТЕМ ЖЕ именем и паролем с пустым приглашением — и должно увидеть её.
+    //
+    // Проверка «два устройства сходятся» выше этого не ловит и поймать не может:
+    // она выдаёт второму устройству готовый ключ книги, то есть начинает с того
+    // места, до которого человек как раз и не доходил.
+    //
+    // Так на живой паре устройств и вышло. Сначала второе устройство выбрасывало
+    // шкатулку со службы и не могло расшифровать книгу. Потом — отказывалось
+    // подключаться, считая записями категории по умолчанию. Потом — сносило
+    // собственный билет, записанный секундой раньше, и синхронизация не
+    // поднималась вовсе. Каждый раз экран говорил «подключено», и каждый раз не
+    // происходило ничего. Все три ломают эту проверку.
+    const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+    const password = "пароль-книги";
+
+    const pc = new Owner();
+    await pc.account.create(password, FAST);
+    await pc.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
+
+    const vault = await pc.account.vault();
+    await pc.server.register({
+      base,
+      code,
+      login: "lucky",
+      password,
+      vault: vault!,
+      device: "компьютер"
+    });
+    expect(await pc.resume()).toBe(true);
+
+    // Второе устройство: свой первый запуск завёл СВОЙ ключ книги.
+    const phone = new Owner();
+    await phone.account.create(password, FAST);
+    // Первый запуск ОТКРЫВАЕТ приложение — и оно заводит книгу с категориями по
+    // умолчанию. Без этой строки телефон в проверке чище любого настоящего, и
+    // сторож «на устройстве уже есть книга» здесь не срабатывает никогда: ровно
+    // так 1.35.0 и уехала зелёной.
+    await phone.app.get("/accounts");
+
+    const joined = await phone.server.signIn({
+      base,
+      login: "lucky",
+      password,
+      device: "телефон"
+    });
+    await phone.account.adopt(joined.vault, password);
+
+    // Билет обязан пережить приём шкатулки — иначе поднимать синхронизацию нечем.
+    expect(await phone.server.link()).not.toBeNull();
+
+    expect(await phone.resume()).toBe(true);
+
+    const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
     expect(seen.accounts.map((row) => row.name)).toContain("Карта");
   });
 
