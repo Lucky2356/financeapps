@@ -454,6 +454,21 @@ export class LocalApiClient implements ApiClient {
   }
 
   /**
+   * Книгу подменили ПОД клиентом — забыть запомненное.
+   *
+   * Зовёт это синхронизация: она пишет слитую книгу в хранилище напрямую, ниже
+   * этого слоя, и о её записи клиент узнать ниоткуда не может. Кэш при этом
+   * держит книгу, прочитанную до слияния, и следующее чтение отдало бы вчерашние
+   * числа — причём отдало бы их и после того, как экран честно перечитал себя.
+   *
+   * Отдельным именем, а не через invalidateStateCache: тот приватный и зовётся
+   * там, где книгу меняет сам клиент. Здесь случай другой — снаружи и без него.
+   */
+  forgetCachedState(): void {
+    this.invalidateStateCache();
+  }
+
+  /**
    * Every change runs to completion before the next one starts.
    *
    * A change is read-modify-write over the WHOLE state, saved as one blob, so

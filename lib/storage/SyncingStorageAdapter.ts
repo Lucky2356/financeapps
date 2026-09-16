@@ -269,6 +269,10 @@ export class SyncingStorageAdapter implements StorageAdapter {
         await this.inner.setItem(key, merged.body);
         this.writes += 1;
         this.outbox.add(key);
+        // Записанное НЕ равно тому, что приложение просило записать: сюда
+        // подмешались строки с другого устройства. Промолчи мы здесь, экран
+        // показал бы свою правку без них, и узнать об этом ему было бы неоткуда.
+        this.announce(key);
         void this.pump();
         return;
       }
@@ -394,6 +398,11 @@ export class SyncingStorageAdapter implements StorageAdapter {
       body,
       base: pending ? pending.base : (this.lastRead.get(slot) ?? before)
     });
+    this.announce(slot);
+  }
+
+  /** Книга на диске изменилась не рукой приложения. */
+  private announce(slot: SlotName): void {
     for (const listener of this.appliedListeners) listener(slot);
   }
 
