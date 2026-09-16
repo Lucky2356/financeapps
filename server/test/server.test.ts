@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { createApp, forLog, type App } from "../src/main.ts";
+import { createApp, whichMethod, whichRoute, type App } from "../src/main.ts";
 
 // Только латиница: заголовки HTTP не переносят ничего сверх Latin-1, и
 // кириллический пропуск не отправить в принципе. То же и на живой машине —
@@ -84,40 +84,41 @@ describe("служба", () => {
   describe("журнал", () => {
     it("пришедшее снаружи не дописывает в журнал своих строк", () => {
       // Журнал — строки, разделённые переводом строки, и читает их человек,
-      // разбирающий поломку. Пропусти мы перевод строки из адреса, рядом с
-      // настоящими записями появились бы выдуманные, неотличимые от них.
+      // разбирающий поломку. Уйди туда адрес как есть, рядом с настоящими
+      // записями появились бы выдуманные, неотличимые от них.
       const forged = "/vault/книга\nсбой запроса GET /всё-сломалось";
-      const safe = forLog(forged);
+      const said = whichRoute(forged);
 
-      assert.ok(!safe.includes("\n"));
-      assert.ok(!safe.includes("\r"));
-      assert.ok(safe.startsWith("/vault/книга."));
+      assert.ok(!said.includes("\n"));
+      assert.ok(!said.includes("сломалось"));
+      assert.equal(said, "/vault/…");
     });
 
-    it("одним запросом журнал не залить", () => {
-      assert.ok(forLog("а".repeat(100000)).length <= 300);
+    it("имя ячейки в журнал не попадает", () => {
+      // Имена ячеек придумывает хозяин книги — это названия его книг. Журнал
+      // читает тот, кто держит машину, и для разбора поломки имя не нужно:
+      // путь в коде у всех ячеек один.
+      assert.equal(whichRoute("/vault/развод"), "/vault/…");
+      assert.equal(whichRoute("/devices/телефон%20Пети"), "/devices/…");
     });
 
-    it("обрезка не разрубает знак пополам", () => {
-      // Знаки вне основного набора — эмодзи, редкие письменности — занимают в
-      // строке две единицы кода. Режь мы по единицам, на границе осталась бы
-      // половина знака: в журнале она выглядит как «\ufffd», а в файле портит
-      // саму строку. Здесь на границу нарочно поставлена пара: один обычный
-      // знак впереди сдвигает её так, чтобы разрез пришёлся ровно на середину.
-      const line = "a" + "\u{1f600}".repeat(400);
-      const safe = forLog(line);
-
-      assert.ok(
-        ![...safe].some((sign) => {
-          const code = sign.codePointAt(0) ?? 0;
-          return code >= 0xd800 && code <= 0xdfff;
-        }),
-        "в журнал попала половина знака"
-      );
+    it("известная ручка называется по имени — иначе разбирать нечего", () => {
+      assert.equal(whichRoute("/auth/login"), "/auth/login");
+      assert.equal(whichRoute("/vault"), "/vault");
+      assert.equal(whichRoute("/events?с=5"), "/events");
     });
 
-    it("отсутствие значения не превращается в «undefined»", () => {
-      assert.equal(forLog(undefined), "—");
+    it("незнакомое не пересказывается, а называется незнакомым", () => {
+      assert.equal(whichRoute("/чего-нибудь-этакого"), "неизвестная ручка");
+      // Запрос без адреса — тоже «незнакомое»: корень служба не обслуживает.
+      assert.equal(whichRoute(undefined), "неизвестная ручка");
+    });
+
+    it("способ запроса тоже из набора, а не какой прислали", () => {
+      // Способ приходит снаружи ровно так же, как адрес.
+      assert.equal(whichMethod("PUT"), "PUT");
+      assert.equal(whichMethod("ВЗЯТЬ\nподделка"), "?");
+      assert.equal(whichMethod(undefined), "?");
     });
   });
 
