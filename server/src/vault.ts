@@ -38,6 +38,23 @@ export function readSlot(db: DatabaseSync, personId: string, slot: string): Snap
   };
 }
 
+/**
+ * Перечень ячеек человека — без содержимого.
+ *
+ * Нужен свежему устройству: иначе оно не знает, что спрашивать, и вторая книга
+ * (второй профиль) не доедет до него никогда.
+ */
+export function listSlots(
+  db: DatabaseSync,
+  personId: string
+): Array<{ slot: string; version: number; updatedAt: string }> {
+  return db
+    .prepare(
+      "select slot, version, updated_at as updatedAt from books where person_id = ? order by slot"
+    )
+    .all<{ slot: string; version: number; updatedAt: string }>(personId);
+}
+
 export type PutOutcome =
   | { ok: true; version: number; updatedAt: string }
   | { ok: false; reason: "stale"; current: Snapshot };

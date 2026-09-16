@@ -44,6 +44,13 @@ export type SlotSnapshot = {
   updatedAt: string | null;
 };
 
+/** Ячейка в перечне: без содержимого, только имя и версия. */
+export type SlotSummary = {
+  slot: SlotName;
+  version: number;
+  updatedAt: string | null;
+};
+
 /** Запрос на запись: что кладём и поверх какой версии. */
 export type PutRequest = {
   /**
@@ -92,6 +99,16 @@ export type SlotChanged = {
  * попросту нет, и притворяться, что она есть, незачем.
  */
 export interface SyncTransport {
+  /**
+   * Какие ячейки вообще есть у этого человека.
+   *
+   * Без этого свежее устройство не знает, что спрашивать. С одним профилем
+   * незаметно — его ячейка называется так же, как на первом устройстве, и
+   * находится сама; а вот второй и третий профили не доехали бы никогда, и
+   * человек увидел бы, что часть его книг просто пропала при переезде.
+   */
+  list(): Promise<SlotSummary[]>;
+
   /** Что лежит в ячейке сейчас. */
   pull(slot: SlotName): Promise<SlotSnapshot>;
 
@@ -131,6 +148,8 @@ export function isOffline(error: unknown): boolean {
 
 /** Ручки службы — чтобы 06.6 писалась по этому файлу, а не по памяти. */
 export const ROUTES = {
+  /** GET → { slots: SlotSummary[] } */
+  slots: "/vault",
   /** GET → SlotSnapshot */
   slot: (slot: SlotName) => `/vault/${encodeURIComponent(slot)}`,
   /** PUT PutRequest → PutResult (отказ отдаётся кодом 409, а не 200). */

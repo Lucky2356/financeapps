@@ -18,6 +18,7 @@ import {
   type SlotChanged,
   type SlotName,
   type SlotSnapshot,
+  type SlotSummary,
   type SyncTransport
 } from "@/lib/sync/protocol";
 
@@ -59,6 +60,15 @@ export class FakeSyncServer implements SyncTransport {
 
   private guard(): void {
     if (!this.online) throw new OfflineError();
+  }
+
+  async list(): Promise<SlotSummary[]> {
+    this.guard();
+    return [...this.cells.entries()].map(([slot, cell]) => ({
+      slot,
+      version: cell.version,
+      updatedAt: cell.updatedAt
+    }));
   }
 
   async pull(slot: SlotName): Promise<SlotSnapshot> {

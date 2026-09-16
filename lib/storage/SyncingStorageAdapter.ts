@@ -30,11 +30,7 @@
 // снаружи (см. lib/vault/runtime.ts) — тем, у кого ключ есть.
 
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
-import {
-  isOffline,
-  type SlotName,
-  type SyncTransport
-} from "@/lib/sync/protocol";
+import { isOffline, type SlotName, type SyncTransport } from "@/lib/sync/protocol";
 import type { SealedBook } from "@/lib/sync/vault-crypto";
 
 /** Где лежат номера версий ячеек. Содержимого книги здесь нет — только числа. */
@@ -154,6 +150,15 @@ export class SyncingStorageAdapter implements StorageAdapter {
 
   private versions: Record<SlotName, number> = {};
   private loaded = false;
+  /**
+   * Надо ли спросить у сервера перечень ячеек.
+   *
+   * Без перечня свежее устройство знает только про те ячейки, которые уже
+   * завело у себя, — то есть второй и третий профили не доехали бы до него
+   * никогда, и человек увидел бы, что часть книг пропала при переезде.
+   */
+  private askForSlots = false;
+
   /** Прогонка, идущая прямо сейчас. Второй такой же не заводится. */
   private running: Promise<void> | null = null;
   private attempt = 0;
@@ -306,11 +311,17 @@ export class SyncingStorageAdapter implements StorageAdapter {
       if (syncableKey(slot)) this.inbox.add(slot);
     }
 
-    await this.pump();
+    // Спросить сервер, что у него вообще есть, — но НЕ здесь, а в очереди.
+    // Запуск не имеет права ждать сеть: сервер, который отвечает не сразу или
+    // не отвечает вовсе, подвесил бы открытие приложения, а оно местное и
+    // обязано открываться всегда.
+    this.askForSlots = true;
+    void this.pump();
   }
 
   /** Отключает провод. Написанное остаётся на устройстве, как и было. */
   stop(): void {
+    this.askForSlots = false;
     this.unwatch?.();
     this.unwatch = null;
     this.transport = null;
@@ -401,6 +412,14 @@ export class SyncingStorageAdapter implements StorageAdapter {
 
   private async drain(): Promise<void> {
     try {
+      if (this.askForSlots && this.transport) {
+        for (const summary of await this.transport.list()) {
+          if (syncableKey(summary.slot)) this.inbox.add(summary.slot);
+        }
+        // Спрошено. Не вышло — флаг остаётся, и следующий заход спросит снова.
+        this.askForSlots = false;
+      }
+
       // По одной ячейке за раз, и убираем её из очереди ТОЛЬКО после успеха.
       // Возьми мы всю очередь списком и очисти заранее — первый же обрыв связи
       // посреди списка унёс бы с собой всё, что стояло за ним, и отправлять

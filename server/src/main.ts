@@ -26,7 +26,7 @@ import {
 import { openDatabase } from "./db.ts";
 import { EventBus } from "./events.ts";
 import { RateLimiter } from "./rate-limit.ts";
-import { readSlot, usageOf, writeSlot, MAX_BODY_BYTES } from "./vault.ts";
+import { listSlots, readSlot, usageOf, writeSlot, MAX_BODY_BYTES } from "./vault.ts";
 
 export type AppOptions = {
   /** Путь к базе. ":memory:" — для проверок. */
@@ -199,6 +199,10 @@ export function createApp(options: AppOptions) {
     }
 
     if (path === "/events" && method === "GET") return bus.attach(who.personId, res);
+
+    if (path === "/vault" && method === "GET") {
+      return send(res, 200, { slots: listSlots(db, who.personId) });
+    }
 
     if (path.startsWith("/vault/")) {
       const slot = decodeURIComponent(path.slice("/vault/".length));
