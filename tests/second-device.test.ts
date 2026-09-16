@@ -122,6 +122,32 @@ describe("второе устройство принимает учётную з
     expect(book.categories.length).toBeGreaterThan(0);
   });
 
+  it("путь, который советует само сообщение об отказе, работает", async () => {
+    // Отказ говорит: выгрузите копию, очистите данные в настройках, подключитесь
+    // заново. Это единственное, что человек может сделать, упёршись в него, —
+    // и до сих пор эту дорогу не проверял никто. Стоит ей однажды перестать
+    // работать, и отказ превращается в тупик: приложение советует то, что не
+    // помогает.
+    //
+    // Переустановка тут НЕ годится и годиться не может: она заводит книгу
+    // заново, вместе с категориями по умолчанию. Помогает именно очистка
+    // изнутри приложения — она заводит книгу вообще пустой.
+    const pc = device();
+    await pc.account.create(PASSWORD, FAST);
+    const fromServer = await pc.account.vault();
+
+    const phone = device();
+    await phone.account.create("свой-пароль", FAST);
+    const app = new LocalApiClient(phone.sealed);
+    await app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 12000 });
+
+    await expect(phone.account.adopt(fromServer!, PASSWORD)).rejects.toThrow(/резервную копию/);
+
+    await app.delete("/storage/clear");
+
+    await expect(phone.account.adopt(fromServer!, PASSWORD)).resolves.toBeUndefined();
+  });
+
   it("прежний ключ с устройства уходит, а не остаётся отпирать пустоту", async () => {
     // Пометка «не спрашивать» помнит ключ. Останься там прежний — следующий
     // запуск отпер бы им книгу с сервера, то есть не отпер бы ничего.
