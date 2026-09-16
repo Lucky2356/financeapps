@@ -65,6 +65,29 @@ async function signUp(login: string, secret = "секрет-входа") {
   return entered.body as { token: string; personId: string; deviceId: string; vault: unknown };
 }
 
+/**
+ * Что служба сказала в журнал, пока шла работа.
+ *
+ * Строку пишет обработчик «finish», а он срабатывает на стороне службы — не
+ * обязательно раньше, чем fetch на стороне проверки дочитает ответ. Поэтому
+ * не «подождать 20 мс на удачу», а дождаться первой строки: проверка, которая
+ * иногда успевает, а иногда нет, хуже отсутствующей.
+ */
+async function captured(work: () => Promise<unknown>): Promise<string[]> {
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
+  try {
+    await work();
+    for (let tick = 0; tick < 200 && lines.length === 0; tick += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  } finally {
+    console.log = original;
+  }
+  return lines;
+}
+
 describe("служба", () => {
   // Служба поднимается заново на каждую проверку. Дороже, чем чистить базу
   // между ними, и честнее: счётчики частоты живут в памяти службы, и проверка,
@@ -119,6 +142,49 @@ describe("служба", () => {
       assert.equal(whichMethod("PUT"), "PUT");
       assert.equal(whichMethod("ВЗЯТЬ\nподделка"), "?");
       assert.equal(whichMethod(undefined), "?");
+    });
+
+    it("каждый запрос оставляет строку", async () => {
+      // Раньше служба писала только о запуске и о сбоях. Молчащий журнал
+      // выглядел ровно так же, как журнал службы, к которой никто не
+      // обращался, — и «устройство не пришло» от «пришло и получило отказ» по
+      // нему было не отличить. Разбирать по такому журналу нечего.
+      const person = await signUp("варя");
+      const lines = await captured(() => call("/vault", { token: person.token }));
+
+      assert.deepEqual(lines.length, 1);
+      assert.match(lines[0], /^GET \/vault → 200 за \d+ мс$/);
+    });
+
+    it("отказ виден в журнале так же, как успех", async () => {
+      // Отказ — это как раз то, за чем в журнал и лезут.
+      const lines = await captured(() => call("/vault"));
+
+      assert.match(lines[0], /^GET \/vault → 401 за \d+ мс$/);
+    });
+
+    it("имя ячейки не попадает в журнал и из живого запроса", async () => {
+      // То же, что проверено выше на самой whichRoute, — но по настоящему
+      // запросу: сойди эти два пути, проверка выше осталась бы зелёной.
+      const person = await signUp("петя");
+      const lines = await captured(() =>
+        call(`/vault/${encodeURIComponent("развод")}`, { token: person.token })
+      );
+
+      assert.ok(!lines[0].includes("развод"));
+      assert.match(lines[0], /^GET \/vault\/… → 200 за \d+ мс$/);
+    });
+
+    it("проверка живости молчит — иначе она одна и заполнит журнал", async () => {
+      // Caddy и следилки дёргают её раз в несколько секунд.
+      const lines = await captured(async () => {
+        await call("/health");
+        await call("/health");
+        await call("/vault");
+      });
+
+      assert.deepEqual(lines.length, 1);
+      assert.match(lines[0], /\/vault → 401/);
     });
   });
 
