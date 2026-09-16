@@ -40,6 +40,11 @@ hand: after installing a release, open the app once and check the four seams.
 - Export a backup — the save dialog opens and the file appears where it was put.
 - Open the releases link from settings — the browser opens on the pinned URL.
 - Check for updates — the answer is "you are up to date", not an error.
+- **Подключиться к своей службе** (Настройки → Свой сервер) — связь
+  устанавливается, а не «нет связи». Это и есть проверка того, что политика
+  безопасности пропускает запросы к чужому домену: список разрешённых адресов
+  зашит в сборку, а адрес службы называется во время работы, и разойтись они
+  могут только здесь.
 
 Five minutes, and it covers precisely what the suite cannot reach.
 

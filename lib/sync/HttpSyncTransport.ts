@@ -25,6 +25,7 @@ import {
   type SlotSummary,
   type SyncTransport
 } from "@/lib/sync/protocol";
+import { shellFetch } from "@/lib/sync/shell-fetch";
 
 /** Сервер ответил отказом, который повторять бесполезно. */
 export class ServerRefused extends Error {
@@ -75,7 +76,7 @@ async function ask(
 
   let response: Response;
   try {
-    response = await fetch(`${credentials.base.replace(/\/+$/, "")}${path}`, {
+    response = await shellFetch(`${credentials.base.replace(/\/+$/, "")}${path}`, {
       method: init.method ?? "GET",
       headers: {
         authorization: `Bearer ${credentials.token}`,
@@ -159,7 +160,7 @@ export class HttpSyncTransport implements SyncTransport {
     const read = async (): Promise<void> => {
       while (!control.signal.aborted) {
         try {
-          const response = await fetch(
+          const response = await shellFetch(
             `${this.credentials.base.replace(/\/+$/, "")}${ROUTES.events}`,
             {
               headers: { authorization: `Bearer ${this.credentials.token}` },
