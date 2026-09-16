@@ -19,8 +19,22 @@
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { openBook, sealBook, type SealedBook } from "@/lib/sync/vault-crypto";
 
-/** Ключи, читаемые и запертыми: без них отпирать было бы нечем. */
-export const UNSEALED_KEYS: readonly string[] = ["financeVault", "financeDevice"];
+/**
+ * Ключи, которые не шифруются. Каждый — с причиной, и причина одна из двух.
+ *
+ *   financeVault, financeDevice — без них замок не отпереть: это сама шкатулка
+ *     с ключом книги и пометка устройства. Содержимого книги в них нет.
+ *   financeSync — номера версий ячеек на сервере, которые ведёт слой
+ *     синхронизации. Он стоит НИЖЕ шифрования и читает свою запись сам; запечатай
+ *     мы её, он прочитал бы вместо чисел шкатулку, счёл бы её книгой и принялся
+ *     бы синхронизировать собственную бухгалтерию. Ничего, кроме имён ячеек и
+ *     чисел, там не лежит, а имена ячеек и так не шифруются.
+ */
+export const UNSEALED_KEYS: readonly string[] = [
+  "financeVault",
+  "financeDevice",
+  "financeSync"
+];
 
 /**
  * Попытка прочитать книгу, пока она заперта.
