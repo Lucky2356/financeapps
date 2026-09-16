@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { AccountService } from "@/lib/vault/account";
@@ -16,6 +17,7 @@ import { AccountService } from "@/lib/vault/account";
 // его просто забыли.
 
 const PASSWORD = "общий-пароль-книги";
+const FAST = { iterations: 1 };
 const BOOK = "localFinanceState_profile-default";
 
 /** Устройство: хранилище, шифрующая обёртка над ним и служба учётной записи. */
@@ -76,24 +78,48 @@ describe("второе устройство принимает учётную з
     const fromServer = await pc.account.vault();
 
     const phone = device();
-    await phone.account.create("свой-пароль");
-    await phone.sealed.setItem(BOOK, { schemaVersion: 16, transactions: [operation] });
+    await phone.account.create("свой-пароль", FAST);
+    await new LocalApiClient(phone.sealed).post("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: 12000
+    });
 
     await expect(phone.account.adopt(fromServer!, PASSWORD)).rejects.toThrow(/резервную копию/);
   });
 
-  it("пустая книга первого запуска подключаться не мешает", async () => {
-    // Она пуста ровно потому, что устройство новое, — то есть именно тогда,
-    // когда человек и подключается. Отказывать здесь было бы издевательством.
+  it("книга первого запуска НАСТОЯЩЕГО приложения подключаться не мешает", async () => {
+    // Книгу заводит приложение, а не проверка. Разница здесь стоила выпуска.
+    //
+    // В 1.35.0 эта проверка была написана так: в хранилище руками клалась
+    // книга `{ transactions: [], accounts: [] }` — и она, конечно, проходила.
+    // Только такой книги в приложении не бывает. Настоящая заводится с набором
+    // категорий по умолчанию, а категории считались записями — и отказ
+    // срабатывал на каждом свежем устройстве. Подключить второе устройство
+    // стало нельзя вовсе, ровно тем способом, который выпуск и чинил.
+    //
+    // Поэтому книга здесь материализуется через LocalApiClient: что бы
+    // приложение ни насеяло при первом запуске, проверка увидит это же.
     const pc = device();
-    await pc.account.create(PASSWORD);
+    await pc.account.create(PASSWORD, FAST);
     const fromServer = await pc.account.vault();
 
     const phone = device();
-    await phone.account.create(PASSWORD);
-    await phone.sealed.setItem(BOOK, { schemaVersion: 16, transactions: [], accounts: [] });
+    await phone.account.create(PASSWORD, FAST);
+    await new LocalApiClient(phone.sealed).get("/accounts");
 
     await expect(phone.account.adopt(fromServer!, PASSWORD)).resolves.toBeUndefined();
+  });
+
+  it("категории по умолчанию записями не считаются", async () => {
+    // Тот же случай, но названный прямо: книга первого запуска НЕ пуста.
+    const phone = device();
+    await phone.account.create(PASSWORD, FAST);
+    const book = await new LocalApiClient(phone.sealed).get<{
+      categories: unknown[];
+    }>("/categories");
+
+    expect(book.categories.length).toBeGreaterThan(0);
   });
 
   it("прежний ключ с устройства уходит, а не остаётся отпирать пустоту", async () => {

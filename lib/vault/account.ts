@@ -81,6 +81,21 @@ function fromBase64(value: string): Uint8Array<ArrayBuffer> {
  * обёртка поверх него, которой отдают ключ. Оба нужны: шкатулку и пометку
  * устройства пишем мимо шифрования, книгу — сквозь него.
  */
+/**
+ * Поля, по которым видно, что человеку есть что терять.
+ *
+ * КАТЕГОРИЙ ЗДЕСЬ НЕТ, И ЭТО ГЛАВНОЕ В СПИСКЕ. Книга первого запуска заводится
+ * с набором категорий по умолчанию — их сеет само приложение, чтобы операцию
+ * было куда отнести, и денег в них нет никаких. Посчитай мы их записями, отказ
+ * срабатывал бы на КАЖДОМ только что поставленном устройстве, то есть ровно
+ * там, где человек и подключается. Именно так и вышло в 1.35.0: подключить
+ * второе устройство стало нельзя вовсе.
+ *
+ * Здесь только то, что заводит человек своими руками и что пропадёт вместе со
+ * старым ключом.
+ */
+const LEDGER_FIELDS = ["transactions", "accounts", "goals", "liabilities"] as const;
+
 export class AccountService {
   constructor(
     private readonly plain: StorageAdapter,
@@ -216,7 +231,7 @@ export class AccountService {
       }
       if (!book) continue;
 
-      const rows = ["transactions", "accounts", "categories", "goals", "liabilities"].some(
+      const rows = LEDGER_FIELDS.some(
         (field) => Array.isArray(book[field]) && (book[field] as unknown[]).length > 0
       );
       if (rows) found.push(key);
