@@ -13,6 +13,39 @@ export async function seedExampleData(page: Page) {
 // in the tab's memory), so a test that is mid-flow cannot afford the goto above.
 export async function loadExample(page: Page) {
   const button = page.getByRole("button", { name: "Загрузить пример" });
+
+  // Сначала — не «дождаться кнопки», а РАЗЛИЧИТЬ два исхода.
+  //
+  // Снимок устройства с заведённым замком приезжает во вкладку не нашими
+  // руками: IndexedDB восстанавливает из storageState сам Playwright, и раз на
+  // много сотен прогонов это не срабатывает. Вкладка тогда открывается как
+  // новое устройство, ворота показывают первый запуск — и кнопки «Загрузить
+  // пример» на экране нет и не будет никогда.
+  //
+  // Жди мы одну кнопку, это выглядело бы как «кнопка не появилась» и
+  // разбиралось бы по тридцатисекундному таймауту с пустой подсказкой. Ворота
+  // при этом безопасно спрашивать: «первый запуск» и «заперто» — состояния
+  // КОНЕЧНЫЕ, до них ворота показывают пустоту, так что мелькнуть мимо них
+  // нельзя и ложной тревоги здесь не будет.
+  const gate = page.getByRole("heading", { name: /Защитите книгу паролем|Книга заперта/ });
+
+  let outcome = "ждём";
+  await expect
+    .poll(
+      async () => {
+        if (await button.isVisible()) return (outcome = "готово");
+        if (await gate.isVisible()) return (outcome = "замок");
+        return (outcome = "ждём");
+      },
+      { timeout: 30_000 }
+    )
+    .not.toBe("ждём");
+
+  expect(
+    outcome,
+    "Книги в хранилище вкладки не оказалось: снимок замка не доехал, приложение открылось как на новом устройстве"
+  ).toBe("готово");
+
   await button.waitFor({ state: "visible", timeout: 30_000 });
 
   // Stamp the window before clicking: the app reloads itself once the example is
