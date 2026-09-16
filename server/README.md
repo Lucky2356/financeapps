@@ -22,9 +22,22 @@
 
 ## Что нужно
 
-- Node 22.6 или новее (в Debian 13 — из `nodejs` в backports либо с nodesource).
-  На Node 24 флаг `--experimental-strip-types` не нужен: типы снимаются сами.
+- **Node 22.6 или новее.** В Debian 13 штатный пакет старее, поэтому проще с
+  nodesource:
+
+  ```sh
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+  sudo apt-get install -y nodejs
+  node --version    # должно быть 22.6+
+  ```
+
+  Флаг `--experimental-strip-types` в юните стоит не зря и на новых Node тоже:
+  начиная с 23 типы снимаются сами, но флаг остаётся принятым и ничего не
+  ломает. **Трогать юнит из-за версии Node не нужно.**
+
 - Caddy, уже настроенный на ваш домен — он держит TLS.
+- `sqlite3` и `jq` пригодятся для копий и приглашений:
+  `sudo apt-get install -y sqlite3 jq`
 
 ## Установка
 
@@ -42,7 +55,22 @@ openssl rand -base64 32 | tr -d '/+=' | head -c 40; echo
 
 # Юнит.
 sudo cp /opt/financeapps/server/financeapps.service /etc/systemd/system/
-sudo systemctl edit financeapps          # сюда вписать FINANCE_ADMIN_TOKEN
+sudo systemctl daemon-reload
+sudo systemctl edit financeapps
+```
+
+`systemctl edit` откроет пустой файл — в него целиком, заменив «строку-из-openssl»
+на то, что выдала команда выше:
+
+```ini
+[Service]
+Environment=FINANCE_ADMIN_TOKEN=строка-из-openssl
+```
+
+Пропуск лежит здесь, а не в юните из склада: юнит приезжает с `git pull` и
+перезаписался бы, а этот файл — ваш и остаётся на месте.
+
+```sh
 sudo systemctl daemon-reload
 sudo systemctl enable --now financeapps
 systemctl status financeapps
@@ -70,6 +98,37 @@ finance.ваш-домен.ru {
 
 Проверка: `curl https://finance.ваш-домен.ru/health` — должно ответить
 `{"ok":true}`.
+
+## Первая проверка
+
+Прежде чем идти в приложение, стоит убедиться, что служба живая. Три команды, и
+каждая отвечает на свой вопрос.
+
+```sh
+# 1. Служба поднялась и Caddy до неё достучался.
+curl -s https://finance.ваш-домен.ru/health
+# {"ok":true}
+
+# 2. Пропуск управления доехал до службы.
+curl -s -X POST https://finance.ваш-домен.ru/admin/invite \
+  -H "Authorization: Bearer ПРОПУСК"
+# {"code":"..."}  — это и есть приглашение, оно пригодится дальше
+
+# 3. Без пропуска внутрь не пускают.
+curl -s -X POST https://finance.ваш-домен.ru/admin/invite
+# {"error":"Нужен пропуск управления."}
+```
+
+Третья — не формальность. Ответь она кодом приглашения, это значило бы, что
+завести у вас учётную запись может кто угодно, кто знает адрес.
+
+Если первая отвечает пустотой или ошибкой Caddy, а `systemctl status financeapps`
+говорит «active» — значит служба жива, но Caddy до неё не дотянулся: смотрите
+порт в блоке домена и `journalctl -u financeapps -n 50`.
+
+Если вторая отвечает «Нужен пропуск управления» с **правильным** пропуском —
+значит `systemctl edit` не доехал: `systemctl show financeapps -p Environment`
+покажет, что служба видит на самом деле.
 
 ## Приглашения
 
@@ -118,8 +177,11 @@ sudo systemctl restart financeapps
 ## Проверки
 
 ```sh
-npm run test:server     # из корня склада
+cd /opt/financeapps && npm run test:server
 ```
+
+Зависимостей они не требуют — ни `npm ci`, ни сборки: прогонщик проверок
+встроен в Node.
 
 Служба поднимается на случайном порту с базой в памяти, и по ней ходят обычным
 `fetch` — то есть проверяется ровно то, что увидит устройство, включая коды
