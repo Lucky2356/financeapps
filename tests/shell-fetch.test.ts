@@ -4,6 +4,8 @@
 // его нет вовсе — проверка молча считала бы, что Tauri не запущен, и
 // проходила бы, ничего не проверяя.
 
+import { readFileSync } from "node:fs";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { forgetShellFetchChoice, shellFetch } from "@/lib/sync/shell-fetch";
@@ -97,4 +99,34 @@ describe("чем ходит синхронизация", () => {
       })
     );
   });
+});
+
+// Сторож на уровне исходников. Поломка, ради которой всё это заведено, не видна
+// ни одной обычной проверке: обычный fetch в проверках работает прекрасно и
+// краснеть ему не с чего. Увидеть её можно только так — посмотрев, ЧЕМ написан
+// запрос в тех файлах, которые ходят к чужому серверу.
+//
+// Проверено на себе: провод я починил, а вход и регистрацию — забыл. Обе части
+// нужны, и забытая половина выглядела бы как полностью сделанная работа.
+describe("сторож: к чужому серверу ходят только через выбор транспорта", () => {
+  const talkToServer = ["lib/sync/HttpSyncTransport.ts", "lib/vault/server-account.ts"];
+
+  for (const file of talkToServer) {
+    it(`${file} не зовёт fetch напрямую`, () => {
+      const source = readFileSync(file, "utf8")
+        // Комментарии не в счёт: в них про fetch как раз и объясняется.
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .join("\n");
+
+      const bare = [...source.matchAll(/(?<![.\w])fetch\s*\(/g)];
+
+      expect(
+        bare.length,
+        `${file}: запрос вкладки до чужого домена не дойдёт — политика безопасности ` +
+          "собранного приложения его погасит. Через shellFetch из lib/sync/shell-fetch.ts."
+      ).toBe(0);
+    });
+  }
 });

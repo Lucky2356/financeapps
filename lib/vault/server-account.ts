@@ -19,6 +19,7 @@
 import { LOCAL_ONLY_KEYS } from "@/lib/storage/SyncingStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { ServerRefused } from "@/lib/sync/HttpSyncTransport";
+import { shellFetch } from "@/lib/sync/shell-fetch";
 import { authSecret, type Vault } from "@/lib/sync/vault-crypto";
 
 /** Где лежит запись о сервере. Это же имя стоит в LOCAL_ONLY_KEYS. */
@@ -46,7 +47,13 @@ async function ask(
   path: string,
   init: { method?: string; body?: unknown; token?: string } = {}
 ): Promise<{ status: number; data: Record<string, unknown> }> {
-  const response = await fetch(`${root(base)}${path}`, {
+  // Через тот же выбор транспорта, что и синхронизация, и по той же причине:
+  // адрес службы человек называет сам, а политика безопасности собранного
+  // приложения знает только адреса, зашитые в сборку. Обычный fetch вкладки
+  // сюда не доходит — а это вход и регистрация, то есть самый первый шаг.
+  // Останься здесь fetch, чинить провод было бы незачем: до провода дело бы не
+  // дошло вовсе.
+  const response = await shellFetch(`${root(base)}${path}`, {
     method: init.method ?? "GET",
     headers: {
       ...(init.token ? { authorization: `Bearer ${init.token}` } : {}),
