@@ -4,6 +4,7 @@ import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { AccountService } from "@/lib/vault/account";
+import { ServerAccount, SERVER_KEY, type ServerLink } from "@/lib/vault/server-account";
 
 // Второе устройство: телефон подключается к учётной записи, заведённой на ПК.
 //
@@ -146,6 +147,43 @@ describe("второе устройство принимает учётную з
     await app.delete("/storage/clear");
 
     await expect(phone.account.adopt(fromServer!, PASSWORD)).resolves.toBeUndefined();
+  });
+
+  it("билет сервера переживает подключение — иначе синхронизация не поднимется", async () => {
+    // Поломка, найденная на живой паре устройств, и самая обидная из всех:
+    // подключение сносило СОБСТВЕННЫЙ билет, записанный секундой раньше.
+    //
+    // Порядок такой: signIn кладёт билет, adopt зовёт sealed.clear(), чтобы
+    // убрать книгу, запечатанную прежним ключом, — а clear() сносит всё, что не
+    // объявлено «не книгой». Билет объявлен не был. Дальше resumeSync не
+    // находит привязки и молча отвечает «сервера нет».
+    //
+    // Снаружи это выглядело так: вход проходит, экран говорит «Устройство
+    // подключено к серверу», и не происходит ничего. В журнале службы —
+    // POST /auth/login → 200 и ни одного обращения за книгой.
+    //
+    // Устройство, которое РЕГИСТРИРУЕТСЯ, этого не видело никогда: там adopt не
+    // зовут вовсе. Поэтому первый компьютер работал, а второе устройство — нет.
+    const pc = device();
+    await pc.account.create(PASSWORD, FAST);
+    const fromServer = await pc.account.vault();
+
+    const phone = device();
+    await phone.account.create(PASSWORD, FAST);
+
+    // Ровно то, что кладёт signIn.
+    await phone.disk.setItem<ServerLink>(SERVER_KEY, {
+      v: 1,
+      base: "https://finance.example",
+      login: "lucky",
+      token: "билет-от-службы",
+      device: "телефон"
+    });
+
+    await phone.account.adopt(fromServer!, PASSWORD);
+
+    // Спрашиваем тем же способом, каким спрашивает resumeSync.
+    expect(await new ServerAccount(phone.disk).link()).not.toBeNull();
   });
 
   it("прежний ключ с устройства уходит, а не остаётся отпирать пустоту", async () => {

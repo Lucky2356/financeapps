@@ -24,7 +24,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
-import { accountService, resumeSync, serverAccount, stopSync } from "@/lib/vault/runtime";
+import {
+  accountService,
+  flushSync,
+  resumeSync,
+  serverAccount,
+  stopSync
+} from "@/lib/vault/runtime";
 import type { ServerLink } from "@/lib/vault/server-account";
 
 /** Как это устройство назовётся в чужом списке устройств. */
@@ -86,6 +92,22 @@ export function ServerPanel() {
       setPassword("");
       setCode("");
       toast.success(t("server.connected"));
+
+      // Дождаться первого обмена и перечитать приложение целиком.
+      //
+      // Книга приезжает в хранилище, а не на экран: слой синхронизации пишет её
+      // под всеми открытыми экранами, и сказать им об этом некому — на onApplied
+      // никто не подписан. Без перечитывания человек, подключивший второе
+      // устройство, видит ровно то же, что при неудаче: «подключено» и пустоту.
+      // Разбираться, что книга уже на диске и надо всего лишь перезапустить
+      // приложение, он не должен.
+      //
+      // Тем же способом сделаны «Очистить все данные» и «Загрузить пример»:
+      // книга под приложением сменилась целиком, и перечитать её проще и
+      // надёжнее, чем обновлять полторы сотни экранов по одному.
+      await flushSync();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      window.location.reload();
     } catch (cause) {
       toast.error((cause as Error).message);
     } finally {
