@@ -144,7 +144,10 @@ describe("два устройства сходятся", () => {
     const phone = new Device("телефон");
     const desktop = new Device("компьютер");
 
-    phone.save({ ...phone.book, transactions: [{ id: "t1", amount: 100 }] }, "2026-02-01T00:00:00.000Z");
+    phone.save(
+      { ...phone.book, transactions: [{ id: "t1", amount: 100 }] },
+      "2026-02-01T00:00:00.000Z"
+    );
     sync(phone, server);
     sync(desktop, server);
 
@@ -162,7 +165,10 @@ describe("два устройства сходятся", () => {
     const phone = new Device("телефон");
     const desktop = new Device("компьютер");
 
-    phone.save({ ...phone.book, transactions: [{ id: "t1", amount: 1 }] }, "2026-02-01T00:00:00.000Z");
+    phone.save(
+      { ...phone.book, transactions: [{ id: "t1", amount: 1 }] },
+      "2026-02-01T00:00:00.000Z"
+    );
     sync(phone, server);
     sync(desktop, server);
     expect(transactions(desktop.book)).toHaveLength(1);
@@ -187,7 +193,10 @@ describe("два устройства сходятся", () => {
     const phone = new Device("телефон");
     const desktop = new Device("компьютер");
 
-    phone.save({ ...phone.book, transactions: [{ id: "t1", amount: 1 }] }, "2026-02-01T00:00:00.000Z");
+    phone.save(
+      { ...phone.book, transactions: [{ id: "t1", amount: 1 }] },
+      "2026-02-01T00:00:00.000Z"
+    );
     sync(phone, server);
     sync(desktop, server);
 
@@ -210,7 +219,10 @@ describe("два устройства сходятся", () => {
     const phone = new Device("телефон");
     const desktop = new Device("компьютер");
 
-    phone.save({ ...phone.book, transactions: [{ id: "с телефона", amount: 1 }] }, "2026-02-01T00:00:00.000Z");
+    phone.save(
+      { ...phone.book, transactions: [{ id: "с телефона", amount: 1 }] },
+      "2026-02-01T00:00:00.000Z"
+    );
     desktop.save(
       { ...desktop.book, transactions: [{ id: "с компьютера", amount: 2 }] },
       "2026-02-01T00:01:00.000Z"

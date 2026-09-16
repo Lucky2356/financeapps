@@ -3523,7 +3523,9 @@ export class LocalApiClient implements ApiClient {
     // исчезнувшая из книги, — это то же событие, что и правка, просто с другим
     // исходом. Разведи их по разным местам — однажды поставится одно без другого.
     const next =
-      options.stamp === false ? state : trackDeletions(stampRows(state, previous, now), previous, now);
+      options.stamp === false
+        ? state
+        : trackDeletions(stampRows(state, previous, now), previous, now);
     await this.storage.setItem(key, next);
     this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
   }

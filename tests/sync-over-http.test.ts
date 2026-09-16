@@ -10,6 +10,7 @@ import { HttpSyncTransport } from "@/lib/sync/HttpSyncTransport";
 import { mergeBooks } from "@/lib/sync/merge";
 import { isOffline } from "@/lib/sync/protocol";
 import { createVault } from "@/lib/sync/vault-crypto";
+import { ServerAccount, SERVER_KEY } from "@/lib/vault/server-account";
 import { createApp, type App } from "../server/src/main.ts";
 
 // Настоящее приложение через настоящий провод в настоящую службу.
@@ -174,6 +175,104 @@ describe("приложение через службу", () => {
     // войти заново.
     const transport = new HttpSyncTransport({ base, token: "билет-с-кириллицей" });
     await expect(transport.pull("книга")).rejects.toSatisfy((error) => !isOffline(error));
+  });
+
+  describe("привязка устройства", () => {
+    it("заводит запись по приглашению и запоминает билет", async () => {
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      const { vault } = await createVault("пароль", FAST);
+      const disk = new MemoryStorageAdapter();
+      const account = new ServerAccount(disk);
+
+      await account.register({
+        base,
+        code,
+        login: "петя",
+        password: "пароль",
+        vault,
+        device: "проверка"
+      });
+
+      const link = await account.link();
+      expect(link).toMatchObject({ base, login: "петя" });
+      expect(link?.token).toBeTruthy();
+    });
+
+    it("на второе устройство шкатулка приезжает со службы", async () => {
+      // Это и есть смысл того, что шкатулка лежит на сервере: на новом телефоне
+      // взять её больше неоткуда, а без неё книга не откроется ничем.
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      const { vault } = await createVault("пароль", FAST);
+      const first = new ServerAccount(new MemoryStorageAdapter());
+      await first.register({
+        base,
+        code,
+        login: "петя",
+        password: "пароль",
+        vault,
+        device: "первое"
+      });
+
+      const second = new ServerAccount(new MemoryStorageAdapter());
+      const entered = await second.signIn({
+        base,
+        login: "петя",
+        password: "пароль",
+        device: "второе"
+      });
+
+      expect(entered.vault).toEqual(vault);
+    });
+
+    it("неверный пароль не привязывает и билета не оставляет", async () => {
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      const { vault } = await createVault("пароль", FAST);
+      const disk = new MemoryStorageAdapter();
+      const account = new ServerAccount(disk);
+      await account.register({
+        base,
+        code,
+        login: "петя",
+        password: "пароль",
+        vault,
+        device: "первое"
+      });
+
+      const other = new ServerAccount(new MemoryStorageAdapter());
+      await expect(
+        other.signIn({ base, login: "петя", password: "не тот", device: "второе" })
+      ).rejects.toThrow();
+      expect(await other.link()).toBeNull();
+    });
+
+    it("отвязка гасит билет на службе, а не только забывает его здесь", async () => {
+      // Забудь мы билет только у себя, он остался бы годным на сервере ещё
+      // месяц — и потерянный телефон продолжал бы иметь доступ к книге.
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      const { vault } = await createVault("пароль", FAST);
+      const disk = new MemoryStorageAdapter();
+      const account = new ServerAccount(disk);
+      await account.register({
+        base,
+        code,
+        login: "петя",
+        password: "пароль",
+        vault,
+        device: "проверка"
+      });
+      const token = (await account.link())?.token ?? "";
+
+      await account.signOut();
+
+      expect(await account.link()).toBeNull();
+      expect(await disk.getItem(SERVER_KEY)).toBeNull();
+      // И билет больше не годен.
+      const after = await fetch(`${base}/vault/книга`, {
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(after.status).toBe(401);
+      await after.text();
+    });
   });
 
   it("событие о чужой записи доходит по потоку", async () => {

@@ -82,9 +82,7 @@ function Version({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">{title}</span>
-        {current ? (
-          <Badge variant="secondary">{t("sync.conflicts.current")}</Badge>
-        ) : null}
+        {current ? <Badge variant="secondary">{t("sync.conflicts.current")}</Badge> : null}
       </div>
 
       {row ? (

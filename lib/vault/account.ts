@@ -254,8 +254,7 @@ async function sealableKeys(storage: StorageAdapter): Promise<string[]> {
   // `:base` — основа для слияния: она приехала с сервера уже запечатанной.
   // Запечатай её ещё раз, и ключ книги не откроет её никогда.
   return all.filter(
-    (key) =>
-      !UNSEALED_KEYS.includes(key) && !key.endsWith(":sealing") && !key.endsWith(BASE_SUFFIX)
+    (key) => !UNSEALED_KEYS.includes(key) && !key.endsWith(":sealing") && !key.endsWith(BASE_SUFFIX)
   );
 }
 

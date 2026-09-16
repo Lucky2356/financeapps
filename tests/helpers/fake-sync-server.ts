@@ -75,9 +75,7 @@ export class FakeSyncServer implements SyncTransport {
     this.guard();
     this.calls.pull += 1;
     const cell = this.cells.get(slot);
-    return cell
-      ? { slot, ...cell }
-      : { slot, version: 0, body: null, updatedAt: null };
+    return cell ? { slot, ...cell } : { slot, version: 0, body: null, updatedAt: null };
   }
 
   async push(slot: SlotName, request: PutRequest): Promise<PutResult> {
@@ -94,9 +92,7 @@ export class FakeSyncServer implements SyncTransport {
       return {
         ok: false,
         reason: "stale",
-        current: cell
-          ? { slot, ...cell }
-          : { slot, version: 0, body: null, updatedAt: null }
+        current: cell ? { slot, ...cell } : { slot, version: 0, body: null, updatedAt: null }
       };
     }
 

@@ -65,10 +65,7 @@ export type MergeReport = {
 };
 
 /** Состояние строки на одной стороне относительно основы. */
-type Side =
-  | { kind: "present"; row: Row }
-  | { kind: "deleted" }
-  | { kind: "absent" };
+type Side = { kind: "present"; row: Row } | { kind: "deleted" } | { kind: "absent" };
 
 /**
  * Списки, которые сливаются объединением по своему опознанию, но строками книги

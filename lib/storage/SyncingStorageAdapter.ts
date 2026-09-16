@@ -108,8 +108,14 @@ function sealed(value: unknown): value is SealedBook {
  *     сама себя.
  *   financeConflicts — спорные строки. Спор разбирает тот, кто его увидел, и
  *     разъезжаться по устройствам ему незачем: решение уедет обычной правкой.
+ *   financeServer — адрес службы и входной билет. Отправлять билет на сервер,
+ *     от которого он получен, было бы забавно.
  */
-export const LOCAL_ONLY_KEYS: readonly string[] = [SYNC_STATE_KEY, "financeConflicts"];
+export const LOCAL_ONLY_KEYS: readonly string[] = [
+  SYNC_STATE_KEY,
+  "financeConflicts",
+  "financeServer"
+];
 
 function syncableKey(key: string): boolean {
   return (

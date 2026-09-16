@@ -30,11 +30,7 @@ import { openBook, sealBook, type SealedBook } from "@/lib/sync/vault-crypto";
  *     бы синхронизировать собственную бухгалтерию. Ничего, кроме имён ячеек и
  *     чисел, там не лежит, а имена ячеек и так не шифруются.
  */
-export const UNSEALED_KEYS: readonly string[] = [
-  "financeVault",
-  "financeDevice",
-  "financeSync"
-];
+export const UNSEALED_KEYS: readonly string[] = ["financeVault", "financeDevice", "financeSync"];
 
 /**
  * Попытка прочитать книгу, пока она заперта.
