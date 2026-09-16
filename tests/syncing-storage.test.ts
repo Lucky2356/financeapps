@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import {
   BASE_SUFFIX,
+  PRE_UPGRADE_SUFFIX,
+  RESCUE_SUFFIX,
   SYNC_STATE_KEY,
   SyncingStorageAdapter,
   type Merge
@@ -86,6 +88,22 @@ describe("синхронизирующее хранилище", () => {
       await storage.setItem(SYNC_STATE_KEY, box("подделка"));
       await storage.flush();
       expect(server.peek(SYNC_STATE_KEY)).toBeNull();
+    });
+
+    it("копии книги остаются на устройстве", async () => {
+      // Обе копии — про эту машину: одна снята перед переводом книги на новую
+      // схему, вторая отложена, когда книгу не удалось прочитать. Уезжай они на
+      // сервер, каждая заводила бы там ВТОРУЮ ячейку на ту же книгу — то есть
+      // хранила бы вторую копию бухгалтерии и разносила бы её по остальным
+      // устройствам как ячейку, которой у них нет.
+      await storage.start(server, glue);
+      await storage.setItem(`${SLOT}${PRE_UPGRADE_SUFFIX}`, box("книга до перевода"));
+      await storage.setItem(`${SLOT}${RESCUE_SUFFIX}`, box("книга, которую не прочитали"));
+      await storage.flush();
+
+      expect(server.peek(`${SLOT}${PRE_UPGRADE_SUFFIX}`)).toBeNull();
+      expect(server.peek(`${SLOT}${RESCUE_SUFFIX}`)).toBeNull();
+      expect(server.calls.push).toBe(0);
     });
   });
 
