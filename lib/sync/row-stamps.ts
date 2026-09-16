@@ -17,11 +17,11 @@
 //     знаем, когда её правили — она была до отметок». Проставить всем задним
 //     числом «сейчас» было бы удобнее и было бы враньём, которому слияние потом
 //     поверило бы.
-//   * Записи об удалённых строках. Удалённая строка просто исчезает, и слияние
-//     не отличит «у них удалили» от «у нас ещё не добавили». Это работа 06.5;
-//     до неё синхронизации нет вовсе, и терять пока нечего — первая отправка
-//     кладёт книгу на сервер целиком.
 //   * Котировок и всего производного (см. STAMPED ниже).
+//
+// Записи об удалённых строках здесь тоже нет — она ниже, отдельным разделом
+// («Следы удалений»): удалённая строка просто исчезает, и без следа слияние не
+// отличит «у них удалили» от «у нас ещё не добавили».
 
 /**
  * Строка книги с отметкой времени последней правки. Отметка необязательна и
@@ -31,11 +31,11 @@
 export type Stamped<T> = T & { updatedAt?: string };
 
 /** Как узнать строку среди своих: у большинства — id, у планов — месяц и статья. */
-type Identity = (row: Record<string, unknown>) => string | null;
+export type Identity = (row: Record<string, unknown>) => string | null;
 
-const byId: Identity = (row) => (typeof row.id === "string" && row.id ? row.id : null);
+export const byId: Identity = (row) => (typeof row.id === "string" && row.id ? row.id : null);
 
-function byFields(...fields: string[]): Identity {
+export function byFields(...fields: string[]): Identity {
   return (row) => {
     const parts: string[] = [];
     for (const field of fields) {
@@ -91,7 +91,7 @@ export const STAMP_FIELD = "updatedAt";
  * читалась бы как изменённая — отметки обновлялись бы у всей книги при каждом
  * сохранении, и не значили бы уже ничего.
  */
-function sameValue(a: unknown, b: unknown): boolean {
+export function sameValue(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
   if (Array.isArray(a) || Array.isArray(b)) {
@@ -113,12 +113,12 @@ function definedKeys(value: Record<string, unknown>): string[] {
   return Object.keys(value).filter((key) => key !== STAMP_FIELD && value[key] !== undefined);
 }
 
-function sameRow(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+export function sameRow(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
   return sameValue({ ...a, [STAMP_FIELD]: undefined }, { ...b, [STAMP_FIELD]: undefined });
 }
 
 /** Прежние строки раздела, разложенные по опознанию, — чтобы искать за раз. */
-function indexRows(rows: unknown, identify: Identity): Map<string, Record<string, unknown>> {
+export function indexRows(rows: unknown, identify: Identity): Map<string, Record<string, unknown>> {
   const index = new Map<string, Record<string, unknown>>();
   if (!Array.isArray(rows)) return index;
   for (const row of rows) {
