@@ -130,6 +130,23 @@ curl -s -X POST https://finance.ваш-домен.ru/admin/invite
 значит `systemctl edit` не доехал: `systemctl show financeapps -p Environment`
 покажет, что служба видит на самом деле.
 
+### Служба поднимается и тут же умирает
+
+`systemctl status` показывает постоянные перезапуски, а в журнале — трасса V8 на
+сорок строк со словами `Check failed` и `SetPermissions`. Выглядит как поломка
+службы, но почти наверняка виноват юнит: какое-то ограничение запрещает Node
+делать память исполняемой, а без этого его JIT не работает.
+
+Смотреть надо на `MemoryDenyWriteExecute`. В юните из склада её нет намеренно
+(см. комментарий там же), но она могла приехать из вашего drop-in:
+
+```sh
+systemctl show financeapps -p MemoryDenyWriteExecute
+```
+
+Ответ `yes` — снимите: `sudo systemctl edit financeapps`, строка
+`MemoryDenyWriteExecute=no` в блоке `[Service]`.
+
 ## Приглашения
 
 Регистрация только по приглашению, и другого пути нет.
