@@ -39,6 +39,13 @@ export class FakeSyncServer implements SyncTransport {
    */
   events = true;
 
+  /**
+   * Связь ТОЛЬКО на запись. Снимается, чтобы поймать состояние между «уже
+   * слил» и «ещё не отправил»: там живёт основа, и ошибка в ней переживает
+   * обрыв, а при удачной отправке немедленно затирается и остаётся незамеченной.
+   */
+  writable = true;
+
   /** Сколько раз спрашивали и сколько раз клали — для проверок про повторы. */
   readonly calls = { pull: 0, push: 0, rejected: 0 };
 
@@ -65,6 +72,7 @@ export class FakeSyncServer implements SyncTransport {
 
   async push(slot: SlotName, request: PutRequest): Promise<PutResult> {
     this.guard();
+    if (!this.writable) throw new OfflineError();
     this.calls.push += 1;
     const cell = this.cells.get(slot);
     const current = cell?.version ?? 0;

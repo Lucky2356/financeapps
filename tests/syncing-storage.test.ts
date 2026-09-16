@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import {
+  BASE_SUFFIX,
   SYNC_STATE_KEY,
   SyncingStorageAdapter,
   type Merge
@@ -224,6 +225,90 @@ describe("синхронизирующее хранилище", () => {
       await storage.flush();
       expect(server.calls.pull).toBe(before);
       expect(storage.status).toBe("off");
+    });
+  });
+
+  describe("основа для слияния", () => {
+    it("хранится запечатанной и не уезжает обратно на сервер", async () => {
+      await storage.start(server, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+
+      expect(await device.getItem(`${SLOT}${BASE_SUFFIX}`)).toEqual(box("а"));
+      expect(server.peek(`${SLOT}${BASE_SUFFIX}`)).toBeNull();
+    });
+
+    it("равна тому, что лежит на сервере в запомненной версии", async () => {
+      // Это и есть определение общего предка: последняя ОБЩАЯ точка. Разойдись
+      // основа с серверной версией хоть раз — слияние начало бы считать чужие
+      // правки своими или свои чужими, и делало бы это молча.
+      await storage.start(server, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+      expect(await device.getItem(`${SLOT}${BASE_SUFFIX}`)).toEqual(server.peek(SLOT)?.body);
+
+      server.seed(SLOT, box("б"));
+      await storage.flush();
+      expect(await device.getItem(`${SLOT}${BASE_SUFFIX}`)).toEqual(server.peek(SLOT)?.body);
+
+      await storage.setItem(SLOT, box("а+б+своё"));
+      await storage.flush();
+      expect(await device.getItem(`${SLOT}${BASE_SUFFIX}`)).toEqual(server.peek(SLOT)?.body);
+    });
+
+    it("после слияния основа — серверное, даже если отправить не удалось", async () => {
+      // Между «уже слил» и «ещё не отправил» книга и основа живут порознь, и
+      // обрыв связи оставляет их в этом виде надолго. Окажись основой слитое —
+      // на следующем круге чужие правки прочитались бы как «никто не менял».
+      await storage.start(server, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+
+      server.writable = false;
+      server.seed(SLOT, box("б"));
+      await storage.flush();
+
+      expect(await device.getItem(SLOT)).toEqual(box("а+б"));
+      expect(await device.getItem(`${SLOT}${BASE_SUFFIX}`)).toEqual(box("б"));
+    });
+
+    it("не уезжает на сервер и после перезапуска", async () => {
+      // Перезапуск обходит хранилище целиком и отправляет всё запечатанное.
+      // Основа запечатана — и уехала бы вместе с книгой, заведя себе ячейку.
+      await storage.start(server, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+
+      const again = new SyncingStorageAdapter(device);
+      await again.start(server, glue);
+      await again.flush();
+
+      expect(server.peek(`${SLOT}${BASE_SUFFIX}`)).toBeNull();
+    });
+
+    it("убирается вместе с книгой", async () => {
+      await storage.start(server, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+
+      await storage.removeItem(SLOT);
+      expect(await device.getItem(`${SLOT}${BASE_SUFFIX}`)).toBeNull();
+    });
+
+    it("передаётся слиянию как третья книга", async () => {
+      const seen: Array<unknown> = [];
+      const watching: Merge = async (slot, mine, theirs, base) => {
+        seen.push(base);
+        return glue(slot, mine, theirs, base);
+      };
+      await storage.start(server, watching);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+
+      server.seed(SLOT, box("а+б"));
+      await storage.flush();
+
+      expect(seen).toEqual([box("а")]);
     });
   });
 

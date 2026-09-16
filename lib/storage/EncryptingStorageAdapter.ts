@@ -87,6 +87,23 @@ export class EncryptingStorageAdapter implements StorageAdapter {
     return this.bookKey;
   }
 
+  /**
+   * Открыть чужую шкатулку и запечатать свою — для слияния.
+   *
+   * Слияние стоит НИЖЕ этого слоя и ключа не имеет; открыть две книги и
+   * сложить их может только тот, у кого ключ есть. Отдавать ему сам ключ было
+   * бы проще и хуже: ключ, однажды отданный наружу, оказывается в местах, про
+   * которые никто уже не помнит. Эти два действия — ровно то, что слиянию
+   * нужно, и ни байтом больше.
+   */
+  async open<T>(body: SealedBook): Promise<T> {
+    return JSON.parse(await openBook(body, this.require())) as T;
+  }
+
+  async seal<T>(value: T): Promise<SealedBook> {
+    return sealBook(JSON.stringify(value), this.require());
+  }
+
   async getItem<T>(key: string): Promise<T | null> {
     if (UNSEALED_KEYS.includes(key)) return this.inner.getItem<T>(key);
 

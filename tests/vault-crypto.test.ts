@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { fromBase64, toBase64 } from "@/lib/sync/bytes";
 import { RECOVERY_WORDS } from "@/lib/sync/recovery-words";
 import {
   authSecret,
@@ -258,10 +259,15 @@ describe("шифрование самой книги", () => {
   it("подменённый байт книги не проходит", async () => {
     const { bookKey } = await createVault("пароль", FAST);
     const sealed = await sealBook("итог месяца: 10000", bookKey);
-    const flipped = {
-      ...sealed,
-      ct: `${sealed.ct.slice(0, -2)}${sealed.ct.at(-2) === "A" ? "B" : "A"}=`
-    };
+
+    // Бит переворачивается в самих байтах, а не в букве base64. Подмена буквы
+    // иногда попадает в добивку в конце записи и не меняет ни одного байта —
+    // тогда книга открывается как ни в чём не бывало, и проверка краснеет через
+    // раз. Ошибка была в проверке, а не в шифровании.
+    const bytes = fromBase64(sealed.ct);
+    bytes[0] ^= 0x01;
+    const flipped = { ...sealed, ct: toBase64(bytes) };
+
     await expect(openBook(flipped, bookKey)).rejects.toThrow(/не удалось прочитать/);
   });
 

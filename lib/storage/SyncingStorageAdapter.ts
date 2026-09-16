@@ -40,6 +40,9 @@ import type { SealedBook } from "@/lib/sync/vault-crypto";
 /** Где лежат номера версий ячеек. Содержимого книги здесь нет — только числа. */
 export const SYNC_STATE_KEY = "financeSync";
 
+/** Чем оканчивается ключ основы — версии, которую устройство видело последней. */
+export const BASE_SUFFIX = ":base";
+
 type Bookkeeping = { v: 1; versions: Record<SlotName, number> };
 
 /**
@@ -60,8 +63,15 @@ export type Merged = {
 
 export type Merge = (
   slot: SlotName,
+  /** Что лежит на устройстве. */
   mine: SealedBook | null,
-  theirs: SealedBook
+  /** Что лежит на сервере. */
+  theirs: SealedBook,
+  /**
+   * Версия, которую это устройство видело на сервере последней, — общий предок.
+   * null, если его нет: первая встреча или книгу на устройстве чистили.
+   */
+  base: SealedBook | null
 ) => Promise<Merged>;
 
 export type SyncStatus =
@@ -95,15 +105,36 @@ function sealed(value: unknown): value is SealedBook {
 }
 
 /**
- * Годится ли ключ в ячейку на сервере.
+ * Что остаётся на устройстве, даже будучи запечатанным.
  *
- * Собственная запись о версиях — не ячейка, и это надо проверять явно. Окажись
- * она однажды зашифрованной (а под ней стоит то же устройство, что и под
- * книгой), она стала бы похожа на шкатулку, поехала бы на сервер и принялась
- * бы синхронизировать сама себя.
+ *   financeSync — собственная запись о версиях ячеек. Окажись она однажды
+ *     зашифрованной, стала бы похожа на книгу и принялась бы синхронизировать
+ *     сама себя.
+ *   financeConflicts — спорные строки. Спор разбирает тот, кто его увидел, и
+ *     разъезжаться по устройствам ему незачем: решение уедет обычной правкой.
  */
+export const LOCAL_ONLY_KEYS: readonly string[] = [SYNC_STATE_KEY, "financeConflicts"];
+
 function syncableKey(key: string): boolean {
-  return key !== SYNC_STATE_KEY;
+  return (
+    !LOCAL_ONLY_KEYS.includes(key) &&
+    !key.endsWith(BASE_SUFFIX) &&
+    // Временная запись, которую делает перевод книги в запечатанный вид. Живёт
+    // секунды и заводить себе ячейку на сервере не должна.
+    !key.endsWith(":sealing")
+  );
+}
+
+/**
+ * Где лежит основа для ячейки.
+ *
+ * Хранится ЗАПЕЧАТАННОЙ — ровно в том виде, в каком приехала с сервера. Этот
+ * слой её не открывает и открыть не может: ключа книги у него нет. Цена —
+ * вторая копия книги на диске; за то, чтобы при расхождении никого не выбросить
+ * молча, это недорого.
+ */
+function baseKey(slot: SlotName): string {
+  return `${slot}${BASE_SUFFIX}`;
 }
 
 function first(set: Set<SlotName>): SlotName | null {
@@ -128,6 +159,45 @@ export class SyncingStorageAdapter implements StorageAdapter {
   private attempt = 0;
   private retryArmed = false;
 
+  /**
+   * Сколько раз приложение писало в это хранилище.
+   *
+   * Слияние идёт долго — оно открывает две книги, складывает их и запечатывает
+   * обратно, — и всё это время человек продолжает работать. Запись, попавшая в
+   * середину, обязана пережить слияние: она уже на диске, и человек видит её на
+   * экране. Счётчик нужен, чтобы это заметить: содержимое не сравнить, у двух
+   * шифрований одной книги разные байты.
+   */
+  private writes = 0;
+
+  /**
+   * Слияния, применённые к книге, которых приложение ещё не перечитывало.
+   *
+   * Приложение работает так: прочитать книгу целиком, изменить, записать
+   * целиком. Между чтением и записью проходит время, и если слияние успело
+   * лечь в этот промежуток, запись приложения вернёт книгу к тому виду, в
+   * котором оно её прочитало, — то есть сотрёт всё, что приехало с другого
+   * устройства. Ни одна проверка отдельного слоя этого не видит: и слияние, и
+   * запись каждое по себе верны.
+   *
+   * Поэтому запись, пришедшая после применённого слияния, не кладётся поверх, а
+   * СЛИВАЕТСЯ с ним — тем же трёхсторонним слиянием, где основой служит книга,
+   * какой она была до слияния. Правка приложения при этом остаётся правкой, а
+   * приехавшее остаётся на месте. Если приложение уже успело перечитать книгу,
+   * слияние просто ничего не меняет.
+   */
+  private readonly applied = new Map<SlotName, { body: SealedBook; base: SealedBook | null }>();
+
+  /**
+   * Книга в том виде, в каком приложение прочитало её последний раз.
+   *
+   * Именно она — основа для «поздней записи»: приложение изменяет то, что
+   * прочитало, а не то, что лежало на диске когда-то давно. Брать основой
+   * состояние до первого из череды слияний неверно — между ними приложение
+   * успевает перечитать книгу, и тогда его правка растёт уже из прочитанного.
+   */
+  private readonly lastRead = new Map<SlotName, SealedBook>();
+
   private state: SyncStatus = "off";
   private readonly listeners = new Set<(status: SyncStatus) => void>();
 
@@ -143,14 +213,36 @@ export class SyncingStorageAdapter implements StorageAdapter {
   async getItem<T>(key: string): Promise<T | null> {
     // Читаем всегда местное. Ходить за книгой в сеть значило бы, что без сети
     // приложение не открывается, — а оно местное и обязано открываться.
-    return this.inner.getItem<T>(key);
+    const value = await this.inner.getItem<T>(key);
+    if (sealed(value) && syncableKey(key)) {
+      // Прочитанное становится точкой отсчёта: всё, что приложение запишет
+      // дальше, выросло отсюда. Слияния, случившиеся ДО этого чтения, приложение
+      // уже увидело, и защищать их от его записи больше не нужно.
+      this.lastRead.set(key, value);
+      this.applied.delete(key);
+    }
+    return value;
   }
 
   async setItem<T>(key: string, value: T): Promise<void> {
+    if (sealed(value) && syncableKey(key)) {
+      const pending = this.applied.get(key);
+      if (pending && this.merge) {
+        const merged = await this.merge(key, value, pending.body, pending.base);
+        this.applied.delete(key);
+        await this.inner.setItem(key, merged.body);
+        this.writes += 1;
+        this.outbox.add(key);
+        void this.pump();
+        return;
+      }
+      await this.inner.setItem(key, value);
+      this.writes += 1;
+      this.outbox.add(key);
+      void this.pump();
+      return;
+    }
     await this.inner.setItem(key, value);
-    if (!sealed(value) || !syncableKey(key)) return;
-    this.outbox.add(key);
-    void this.pump();
   }
 
   /**
@@ -167,6 +259,9 @@ export class SyncingStorageAdapter implements StorageAdapter {
    */
   async removeItem(key: string): Promise<void> {
     await this.inner.removeItem(key);
+    // Основа без книги — мусор, который при следующем слиянии выдал бы себя за
+    // общего предка книги, которой здесь уже нет.
+    if (syncableKey(key)) await this.inner.removeItem(baseKey(key));
     this.outbox.delete(key);
     if (this.versions[key] !== undefined) {
       delete this.versions[key];
@@ -246,6 +341,36 @@ export class SyncingStorageAdapter implements StorageAdapter {
     if (this.state === status) return;
     this.state = status;
     for (const listener of this.listeners) listener(status);
+  }
+
+  /** Запоминает применённое слияние — до тех пор, пока приложение не перепишет книгу. */
+  private remember(slot: SlotName, body: SealedBook, before: SealedBook | null): void {
+    const pending = this.applied.get(slot);
+    // Основа — то, что приложение читало последним. До первого чтения её нет, и
+    // тогда сгодится книга, лежавшая до слияния.
+    this.applied.set(slot, {
+      body,
+      base: pending ? pending.base : (this.lastRead.get(slot) ?? before)
+    });
+    for (const listener of this.appliedListeners) listener(slot);
+  }
+
+  private readonly appliedListeners = new Set<(slot: SlotName) => void>();
+
+  /**
+   * Книга изменилась не по воле приложения — приехало чужое.
+   *
+   * Приложение держит прочитанное в памяти и само об этом не узнает; ему нужно
+   * сказать, чтобы оно перечитало и перерисовало.
+   */
+  onApplied(listener: (slot: SlotName) => void): () => void {
+    this.appliedListeners.add(listener);
+    return () => this.appliedListeners.delete(listener);
+  }
+
+  private async base(slot: SlotName): Promise<SealedBook | null> {
+    const stored = await this.inner.getItem<unknown>(baseKey(slot));
+    return sealed(stored) ? stored : null;
   }
 
   private async load(): Promise<void> {
@@ -329,16 +454,39 @@ export class SyncingStorageAdapter implements StorageAdapter {
     }
     if (snapshot.version === this.versions[slot]) return;
 
-    const mine = await this.inner.getItem<unknown>(slot);
-    const result = await merge(slot, sealed(mine) ? mine : null, snapshot.body);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const mark = this.writes;
+      const mine = await this.inner.getItem<unknown>(slot);
+      const result = await merge(
+        slot,
+        sealed(mine) ? mine : null,
+        snapshot.body,
+        await this.base(slot)
+      );
 
-    await this.inner.setItem(slot, result.body);
-    this.versions[slot] = snapshot.version;
-    await this.persist();
+      // Пока мы сливали, человек что-то записал. Положи мы слитое как есть —
+      // его запись исчезла бы с экрана, хотя он её только что сделал. Сливаем
+      // заново, теперь уже вместе с ней.
+      if (this.writes !== mark) continue;
 
-    // Отправляем обратно, только если в слитом есть что-то наше. Иначе два
-    // устройства перекидывали бы одну и ту же книгу друг другу без конца.
-    if (result.differs) this.outbox.add(slot);
+      this.remember(slot, result.body, sealed(mine) ? mine : null);
+      await this.inner.setItem(slot, result.body);
+      // Основой становится то, что лежит на сервере, а НЕ то, что получилось
+      // при слиянии: общий предок — это последняя общая точка, а слитое своё
+      // второе устройство ещё не видело.
+      await this.inner.setItem(baseKey(slot), snapshot.body);
+      this.versions[slot] = snapshot.version;
+      await this.persist();
+
+      // Отправляем обратно, только если в слитом есть что-то наше. Иначе два
+      // устройства перекидывали бы одну и ту же книгу друг другу без конца.
+      if (result.differs) this.outbox.add(slot);
+      return;
+    }
+
+    // Человек пишет быстрее, чем мы сливаем. Не страшно: ячейка остаётся в
+    // очереди, и следующий заход разберёт её вместе со всем написанным.
+    this.inbox.add(slot);
   }
 
   private async send(slot: SlotName): Promise<void> {
@@ -357,6 +505,8 @@ export class SyncingStorageAdapter implements StorageAdapter {
       });
 
       if (result.ok) {
+        // Сервер принял наше — теперь общая точка это оно.
+        await this.inner.setItem(baseKey(slot), body);
         this.versions[slot] = result.version;
         await this.persist();
         return;
@@ -371,8 +521,19 @@ export class SyncingStorageAdapter implements StorageAdapter {
         continue;
       }
 
-      const merged = await merge(slot, body, result.current.body);
+      const mark = this.writes;
+      const merged = await merge(slot, body, result.current.body, await this.base(slot));
+      if (this.writes !== mark) {
+        // Та же гонка, что и при приёме: записанное человеком, пока мы сливали,
+        // затирать нельзя. Заходим на круг заново.
+        this.versions[slot] = result.current.version;
+        await this.inner.setItem(baseKey(slot), result.current.body);
+        await this.persist();
+        continue;
+      }
+      this.remember(slot, merged.body, body);
       await this.inner.setItem(slot, merged.body);
+      await this.inner.setItem(baseKey(slot), result.current.body);
       this.versions[slot] = result.current.version;
       await this.persist();
       if (!merged.differs) return;

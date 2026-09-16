@@ -87,6 +87,33 @@ const NESTED_ROWS: ReadonlyArray<readonly [string, string, Identity]> = [
 /** Списки значений, которые просто объединяются. */
 const UNIONS: readonly string[] = ["planMonths"];
 
+/**
+ * Поля, которые операции НАКАПЛИВАЮТ, а не задают.
+ *
+ * Это самое важное место во всём слиянии, и понято оно было не сразу. Остаток
+ * на счёте — не свойство счёта, а итог всего, что по нему прошло. Купи человек
+ * хлеб с телефона и бензин с компьютера, обе траты настоящие и обе обязаны
+ * вычесться. Слияние «по строкам» выбрало бы одну из двух версий счёта — и
+ * остаток оказался бы неверным на одну покупку. Не спорным, не подозрительным:
+ * просто неверным, тихо, и человек увидел бы это месяцем позже при сверке.
+ *
+ * Поэтому такие поля складываются приращениями от общей основы:
+ *
+ *     было + (стало у меня − было) + (стало у них − было)
+ *
+ * Деньги при этом не теряются и не удваиваются, а спора не возникает вовсе —
+ * потому что спора и нет: два человека не «правили одно и то же», они потратили
+ * каждый своё.
+ *
+ * Без основы сложить приращения не из чего; тогда берётся версия посвежее, и
+ * это записано как известное ограничение первой встречи с сервером.
+ */
+const SUMMED: Readonly<Record<string, readonly string[]>> = {
+  accounts: ["balance"],
+  goals: ["currentAmount"],
+  liabilities: ["balance"]
+};
+
 function isRow(value: unknown): value is Row {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -140,6 +167,46 @@ function rowOf(side: Side): Row | null {
   return side.kind === "present" ? side.row : null;
 }
 
+function numberAt(row: Row, field: string): number | null {
+  const value = row[field];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Складывает приращения накопительных полей.
+ *
+ * Возвращает строку, только если после сложения стороны РАЗОШЛИСЬ ТОЛЬКО В НИХ.
+ * Правку названия счёта на одном устройстве и переименование его же на другом
+ * складывать нечем — это настоящий спор, и вернуть тут надо null.
+ */
+function sumDeltas(collection: string, was: Row, here: Row, there: Row): Row | null {
+  const fields = SUMMED[collection];
+  if (!fields) return null;
+
+  const result: Row = { ...(stampOf(here) >= stampOf(there) ? here : there) };
+  let summedAny = false;
+
+  for (const field of fields) {
+    const before = numberAt(was, field);
+    const mine = numberAt(here, field);
+    const theirs = numberAt(there, field);
+    if (before === null || mine === null || theirs === null) continue;
+    if (mine === theirs) continue;
+    result[field] = mine + theirs - before;
+    summedAny = true;
+  }
+
+  if (!summedAny) return null;
+
+  // Всё, кроме сложенного, обязано совпадать — иначе это спор, а не арифметика.
+  const bare = (row: Row): Row => {
+    const copy = { ...row };
+    for (const field of fields) delete copy[field];
+    return copy;
+  };
+  return sameRow(bare(here), bare(there)) ? result : null;
+}
+
 /** Слияние одного раздела. Дописывает спорные строки в `conflicts`. */
 function mergeCollection(
   collection: string,
@@ -184,6 +251,17 @@ function mergeCollection(
     if (rowHere && rowThere && sameRow(rowHere, rowThere)) {
       merged.push(stampOf(rowHere) >= stampOf(rowThere) ? rowHere : rowThere);
       continue;
+    }
+
+    // Тронуто с обеих, и вся разница — в накопленном. Складываем приращения:
+    // это не спор, а две настоящие траты, каждая из которых обязана вычесться.
+    if (rowHere && rowThere && was) {
+      const summed = sumDeltas(collection, was, rowHere, rowThere);
+
+      if (summed) {
+        merged.push(summed);
+        continue;
+      }
     }
     if (!rowHere && !rowThere) continue; // удалили обе стороны
 
