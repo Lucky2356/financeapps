@@ -21,7 +21,13 @@ import type {
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
-import { stampRows, trackDeletions, type Stamped, type Tombstone } from "@/lib/sync/row-stamps";
+import {
+  STAMPED,
+  stampRows,
+  trackDeletions,
+  type Stamped,
+  type Tombstone
+} from "@/lib/sync/row-stamps";
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
@@ -691,6 +697,7 @@ export class LocalApiClient implements ApiClient {
       await this.save(sample);
       return { loaded: true } as TResponse;
     }
+    if (pathname === "/sync/resolve") return this.resolveConflict<TResponse>(state, body);
     if (pathname === "/accounts")
       return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
@@ -3468,6 +3475,45 @@ export class LocalApiClient implements ApiClient {
    * означают, когда строку правили на самом деле. Переписать их на «сейчас»
    * значило бы объявить трёхлетнюю книгу целиком свежей.
    */
+  /**
+   * Решение человека по спорной строке.
+   *
+   * Обычная правка книги, а не особый путь: строка кладётся на своё место (или
+   * убирается), и дальше всё идёт как всегда — отметка времени, след удаления,
+   * отправка на сервер. Поэтому выбранное доезжает до второго устройства само и
+   * ровно тем же порядком, что любая другая правка, а не отдельным механизмом,
+   * который однажды разойдётся с основным.
+   */
+  private async resolveConflict<TResponse>(state: LocalState, body: unknown): Promise<TResponse> {
+    const input = body as { collection?: unknown; key?: unknown; row?: unknown };
+    const collection = typeof input.collection === "string" ? input.collection : "";
+    const key = typeof input.key === "string" ? input.key : "";
+
+    const identify = STAMPED.find(([name]) => name === collection)?.[1];
+    if (!identify) throw new Error(`Такого раздела в книге нет: ${collection}`);
+
+    const holder = state as unknown as Record<string, unknown>;
+    const rows = Array.isArray(holder[collection]) ? (holder[collection] as unknown[]) : [];
+    const kept = rows.filter((row) => {
+      if (typeof row !== "object" || row === null) return true;
+      return identify(row as Record<string, unknown>) !== key;
+    });
+
+    // Пустой строки нет — значит, выбрали «здесь её удалили»: строка просто не
+    // возвращается, а след удаления поставит сохранение, как и всегда.
+    //
+    // Отметку времени со строки снимать не нужно, хотя рука и тянется: точка
+    // сохранения верному времени учит сама и отметке, пришедшей вместе со
+    // строкой, не доверяет вовсе (см. row-stamps, decide).
+    if (input.row && typeof input.row === "object") {
+      kept.push({ ...(input.row as Record<string, unknown>) });
+    }
+
+    holder[collection] = kept;
+    await this.save(state);
+    return { resolved: true } as TResponse;
+  }
+
   private async save(state: LocalState, options: { stamp?: boolean } = {}) {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
