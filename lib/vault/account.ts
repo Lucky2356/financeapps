@@ -144,6 +144,86 @@ export class AccountService {
     return { recoveryCode };
   }
 
+  /**
+   * Принять учётную запись со своего сервера — на ВТОРОМ устройстве.
+   *
+   * Зачем это отдельно от `unlock`. Ключ книги придумывается на первом
+   * устройстве и лежит в шкатулке, завёрнутый паролем. Второе устройство, пройдя
+   * первый запуск, завело СВОЙ ключ — и книгу, приехавшую с сервера, им не
+   * открыть: это разные ключи, и никакой пароль тут не поможет. Значит чужую
+   * шкатулку надо принять как свою, а не отпирать имеющуюся.
+   *
+   * Порядок здесь важен не меньше, чем в первом запуске.
+   *
+   * Пароль проверяется ПЕРВЫМ, до единой записи: не подойди он к чужой
+   * шкатулке — на устройстве не должно измениться ничего.
+   *
+   * Дальше книга этого устройства убирается. Убирается сознательно: она
+   * запечатана ключом, который через секунду перестанет существовать, и
+   * оставить её значило бы оставить набор байтов, который уже никто никогда не
+   * прочитает. Поэтому выше стоит проверка — если в ней есть что терять, сюда
+   * мы не доходим вовсе.
+   *
+   * Пометка «не спрашивать» стирается тоже: в ней лежит ПРЕЖНИЙ ключ, и
+   * следующий запуск отпер бы книгу им — то есть не отпер бы ничего.
+   *
+   * Шкатулка кладётся последней, как и при первом запуске: оборвись всё
+   * раньше, на устройстве останется прежняя шкатулка и пустое место под книгу,
+   * а это состояние приложение читать умеет.
+   */
+  async adopt(
+    serverVault: Vault,
+    password: string,
+    options: { remember?: boolean } = {}
+  ): Promise<void> {
+    const bookKey = await unlockWithPassword(serverVault, password, {
+      extractable: options.remember === true
+    });
+
+    const own = await this.ownLedgerKeys();
+    if (own.length > 0) {
+      throw new Error(
+        "На этом устройстве уже есть своя книга с записями. Подключение к учётной " +
+          "записи сервера заменит ключ, и прочитать её будет нечем. Выгрузите " +
+          "резервную копию (Импорт → Резервная копия), очистите данные в настройках " +
+          "и подключитесь заново — книга приедет с сервера."
+      );
+    }
+
+    await this.sealed.clear();
+    await this.forgetDevice();
+    await this.plain.setItem(VAULT_KEY, serverVault);
+    this.sealed.unlock(bookKey);
+    if (options.remember) await this.rememberDevice(bookKey);
+  }
+
+  /**
+   * Книги этого устройства, в которых есть что терять.
+   *
+   * Пустая книга, заведённая первым запуском, здесь не в счёт: ради неё
+   * отказывать человеку в подключении было бы издевательством — она пуста
+   * ровно потому, что устройство новое, и именно поэтому он и подключается.
+   */
+  private async ownLedgerKeys(): Promise<string[]> {
+    const found: string[] = [];
+    for (const key of await sealableKeys(this.plain)) {
+      let book: Record<string, unknown> | null = null;
+      try {
+        book = await this.sealed.getItem<Record<string, unknown>>(key);
+      } catch {
+        // Не прочиталась — значит и потерять нечего: открыть её всё равно нечем.
+        continue;
+      }
+      if (!book) continue;
+
+      const rows = ["transactions", "accounts", "categories", "goals", "liabilities"].some(
+        (field) => Array.isArray(book[field]) && (book[field] as unknown[]).length > 0
+      );
+      if (rows) found.push(key);
+    }
+    return found;
+  }
+
   /** Отпирает паролем. Бросает, если пароль не подходит. */
   async unlock(password: string, options: { remember?: boolean } = {}): Promise<void> {
     const vault = await this.requireVault();

@@ -72,7 +72,13 @@ export function ServerPanel() {
       if (code.trim()) {
         await serverAccount.register({ base, code, login, password, vault, device });
       } else {
-        await serverAccount.signIn({ base, login, password, device });
+        // Вход БЕЗ приглашения — это второе устройство, и шкатулку, которую
+        // отдаёт служба, надо принять как свою. Ключ книги придумывался на
+        // первом устройстве; здесь первый запуск завёл свой, и книгой с сервера
+        // он не открывается. Выбрось мы её здесь — устройство подключилось бы,
+        // показало «Всё на сервере» и не смогло бы прочитать ни одной записи.
+        const joined = await serverAccount.signIn({ base, login, password, device });
+        await accountService.adopt(joined.vault, password);
       }
 
       await resumeSync();
