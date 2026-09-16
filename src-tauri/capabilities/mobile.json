@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Android permissions: the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation. The opener scope is pinned to this project's releases: granting the command alone opens nothing — the plugin also checks the URL against this list, and a bare `opener:allow-open-url` blocked the update download.",
+  "description": "Android permissions: the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation. The opener scope is pinned to this project's releases: granting the command alone opens nothing — the plugin also checks the URL against this list, and a bare `opener:allow-open-url` blocked the update download. The http scope ends with https://* and https://*:* — the two spellings the capability schema documents for \"any HTTPS origin\". Both are needed: https://* alone covers port 443 only, so a server behind a non-standard port would be refused because the sync server's address is typed by its owner at runtime and cannot be pinned at build time. This is deliberately granted to the PLUGIN, not to the page: the webview's own connect-src stays pinned, so an injected script cannot reach out through fetch. Sync requests go through lib/sync/shell-fetch.ts, which routes them via Rust for exactly this reason — the page CSP would otherwise block every request to a self-hosted server, and it would look like \"no connection\".",
   "platforms": ["android", "iOS"],
   "windows": ["main"],
   "permissions": [
@@ -41,6 +41,12 @@
         },
         {
           "url": "https://objects.githubusercontent.com/*"
+        },
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "https://*:*"
         }
       ],
       "deny": []

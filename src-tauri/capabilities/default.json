@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Desktop permissions for CSV/JSON import/export and cloud-folder sync. The opener scope is pinned to this project's releases: the command permission alone is not enough, the plugin also matches the URL against this list. The home directory stays in the allow list because that is where cloud folders actually live (YandexDisk, Dropbox, OneDrive sit next to it, not under Documents), and a folder picked once has to stay readable for the scheduled backup after a restart. What does NOT belong to a finance app is denied outright — deny wins over allow — so credentials, keys and application data are out of reach even though the folder above them is not.",
+  "description": "Desktop permissions for CSV/JSON import/export and cloud-folder sync. The opener scope is pinned to this project's releases: the command permission alone is not enough, the plugin also matches the URL against this list. The home directory stays in the allow list because that is where cloud folders actually live (YandexDisk, Dropbox, OneDrive sit next to it, not under Documents), and a folder picked once has to stay readable for the scheduled backup after a restart. What does NOT belong to a finance app is denied outright — deny wins over allow — so credentials, keys and application data are out of reach even though the folder above them is not. The http scope ends with https://* and https://*:* — the two spellings the capability schema documents for \"any HTTPS origin\". Both are needed: https://* alone covers port 443 only, so a server behind a non-standard port would be refused because the sync server's address is typed by its owner at runtime and cannot be pinned at build time. This is deliberately granted to the PLUGIN, not to the page: the webview's own connect-src stays pinned, so an injected script cannot reach out through fetch. Sync requests go through lib/sync/shell-fetch.ts, which routes them via Rust for exactly this reason — the page CSP would otherwise block every request to a self-hosted server, and it would look like \"no connection\".",
   "platforms": ["windows", "macOS", "linux"],
   "windows": ["main"],
   "permissions": [
@@ -58,6 +58,12 @@
         },
         {
           "url": "https://objects.githubusercontent.com/*"
+        },
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "https://*:*"
         }
       ],
       "deny": []
