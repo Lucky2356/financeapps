@@ -93,6 +93,19 @@ export async function resumeSync(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Дождаться, пока очередь разберётся один раз.
+ *
+ * Нужно ровно в одном месте — сразу после подключения к службе. start() толкает
+ * очередь и НЕ ждёт её: запуск приложения не имеет права ждать сеть. А вот
+ * человек, только что нажавший «Подключить устройство», ждёт именно книгу, и
+ * показать ему пустой экран, пока она едет, — значит показать то же самое, что
+ * при неудаче.
+ */
+export async function flushSync(): Promise<void> {
+  await syncStorage.flush();
+}
+
 export function stopSync(): void {
   syncStorage.stop();
 }
