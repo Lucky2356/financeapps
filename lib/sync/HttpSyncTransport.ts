@@ -71,7 +71,7 @@ async function ask(
   init: { method?: string; body?: unknown } = {}
 ): Promise<{ status: number; data: Json }> {
   if (!usable(credentials.token)) {
-    throw new ServerRefused(401, "Испорченный входной билет — войдите заново.");
+    throw new ServerRefused(401, "Вход устарел — подключитесь к службе заново.");
   }
 
   let response: Response;
@@ -116,7 +116,8 @@ export class HttpSyncTransport implements SyncTransport {
 
   async pull(slot: SlotName): Promise<SlotSnapshot> {
     const { status, data } = await ask(this.credentials, ROUTES.slot(slot));
-    if (status !== 200) throw new ServerRefused(status, String(data.error ?? "Не отдаёт ячейку."));
+    if (status !== 200)
+      throw new ServerRefused(status, String(data.error ?? "Служба не отдаёт данные."));
     return data as unknown as SlotSnapshot;
   }
 

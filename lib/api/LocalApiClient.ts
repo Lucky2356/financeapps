@@ -3596,7 +3596,7 @@ export class LocalApiClient implements ApiClient {
     const key = typeof input.key === "string" ? input.key : "";
 
     const identify = STAMPED.find(([name]) => name === collection)?.[1];
-    if (!identify) throw new Error(`Такого раздела в книге нет: ${collection}`);
+    if (!identify) throw new Error(`Такого раздела в данных нет: ${collection}`);
 
     const holder = state as unknown as Record<string, unknown>;
     const rows = Array.isArray(holder[collection]) ? (holder[collection] as unknown[]) : [];

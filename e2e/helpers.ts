@@ -27,7 +27,7 @@ export async function loadExample(page: Page) {
   // при этом безопасно спрашивать: «первый запуск» и «заперто» — состояния
   // КОНЕЧНЫЕ, до них ворота показывают пустоту, так что мелькнуть мимо них
   // нельзя и ложной тревоги здесь не будет.
-  const gate = page.getByRole("heading", { name: /Защитите книгу паролем|Книга заперта/ });
+  const gate = page.getByRole("heading", { name: /Защитите свои данные паролем|Данные заперты/ });
 
   let outcome = "ждём";
   await expect

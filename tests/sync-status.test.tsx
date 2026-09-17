@@ -90,7 +90,7 @@ describe("значок состояния связи", () => {
     );
   });
 
-  it("показывает обе версии и помечает ту, что сейчас в книге", async () => {
+  it("показывает обе версии и помечает ту, что сейчас в данных", async () => {
     runtime.setConflicts([conflict]);
     render(<SyncStatusIndicator />);
 
@@ -100,7 +100,7 @@ describe("значок состояния связи", () => {
     expect(screen.getByText("На другом устройстве")).toBeInTheDocument();
     expect(screen.getByText("700")).toBeInTheDocument();
     expect(screen.getByText("900")).toBeInTheDocument();
-    expect(screen.getAllByText("сейчас в книге")).toHaveLength(1);
+    expect(screen.getAllByText("сейчас в данных")).toHaveLength(1);
   });
 
   it("выбор уходит в книгу обычной правкой и убирает спор", async () => {

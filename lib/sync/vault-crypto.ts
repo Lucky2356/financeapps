@@ -339,7 +339,7 @@ export async function sealBook(plaintext: string, bookKey: CryptoKey): Promise<S
  */
 export async function openBook(sealed: SealedBook, bookKey: CryptoKey): Promise<string> {
   if (sealed?.alg !== "AES-GCM" || !sealed.iv || !sealed.ct) {
-    throw new Error("Книга с сервера пришла в неизвестном виде.");
+    throw new Error("Данные с сервера пришли в неизвестном виде.");
   }
   try {
     const plaintext = await crypto.subtle.decrypt(
@@ -349,6 +349,6 @@ export async function openBook(sealed: SealedBook, bookKey: CryptoKey): Promise<
     );
     return new TextDecoder().decode(plaintext);
   } catch {
-    throw new Error("Книгу не удалось прочитать — не тот ключ или файл повреждён.");
+    throw new Error("Данные не удалось прочитать — не тот ключ или файл повреждён.");
   }
 }

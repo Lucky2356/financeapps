@@ -56,7 +56,7 @@ export const UNSEALED_KEYS: readonly string[] = [
  */
 export class BookLockedError extends Error {
   constructor() {
-    super("Книга заперта — введите пароль.");
+    super("Данные заперты — введите пароль.");
     this.name = "BookLockedError";
   }
 }

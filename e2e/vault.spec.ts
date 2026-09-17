@@ -60,7 +60,7 @@ async function answerVerification(page: import("@playwright/test").Page, words: 
 
 test("первый запуск просит пароль раньше, чем покажет приложение", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Защитите книгу паролем" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Защитите свои данные паролем" })).toBeVisible({
     timeout: 30_000
   });
   // Ни боковой панели, ни кнопки добавления: под замком нажимать нечего.
@@ -109,7 +109,7 @@ test("после перезапуска книга заперта, и верны
   });
 
   await restart(page);
-  await expect(page.getByRole("heading", { name: "Книга заперта" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Данные заперты" })).toBeVisible({
     timeout: 30_000
   });
 
@@ -136,7 +136,7 @@ test("забытый пароль чинится кодом, и записанн
   await loadExample(page);
 
   await restart(page);
-  await expect(page.getByRole("heading", { name: "Книга заперта" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Данные заперты" })).toBeVisible({
     timeout: 30_000
   });
   await page.getByRole("button", { name: "Забыли пароль?" }).click();
@@ -167,7 +167,7 @@ test("галка «не спрашивать» убирает вопрос пр�
   });
 
   await restart(page);
-  await expect(page.getByRole("heading", { name: "Книга заперта" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Данные заперты" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
     timeout: 30_000
   });
