@@ -127,8 +127,17 @@ const waitText = (needle) =>
 async function press(label) {
   const found = await until(`кнопка «${label}»`, () =>
     run(
-      "return Array.from(document.querySelectorAll('button, a'))" +
-        ".find((node) => node.innerText.trim() === arguments[0]) ?? null",
+      // Сверяется ПЕРВАЯ СТРОКА подписи, а не вся целиком.
+      //
+      // На выборе источника данных подпись и пояснение лежат в одной кнопке:
+      // «Начать с нуля\nПустые счета и операции — их заполняете вы». Точное
+      // равенство не совпадало с ней ни по-русски, ни по-английски, и выглядело
+      // это как «кнопки нет». Первая строка — это ровно то, что человек читает
+      // как название кнопки.
+      "return Array.from(document.querySelectorAll('button, a')).find((node) => {" +
+        " const text = node.innerText.trim();" +
+        " return text === arguments[0] || text.split('\\n')[0].trim() === arguments[0];" +
+        "}) ?? null",
       [label]
     )
   );
@@ -373,6 +382,32 @@ async function main() {
     } catch {
       console.log("Экран так и остался пустым.");
     }
+
+    // Язык закрепляется НАРОЧНО, и это не подгонка под оснастку.
+    //
+    // Приложение выбирает язык так: сохранённый выбор, иначе язык устройства,
+    // иначе русский. На машине сборки Windows английская — и приложение
+    // открылось по-английски, «Where do we start?» вместо «С чего начнём?».
+    // Оснастка искала русские подписи и не нашла ни одной.
+    //
+    // То есть исход прогона зависел от языка чужой машины. Это надо убирать, а
+    // не обходить: не закрепи мы язык, проверка отвечала бы по-разному на
+    // одинаковом приложении, и однажды её ответ ничего бы не значил.
+    //
+    // Пишется тот же ключ, что и настройками приложения, и страница
+    // перечитывается — ровно то, что делает человек, выбрав язык.
+    const already = await run("return document.documentElement.lang");
+    if (already !== "ru") {
+      await run("try { localStorage.setItem('app-locale', 'ru'); } catch {}");
+      await inSession("POST", "/refresh");
+      await until(
+        "русский на экране",
+        async () => (await run("return document.documentElement.lang").catch(() => "")) === "ru",
+        30_000
+      );
+      console.log(`Язык закреплён: был «${already}», стал «ru».`);
+    }
+
     console.log(`  ${await snapshot()}`);
 
     for (const [name, seam] of SEAMS) {
