@@ -333,12 +333,54 @@ async function main() {
     sessionId = created.sessionId;
     console.log(`Приложение открыто: ${app}`);
 
+    // Что на экране НА САМОМ ДЕЛЕ.
+    //
+    // Без этого неудача шва звучит одинаково при трёх разных положениях дел:
+    // страница не загрузилась вовсе; загрузилась, но драйвер смотрит в чужое
+    // окно; загрузилась наша и показывает не то, чего мы ждём. Разбирать их по
+    // строке «не дождались кнопки» — то же гадание, что стоило трёх прогонов
+    // на «DevToolsActivePort».
+    const snapshot = async () => {
+      const windows = await inSession("GET", "/window/handles").catch(() => []);
+      const where = await run("return location.href").catch(() => "?");
+      const title = await run("return document.title").catch(() => "?");
+      const text = await run(
+        "return document.body ? document.body.innerText.slice(0, 400) : '<body ещё нет>'"
+      ).catch((cause) => `<не прочиталось: ${cause.message}>`);
+      const buttons = await run(
+        "return Array.from(document.querySelectorAll('button')).map(n => n.innerText.trim()).filter(Boolean).slice(0, 12)"
+      ).catch(() => []);
+      return [
+        `окон: ${windows.length}; адрес: ${where}; заголовок: ${title}`,
+        `видно: ${JSON.stringify(text)}`,
+        `кнопки: ${JSON.stringify(buttons)}`
+      ].join("\n  ");
+    };
+
+    // Оболочка рисуется не мгновенно: статическая страница ещё поднимает Next,
+    // ворота ещё спрашивают хранилище. Ждём первых слов, а не первого шва.
+    try {
+      await until(
+        "первые слова на экране",
+        async () => {
+          const text = await run(
+            "return document.body ? document.body.innerText.trim() : ''"
+          ).catch(() => "");
+          return text.length > 0;
+        },
+        60_000
+      );
+    } catch {
+      console.log("Экран так и остался пустым.");
+    }
+    console.log(`  ${await snapshot()}`);
+
     for (const [name, seam] of SEAMS) {
       try {
         console.log(`✓ ${name}\n  ${await seam()}`);
       } catch (cause) {
         failed += 1;
-        console.log(`✗ ${name}\n  ${cause.message}`);
+        console.log(`✗ ${name}\n  ${cause.message}\n  ${await snapshot()}`);
         // Дальше идём: швы независимы, и знать про все разом полезнее, чем
         // чинить их по одному прогону за двадцать минут.
       }
