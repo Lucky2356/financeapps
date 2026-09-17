@@ -15,6 +15,7 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { unwrapBackup } from "@/lib/backup/unwrap";
 import { apiClient } from "@/lib/api/client";
 import type { PreUpgradeBackup } from "@/lib/api/LocalApiClient";
 import type { ImportPageData, TransactionsPageData } from "@/lib/data";
@@ -71,22 +72,6 @@ type BackupPreview = {
 
 function countArray(value: unknown) {
   return Array.isArray(value) ? value.length : 0;
-}
-
-/**
- * The state document inside whatever the file holds.
- *
- * Three things in the app write a backup: the "download backup" button writes
- * the document itself, while the scheduled backup and the folder sync wrap it
- * as `{ exportedAt, backup }`. Restore only understood the first, so a file
- * from the other two opened with every count at zero and was then refused —
- * which is exactly what a person moving to a second computer picks up.
- */
-function unwrapBackup(payload: unknown): unknown {
-  const data = payload as { backup?: unknown } | null;
-  return data && typeof data === "object" && data.backup && typeof data.backup === "object"
-    ? data.backup
-    : payload;
 }
 
 function summarizeBackupPayload(payload: unknown): BackupPreview {

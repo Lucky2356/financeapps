@@ -1731,6 +1731,36 @@ const ru: Messages = {
   "calc.open": "Калькулятор",
   // --- Замок на данных (учётная запись) ---
   "vault.checking": "Проверяем замок…",
+  "vault.source.title": "С чего начнём?",
+  "vault.source.lead":
+    "Записи будут храниться на этом устройстве. Их можно завести с нуля, поднять из резервной копии или забрать с устройства, где они уже есть.",
+  "vault.source.fresh": "Начать с нуля",
+  "vault.source.freshHint": "Пустые счета и операции — заполните их сами.",
+  "vault.source.file": "Восстановить из файла",
+  "vault.source.fileHint": "Файл резервной копии, выгруженный из этого приложения.",
+  "vault.source.device": "Данные уже есть на другом устройстве",
+  "vault.source.deviceHint": "Заберём их со службы, к которой подключено то устройство.",
+  "vault.restore.title": "Выберите файл резервной копии",
+  "vault.restore.lead":
+    "Тот самый файл, который выгружали из приложения: «Импорт» → «Резервная копия». Всё, что в нём есть, ляжет на это устройство.",
+  "vault.restore.pick": "Файл резервной копии",
+  "vault.restore.submit": "Восстановить",
+  "vault.restore.working": "Восстанавливаем…",
+  "vault.restore.broken": "Файл не похож на резервную копию этого приложения.",
+  "vault.restore.skip": "Пропустить и начать с нуля",
+  "vault.join.title": "Забрать данные с другого устройства",
+  "vault.join.lead":
+    "Понадобится адрес службы, имя входа и пароль — те же, что на устройстве, где данные уже есть.",
+  "vault.join.submit": "Забрать данные",
+  "vault.join.working": "Забираем…",
+  "vault.choose.title": "Защитить данные паролем?",
+  "vault.choose.lead":
+    "Записи будут храниться на этом устройстве. Пароль нужен, чтобы их не открыл тот, кто взял устройство в руки, — и он же понадобится, если вы захотите видеть эти же записи на телефоне.",
+  "vault.choose.withPassword": "Задать пароль",
+  "vault.choose.without": "Пока без пароля",
+  "vault.choose.withoutHint":
+    "Начнёте прямо сейчас. Данные и так будут зашифрованы на диске — но ключ лежит рядом, и откроет их любой, кто до этого устройства добрался. Пароль можно задать потом в настройках.",
+  "vault.choose.working": "Готовим…",
   "vault.setup.title": "Защитите свои данные паролем",
   "vault.setup.lead":
     "Данные будут храниться на устройстве в зашифрованном виде. Пароль нужен, чтобы их открыть, — и он же понадобится, когда они начнут синхронизироваться между устройствами.",
@@ -1776,6 +1806,10 @@ const ru: Messages = {
   "vault.wipe.confirm": "Стереть всё безвозвратно",
   "vault.settings.title": "Пароль и доступ",
   "vault.settings.desc": "Пароль, которым открываются ваши данные на этом устройстве.",
+  "vault.settings.noPassword":
+    "Пароль не задан: данные на этом устройстве откроет любой, кто до него добрался. Задайте пароль — и его начнут спрашивать при запуске.",
+  "vault.settings.setPassword": "Задать пароль",
+  "vault.settings.passwordSet": "Пароль задан. Теперь его будут спрашивать при запуске.",
   "vault.settings.remembered": "Это устройство не спрашивает пароль.",
   "vault.settings.asks": "Пароль спрашивается при каждом запуске.",
   "vault.settings.forget": "Спрашивать пароль на этом устройстве",
@@ -3640,6 +3674,36 @@ const en: Messages = {
   "calc.open": "Calculator",
   // --- Data lock (account) ---
   "vault.checking": "Checking the lock…",
+  "vault.source.title": "Where do we start?",
+  "vault.source.lead":
+    "Your records will live on this device. Start them from scratch, bring them back from a backup, or fetch them from a device that already has them.",
+  "vault.source.fresh": "Start from scratch",
+  "vault.source.freshHint": "Empty accounts and operations — you fill them in.",
+  "vault.source.file": "Restore from a file",
+  "vault.source.fileHint": "A backup file saved from this app.",
+  "vault.source.device": "My data is on another device",
+  "vault.source.deviceHint": "We fetch it from the service that device is connected to.",
+  "vault.restore.title": "Choose the backup file",
+  "vault.restore.lead":
+    "The file you saved from the app: Import → Backup. Everything in it lands on this device.",
+  "vault.restore.pick": "Backup file",
+  "vault.restore.submit": "Restore",
+  "vault.restore.working": "Restoring…",
+  "vault.restore.broken": "That file does not look like a backup of this app.",
+  "vault.restore.skip": "Skip and start from scratch",
+  "vault.join.title": "Fetch data from another device",
+  "vault.join.lead":
+    "You will need the service address, the login name and the password — the same ones as on the device that already has the data.",
+  "vault.join.submit": "Fetch the data",
+  "vault.join.working": "Fetching…",
+  "vault.choose.title": "Protect your data with a password?",
+  "vault.choose.lead":
+    "Your records will be kept on this device. A password keeps them from whoever picks the device up — and it is the same password you will need if you ever want these records on your phone too.",
+  "vault.choose.withPassword": "Set a password",
+  "vault.choose.without": "Not for now",
+  "vault.choose.withoutHint":
+    "You start right away. The data is still encrypted on disk — but the key sits next to it, so anyone who gets to this device opens it. You can set a password later in settings.",
+  "vault.choose.working": "Getting ready…",
   "vault.setup.title": "Protect your data with a password",
   "vault.setup.lead":
     "Your data will be stored on this device encrypted. The password opens it — and it is the same password you will need once the data starts syncing between devices.",
@@ -3685,6 +3749,10 @@ const en: Messages = {
   "vault.wipe.confirm": "Erase everything permanently",
   "vault.settings.title": "Password and access",
   "vault.settings.desc": "The password your data on this device opens with.",
+  "vault.settings.noPassword":
+    "No password is set: anyone who gets to this device opens your data. Set one and it will be asked on launch.",
+  "vault.settings.setPassword": "Set a password",
+  "vault.settings.passwordSet": "Password set. It will be asked on launch from now on.",
   "vault.settings.remembered": "This device does not ask for the password.",
   "vault.settings.asks": "The password is asked on every launch.",
   "vault.settings.forget": "Ask for the password on this device",

@@ -49,8 +49,25 @@ export const DEVICE_KEY = "financeDevice";
  */
 type DeviceMemory = {
   v: 1;
-  /** Ключ книги в необработанном виде, base64. */
+  /** Ключ данных в необработанном виде, base64. */
   bookKey: string;
+  /**
+   * Код восстановления — и только у записи БЕЗ пароля.
+   *
+   * Запись без пароля устроена так: пароль всё равно есть, он случайный и
+   * человеку не показывается никогда. Заворачивать ключ надо чем-то, а
+   * «завернём пустой строкой» — это не защита, а её изображение.
+   *
+   * Значит нужен способ поставить пароль потом, не зная случайного. Он уже
+   * есть и уже проверен: код восстановления, вторая обёртка того же ключа.
+   * Поэтому код лежит здесь — рядом с самим ключом, то есть ровно там же, где
+   * и так лежит всё, что открывает данные на этом устройстве. Ничего нового он
+   * не открывает: у кого есть bookKey, у того уже всё.
+   *
+   * Его наличие И ЕСТЬ признак «пароль не задан»: отдельного поля-флага нет,
+   * потому что флаг и действительность разошлись бы на первой же правке.
+   */
+  recoveryCode?: string;
 };
 
 export type AccountState =
@@ -160,6 +177,68 @@ export class AccountService {
   }
 
   /**
+   * Первый запуск БЕЗ пароля — для того, кто просто хочет начать вести расходы.
+   *
+   * Три экрана до первой операции — самое частое место, где люди бросают. Кто
+   * скачал приложение посмотреть, тот не готов придумывать пароль и
+   * переписывать на бумагу двенадцать слов; он хочет записать вчерашний поход
+   * в магазин. Поэтому пароль предлагается, но не требуется.
+   *
+   * ЧТО ЭТО ЗНАЧИТ НА САМОМ ДЕЛЕ, и сказать это надо прямо, потому что экран
+   * обязан повторить то же самое. Данные на диске по-прежнему зашифрованы —
+   * это не «без шифрования». Но ключ лежит на том же устройстве и открыт, то
+   * есть данные откроет любой, кто до устройства добрался. Защиты ИМЕННО ЭТОГО
+   * устройства нет. Замок остаётся там, где он и без того нужен: на копиях и
+   * на том, что уедет на сервер.
+   *
+   * Устроено это не отдельной веткой в шифровании, а той же шкатулкой со
+   * случайным паролем, которого никто не увидит. Заводить второй вид записи —
+   * значит завести второй путь через весь замок, и однажды разойтись с первым.
+   */
+  async createWithoutPassword(): Promise<void> {
+    if (await this.vault()) throw new Error("Учётная запись на этом устройстве уже заведена.");
+
+    const throwaway = toBase64(crypto.getRandomValues(new Uint8Array(32)));
+    const { vault, recoveryCode } = await createVault(throwaway);
+    // Извлекаемый: ключ придётся положить в память устройства, иначе следующий
+    // запуск спросит пароль, которого человек не знает и знать не может.
+    const bookKey = await unlockWithPassword(vault, throwaway, { extractable: true });
+
+    await sealExistingBook(this.plain, bookKey);
+    this.sealed.unlock(bookKey);
+    await this.rememberDevice(bookKey, recoveryCode);
+    // Шкатулка последней — по той же причине, что и в первом запуске с паролем.
+    await this.plain.setItem(VAULT_KEY, vault);
+  }
+
+  /** Задан ли пароль. «Нет» — значит запись заведена без него. */
+  async hasPassword(): Promise<boolean> {
+    if (!(await this.vault())) return false;
+    const remembered = await this.plain.getItem<DeviceMemory>(DEVICE_KEY);
+    return !remembered?.recoveryCode;
+  }
+
+  /**
+   * Поставить пароль записи, заведённой без него.
+   *
+   * Случайного пароля нет ни у кого, и в этом весь фокус: пароль ставится
+   * кодом восстановления — той же дорогой, какой его меняет забывший. Отдельной
+   * ветки в шифровании не появляется.
+   *
+   * Память устройства стирается: человек, задавший пароль, хочет, чтобы его
+   * спрашивали. Оставь мы пометку — пароль был бы поставлен и тут же обойдён.
+   */
+  async setPassword(next: string): Promise<{ recoveryCode: string }> {
+    const remembered = await this.plain.getItem<DeviceMemory>(DEVICE_KEY);
+    if (!remembered?.recoveryCode) {
+      throw new Error("Пароль уже задан — его можно только сменить.");
+    }
+    await this.resetPassword(remembered.recoveryCode, next);
+    await this.forgetDevice();
+    return { recoveryCode: remembered.recoveryCode };
+  }
+
+  /**
    * Принять учётную запись со своего сервера — на ВТОРОМ устройстве.
    *
    * Зачем это отдельно от `unlock`. Ключ книги придумывается на первом
@@ -257,8 +336,19 @@ export class AccountService {
     this.sealed.unlock(await unlockWithRecoveryCode(vault, code));
   }
 
-  /** Запирает обратно и забывает устройство: «выйти» означает именно это. */
+  /**
+   * Запирает обратно и забывает устройство: «выйти» означает именно это.
+   *
+   * У записи БЕЗ пароля отпирать потом нечем: в памяти устройства лежит
+   * единственный ключ, и «запереть» означало бы выбросить его. Поэтому здесь
+   * отказ, а не молчаливая потеря данных. Экран такую кнопку и не показывает —
+   * но полагаться на то, что экран не ошибётся, нельзя: между ним и данными
+   * стоит эта служба, ей и отвечать.
+   */
   async lock(): Promise<void> {
+    if (!(await this.hasPassword())) {
+      throw new Error("Пароль не задан — запирать нечем. Сначала задайте пароль.");
+    }
     this.sealed.lock();
     await this.forgetDevice();
   }
@@ -307,11 +397,12 @@ export class AccountService {
     await this.plain.removeItem(DEVICE_KEY);
   }
 
-  private async rememberDevice(bookKey: CryptoKey): Promise<void> {
+  private async rememberDevice(bookKey: CryptoKey, recoveryCode?: string): Promise<void> {
     const raw = await crypto.subtle.exportKey("raw", bookKey);
     await this.plain.setItem<DeviceMemory>(DEVICE_KEY, {
       v: 1,
-      bookKey: toBase64(new Uint8Array(raw))
+      bookKey: toBase64(new Uint8Array(raw)),
+      ...(recoveryCode ? { recoveryCode } : {})
     });
   }
 

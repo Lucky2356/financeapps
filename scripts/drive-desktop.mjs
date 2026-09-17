@@ -61,10 +61,19 @@ const app = pickApp();
 let sessionId = null;
 
 async function call(method, path, body) {
+  // У команды POST тело обязательно, даже когда сказать нечего.
+  //
+  // Драйвер разбирает тело у всякой POST и на пустоту отвечает «invalid
+  // argument: missing command parameters» — строкой про параметры, хотя дело в
+  // отсутствии самого тела. Этим споткнулись и перечитывание страницы, и щелчок
+  // по кнопке: обоим сказать нечего, и оба уходили без тела. Пустой предмет
+  // здесь — не украшение, а то, чего ждёт протокол.
+  const sends = method === "POST";
+  const outgoing = sends ? (body ?? {}) : body;
   const response = await fetch(`${DRIVER}${path}`, {
     method,
-    headers: body === undefined ? {} : { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body)
+    headers: outgoing === undefined ? {} : { "content-type": "application/json" },
+    body: outgoing === undefined ? undefined : JSON.stringify(outgoing)
   });
   const text = await response.text();
   let payload = {};
@@ -127,8 +136,17 @@ const waitText = (needle) =>
 async function press(label) {
   const found = await until(`кнопка «${label}»`, () =>
     run(
-      "return Array.from(document.querySelectorAll('button, a'))" +
-        ".find((node) => node.innerText.trim() === arguments[0]) ?? null",
+      // Сверяется ПЕРВАЯ СТРОКА подписи, а не вся целиком.
+      //
+      // На выборе источника данных подпись и пояснение лежат в одной кнопке:
+      // «Начать с нуля\nПустые счета и операции — их заполняете вы». Точное
+      // равенство не совпадало с ней ни по-русски, ни по-английски, и выглядело
+      // это как «кнопки нет». Первая строка — это ровно то, что человек читает
+      // как название кнопки.
+      "return Array.from(document.querySelectorAll('button, a')).find((node) => {" +
+        " const text = node.innerText.trim();" +
+        " return text === arguments[0] || text.split('\\n')[0].trim() === arguments[0];" +
+        "}) ?? null",
       [label]
     )
   );
@@ -168,6 +186,13 @@ async function closeDialogs() {
  * в IndexedDB. Погасни любое из трёх — дальше первого шага не уйти.
  */
 async function firstRun() {
+  // Первый запуск начинается с выбора, откуда взять данные, и следом — нужен ли
+  // пароль. Швы проверяются по ветке «с нуля, с паролем»: она проходит через
+  // WebCrypto и запись в IndexedDB целиком, то есть через всё, что политика
+  // WebView2 может погасить.
+  await press("Начать с нуля");
+  await press("Задать пароль");
+
   await type(await waitFor("#vault-password"), PASSWORD);
   await type(await find("#vault-repeat"), PASSWORD);
   await press("Задать пароль");
@@ -244,23 +269,43 @@ async function strangerAddress() {
  *
  * Проверяется не «есть обновление» — его может и не быть, — а то, что вопрос
  * задан и ответ получен: ключ на месте, адрес разрешён, подпись читается.
- * Ошибка здесь выглядит совсем иначе, чем «вы на последней версии».
+ *
+ * Ответов у обновлялки ровно три, и сверяться надо с ними целиком, а не с
+ * обрывками слов. Первая эта проверка искала в тексте всей страницы кусок
+ * «последн» — и нашла его в кнопке «Отменить последний импорт», которая лежала
+ * на экране настроек ещё до нажатия. Шов показал зелёное, не спросив обновлялку
+ * ни разу, и показывал бы его всегда.
+ *
+ * Такое хуже красного: красное зовёт разбираться, а ложное зелёное выдаёт себя
+ * за доказательство. Поэтому здесь перечислены три настоящих ответа, и третий
+ * из них — поломка, ради которой шов и заведён.
  */
+const UPDATER_FINE = ["У вас актуальная версия", "Доступно обновление"];
+const UPDATER_BROKEN = "Автообновление недоступно";
+
 async function updates() {
   await press("Проверить обновления");
   const answer = await until(
     "ответ обновлялки",
     async () => {
       const text = await seen();
-      for (const known of ["последн", "Обновление", "обновлени"]) {
-        if (text.includes(known)) return text;
-      }
-      return null;
+      if (text.includes(UPDATER_BROKEN)) return { fine: false, line: UPDATER_BROKEN };
+      const said = UPDATER_FINE.find((known) => text.includes(known));
+      if (!said) return null;
+      const line = text.split("\n").find((part) => part.includes(said)) ?? said;
+      return { fine: true, line: line.trim().slice(0, 120) };
     },
     90_000
   );
-  const line = answer.split("\n").find((part) => /последн|бновлени/.test(part)) ?? "";
-  return `обновлялка ответила: ${line.trim().slice(0, 120)}`;
+
+  if (!answer.fine) {
+    throw new Error(
+      "обновлялка не смогла прочитать манифест — это и есть тот шов, ради которого " +
+        "прогон заведён: ключ, адрес выпусков или подпись не сошлись, и человек " +
+        "обновление не получит"
+    );
+  }
+  return `обновлялка ответила: ${answer.line}`;
 }
 
 // ——— прогон ——————————————————————————————————————————————————————
@@ -277,7 +322,10 @@ async function main() {
     process.exit(1);
   }
 
+  // Слово драйвера попадает в журнал: без него неудача выглядит одной строкой
+  // про несуществующий файл, и разбирать нечего.
   const driver = spawn("tauri-driver", ["--port", "4444"], { stdio: "inherit" });
+  console.log(`Приложение для прогона: ${app}`);
   driver.on("error", (cause) => {
     console.error("tauri-driver не запустился:", cause.message);
     process.exit(1);
@@ -298,18 +346,105 @@ async function main() {
       30_000
     );
 
+    // Здесь приложение открывается — и здесь же прогон спотыкается на машине
+    // сборки. Причина не наша, и записана она, чтобы следующий читатель не
+    // потратил на неё три прогона, как я.
+    //
+    // WebView2 Runtime 150 (июль 2026) перестал принимать порт отладки от
+    // приложения, запущенного С ПРАВАМИ АДМИНИСТРАТОРА: ни из командной
+    // строки, ни из переменных окружения, ни из HKCU. Драйвер Edge выставляет
+    // порт ровно переменной окружения — и она молча отбрасывается. Файла с
+    // портом не появляется, и приходит «DevToolsActivePort file doesn't
+    // exist»: строка про несуществующий файл вместо строки про отнятое право.
+    //
+    // Отсюда windows-2022 в настройках действия: там WebView2 ещё 131.
+    //
+    // browserName здесь не указан НАРОЧНО. На Windows tauri-driver ставит его
+    // сам — «webview2», перезаписывая что бы мы ни прислали (map_capabilities,
+    // always_match.extend). Строка «wry» из руководства — про Linux и WebKit;
+    // на Windows она не значит ничего, и одна попытка починки ушла на неё.
     const created = await call("POST", "/session", {
-      capabilities: { alwaysMatch: { "tauri:options": { application: app } } }
+      capabilities: {
+        alwaysMatch: { "tauri:options": { application: app } }
+      }
     });
     sessionId = created.sessionId;
     console.log(`Приложение открыто: ${app}`);
+
+    // Что на экране НА САМОМ ДЕЛЕ.
+    //
+    // Без этого неудача шва звучит одинаково при трёх разных положениях дел:
+    // страница не загрузилась вовсе; загрузилась, но драйвер смотрит в чужое
+    // окно; загрузилась наша и показывает не то, чего мы ждём. Разбирать их по
+    // строке «не дождались кнопки» — то же гадание, что стоило трёх прогонов
+    // на «DevToolsActivePort».
+    const snapshot = async () => {
+      const windows = await inSession("GET", "/window/handles").catch(() => []);
+      const where = await run("return location.href").catch(() => "?");
+      const title = await run("return document.title").catch(() => "?");
+      const text = await run(
+        "return document.body ? document.body.innerText.slice(0, 400) : '<body ещё нет>'"
+      ).catch((cause) => `<не прочиталось: ${cause.message}>`);
+      const buttons = await run(
+        "return Array.from(document.querySelectorAll('button')).map(n => n.innerText.trim()).filter(Boolean).slice(0, 12)"
+      ).catch(() => []);
+      return [
+        `окон: ${windows.length}; адрес: ${where}; заголовок: ${title}`,
+        `видно: ${JSON.stringify(text)}`,
+        `кнопки: ${JSON.stringify(buttons)}`
+      ].join("\n  ");
+    };
+
+    // Оболочка рисуется не мгновенно: статическая страница ещё поднимает Next,
+    // ворота ещё спрашивают хранилище. Ждём первых слов, а не первого шва.
+    try {
+      await until(
+        "первые слова на экране",
+        async () => {
+          const text = await run(
+            "return document.body ? document.body.innerText.trim() : ''"
+          ).catch(() => "");
+          return text.length > 0;
+        },
+        60_000
+      );
+    } catch {
+      console.log("Экран так и остался пустым.");
+    }
+
+    // Язык закрепляется НАРОЧНО, и это не подгонка под оснастку.
+    //
+    // Приложение выбирает язык так: сохранённый выбор, иначе язык устройства,
+    // иначе русский. На машине сборки Windows английская — и приложение
+    // открылось по-английски, «Where do we start?» вместо «С чего начнём?».
+    // Оснастка искала русские подписи и не нашла ни одной.
+    //
+    // То есть исход прогона зависел от языка чужой машины. Это надо убирать, а
+    // не обходить: не закрепи мы язык, проверка отвечала бы по-разному на
+    // одинаковом приложении, и однажды её ответ ничего бы не значил.
+    //
+    // Пишется тот же ключ, что и настройками приложения, и страница
+    // перечитывается — ровно то, что делает человек, выбрав язык.
+    const already = await run("return document.documentElement.lang");
+    if (already !== "ru") {
+      await run("try { localStorage.setItem('app-locale', 'ru'); } catch {}");
+      await inSession("POST", "/refresh");
+      await until(
+        "русский на экране",
+        async () => (await run("return document.documentElement.lang").catch(() => "")) === "ru",
+        30_000
+      );
+      console.log(`Язык закреплён: был «${already}», стал «ru».`);
+    }
+
+    console.log(`  ${await snapshot()}`);
 
     for (const [name, seam] of SEAMS) {
       try {
         console.log(`✓ ${name}\n  ${await seam()}`);
       } catch (cause) {
         failed += 1;
-        console.log(`✗ ${name}\n  ${cause.message}`);
+        console.log(`✗ ${name}\n  ${cause.message}\n  ${await snapshot()}`);
         // Дальше идём: швы независимы, и знать про все разом полезнее, чем
         // чинить их по одному прогону за двадцать минут.
       }

@@ -26,7 +26,26 @@ permissions:
 jobs:
   seams:
     name: Drive the built app
-    runs-on: windows-latest
+    # windows-2022, а не windows-latest, и это не придирка к образу.
+    #
+    # WebView2 Runtime 150 (июль 2026) перестал принимать порт отладки от
+    # приложения, запущенного с правами администратора: ни из командной строки,
+    # ни из переменных окружения, ни из HKCU — только через API или политику
+    # HKLM. Драйвер Edge выставляет порт ровно переменной окружения, а машины
+    # сборки работают от администратора. На windows-latest (это windows-2025,
+    # WebView2 152) прогон падает на создании сессии ВСЕГДА; на windows-2022,
+    # где WebView2 ещё 131, проходит.
+    #
+    # Своими силами это не чинится: порт мог бы передать сам wry, через
+    # AdditionalBrowserArguments, но там от такой правки отказались, сочтя
+    # ужесточение правильным по замыслу. Обсуждение:
+    # https://github.com/webdriverio/desktop-mobile/issues/542
+    # https://github.com/actions/runner-images/issues/14738
+    #
+    # Образ этот не навсегда, и делать вид, что навсегда, не будем: когда его
+    # уберут, прогон встанет, и разбираться придётся заново — потому шаг ниже и
+    # печатает обе версии, чтобы следующая поломка читалась с первого взгляда.
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
@@ -61,14 +80,117 @@ jobs:
       - name: Build Tauri Windows bundle
         run: npx tauri build --no-bundle
 
+      # Ставится, только если его ещё нет.
+      #
+      # В кэш попадает и ~/.cargo/bin — ради того кэш и заведён, — а
+      # «cargo install» на уже установленный двоичный файл отвечает отказом:
+      # «binary tauri-driver.exe already exists in destination». То есть первый
+      # же удачный прогон ломал следующий, и заметно это стало только тогда,
+      # когда прогон впервые дошёл до конца и сохранил полный кэш.
       - name: Install tauri-driver
-        run: cargo install tauri-driver --locked
-
-      # tauri-driver разговаривает с WebView2 через драйвер Edge. На машине
-      # сборки он уже стоит, но не на PATH — путь приходит переменной.
-      - name: Put Edge WebDriver on PATH
         shell: pwsh
-        run: Add-Content -Path $env:GITHUB_PATH -Value $env:EDGEWEBDRIVER
+        run: |
+          $have = Get-Command tauri-driver -ErrorAction SilentlyContinue
+          if ($have) {
+            Write-Host "tauri-driver уже в кэше: $($have.Source)"
+          } else {
+            cargo install tauri-driver --locked
+          }
+
+      # Драйвер подбирается под WEBVIEW2, а не под Edge, — и это две разные
+      # версии на одной машине.
+      #
+      # Разговор идёт с WebView2 нашего приложения, и драйвер отказывается вести
+      # окно, у которого не совпадает старшая цифра версии. На этом образе Edge
+      # обновляется сам и приехал 152-м, а WebView2 остался 131-м, — драйвер с
+      # образа не годится, и он прямо об этом сказал: «This version of Microsoft
+      # Edge WebDriver only supports Microsoft Edge version 152, current browser
+      # version is 131.0.2903.86».
+      #
+      # Сказал он это потому, что предыдущий шаг напечатал обе версии рядом. До
+      # того ответом была строка про несуществующий файл, и на неё ушло три
+      # прогона. Здесь версии печатаются снова, уже подобранные.
+      #
+      # Про совпадение с версией EDGE в руководстве Tauri написано верно для
+      # обычного Edge; для WebView2 верно другое — совпадать нужно с ним.
+      - name: Put a matching Edge WebDriver on PATH
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $webview2 = (Get-ItemProperty -Path $key -ErrorAction SilentlyContinue).pv
+          if (-not $webview2) {
+            Write-Host "::error::версия WebView2 Runtime не читается из реестра — подобрать драйвер не под что"
+            exit 1
+          }
+          $wanted = $webview2.Split('.')[0]
+
+          $onImage = (& (Join-Path $env:EDGEWEBDRIVER 'msedgedriver.exe') --version) -join ' '
+          $have = if ($onImage -match '(\d+)\.') { $Matches[1] } else { '?' }
+          Write-Host "WebView2 Runtime: $webview2 (нужен драйвер $wanted)"
+          Write-Host "драйвер с образа: $onImage"
+
+          if ($have -eq $wanted) {
+            Write-Host "версии сходятся — берём драйвер с образа"
+            Add-Content -Path $env:GITHUB_PATH -Value $env:EDGEWEBDRIVER
+            exit 0
+          }
+
+          # Сначала — драйвер ровно той же сборки, что WebView2. Если такой
+          # сборки в загрузках нет, годится последний из той же старшей версии:
+          # драйвер сверяет именно её.
+          $dir = Join-Path $env:RUNNER_TEMP 'edgedriver'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $zip = Join-Path $dir 'driver.zip'
+          $tries = @($webview2)
+          try {
+            $latest = (Invoke-WebRequest -UseBasicParsing "https://msedgedriver.microsoft.com/LATEST_RELEASE_$wanted").Content
+            $latest = ($latest -replace '[^\d\.]', '').Trim()
+            if ($latest -and $latest -ne $webview2) { $tries += $latest }
+          } catch {
+            Write-Host "список последних сборок $wanted не прочитался: $($_.Exception.Message)"
+          }
+
+          $took = $null
+          foreach ($build in $tries) {
+            $url = "https://msedgedriver.microsoft.com/$build/edgedriver_win64.zip"
+            try {
+              Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
+              $took = $build
+              break
+            } catch {
+              Write-Host "не скачался $build"
+            }
+          }
+          if (-not $took) {
+            Write-Host "::error::драйвера под WebView2 $webview2 в загрузках не нашлось"
+            exit 1
+          }
+
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          Write-Host "взят драйвер $took : $(& (Join-Path $dir 'msedgedriver.exe') --version)"
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+
+      # Приложение запускается ОТДЕЛЬНО, до всякого драйвера.
+      #
+      # Это не перестраховка, а разделение вопроса пополам. Драйвер на неудачу
+      # отвечает строкой «DevToolsActivePort file doesn't exist», и означать она
+      # может ровно два разных положения дел: приложение не поднялось вовсе —
+      # или поднялось, а договориться с ним не вышло. Чинить это, не зная,
+      # которое из двух, — гадание; первая попытка (версия драйвера) как раз им
+      # и была и ничего не дала.
+      - name: Does the app even start
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem 'src-tauri/target/release/*.exe' | Select-Object -First 1).FullName
+          Write-Host "приложение: $exe"
+          $app = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($app.HasExited) {
+            Write-Host "::error::приложение закрылось само, код $($app.ExitCode)"
+          } else {
+            Write-Host "приложение живо через 10 секунд — значит дело в разговоре с драйвером"
+            Stop-Process -Id $app.Id -Force
+          }
 
       - name: Drive the built app
         shell: pwsh

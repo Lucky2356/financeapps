@@ -17,13 +17,40 @@ import { accountService } from "@/lib/vault/runtime";
 export function VaultPanel() {
   const { t } = useI18n();
   const [remembered, setRemembered] = useState<boolean | null>(null);
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void Promise.resolve().then(async () => setRemembered(await accountService.remembered()));
+    void Promise.resolve().then(async () => {
+      setRemembered(await accountService.remembered());
+      setHasPassword(await accountService.hasPassword());
+    });
   }, []);
+
+  /**
+   * Задать пароль записи, заведённой без него.
+   *
+   * Отдельно от смены пароля, и не для красоты: менять нечего — случайного
+   * пароля не знает никто, включая приложение. Ставится он кодом
+   * восстановления, который лежит в памяти устройства ровно для этого.
+   */
+  async function setFirstPassword(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await accountService.setPassword(next);
+      setNext("");
+      setHasPassword(true);
+      setRemembered(false);
+      toast.success(t("vault.settings.passwordSet"));
+    } catch (cause) {
+      toast.error((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function changePassword(event: React.FormEvent) {
     event.preventDefault();
@@ -57,7 +84,7 @@ export function VaultPanel() {
               {t(remembered ? "vault.settings.remembered" : "vault.settings.asks")}
             </p>
           )}
-          {remembered ? (
+          {remembered && hasPassword ? (
             <Button
               type="button"
               variant="secondary"
@@ -76,7 +103,30 @@ export function VaultPanel() {
           ) : null}
         </div>
 
-        <form onSubmit={changePassword} className="space-y-3 border-t pt-4">
+        {hasPassword === false ? (
+          <form onSubmit={setFirstPassword} className="space-y-3 border-t pt-4">
+            <p className="text-sm text-muted-foreground">{t("vault.settings.noPassword")}</p>
+            <div className="space-y-2">
+              <Label htmlFor="vault-first">{t("vault.settings.next")}</Label>
+              <Input
+                id="vault-first"
+                type="password"
+                autoComplete="new-password"
+                value={next}
+                onChange={(event) => setNext(event.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={busy}>
+              {t("vault.settings.setPassword")}
+            </Button>
+          </form>
+        ) : null}
+
+        <form
+          onSubmit={changePassword}
+          className={`space-y-3 border-t pt-4 ${hasPassword === false ? "hidden" : ""}`}
+        >
           <div className="space-y-2">
             <Label htmlFor="vault-current">{t("vault.settings.current")}</Label>
             <Input
@@ -105,8 +155,11 @@ export function VaultPanel() {
         </form>
 
         {/* «Запереть» — то же, что выйти: ключ уходит из памяти, устройство
-            забывает его, и книга снова спрашивает пароль. */}
-        <div className="border-t pt-4">
+            забывает его, и данные снова спрашивают пароль.
+            У записи БЕЗ пароля отпирать потом нечем, поэтому кнопки нет вовсе.
+            Служба такой вызов тоже отклоняет — надеяться на то, что экран не
+            ошибётся, нельзя. */}
+        <div className={`border-t pt-4 ${hasPassword === false ? "hidden" : ""}`}>
           <Button
             type="button"
             variant="secondary"

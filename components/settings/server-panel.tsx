@@ -31,17 +31,8 @@ import {
   serverAccount,
   stopSync
 } from "@/lib/vault/runtime";
+import { deviceName } from "@/lib/vault/device-name";
 import type { ServerLink } from "@/lib/vault/server-account";
-
-/** Как это устройство назовётся в чужом списке устройств. */
-function deviceName(): string {
-  if (typeof navigator === "undefined") return "Устройство";
-  const agent = navigator.userAgent;
-  if (/Android/i.test(agent)) return "Телефон (Android)";
-  if (/Windows/i.test(agent)) return "Компьютер (Windows)";
-  if (/Mac OS/i.test(agent)) return "Компьютер (Mac)";
-  return "Устройство";
-}
 
 export function ServerPanel() {
   const { t } = useI18n();
