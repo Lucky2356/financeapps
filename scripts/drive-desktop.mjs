@@ -308,8 +308,22 @@ async function main() {
       30_000
     );
 
+    // browserName: "wry" — не украшение и не вкусовщина.
+    //
+    // По нему tauri-driver понимает, что сессию надо вести к WebView2 нашего
+    // приложения. Без него она уходит к драйверу Edge как обычная: тот
+    // запускает наш .exe, будто это браузер, и ждёт от него файла с портом
+    // отладки. Файла нет и быть не может — приложение не браузер, — и через
+    // минуту приходит «DevToolsActivePort file doesn't exist».
+    //
+    // Строка эта не про порт и не про файл, и в этом вся западня: она звучит
+    // так, будто виноват драйвер или его версия. Две попытки ушли на версию,
+    // прежде чем отдельный шаг показал, что приложение поднимается прекрасно, —
+    // и стало ясно, что ломается сам разговор, а не его участники.
     const created = await call("POST", "/session", {
-      capabilities: { alwaysMatch: { "tauri:options": { application: app } } }
+      capabilities: {
+        alwaysMatch: { browserName: "wry", "tauri:options": { application: app } }
+      }
     });
     sessionId = created.sessionId;
     console.log(`Приложение открыто: ${app}`);
