@@ -19,6 +19,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { buildNotifications, countUrgent, type NotificationItem } from "@/lib/notifications";
 import type { BudgetsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 const badgeVariant = {
   INFO: "info",
@@ -42,6 +43,7 @@ function loadRead(): string[] {
 }
 
 export function NotificationBell() {
+  const dataVersion = useDataVersion();
   const { t, locale } = useI18n();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [readIds, setReadIds] = useState<string[]>([]);
@@ -49,7 +51,10 @@ export function NotificationBell() {
   useEffect(() => {
     const stored = loadRead();
     if (stored.length > 0) void Promise.resolve().then(() => setReadIds(stored));
-  }, []);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
+    // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
+  }, [dataVersion]);
 
   // Called when the dialog opens: everything currently listed counts as seen.
   function markAllRead(currentItems: NotificationItem[]) {

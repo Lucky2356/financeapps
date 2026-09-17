@@ -215,6 +215,115 @@ describe("приложение через службу", () => {
     expect(seen.accounts.map((row) => row.name)).toContain("Карта");
   });
 
+  it("на втором устройстве КАЖДЫЙ экран показывает то же, что на первом", async () => {
+    // Проверка, которой не хватало всё это время, и просил её владелец своими
+    // словами: «чтобы я открыл приложение и всё работало так, будто я работаю
+    // на любом устройстве».
+    //
+    // Все прежние проверки синхронизации смотрели на одну-две величины — счёт,
+    // операцию, остаток. Экранов же полтора десятка, и каждый считает своё:
+    // аналитика — средние, прогноз — будущий остаток, планы — план и факт.
+    // Разойтись они могут поодиночке и молча, а человек увидит два разных
+    // ответа на один вопрос и не поймёт, какому верить.
+    //
+    // Поэтому сравниваются ВСЕ разделы целиком, а не выборочные числа: любое
+    // расхождение, даже в разделе, о котором эта проверка не думала, покажет
+    // себя здесь, а не на живой паре устройств.
+    const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+    const password = "пароль-книги";
+
+    const pc = new Owner();
+    await pc.account.create(password, FAST);
+
+    // Книга с содержимым: счета, операции разных видов, долг, цель, лимит.
+    await pc.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
+    await pc.app.post("/accounts", { name: "Копилка", type: "SAVINGS", balance: 120000 });
+    const { categories } = await pc.app.get<{ categories: Array<{ id: string; kind: string }> }>(
+      "/categories"
+    );
+    const expense = categories.find((row) => row.kind === "EXPENSE")!;
+    const { accounts } = await pc.app.get<{ accounts: Array<{ id: string; name: string }> }>(
+      "/accounts"
+    );
+    const card = accounts.find((row) => row.name === "Карта")!;
+
+    for (const [description, amount] of [
+      ["продукты", 2500],
+      ["бензин", 3200],
+      ["аптека", 990]
+    ] as Array<[string, number]>) {
+      await pc.app.post("/transactions", {
+        type: "EXPENSE",
+        amount,
+        description,
+        categoryId: expense.id,
+        accountId: card.id,
+        date: "2026-09-10"
+      });
+    }
+    await pc.app.post("/goals", {
+      name: "Отпуск",
+      targetAmount: 200000,
+      currentAmount: 15000,
+      deadline: "2027-06-01",
+      linkedAccountId: accounts.find((row) => row.name === "Копилка")!.id
+    });
+
+    const vault = await pc.account.vault();
+    await pc.server.register({
+      base,
+      code,
+      login: "lucky",
+      password,
+      vault: vault!,
+      device: "компьютер"
+    });
+    expect(await pc.resume()).toBe(true);
+
+    // Второе устройство приходит тем же путём, что человек.
+    const phone = new Owner();
+    await phone.account.create(password, FAST);
+    await phone.app.get("/accounts");
+    const joined = await phone.server.signIn({ base, login: "lucky", password, device: "телефон" });
+    await phone.account.adopt(joined.vault, password);
+    expect(await phone.resume()).toBe(true);
+
+    // Разделы, которые читает приложение. Все, какие есть, кроме тех, что не о
+    // книге: выгрузка копии, курсы валют, ввоз, образец, профили.
+    //
+    // Без «/investments», и это единственное исключение по существу. Оно не
+    // просто читает: оно ходит за котировками и записывает полученные цены
+    // обратно в книгу. Два устройства, открывшие его в разные секунды, честно
+    // покажут разные цены — биржа за это время сдвинулась. Сверять тут нечего:
+    // расхождение означало бы не поломку синхронизации, а работающий рынок.
+    // Бумаги, которыми человек владеет, лежат в книге и приезжают как всё
+    // остальное.
+    const SCREENS = [
+      "/accounts",
+      "/analytics",
+      "/budgets",
+      "/categories",
+      "/dashboard",
+      "/debts",
+      "/forecast",
+      "/goals",
+      "/plan",
+      "/recurring",
+      "/rules",
+      "/settings",
+      "/transactions"
+    ];
+
+    const different: string[] = [];
+    for (const screen of SCREENS) {
+      const here = await pc.app.get<unknown>(screen);
+      const there = await phone.app.get<unknown>(screen);
+      if (JSON.stringify(here) !== JSON.stringify(there)) different.push(screen);
+    }
+
+    expect(different, "разделы, расходящиеся между устройствами").toEqual([]);
+  });
+
   it("отказ «вас обогнали» доходит до приложения как отказ, а не как успех", async () => {
     // Здесь и встречаются две стороны договора: служба отвечает 409, провод
     // обязан прочитать это как второй законный исход, а не как ошибку и не как

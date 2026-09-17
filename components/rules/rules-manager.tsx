@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDataVersion } from "@/hooks/use-data-version";
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ import {
 // Categorization rules live in the local profile state (desktop) or the Rule
 // table (web) — both behind the /rules endpoint, so the UI is identical.
 export function RulesManager() {
+  const dataVersion = useDataVersion();
   const { t } = useI18n();
   const [data, setData] = useState<RulesPageData | null>(null);
   const [match, setMatch] = useState("");
@@ -51,7 +53,10 @@ export function RulesManager() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
+    // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
+  }, [dataVersion]);
 
   async function addRule() {
     if (!match.trim() || !categoryId) {
