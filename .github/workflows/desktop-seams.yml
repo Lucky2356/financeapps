@@ -80,8 +80,22 @@ jobs:
       - name: Build Tauri Windows bundle
         run: npx tauri build --no-bundle
 
+      # Ставится, только если его ещё нет.
+      #
+      # В кэш попадает и ~/.cargo/bin — ради того кэш и заведён, — а
+      # «cargo install» на уже установленный двоичный файл отвечает отказом:
+      # «binary tauri-driver.exe already exists in destination». То есть первый
+      # же удачный прогон ломал следующий, и заметно это стало только тогда,
+      # когда прогон впервые дошёл до конца и сохранил полный кэш.
       - name: Install tauri-driver
-        run: cargo install tauri-driver --locked
+        shell: pwsh
+        run: |
+          $have = Get-Command tauri-driver -ErrorAction SilentlyContinue
+          if ($have) {
+            Write-Host "tauri-driver уже в кэше: $($have.Source)"
+          } else {
+            cargo install tauri-driver --locked
+          }
 
       # Драйвер подбирается под WEBVIEW2, а не под Edge, — и это две разные
       # версии на одной машине.
