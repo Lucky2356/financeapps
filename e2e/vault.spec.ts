@@ -43,6 +43,10 @@ async function restart(page: import("@playwright/test").Page) {
  */
 async function choosePassword(page: import("@playwright/test").Page) {
   await page.goto("/");
+  const fresh = page.getByRole("button", { name: "Начать с нуля" });
+  await fresh.waitFor({ state: "visible", timeout: 30_000 });
+  await fresh.click();
+
   const choose = page.getByRole("button", { name: "Задать пароль" });
   await choose.waitFor({ state: "visible", timeout: 30_000 });
   await choose.click();
@@ -73,11 +77,18 @@ async function answerVerification(page: import("@playwright/test").Page, words: 
   }
 }
 
-test("первый запуск спрашивает про защиту раньше, чем покажет приложение", async ({ page }) => {
+test("первый запуск спрашивает, откуда взять данные, раньше всего", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Защитить данные паролем?" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "С чего начнём?" })).toBeVisible({
     timeout: 30_000
   });
+  // Все три способа названы сразу, а не спрятаны: до сих пор про два из них
+  // человек узнавал случайно.
+  await expect(page.getByRole("button", { name: "Начать с нуля" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Восстановить из файла" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Данные уже есть на другом устройстве" })
+  ).toBeVisible();
   // Ни боковой панели, ни кнопки добавления: под замком нажимать нечего.
   await expect(page.getByRole("button", { name: "Быстрое добавление операции" })).toHaveCount(0);
 });
@@ -193,6 +204,7 @@ test("без пароля: приложение открывается сраз�
   // вчерашний поход в магазин, а не придумывать пароль и переписывать на бумагу
   // двенадцать слов. Проверяется, что путь до первой операции — одна кнопка.
   await page.goto("/");
+  await page.getByRole("button", { name: "Начать с нуля" }).click();
   await page.getByRole("button", { name: "Пока без пароля" }).click();
 
   await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
@@ -202,6 +214,34 @@ test("без пароля: приложение открывается сраз�
   // И перезапуск ничего не спрашивает: ключ помнит устройство.
   await restart(page);
   await expect(page.getByRole("heading", { name: "Данные заперты" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
+    timeout: 30_000
+  });
+});
+
+test("из файла: экран просит копию и не принимает что попало", async ({ page }) => {
+  // Полное восстановление проверяется на уровне обработчика; здесь — сама
+  // ветка: что она есть, что просит именно файл копии и что отказ понятен.
+  // Человек, поставивший приложение на новый компьютер, приходит сюда с
+  // файлом в руках, и «не тот файл» он должен прочитать словами.
+  await page.goto("/");
+  await page.getByRole("button", { name: "Восстановить из файла" }).click();
+  await page.getByRole("button", { name: "Пока без пароля" }).click();
+
+  await expect(page.getByRole("heading", { name: "Выберите файл резервной копии" })).toBeVisible({
+    timeout: 60_000
+  });
+
+  await page.setInputFiles("#vault-backup", {
+    name: "не-копия.json",
+    mimeType: "application/json",
+    buffer: Buffer.from("это не json")
+  });
+  await page.getByRole("button", { name: "Восстановить", exact: true }).click();
+  await expect(page.locator('p[role="alert"]')).toContainText("не похож на резервную копию");
+
+  // Выход есть: не нашедший файл не остаётся запертым на этом экране.
+  await page.getByRole("button", { name: "Пропустить и начать с нуля" }).click();
   await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
     timeout: 30_000
   });

@@ -1731,6 +1731,28 @@ const ru: Messages = {
   "calc.open": "Калькулятор",
   // --- Замок на данных (учётная запись) ---
   "vault.checking": "Проверяем замок…",
+  "vault.source.title": "С чего начнём?",
+  "vault.source.lead":
+    "Записи будут храниться на этом устройстве. Их можно завести с нуля, поднять из резервной копии или забрать с устройства, где они уже есть.",
+  "vault.source.fresh": "Начать с нуля",
+  "vault.source.freshHint": "Пустые счета и операции — заполните их сами.",
+  "vault.source.file": "Восстановить из файла",
+  "vault.source.fileHint": "Файл резервной копии, выгруженный из этого приложения.",
+  "vault.source.device": "Данные уже есть на другом устройстве",
+  "vault.source.deviceHint": "Заберём их со службы, к которой подключено то устройство.",
+  "vault.restore.title": "Выберите файл резервной копии",
+  "vault.restore.lead":
+    "Тот самый файл, который выгружали из приложения: «Импорт» → «Резервная копия». Всё, что в нём есть, ляжет на это устройство.",
+  "vault.restore.pick": "Файл резервной копии",
+  "vault.restore.submit": "Восстановить",
+  "vault.restore.working": "Восстанавливаем…",
+  "vault.restore.broken": "Файл не похож на резервную копию этого приложения.",
+  "vault.restore.skip": "Пропустить и начать с нуля",
+  "vault.join.title": "Забрать данные с другого устройства",
+  "vault.join.lead":
+    "Понадобится адрес службы, имя входа и пароль — те же, что на устройстве, где данные уже есть.",
+  "vault.join.submit": "Забрать данные",
+  "vault.join.working": "Забираем…",
   "vault.choose.title": "Защитить данные паролем?",
   "vault.choose.lead":
     "Записи будут храниться на этом устройстве. Пароль нужен, чтобы их не открыл тот, кто взял устройство в руки, — и он же понадобится, если вы захотите видеть эти же записи на телефоне.",
@@ -3652,6 +3674,28 @@ const en: Messages = {
   "calc.open": "Calculator",
   // --- Data lock (account) ---
   "vault.checking": "Checking the lock…",
+  "vault.source.title": "Where do we start?",
+  "vault.source.lead":
+    "Your records will live on this device. Start them from scratch, bring them back from a backup, or fetch them from a device that already has them.",
+  "vault.source.fresh": "Start from scratch",
+  "vault.source.freshHint": "Empty accounts and operations — you fill them in.",
+  "vault.source.file": "Restore from a file",
+  "vault.source.fileHint": "A backup file saved from this app.",
+  "vault.source.device": "My data is on another device",
+  "vault.source.deviceHint": "We fetch it from the service that device is connected to.",
+  "vault.restore.title": "Choose the backup file",
+  "vault.restore.lead":
+    "The file you saved from the app: Import → Backup. Everything in it lands on this device.",
+  "vault.restore.pick": "Backup file",
+  "vault.restore.submit": "Restore",
+  "vault.restore.working": "Restoring…",
+  "vault.restore.broken": "That file does not look like a backup of this app.",
+  "vault.restore.skip": "Skip and start from scratch",
+  "vault.join.title": "Fetch data from another device",
+  "vault.join.lead":
+    "You will need the service address, the login name and the password — the same ones as on the device that already has the data.",
+  "vault.join.submit": "Fetch the data",
+  "vault.join.working": "Fetching…",
   "vault.choose.title": "Protect your data with a password?",
   "vault.choose.lead":
     "Your records will be kept on this device. A password keeps them from whoever picks the device up — and it is the same password you will need if you ever want these records on your phone too.",
