@@ -168,6 +168,13 @@ async function closeDialogs() {
  * в IndexedDB. Погасни любое из трёх — дальше первого шага не уйти.
  */
 async function firstRun() {
+  // Первый запуск начинается с выбора, откуда взять данные, и следом — нужен ли
+  // пароль. Швы проверяются по ветке «с нуля, с паролем»: она проходит через
+  // WebCrypto и запись в IndexedDB целиком, то есть через всё, что политика
+  // WebView2 может погасить.
+  await press("Начать с нуля");
+  await press("Задать пароль");
+
   await type(await waitFor("#vault-password"), PASSWORD);
   await type(await find("#vault-repeat"), PASSWORD);
   await press("Задать пароль");
@@ -277,7 +284,10 @@ async function main() {
     process.exit(1);
   }
 
+  // Слово драйвера попадает в журнал: без него неудача выглядит одной строкой
+  // про несуществующий файл, и разбирать нечего.
   const driver = spawn("tauri-driver", ["--port", "4444"], { stdio: "inherit" });
+  console.log(`Приложение для прогона: ${app}`);
   driver.on("error", (cause) => {
     console.error("tauri-driver не запустился:", cause.message);
     process.exit(1);

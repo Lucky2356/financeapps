@@ -91,6 +91,28 @@ jobs:
           & (Join-Path $into 'msedgedriver.exe') --version
           Add-Content -Path $env:GITHUB_PATH -Value $into
 
+      # Приложение запускается ОТДЕЛЬНО, до всякого драйвера.
+      #
+      # Это не перестраховка, а разделение вопроса пополам. Драйвер на неудачу
+      # отвечает строкой «DevToolsActivePort file doesn't exist», и означать она
+      # может ровно два разных положения дел: приложение не поднялось вовсе —
+      # или поднялось, а договориться с ним не вышло. Чинить это, не зная,
+      # которое из двух, — гадание; первая попытка (версия драйвера) как раз им
+      # и была и ничего не дала.
+      - name: Does the app even start
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem 'src-tauri/target/release/*.exe' | Select-Object -First 1).FullName
+          Write-Host "приложение: $exe"
+          $app = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($app.HasExited) {
+            Write-Host "::error::приложение закрылось само, код $($app.ExitCode)"
+          } else {
+            Write-Host "приложение живо через 10 секунд — значит дело в разговоре с драйвером"
+            Stop-Process -Id $app.Id -Force
+          }
+
       - name: Drive the built app
         shell: pwsh
         run: node scripts/drive-desktop.mjs
