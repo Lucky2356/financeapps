@@ -69,7 +69,7 @@ export function writeSlot(
 ): PutOutcome {
   const text = JSON.stringify(body);
   if (Buffer.byteLength(text) > MAX_BODY_BYTES) {
-    throw new Error("Книга не помещается в отведённый предел.");
+    throw new Error("Данные не помещаются в отведённый предел.");
   }
 
   const current = readSlot(db, personId, slot);

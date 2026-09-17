@@ -169,7 +169,8 @@ export class ServerAccount {
     if (entered.status !== 200) refuse(entered.status, entered.data, "Не подходит имя или пароль.");
 
     const token = String(entered.data.token ?? "");
-    if (!token) refuse(entered.status, entered.data, "Служба не выдала билет.");
+    if (!token)
+      refuse(entered.status, entered.data, "Служба не пустила внутрь: не ответила на вход.");
 
     await this.storage.setItem<ServerLink>(SERVER_KEY, {
       v: 1,
