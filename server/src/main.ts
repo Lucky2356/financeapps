@@ -266,7 +266,7 @@ export function createApp(options: AppOptions) {
       // Отдельно от строки на «finish»: та придёт только при разрыве, а знать,
       // что устройство на связи, нужно именно сейчас.
       console.log("GET /events → поток открыт");
-      return bus.attach(who.personId, res);
+      return bus.attach(who.personId, res, ORIGIN);
     }
 
     if (path === "/vault" && method === "GET") {
