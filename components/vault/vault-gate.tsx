@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FirstRun } from "@/components/vault/first-run";
 import { UnlockScreen } from "@/components/vault/unlock-screen";
 import { useI18n } from "@/lib/i18n/context";
-import { accountService, resumeSync } from "@/lib/vault/runtime";
+import { accountService, resumeSync, stopSync } from "@/lib/vault/runtime";
 
 type Phase = "checking" | "fresh" | "locked" | "open";
 
@@ -37,6 +37,15 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
           // Сервер недоступен или билет протух — приложение местное и работает
           // без него. Значок связи скажет об этом сам, когда будет что сказать.
         });
+      } else {
+        // Заперли — синхронизацию останавливаем здесь же, где и поднимаем.
+        //
+        // Иначе поток событий остаётся висеть, и каждое приехавшее изменение
+        // упирается в запертое хранилище: слияние открывает книгу, а ключа в
+        // памяти больше нет. Человек при этом видит «ошибка связи», хотя связь
+        // в полном порядке — заперта книга. Отправка ничего не теряет: всё
+        // ненаписанное остаётся в очереди и уедет, как только отопрут.
+        stopSync();
       }
     } catch {
       // Хранилище не открылось вовсе (приватный режим, запрет на запись).
