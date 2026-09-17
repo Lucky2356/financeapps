@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api/client";
 import type { ImportPageData } from "@/lib/data";
 import { NOTICE_ACTION_CLASS, NoticeLine } from "@/components/ui/notice-line";
 import { useI18n } from "@/lib/i18n/context";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 /**
  * The line that says the only copy of the ledger is the one on this machine.
@@ -29,6 +30,7 @@ import { useI18n } from "@/lib/i18n/context";
  * человека через редирект незачем.
  */
 export function BackupNotice() {
+  const dataVersion = useDataVersion();
   const { t, locale } = useI18n();
   const [refs, setRefs] = useState<ImportPageData | null>(null);
 
@@ -41,7 +43,10 @@ export function BackupNotice() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
+    // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
+  }, [dataVersion]);
 
   if (!refs || !refs.backupReminderDue || refs.accounts.length === 0) return null;
 

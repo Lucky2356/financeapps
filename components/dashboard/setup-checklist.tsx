@@ -14,6 +14,7 @@ import type {
 } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 const STORAGE_KEY = "setup-checklist-dismissed-v1";
 
@@ -33,6 +34,7 @@ type Counts = {
 // защищены. Копией теперь владеет BackupNotice: у неё нет крестика, и она
 // возвращается сама.
 export function SetupChecklist() {
+  const dataVersion = useDataVersion();
   const { t } = useI18n();
   const [counts, setCounts] = useState<Counts | null>(null);
   const [loadingSample, setLoadingSample] = useState(false);
@@ -64,7 +66,10 @@ export function SetupChecklist() {
     return () => {
       cancelled = true;
     };
-  }, [loadCounts]);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости счётчики остаются теми, что прочитаны при
+    // открытии, — и спорят с соседним экраном, читающим ту же книгу.
+  }, [loadCounts, dataVersion]);
 
   async function loadSampleData() {
     setLoadingSample(true);

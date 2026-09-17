@@ -21,6 +21,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 const PROFILE_COLORS = [
   "#0d9488",
@@ -66,6 +67,7 @@ function Logo({ color }: { color?: string }) {
 }
 
 function ProfileSwitcherInner({ compact }: { compact: boolean }) {
+  const dataVersion = useDataVersion();
   const [list, setList] = useState<ProfileList | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -95,7 +97,10 @@ function ProfileSwitcherInner({ compact }: { compact: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
+    // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
+  }, [dataVersion]);
 
   const active = list?.profiles.find((p) => p.id === list.activeProfileId) ?? list?.profiles[0];
   // Profiles come from the local API; in a build without it the sidebar still

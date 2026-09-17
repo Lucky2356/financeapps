@@ -12,6 +12,7 @@ import type { ForecastData } from "@/types/finance";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDataVersion } from "@/hooks/use-data-version";
 import {
   Select,
   SelectContent,
@@ -25,6 +26,7 @@ import {
 // income/expense come from the analytics averages; the starting balance from
 // the forecast. Pure math lives in ScenarioPlanningService.
 export function ScenarioPanel() {
+  const dataVersion = useDataVersion();
   const { t } = useI18n();
   const [base, setBase] = useState<{
     startingBalance: number;
@@ -56,7 +58,10 @@ export function ScenarioPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
+    // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
+  }, [dataVersion]);
 
   const result = useMemo(() => {
     if (!base) return null;

@@ -20,6 +20,7 @@ import { countableRows } from "@/lib/transactions/transfers";
 import { ExportService } from "@/services/export/ExportService";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { useI18n } from "@/lib/i18n/context";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -222,6 +223,7 @@ function ExtendedReport({
   currency: string;
   includeTransfers: boolean;
 }) {
+  const dataVersion = useDataVersion();
   const { t } = useI18n();
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
   const [transactions, setTransactions] = useState<TransactionsPageData["transactions"]>([]);
@@ -254,7 +256,10 @@ function ExtendedReport({
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
+    // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
+  }, [dataVersion]);
 
   // The same choice the rest of the page follows: a transfer between own
   // accounts is not earning and not spending.

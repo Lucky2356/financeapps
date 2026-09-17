@@ -43,6 +43,7 @@ import { StatGrid } from "@/components/ui/stat-grid";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 export function AnalyticsView({
   data,
@@ -446,6 +447,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 function CategoryTrendsSection({ currency }: { currency: string }) {
+  const dataVersion = useDataVersion();
   const { t } = useI18n();
   const [transactions, setTransactions] = useState<TransactionsPageData["transactions"]>([]);
 
@@ -465,7 +467,10 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Книга меняется и без нашего участия: её приносит синхронизация с другого
+    // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
+    // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
+  }, [dataVersion]);
 
   const trends = useMemo(() => buildCategoryTrends(transactions).slice(0, 8), [transactions]);
 
