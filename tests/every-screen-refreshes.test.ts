@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -51,10 +51,22 @@ const ON_DEMAND: Record<string, string> = {
   "components/investments/security-search.tsx": "поиск бумаги по набранному"
 };
 
+/**
+ * Пути — всегда с прямым слэшем, независимо от системы.
+ *
+ * join даёт «components\\ai\\карточка.tsx» на Windows и
+ * «components/ai/карточка.tsx» на остальных. Список исключений ниже написан
+ * прямыми слэшами, и без приведения сторож краснел ровно на одной системе из
+ * двух: у меня всё сходилось, а сборка под Windows падала на всех одиннадцати
+ * строках списка разом.
+ *
+ * Обидно вдвойне: сторож написан ради того, чтобы одинаково работало везде, — и
+ * сам работал по-разному.
+ */
 function walk(dir: string): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
+    const full = join(dir, entry).split(sep).join("/");
     if (statSync(full).isDirectory()) {
       found.push(...walk(full));
     } else if (/\.(ts|tsx)$/.test(entry)) {
