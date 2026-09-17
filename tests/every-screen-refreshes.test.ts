@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, sep } from "node:path";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -52,21 +52,28 @@ const ON_DEMAND: Record<string, string> = {
 };
 
 /**
- * Пути — всегда с прямым слэшем, независимо от системы.
+ * Путь — всегда с прямым слэшем, на любой системе.
  *
  * join даёт «components\\ai\\карточка.tsx» на Windows и
- * «components/ai/карточка.tsx» на остальных. Список исключений ниже написан
+ * «components/ai/карточка.tsx» на остальных. Список исключений выше написан
  * прямыми слэшами, и без приведения сторож краснел ровно на одной системе из
- * двух: у меня всё сходилось, а сборка под Windows падала на всех одиннадцати
- * строках списка разом.
+ * двух: локально всё сходилось, а сборка под Windows падала на всех одиннадцати
+ * строках списка разом. Обидно вдвойне: сторож написан ради того, чтобы всё
+ * работало одинаково везде, — и сам работал по-разному.
  *
- * Обидно вдвойне: сторож написан ради того, чтобы одинаково работало везде, — и
- * сам работал по-разному.
+ * Заменяется именно обратный слэш, а не системный разделитель. Через разделитель
+ * было бы «правильнее», но на Linux он и так прямой — то есть приведение стало
+ * бы пустым действием, и проверить его здесь было бы нельзя. А проверять
+ * починку на той самой системе, где поломки не видно, мы сегодня уже пробовали.
  */
+export function toPosix(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
 function walk(dir: string): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry).split(sep).join("/");
+    const full = toPosix(join(dir, entry));
     if (statSync(full).isDirectory()) {
       found.push(...walk(full));
     } else if (/\.(ts|tsx)$/.test(entry)) {
@@ -77,6 +84,14 @@ function walk(dir: string): string[] {
 }
 
 describe("каждый экран перечитывает себя", () => {
+  it("путь приводится к прямому слэшу на любой системе", () => {
+    // Эта проверка и есть починка той поломки, что уронила сборку 1.39.0.
+    // Она краснеет на Linux, если приведение убрать, — то есть видна там, где
+    // её пишут, а не только на Windows через двадцать минут сборки.
+    expect(toPosix("components\\ai\\ai-quick-add.tsx")).toBe("components/ai/ai-quick-add.tsx");
+    expect(toPosix("components/ai/ai-quick-add.tsx")).toBe("components/ai/ai-quick-add.tsx");
+  });
+
   it("читающий книгу либо подписан, либо назван читающим по требованию", () => {
     const unsubscribed: string[] = [];
 
