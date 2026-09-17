@@ -454,6 +454,25 @@ describe("служба", () => {
       assert.ok(seen.includes('"version":1'), seen);
     });
 
+    it("поток разрешён чужому источнику — иначе вкладка гасит его молча", async () => {
+      // Заголовки потоку пишутся свои, мимо send, и разрешение на чужой
+      // источник туда однажды не попало. Обычные ручки при этом работали, и
+      // поломка выглядела так: «подключено», всё на месте, а чужая правка сама
+      // на экран не приезжает — только после своей.
+      //
+      // Найдено живым прогоном двух устройств: служба писала «поток открыт»
+      // каждую секунду и теряла его через пять, а вкладка не получала ни
+      // события. fetch здесь этого не видит — CORS применяет браузер, не
+      // сервер; поэтому проверяется сам заголовок.
+      const { token } = await signUp("петя");
+      const stream = await fetch(`${base}/events`, {
+        headers: { authorization: `Bearer ${token}`, origin: "http://localhost:4173" }
+      });
+      assert.equal(stream.headers.get("access-control-allow-origin"), "*");
+      assert.equal(stream.headers.get("content-type"), "text/event-stream");
+      await stream.body?.cancel();
+    });
+
     it("без входа соединение не открывается", async () => {
       const response = await fetch(`${base}/events`);
       assert.equal(response.status, 401);
