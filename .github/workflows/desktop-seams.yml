@@ -64,11 +64,32 @@ jobs:
       - name: Install tauri-driver
         run: cargo install tauri-driver --locked
 
-      # tauri-driver разговаривает с WebView2 через драйвер Edge. На машине
-      # сборки он уже стоит, но не на PATH — путь приходит переменной.
-      - name: Put Edge WebDriver on PATH
+      # tauri-driver разговаривает с WebView2 через драйвер Edge, и драйвер
+      # обязан совпадать с ВЕРСИЕЙ WEBVIEW2, а не с версией браузера Edge.
+      #
+      # На машине сборки стоит и то и другое, и версии у них разные. Драйвер с
+      # машины (переменная EDGEWEBDRIVER) собран под браузер — с WebView2 он
+      # здоровается и не договаривается, а наружу это выходит одной строкой:
+      #
+      #     session not created: DevToolsActivePort file doesn't exist
+      #
+      # Строка эта не про порт и не про файл: так выглядит «приложение не
+      # поднялось, и драйвер не дождался». Первый прогон упал ровно на ней.
+      #
+      # Поэтому версия WebView2 читается из реестра, и драйвер берётся ровно
+      # под неё.
+      - name: Match Edge WebDriver to the WebView2 runtime
         shell: pwsh
-        run: Add-Content -Path $env:GITHUB_PATH -Value $env:EDGEWEBDRIVER
+        run: |
+          $client = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $version = (Get-ItemProperty -Path $client -ErrorAction Stop).pv
+          Write-Host "WebView2: $version"
+          $into = Join-Path $env:RUNNER_TEMP 'edgedriver'
+          $zip = Join-Path $env:RUNNER_TEMP 'edgedriver.zip'
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $into -Force
+          & (Join-Path $into 'msedgedriver.exe') --version
+          Add-Content -Path $env:GITHUB_PATH -Value $into
 
       - name: Drive the built app
         shell: pwsh

@@ -34,9 +34,24 @@ async function restart(page: import("@playwright/test").Page) {
   await page.goto("/");
 }
 
+/**
+ * Выбрать «Задать пароль» на первом экране.
+ *
+ * Первый запуск теперь начинается с выбора: пароль предлагается, но не
+ * требуется. Все проверки замка идут по ветке «с паролем» — ветка «без» живёт
+ * своей проверкой ниже.
+ */
+async function choosePassword(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  const choose = page.getByRole("button", { name: "Задать пароль" });
+  await choose.waitFor({ state: "visible", timeout: 30_000 });
+  await choose.click();
+  await page.getByLabel("Пароль", { exact: true }).waitFor({ state: "visible" });
+}
+
 /** Проходит первый запуск и возвращает выписанный код восстановления. */
 async function firstRun(page: import("@playwright/test").Page): Promise<string[]> {
-  await page.goto("/");
+  await choosePassword(page);
   await page.getByLabel("Пароль", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Ещё раз").fill(PASSWORD);
   await page.getByRole("button", { name: "Задать пароль" }).click();
@@ -58,9 +73,9 @@ async function answerVerification(page: import("@playwright/test").Page, words: 
   }
 }
 
-test("первый запуск просит пароль раньше, чем покажет приложение", async ({ page }) => {
+test("первый запуск спрашивает про защиту раньше, чем покажет приложение", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Защитите свои данные паролем" })).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Защитить данные паролем?" })).toBeVisible({
     timeout: 30_000
   });
   // Ни боковой панели, ни кнопки добавления: под замком нажимать нечего.
@@ -68,7 +83,7 @@ test("первый запуск просит пароль раньше, чем �
 });
 
 test("короткий пароль и опечатка во втором поле не пропускаются", async ({ page }) => {
-  await page.goto("/");
+  await choosePassword(page);
   await page.getByLabel("Пароль", { exact: true }).fill("корот");
   await page.getByLabel("Ещё раз").fill("корот");
   await page.getByRole("button", { name: "Задать пароль" }).click();
@@ -166,6 +181,25 @@ test("галка «не спрашивать» убирает вопрос пр�
     timeout: 30_000
   });
 
+  await restart(page);
+  await expect(page.getByRole("heading", { name: "Данные заперты" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
+    timeout: 30_000
+  });
+});
+
+test("без пароля: приложение открывается сразу и остаётся открытым", async ({ page }) => {
+  // Ветка ради которой всё и затевалось: человек скачал приложение записать
+  // вчерашний поход в магазин, а не придумывать пароль и переписывать на бумагу
+  // двенадцать слов. Проверяется, что путь до первой операции — одна кнопка.
+  await page.goto("/");
+  await page.getByRole("button", { name: "Пока без пароля" }).click();
+
+  await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
+    timeout: 60_000
+  });
+
+  // И перезапуск ничего не спрашивает: ключ помнит устройство.
   await restart(page);
   await expect(page.getByRole("heading", { name: "Данные заперты" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({

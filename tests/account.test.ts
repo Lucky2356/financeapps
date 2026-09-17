@@ -388,3 +388,80 @@ describe("смена пароля и восстановление", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("запись без пароля", () => {
+  // Пароль на первом запуске перестал быть обязательным: три экрана до первой
+  // операции — самое частое место, где люди бросают. Проверяется здесь не
+  // «работает», а то, ЧТО ИМЕННО это значит, потому что значит оно неочевидное.
+
+  it("заводится и сразу открыта", async () => {
+    const { account } = device();
+    await account.createWithoutPassword();
+
+    const state = await account.state();
+    expect(state.status).toBe("unlocked");
+    expect(await account.hasPassword()).toBe(false);
+  });
+
+  it("переживает перезапуск: следующий запуск не спрашивает ничего", async () => {
+    const plain = new MemoryStorageAdapter();
+    await device(plain).account.createWithoutPassword();
+
+    // Новая служба над тем же хранилищем — это и есть перезапуск приложения.
+    expect((await device(plain).account.state()).status).toBe("unlocked");
+  });
+
+  it("данные на диске всё равно зашифрованы", async () => {
+    // «Без пароля» — не «без шифрования». Разница существенная: на сервер и в
+    // копии уезжает запечатанное, и только этого устройства защита не касается.
+    const { plain, account, sealed } = await withExistingBook();
+    await account.createWithoutPassword();
+    await sealed.setItem(BOOK, { transactions: [], accounts: [{ name: "Карта" }] });
+
+    const raw = JSON.stringify(await plain.getItem(BOOK));
+    expect(raw).not.toContain("Карта");
+    expect(raw).toContain("AES-GCM");
+  });
+
+  it("ключ лежит на устройстве открытым — и это главное, о чём надо сказать", async () => {
+    // Свойство неприятное, и проверка на него стоит именно поэтому: сотрись
+    // она однажды вместе с кодом, никто бы и не заметил, что обещание
+    // приложения тихо изменилось.
+    const { plain, account } = device();
+    await account.createWithoutPassword();
+
+    const remembered = await plain.getItem<{ bookKey: string; recoveryCode?: string }>(DEVICE_KEY);
+    expect(remembered?.bookKey).toBeTruthy();
+    expect(remembered?.recoveryCode).toBeTruthy();
+  });
+
+  it("запереть нельзя: отпирать было бы нечем", async () => {
+    const { account } = device();
+    await account.createWithoutPassword();
+    await expect(account.lock()).rejects.toThrow(/Пароль не задан/);
+  });
+
+  it("пароль ставится потом, и после этого его спрашивают", async () => {
+    const plain = new MemoryStorageAdapter();
+    const first = device(plain);
+    await first.account.createWithoutPassword();
+    await first.sealed.setItem(BOOK, { transactions: [], accounts: [{ name: "Карта" }] });
+
+    await first.account.setPassword("пароль-поставленный-потом");
+    expect(await first.account.hasPassword()).toBe(true);
+
+    // Перезапуск: теперь заперто, и открывается новым паролем.
+    const next = device(plain);
+    expect((await next.account.state()).status).toBe("locked");
+    await next.account.unlock("пароль-поставленный-потом");
+
+    const book = await next.sealed.getItem<{ accounts: { name: string }[] }>(BOOK);
+    expect(book?.accounts[0].name).toBe("Карта");
+  });
+
+  it("на записи с паролем поставить пароль второй раз нельзя", async () => {
+    const { account } = device();
+    await account.create("первый-пароль-подлиннее", FAST);
+    await expect(account.setPassword("второй")).rejects.toThrow(/уже задан/);
+  });
+});

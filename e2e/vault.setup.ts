@@ -18,7 +18,12 @@ const PASSWORD = "проверочный-пароль";
 setup("завести замок один раз на весь прогон", async ({ page, context }) => {
   await page.goto("/");
 
-  // Первый запуск: пароль.
+  // Первый запуск начинается с выбора: пароль предлагается, но не требуется.
+  // Снимку нужна ветка с паролем — по ней идут все остальные сценарии.
+  const choose = page.getByRole("button", { name: "Задать пароль" });
+  await choose.waitFor({ state: "visible", timeout: 30_000 });
+  await choose.click();
+
   const password = page.getByLabel("Пароль", { exact: true });
   await password.waitFor({ state: "visible", timeout: 30_000 });
   await password.fill(PASSWORD);

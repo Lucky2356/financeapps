@@ -1,12 +1,19 @@
 "use client";
 
-// Первый запуск: задать пароль, увидеть код восстановления и доказать, что его
-// записали.
+// Первый запуск: решить, нужен ли пароль, и если нужен — задать его, увидеть
+// код восстановления и доказать, что его записали.
 //
-// Проверка в конце — не формальность и не придирка. Код восстановления
+// ПОЧЕМУ ВЫБОР ИДЁТ ПЕРВЫМ. Три обязательных экрана до первой операции — самое
+// частое место, где люди бросают. Человек скачал приложение записать вчерашний
+// поход в магазин, а его просят придумать пароль и переписать на бумагу
+// двенадцать слов. Теперь пароль предлагается, но не требуется, и пропустить
+// его можно одной кнопкой — с честным объяснением, что это значит, а не с
+// бодрым «потом настроите».
+//
+// Проверка слов в конце — не формальность и не придирка. Код восстановления
 // показывают ровно один раз, и человек, нажавший «я записал» не записав, узнает
 // об этом в тот день, когда забудет пароль, — то есть когда возвращать будет
-// уже нечего. Два слова обратно стоят десяти секунд сейчас и всей книги потом.
+// уже нечего. Два слова обратно стоят десяти секунд сейчас и всех данных потом.
 
 import { KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { useState } from "react";
@@ -23,7 +30,7 @@ const MIN_PASSWORD = 8;
 
 export function FirstRun({ onDone }: { onDone: () => void }) {
   const { t } = useI18n();
-  const [step, setStep] = useState<"password" | "code" | "verify">("password");
+  const [step, setStep] = useState<"choose" | "password" | "code" | "verify">("choose");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,6 +62,19 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     }
   }
 
+  async function startWithoutPassword() {
+    setError(null);
+    setBusy(true);
+    try {
+      await accountService.createWithoutPassword();
+      onDone();
+    } catch (cause) {
+      setError(t("vault.error", { message: (cause as Error).message }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function answer(slot: number, value: string) {
     setAnswers((prev) => prev.map((old, index) => (index === slot ? value : old)));
   }
@@ -68,6 +88,35 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
 
   return (
     <Shell>
+      {step === "choose" && (
+        <div className="space-y-4">
+          <Head icon={<Lock className="size-5" />} title={t("vault.choose.title")} />
+          <p className="text-sm text-muted-foreground">{t("vault.choose.lead")}</p>
+
+          <Problem text={error} />
+
+          <Button type="button" className="w-full" onClick={() => setStep("password")}>
+            {t("vault.choose.withPassword")}
+          </Button>
+
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={busy}
+              onClick={startWithoutPassword}
+            >
+              {busy ? t("vault.choose.working") : t("vault.choose.without")}
+            </Button>
+            {/* Оговорка стоит ПОД кнопкой, а не спрятана за вопросительным
+                знаком: человек читает её в тот момент, когда решает, а не
+                когда пойдёт искать, почему так вышло. */}
+            <p className="text-xs text-muted-foreground">{t("vault.choose.withoutHint")}</p>
+          </div>
+        </div>
+      )}
+
       {step === "password" && (
         <form onSubmit={createAccount} className="space-y-4">
           <Head icon={<Lock className="size-5" />} title={t("vault.setup.title")} />
