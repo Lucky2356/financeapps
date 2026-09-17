@@ -26,7 +26,26 @@ permissions:
 jobs:
   seams:
     name: Drive the built app
-    runs-on: windows-latest
+    # windows-2022, а не windows-latest, и это не придирка к образу.
+    #
+    # WebView2 Runtime 150 (июль 2026) перестал принимать порт отладки от
+    # приложения, запущенного с правами администратора: ни из командной строки,
+    # ни из переменных окружения, ни из HKCU — только через API или политику
+    # HKLM. Драйвер Edge выставляет порт ровно переменной окружения, а машины
+    # сборки работают от администратора. На windows-latest (это windows-2025,
+    # WebView2 152) прогон падает на создании сессии ВСЕГДА; на windows-2022,
+    # где WebView2 ещё 131, проходит.
+    #
+    # Своими силами это не чинится: порт мог бы передать сам wry, через
+    # AdditionalBrowserArguments, но там от такой правки отказались, сочтя
+    # ужесточение правильным по замыслу. Обсуждение:
+    # https://github.com/webdriverio/desktop-mobile/issues/542
+    # https://github.com/actions/runner-images/issues/14738
+    #
+    # Образ этот не навсегда, и делать вид, что навсегда, не будем: когда его
+    # уберут, прогон встанет, и разбираться придётся заново — потому шаг ниже и
+    # печатает обе версии, чтобы следующая поломка читалась с первого взгляда.
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
@@ -64,19 +83,22 @@ jobs:
       - name: Install tauri-driver
         run: cargo install tauri-driver --locked
 
-      # Драйвер Edge берётся с машины сборки, и версия у него та же, что у
-      # установленного Edge, — ровно то, чего требует руководство Tauri:
-      # «crucial to use a version of Microsoft Edge Driver that precisely
-      # matches your Windows Edge version».
+      # Драйвер Edge берётся с машины сборки: на образе он, Edge и WebView2
+      # обновляются вместе, потому и совпадают.
       #
-      # Подбирать драйвер под версию WebView2 (первая попытка починки) не
-      # помогло и было мимо: версия не при чём, ломался сам разговор — см.
-      # browserName в scripts/drive-desktop.mjs.
+      # Версии печатаются рядом НАРОЧНО. Разговор с приложением идёт через
+      # WebView2, а не через Edge, и драйвер должен подходить именно ему.
+      # Разойдись они — прогон сорвался бы на создании сессии, и строка была бы
+      # опять про какой-нибудь файл, а не про версии. Две строки в журнале
+      # дешевле ещё одного круга догадок.
       - name: Put Edge WebDriver on PATH
         shell: pwsh
         run: |
           Write-Host "драйвер: $env:EDGEWEBDRIVER"
           & (Join-Path $env:EDGEWEBDRIVER 'msedgedriver.exe') --version
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $webview2 = (Get-ItemProperty -Path $key -ErrorAction SilentlyContinue).pv
+          Write-Host "WebView2 Runtime: $(if ($webview2) { $webview2 } else { 'не нашёлся в реестре' })"
           Add-Content -Path $env:GITHUB_PATH -Value $env:EDGEWEBDRIVER
 
       # Приложение запускается ОТДЕЛЬНО, до всякого драйвера.
