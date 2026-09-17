@@ -32,21 +32,28 @@ built Tauri app, so four things ship unverified by CI: the filesystem plugin, th
 native dialogs, the updater, and the CSP as WebView2 actually enforces it. A break in
 any of them looks exactly like a green build.
 
-Closing that properly means driving the packaged app from a Windows runner — worth it
-for a wider audience, not for this one. Until then it is a known risk paid down by
-hand: after installing a release, open the app once and check the four seams.
+Три шва из четырёх теперь закрыты машиной. Действие **Desktop Seams**
+(`.github/workflows/desktop-seams.yml`) собирает приложение на машине Windows и
+водит его через WebDriver — `scripts/drive-desktop.mjs`:
+
+- **Первый запуск целиком** — пароль, код восстановления, две проверочные
+  строки. За это отвечают разом скрипты страницы, WebCrypto с шестьюстами
+  тысячами прогонов PBKDF2 и запись в IndexedDB; погасни любое из трёх под
+  политикой WebView2 — дальше первого шага не уйти.
+- **Запрос к адресу, которого нет в политике.** Главный шов: список разрешённых
+  адресов зашит в сборку, а адрес своей службы человек называет во время
+  работы, и совпасть они не могут никогда. Сверка идёт по тому, КАКОЙ пришёл
+  отказ: «не удалось связаться» значит запрос не вышел из приложения, «отвечает
+  не служба» — вышел, дошёл и вернулся.
+- **Обновлялка** спрашивает настоящий манифест и получает ответ.
+
+Четвёртый — родные окна выбора файла — машине не даётся: их рисует Windows,
+WebDriver до них не дотягивается. Остаётся ручной проверкой на две минуты после
+установки выпуска:
 
 - Import a CSV — the file dialog opens and the rows land.
 - Export a backup — the save dialog opens and the file appears where it was put.
 - Open the releases link from settings — the browser opens on the pinned URL.
-- Check for updates — the answer is "you are up to date", not an error.
-- **Подключиться к своей службе** (Настройки → Свой сервер) — связь
-  устанавливается, а не «нет связи». Это и есть проверка того, что политика
-  безопасности пропускает запросы к чужому домену: список разрешённых адресов
-  зашит в сборку, а адрес службы называется во время работы, и разойтись они
-  могут только здесь.
-
-Five minutes, and it covers precisely what the suite cannot reach.
 
 ## Version bump
 

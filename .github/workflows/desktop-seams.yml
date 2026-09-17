@@ -1,0 +1,75 @@
+name: Desktop Seams
+
+# Швы собранного приложения — то, чего не достаёт ни одна другая проверка.
+#
+# В памятке выпуска про них написано прямо: «четыре вещи уезжают непроверенными
+# — файловый плагин, родные окна, обновлялка и политика безопасности в том виде,
+# как её применяет WebView2. Поломка в любой выглядит ровно как зелёная сборка».
+# Три из четырёх закрываются здесь; четвёртая, родные окна выбора файла,
+# остаётся ручной, и это записано в самой проверке.
+#
+# Почему отдельным действием, а не шагом выпуска. Пока не доказано, что прогон
+# держится сам, ставить его на дорогу выпуска нельзя: сорвавшаяся проверка
+# останавливала бы выпуск, ничего не говоря о приложении. Как отстоится — станет
+# шагом desktop-release.yml перед публикацией, и там ему самое место: сборка там
+# уже есть, платить за неё второй раз не придётся.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Раз в неделю, ночью с воскресенья на понедельник по Москве.
+    - cron: "0 22 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  seams:
+    name: Drive the built app
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            src-tauri/target
+          key: seams-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: seams-cargo-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static desktop shell
+        run: npm run build:static
+
+      # Сборка без подписи: подпись проверяет выпуск, здесь речь о поведении.
+      - name: Build Tauri Windows bundle
+        run: npx tauri build --no-bundle
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      # tauri-driver разговаривает с WebView2 через драйвер Edge. На машине
+      # сборки он уже стоит, но не на PATH — путь приходит переменной.
+      - name: Put Edge WebDriver on PATH
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value $env:EDGEWEBDRIVER
+
+      - name: Drive the built app
+        shell: pwsh
+        run: node scripts/drive-desktop.mjs
