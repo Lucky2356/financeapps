@@ -61,10 +61,19 @@ const app = pickApp();
 let sessionId = null;
 
 async function call(method, path, body) {
+  // У команды POST тело обязательно, даже когда сказать нечего.
+  //
+  // Драйвер разбирает тело у всякой POST и на пустоту отвечает «invalid
+  // argument: missing command parameters» — строкой про параметры, хотя дело в
+  // отсутствии самого тела. Этим споткнулись и перечитывание страницы, и щелчок
+  // по кнопке: обоим сказать нечего, и оба уходили без тела. Пустой предмет
+  // здесь — не украшение, а то, чего ждёт протокол.
+  const sends = method === "POST";
+  const outgoing = sends ? (body ?? {}) : body;
   const response = await fetch(`${DRIVER}${path}`, {
     method,
-    headers: body === undefined ? {} : { "content-type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body)
+    headers: outgoing === undefined ? {} : { "content-type": "application/json" },
+    body: outgoing === undefined ? undefined : JSON.stringify(outgoing)
   });
   const text = await response.text();
   let payload = {};
