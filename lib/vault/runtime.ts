@@ -39,9 +39,12 @@ import {
   addPerson,
   choosePerson,
   hasVault,
+  forgetServer,
   opensWithoutPassword,
   readRoster,
   rememberLastUsed,
+  rememberServer,
+  whoAlreadyUses,
   type Roster
 } from "@/lib/vault/people";
 import { ServerAccount } from "@/lib/vault/server-account";
@@ -223,4 +226,40 @@ export async function listPeople(): Promise<PersonCard[]> {
 export async function addPersonAndSwitch(name: string): Promise<void> {
   const person = await addPerson(device, name);
   await switchPerson(person.id);
+}
+
+/**
+ * Не даёт двоим на одном устройстве войти под одной учётной записью службы.
+ *
+ * Без этого они слились бы в одни данные МОЛЧА: ячейки на службе адресуются
+ * парой «человек, ячейка», и служба не видит разницы между двумя людьми за
+ * одним компьютером. Каждый увидел бы чужие операции в своих и, что хуже,
+ * решил бы, что так и надо — приложение ведь ничего не сказало.
+ *
+ * Отказ здесь, а не в службе, потому что знание об этом есть только на
+ * устройстве: служба честно видит один вход и один вход.
+ */
+export async function refuseSharedServerAccount(base: string, login: string): Promise<void> {
+  const roster = await peopleReady;
+  const me = roster?.lastUsedId ?? "";
+  const busy = await whoAlreadyUses(device, base, login, me);
+  if (busy) {
+    throw new Error(
+      `На этом компьютере под этой же учётной записью уже работает «${busy.name}». ` +
+        "Двое под одним именем получат общие данные: служба не различает людей за одним " +
+        "компьютером. Заведите на службе отдельную запись."
+    );
+  }
+}
+
+/** Запомнить, под какой записью службы работает нынешний человек. */
+export async function rememberMyServer(base: string, login: string): Promise<void> {
+  const roster = await peopleReady;
+  await rememberServer(device, roster?.lastUsedId ?? "", base, login);
+}
+
+/** Забыть её — при отключении от службы. */
+export async function forgetMyServer(): Promise<void> {
+  const roster = await peopleReady;
+  await forgetServer(device, roster?.lastUsedId ?? "");
 }

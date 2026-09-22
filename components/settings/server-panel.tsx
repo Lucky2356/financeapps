@@ -27,6 +27,9 @@ import { useI18n } from "@/lib/i18n/context";
 import {
   accountService,
   flushSync,
+  forgetMyServer,
+  refuseSharedServerAccount,
+  rememberMyServer,
   resumeSync,
   serverAccount,
   stopSync
@@ -65,6 +68,10 @@ export function ServerPanel() {
       const vault = await accountService.vault();
       if (!vault) throw new Error(t("server.noVault"));
 
+      // Сначала — не занята ли эта запись службы соседом по компьютеру.
+      // Спрашивается ДО подключения: после него данные уже перемешаны.
+      await refuseSharedServerAccount(base, login);
+
       const device = deviceName();
       if (code.trim()) {
         await serverAccount.register({ base, code, login, password, vault, device });
@@ -78,6 +85,7 @@ export function ServerPanel() {
         await accountService.adopt(joined.vault, password);
       }
 
+      await rememberMyServer(base, login);
       await resumeSync();
       setLink(await serverAccount.link());
       setPassword("");
@@ -111,6 +119,7 @@ export function ServerPanel() {
     try {
       stopSync();
       await serverAccount.signOut();
+      await forgetMyServer();
       setLink(null);
       toast.success(t("server.disconnected"));
     } catch (cause) {

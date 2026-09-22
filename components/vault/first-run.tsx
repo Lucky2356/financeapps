@@ -34,7 +34,14 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
 import { pickTwo } from "@/lib/vault/pick-two";
 import { deviceName } from "@/lib/vault/device-name";
-import { accountService, flushSync, resumeSync, serverAccount } from "@/lib/vault/runtime";
+import {
+  accountService,
+  flushSync,
+  refuseSharedServerAccount,
+  rememberMyServer,
+  resumeSync,
+  serverAccount
+} from "@/lib/vault/runtime";
 import { Head, Problem, Shell } from "@/components/vault/shell";
 
 const MIN_PASSWORD = 8;
@@ -145,6 +152,9 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     setError(null);
     setBusy(true);
     try {
+      // До подключения, а не после: после него данные уже перемешаны.
+      await refuseSharedServerAccount(base, login);
+
       const joined = await serverAccount.signIn({
         base,
         login,
@@ -152,6 +162,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
         device: deviceName()
       });
       await accountService.adopt(joined.vault, joinPassword);
+      await rememberMyServer(base, login);
       await resumeSync();
       await flushSync();
       onDone();
