@@ -26,7 +26,15 @@ import {
 import { openDatabase } from "./db.ts";
 import { EventBus } from "./events.ts";
 import { RateLimiter } from "./rate-limit.ts";
-import { listSlots, readSlot, usageOf, writeSlot, MAX_BODY_BYTES } from "./vault.ts";
+import {
+  listSlots,
+  readSlot,
+  usageOf,
+  writeSlot,
+  MAX_BODY_BYTES,
+  NO_LIMITS,
+  type Limits
+} from "./vault.ts";
 
 /**
  * Что сказать в журнале о запросе, на котором служба сломалась.
@@ -99,11 +107,23 @@ export type AppOptions = {
   adminToken?: string;
   /** Кому отвечать. По умолчанию всем; см. оговорку выше. */
   origin?: string;
+  /** Сколько позволено одному человеку. По умолчанию — без пределов. */
+  limits?: Limits;
+  /**
+   * Пускать ли без приглашения. По умолчанию — нет, как было всегда.
+   *
+   * Умолчание здесь не вкусовое. Переменную окружения ставят осознанно, а не
+   * поставить её можно по невнимательности; служба, открывшаяся сама, — это
+   * чужие люди на чужой машине, о которых хозяин узнаёт последним.
+   */
+  openRegistration?: boolean;
 };
 
 export function createApp(options: AppOptions) {
   const ADMIN_TOKEN = options.adminToken ?? "";
   const ORIGIN = options.origin ?? "*";
+  const LIMITS = options.limits ?? NO_LIMITS;
+  const OPEN = options.openRegistration ?? false;
 
   const db = openDatabase(options.dbPath);
   const bus = new EventBus();
@@ -114,6 +134,16 @@ export function createApp(options: AppOptions) {
   // запирает вход остальным. Подбор ПАРОЛЯ ограничивает счётчик по имени;
   // счётчик по адресу нужен от другого — от того, кто перебирает имена подряд.
   const byAddress = new RateLimiter(30);
+  // Счётчик на РЕГИСТРАЦИЮ, и появился он вместе с открытой записью. Пока
+  // пускали по приглашениям, пределом было само приглашение: без него дальше
+  // первой же проверки не проходили. Открытая запись убирает этот предел
+  // целиком — и без замены один скрипт заводит тысячу записей за минуту,
+  // каждая из которых стоит службе полного прогона scrypt.
+  //
+  // Час, а не минута: заводят запись один раз в жизни, и человеку незачем
+  // делать это чаще. Десять на адрес — с запасом на общий роутер и на того,
+  // кто трижды ошибся именем; скрипту десять в час не дают ничего.
+  const newcomers = new RateLimiter(10, 60 * 60 * 1000);
 
   function now(): string {
     return new Date().toISOString();
@@ -172,7 +202,12 @@ export function createApp(options: AppOptions) {
     const method = req.method ?? "GET";
 
     if (method === "OPTIONS") return send(res, 204);
-    if (path === "/health") return send(res, 200, { ok: true });
+    // Про «open» в проверке живости. Устройству надо знать, спрашивать ли у
+    // человека приглашение, — и узнать это оно может только до входа, то есть
+    // не предъявив ничего. Отдельная ручка для одного поля была бы лишней, а
+    // тайны в этом поле нет: открытость службы видна и так, с первой же
+    // попытки завестись без приглашения.
+    if (path === "/health") return send(res, 200, { ok: true, open: OPEN });
 
     // ——— вход ——————————————————————————————————————————————————————
 
@@ -182,6 +217,12 @@ export function createApp(options: AppOptions) {
     }
 
     if (path === "/auth/register" && method === "POST") {
+      if (!newcomers.allow(`запись:${addressOf(req)}`, Date.now())) {
+        return send(res, 429, {
+          error: "Слишком много новых записей с этого адреса. Попробуйте позже."
+        });
+      }
+
       const body = await readJson(req);
       const created = await register(
         db,
@@ -191,7 +232,8 @@ export function createApp(options: AppOptions) {
           vault: JSON.stringify(body.vault),
           secret: text(body.secret)
         },
-        now()
+        now(),
+        OPEN
       );
       return send(res, 201, created);
     }
@@ -286,7 +328,16 @@ export function createApp(options: AppOptions) {
           return send(res, 400, { error: "Неверная версия." });
         }
 
-        const outcome = writeSlot(db, who.personId, slot, baseVersion, body.body, now());
+        const outcome = writeSlot(db, who.personId, slot, baseVersion, body.body, now(), LIMITS);
+        if (!outcome.ok && outcome.reason === "full") {
+          // 507, а не 409 и не 403. 409 значит «сходите за свежим и повторите» —
+          // устройство так и сделает, упрётся в то же самое и будет ходить по
+          // кругу, показывая человеку «вас обогнали» вместо «кончилось место».
+          // 507 устройство трактует как отказ, повторять который бесполезно, —
+          // и показывает текст. Данные при этом остаются на устройстве целыми:
+          // не уехало — не значит потеряно.
+          return send(res, 507, { error: outcome.error });
+        }
         if (!outcome.ok) {
           // Отказ «вас обогнали» — 409, а не 200 с полем: по договору это другой
           // исход, и путать его с успехом на уровне кода ответа нельзя.

@@ -17,6 +17,30 @@ import type { BookRow } from "./db.ts";
 /** Сколько может весить одна книга. */
 export const MAX_BODY_BYTES = 32 * 1024 * 1024;
 
+/**
+ * Сколько всего позволено одному человеку.
+ *
+ * До открытой регистрации пределов не было вовсе, и это было правильно: на
+ * службе сидели десять человек по личным приглашениям, и единственный, кто мог
+ * её переполнить, — сам хозяин. С открытой регистрацией это перестаёт быть
+ * верным в тот же день: любой желающий заводит себе запись и пишет в неё
+ * сколько влезет, пока не кончится диск. Кончившийся диск — это не «медленно»,
+ * это остановка службы для ВСЕХ, включая тех, кто ничего не делал.
+ *
+ * `null` — без предела, и это единственное значение, означающее «не считать».
+ * Ноль здесь означал бы ровно ноль: записывать нельзя ничего. Классическая
+ * западня «0 = безлимит» не заводится тем, что её негде завести.
+ */
+export type Limits = {
+  /** Сколько ячеек. Ячейка — это профиль: «Личное», «Жена», «Бизнес». */
+  slots: number | null;
+  /** Сколько всего байт во всех ячейках вместе. */
+  bytes: number | null;
+};
+
+/** Сегодняшнее поведение: служба на десять своих, считать нечего. */
+export const NO_LIMITS: Limits = { slots: null, bytes: null };
+
 export type Snapshot = {
   slot: string;
   version: number;
@@ -57,7 +81,8 @@ export function listSlots(
 
 export type PutOutcome =
   | { ok: true; version: number; updatedAt: string }
-  | { ok: false; reason: "stale"; current: Snapshot };
+  | { ok: false; reason: "stale"; current: Snapshot }
+  | { ok: false; reason: "full"; error: string };
 
 export function writeSlot(
   db: DatabaseSync,
@@ -65,7 +90,8 @@ export function writeSlot(
   slot: string,
   baseVersion: number,
   body: unknown,
-  now: string
+  now: string,
+  limits: Limits = NO_LIMITS
 ): PutOutcome {
   const text = JSON.stringify(body);
   if (Buffer.byteLength(text) > MAX_BODY_BYTES) {
@@ -74,6 +100,9 @@ export function writeSlot(
 
   const current = readSlot(db, personId, slot);
   if (current.version !== baseVersion) return { ok: false, reason: "stale", current };
+
+  const crowded = tooMuch(db, personId, slot, text, limits);
+  if (crowded) return { ok: false, reason: "full", error: crowded };
 
   const version = current.version + 1;
   // Одним запросом, а не «проверить и записать»: между двумя запросами
@@ -99,11 +128,82 @@ export function writeSlot(
   return { ok: true, version, updatedAt: now };
 }
 
+/**
+ * Влезет ли запись в отведённое человеку — и если нет, то что ему сказать.
+ *
+ * Считается ПОСЛЕ проверки версии и ПЕРЕД самой записью. Порядок тут не
+ * вкусовой: откажи предел раньше версии — и человек, которого вдобавок
+ * обогнали, узнал бы только про место, сходил бы чистить и вернулся бы к тому
+ * же отказу «вас обогнали». Сначала договор, потом хозяйство.
+ *
+ * Старый размер этой же ячейки ВЫЧИТАЕТСЯ. Иначе человек, упёршийся в предел,
+ * не смог бы даже УДАЛИТЬ у себя половину операций: запись меньшего размера
+ * поверх большей всё равно считалась бы добавкой, и единственный выход из
+ * переполнения оказался бы закрыт тем же переполнением.
+ *
+ * Отказ возвращается строкой, а не `true`: человеку на экране нужно не «не
+ * влезло», а сколько у него есть и сколько он просит.
+ */
+function tooMuch(
+  db: DatabaseSync,
+  personId: string,
+  slot: string,
+  text: string,
+  limits: Limits
+): string | null {
+  if (limits.slots === null && limits.bytes === null) return null;
+
+  const mine = usageOf(db, personId);
+  const existing = db.prepare(SIZE_OF_ONE).get<{ bytes: number }>(personId, slot);
+
+  if (limits.slots !== null && !existing && mine.slots >= limits.slots) {
+    return `На этой службе разрешено ${limits.slots} книг(и) на человека, а у вас уже ${mine.slots}.`;
+  }
+
+  if (limits.bytes !== null) {
+    const after = mine.bytes - (existing?.bytes ?? 0) + Buffer.byteLength(text);
+    if (after > limits.bytes) {
+      return (
+        `Не хватает места на службе: разрешено ${megabytes(limits.bytes)}, ` +
+        `а эта запись довела бы до ${megabytes(after)}.`
+      );
+    }
+  }
+
+  return null;
+}
+
+function megabytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МиБ`;
+}
+
+/**
+ * Размер — В БАЙТАХ, а не в знаках, и `cast(... as blob)` здесь именно за этим.
+ *
+ * `length()` у SQLite считает текст ЗНАКАМИ. Для латиницы это одно и то же, и
+ * разницу не видно вовсе; для кириллицы знак весит два байта, и служба
+ * насчитала бы человеку ровно вдвое меньше занятого. Предел, выставленный
+ * хозяином в мегабайтах, пропускал бы вдвое больше — а сверял бы он его по
+ * `df`, который считает байты.
+ *
+ * Поймано первой же проверкой, которая записала кириллицу: предел в 4 КиБ
+ * отказал записи, которую сам же считал влезающей. Латиница прошла бы молча, и
+ * расхождение всплыло бы на живой машине как «место кончилось вдвое раньше
+ * обещанного».
+ *
+ * Приведение к blob делается вместо `octet_length()` нарочно: та появилась в
+ * SQLite 3.43, а служба ходит на той библиотеке, что встроена в Node у
+ * хозяина, — и падать на старой из-за красоты запроса ей незачем.
+ */
+const SIZE_OF_ONE =
+  "select length(cast(body as blob)) as bytes from books where person_id = ? and slot = ?";
+
 /** Сколько места занимают книги человека — для страницы управления. */
 export function usageOf(db: DatabaseSync, personId: string): { slots: number; bytes: number } {
   const row = db
     .prepare(
-      "select count(*) as slots, coalesce(sum(length(body)), 0) as bytes from books where person_id = ?"
+      "select count(*) as slots, coalesce(sum(length(cast(body as blob))), 0) as bytes" +
+        " from books where person_id = ?"
     )
     .get<{ slots: number; bytes: number }>(personId);
   return { slots: row?.slots ?? 0, bytes: row?.bytes ?? 0 };
