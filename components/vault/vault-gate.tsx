@@ -7,18 +7,32 @@
 // человек увидел бы приложение без единого счёта и операции и решил бы, что
 // всё пропало. Поэтому запертое состояние не пускает вниз ничего.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FirstRun } from "@/components/vault/first-run";
 import { UnlockScreen } from "@/components/vault/unlock-screen";
 import { useI18n } from "@/lib/i18n/context";
-import { accountService, peopleReady, resumeSync, stopSync } from "@/lib/vault/runtime";
+import { WhoIsIt } from "@/components/vault/who-is-it";
+import {
+  accountService,
+  listPeople,
+  peopleReady,
+  resumeSync,
+  stopSync,
+  type PersonCard
+} from "@/lib/vault/runtime";
 
-type Phase = "checking" | "fresh" | "locked" | "open";
+type Phase = "checking" | "who" | "fresh" | "locked" | "open";
 
 export function VaultGate({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>("checking");
+  const [people, setPeople] = useState<PersonCard[]>([]);
+
+  // Спрашиваем «кто это» РОВНО ОДИН РАЗ за жизнь вкладки. Иначе каждое
+  // «vault-changed» — заперли, забыли устройство — возвращало бы человека к
+  // выбору, хотя он никуда не уходил.
+  const asked = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -28,6 +42,24 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
       // хранилище, ещё не знающее, чьё оно, — и человек с заведённым паролем
       // увидел бы первый запуск поверх собственных данных.
       await peopleReady;
+
+      // «Кто это» показывается, только когда людей больше одного.
+      //
+      // Одному этот экран не говорит ничего и лишь добавляет нажатие к каждому
+      // запуску — а укоротить путь до первой операции было смыслом целого
+      // выпуска. Удлинять его здесь же было бы смешно.
+      //
+      // Спрашивается это ПОСЛЕ выбора человека и ДО замка: список уже прочитан,
+      // а чей замок открывать — ещё вопрос.
+      if (!asked.current) {
+        asked.current = true;
+        const here = await listPeople();
+        if (here.length > 1) {
+          setPeople(here);
+          setPhase("who");
+          return;
+        }
+      }
 
       const { status } = await accountService.state();
       setPhase(status === "unlocked" ? "open" : status);
@@ -83,6 +115,7 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (phase === "who") return <WhoIsIt people={people} />;
   if (phase === "fresh") return <FirstRun onDone={refresh} />;
   if (phase === "locked") return <UnlockScreen onDone={refresh} />;
   return <>{children}</>;

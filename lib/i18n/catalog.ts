@@ -1731,6 +1731,19 @@ const ru: Messages = {
   "calc.open": "Калькулятор",
   // --- Замок на данных (учётная запись) ---
   "vault.checking": "Проверяем замок…",
+  "vault.who.title": "Кто за компьютером?",
+  "vault.who.lead":
+    "У каждого свои данные и свой пароль. Друг друга вы не видите — но это про приложение, а не про диск: кто взял компьютер, тот может открыть чужое, если оно не заперто паролем.",
+  "vault.who.add": "Добавить человека",
+  "vault.who.addHint": "Свои счета, свой пароль, своя связь со службой.",
+  "vault.who.newTitle": "Как вас зовут?",
+  "vault.who.newLead":
+    "Имя видно только на этом компьютере — оно нужно, чтобы не перепутать, чьи данные открывать.",
+  "vault.who.namePlaceholder": "Например, Маша",
+  "vault.who.create": "Готово",
+  "vault.who.back": "Назад",
+  "vault.who.noPassword": "Без пароля — сосед откроет",
+  "vault.who.locked": "Под паролем",
   "vault.source.title": "С чего начнём?",
   "vault.source.lead":
     "Записи будут храниться на этом устройстве. Их можно завести с нуля, поднять из резервной копии или забрать с устройства, где они уже есть.",
@@ -3674,6 +3687,19 @@ const en: Messages = {
   "calc.open": "Calculator",
   // --- Data lock (account) ---
   "vault.checking": "Checking the lock…",
+  "vault.who.title": "Who is at this computer?",
+  "vault.who.lead":
+    "Everyone here has their own data and their own password. You do not see each other — but that is about the app, not the disk: whoever has the computer can open anything that is not locked with a password.",
+  "vault.who.add": "Add a person",
+  "vault.who.addHint": "Own accounts, own password, own link to the service.",
+  "vault.who.newTitle": "What should we call you?",
+  "vault.who.newLead":
+    "The name is only visible on this computer — it is there so nobody opens the wrong data.",
+  "vault.who.namePlaceholder": "For example, Masha",
+  "vault.who.create": "Done",
+  "vault.who.back": "Back",
+  "vault.who.noPassword": "No password — a neighbour can open it",
+  "vault.who.locked": "Password protected",
   "vault.source.title": "Where do we start?",
   "vault.source.lead":
     "Your records will live on this device. Start them from scratch, bring them back from a backup, or fetch them from a device that already has them.",

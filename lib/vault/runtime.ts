@@ -35,7 +35,15 @@ import type { SyncTransport } from "@/lib/sync/protocol";
 import { AccountService } from "@/lib/vault/account";
 import { ConflictStore } from "@/lib/vault/conflicts";
 import { rememberWho } from "@/lib/storage/mine";
-import { choosePerson, rememberLastUsed, type Roster } from "@/lib/vault/people";
+import {
+  addPerson,
+  choosePerson,
+  hasVault,
+  opensWithoutPassword,
+  readRoster,
+  rememberLastUsed,
+  type Roster
+} from "@/lib/vault/people";
 import { ServerAccount } from "@/lib/vault/server-account";
 
 /**
@@ -175,4 +183,44 @@ export async function flushSync(): Promise<void> {
 
 export function stopSync(): void {
   syncStorage.stop();
+}
+
+/** Человек глазами экрана выбора. */
+export type PersonCard = {
+  id: string;
+  name: string;
+  /** Данные откроются соседу без пароля — и экран обязан сказать это вслух. */
+  unprotected: boolean;
+};
+
+/**
+ * Кто есть на этом устройстве и чьи данные заперты.
+ *
+ * Читается голым хранилищем устройства: спрашивать надо про ВСЕХ, а стопка
+ * открыта на одного.
+ */
+export async function listPeople(): Promise<PersonCard[]> {
+  const roster = await readRoster(device);
+  return Promise.all(
+    roster.people.map(async (person) => ({
+      id: person.id,
+      name: person.name,
+      unprotected: (await hasVault(device, person.id))
+        ? await opensWithoutPassword(device, person.id)
+        : // Замка ещё нет вовсе — человека только что завели, и первый запуск
+          // он пройдёт сам. Пугать его «сосед откроет» раньше времени незачем.
+          false
+    }))
+  );
+}
+
+/**
+ * Завести человека и сразу открыть его.
+ *
+ * Перезагрузкой, как и смена: заводит его тот, кто сейчас за компьютером, а
+ * дальше стопку надо собрать заново — уже на нового.
+ */
+export async function addPersonAndSwitch(name: string): Promise<void> {
+  const person = await addPerson(device, name);
+  await switchPerson(person.id);
 }

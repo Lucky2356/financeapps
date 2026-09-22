@@ -1,5 +1,10 @@
-import { PEOPLE_KEY, PERSON_MARK } from "@/lib/storage/NamespacedStorageAdapter";
+import {
+  NamespacedStorageAdapter,
+  PEOPLE_KEY,
+  PERSON_MARK
+} from "@/lib/storage/NamespacedStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
+import { DEVICE_KEY, VAULT_KEY } from "@/lib/vault/account";
 
 /**
  * Кто живёт на этом устройстве.
@@ -308,4 +313,30 @@ export async function forgetServer(device: StorageAdapter, id: string): Promise<
       return without;
     })
   });
+}
+
+/**
+ * Откроются ли данные этого человека БЕЗ пароля.
+ *
+ * Ровно тот вопрос, на который обязан отвечать экран выбора. Разделение людей
+ * честно ровно настолько, насколько заперты их данные: у человека без пароля и
+ * у поставившего «не спрашивать на этом устройстве» ключ лежит в хранилище
+ * открытым — по замыслу, иначе «не спрашивать» не работало бы вовсе. Сосед
+ * возьмёт компьютер и откроет.
+ *
+ * Молчать об этом нельзя. Экран, обещающий «друг друга вы не видите» и
+ * умалчивающий об этом, обещает защиту, которой нет, — а человек, поверивший
+ * такому обещанию, ведёт в приложении то, что прятал бы.
+ */
+export async function opensWithoutPassword(device: StorageAdapter, id: string): Promise<boolean> {
+  const theirs = new NamespacedStorageAdapter(device);
+  theirs.bind(id);
+  return (await theirs.getItem(DEVICE_KEY)) !== null;
+}
+
+/** Заведён ли у человека замок вообще (иначе он ещё не проходил первый запуск). */
+export async function hasVault(device: StorageAdapter, id: string): Promise<boolean> {
+  const theirs = new NamespacedStorageAdapter(device);
+  theirs.bind(id);
+  return (await theirs.getItem(VAULT_KEY)) !== null;
 }
