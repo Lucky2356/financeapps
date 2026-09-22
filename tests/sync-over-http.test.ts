@@ -12,7 +12,7 @@ import { mergeBooks } from "@/lib/sync/merge";
 import { isOffline } from "@/lib/sync/protocol";
 import { createVault } from "@/lib/sync/vault-crypto";
 import { AccountService } from "@/lib/vault/account";
-import { ServerAccount, SERVER_KEY } from "@/lib/vault/server-account";
+import { ServerAccount, SERVER_KEY, probeServer, redeemPairing } from "@/lib/vault/server-account";
 import { createApp, type App } from "../server/src/main.ts";
 
 // Настоящее приложение через настоящий провод в настоящую службу.
@@ -660,5 +660,185 @@ describe("двое на одном устройстве — через наст�
     const masha = new Housemate(disk, "маша");
     expect(await masha.server.link()).toBeNull();
     expect(await vasya.server.link()).not.toBeNull();
+  });
+
+  describe("связка второго устройства", () => {
+    // Здесь проверяется шов между приложением и службой, а не каждая из
+    // сторон. У обеих свои проверки, и обе могут остаться честно зелёными,
+    // разойдясь в коде ответа, имени поля или форме отказа. Код связки — самый
+    // свежий из таких швов и единственный, который зовут ДО всякого входа.
+
+    it("второе устройство узнаёт адрес и имя, не зная ничего", async () => {
+      // Весь смысл кода: у второго устройства нет ни адреса, ни имени входа, и
+      // предъявить службе ему нечего.
+      const password = "пароль";
+      const first = new Owner();
+      await first.account.create(password, FAST);
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      await first.server.register({
+        base,
+        code,
+        login: "petya",
+        password,
+        vault: (await first.account.vault())!,
+        device: "компьютер"
+      });
+
+      const pairing = await first.server.issuePairing();
+      const answer = await redeemPairing(base, pairing.code);
+
+      expect(answer.login).toBe("petya");
+      expect(answer.base).toBe(base);
+    });
+
+    it("код не везёт пароля — и без него данные не открываются", async () => {
+      // Решение владельца, и оно правильное: пароль — единственное, чем
+      // завёрнут ключ. Поехав в коде (а значит и в картинке QR, которую
+      // снимают из-за плеча), он сделал бы бессмысленным всё шифрование разом.
+      const password = "пароль";
+      const first = new Owner();
+      await first.account.create(password, FAST);
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      await first.server.register({
+        base,
+        code,
+        login: "petya",
+        password,
+        vault: (await first.account.vault())!,
+        device: "компьютер"
+      });
+
+      const pairing = await first.server.issuePairing();
+      const answer = (await redeemPairing(base, pairing.code)) as unknown as Record<
+        string,
+        unknown
+      >;
+
+      expect(Object.keys(answer).sort()).toEqual(["base", "login"]);
+      // А со ВТОРЫМ устройством, знающим только это, вход без пароля не
+      // проходит: служба отвечает одинаково на чужое имя и на чужой секрет.
+      const second = new Owner();
+      await second.account.create("своя жизнь", FAST);
+      await expect(
+        second.server.signIn({
+          base: answer.base as string,
+          login: answer.login as string,
+          password: "не тот пароль",
+          device: "телефон"
+        })
+      ).rejects.toThrow();
+    });
+
+    it("своим кодом второе устройство доезжает до тех же данных", async () => {
+      // Путь целиком, как его пройдёт человек: код → адрес и имя → пароль →
+      // шкатулка со службы → те же записи.
+      const password = "пароль";
+      const first = new Owner();
+      await first.account.create(password, FAST);
+      await first.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      await first.server.register({
+        base,
+        code,
+        login: "petya",
+        password,
+        vault: (await first.account.vault())!,
+        device: "компьютер"
+      });
+      expect(await first.resume()).toBe(true);
+
+      const pairing = await first.server.issuePairing();
+      const answer = await redeemPairing(base, pairing.code);
+
+      const second = new Owner();
+      await second.account.create("свой первый запуск", FAST);
+      // Первый запуск ОТКРЫВАЕТ приложение — и оно заводит данные с
+      // категориями по умолчанию. Без этой строки телефон в проверке чище
+      // любого настоящего.
+      await second.app.get("/accounts");
+      const joined = await second.server.signIn({
+        base: answer.base,
+        login: answer.login,
+        password,
+        device: "телефон"
+      });
+      await second.account.adopt(joined.vault, password);
+      await second.resume();
+
+      const there = await second.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+      expect(there.accounts.map((row) => row.name)).toContain("Карта");
+    });
+
+    it("код срабатывает один раз — и второй раз это видно приложению", async () => {
+      const password = "пароль";
+      const first = new Owner();
+      await first.account.create(password, FAST);
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      await first.server.register({
+        base,
+        code,
+        login: "petya",
+        password,
+        vault: (await first.account.vault())!,
+        device: "компьютер"
+      });
+
+      const pairing = await first.server.issuePairing();
+      await redeemPairing(base, pairing.code);
+
+      await expect(redeemPairing(base, pairing.code)).rejects.toThrow(/использован/);
+    });
+
+    it("устройства видны, переименовываются и выкидываются", async () => {
+      // Ручка была с самого начала, а экрана не было, и в server/README.md об
+      // этом было написано прямо. Человек, потерявший телефон, не мог выкинуть
+      // его билет иначе как через curl — а билет живёт месяц.
+      const password = "пароль";
+      const first = new Owner();
+      await first.account.create(password, FAST);
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      await first.server.register({
+        base,
+        code,
+        login: "petya",
+        password,
+        vault: (await first.account.vault())!,
+        device: "Компьютер (Windows)"
+      });
+
+      const mine = await first.server.devices();
+      expect(mine.devices).toHaveLength(1);
+      expect(mine.current).toBe(mine.devices[0].id);
+
+      await first.server.renameDevice(mine.devices[0].id, "Ноутбук на кухне");
+      expect((await first.server.devices()).devices[0].name).toBe("Ноутбук на кухне");
+
+      await first.server.forgetDevice(mine.devices[0].id);
+      // Выкинутое устройство теряет билет — в этом весь смысл.
+      await expect(first.server.devices()).rejects.toThrow();
+    });
+
+    it("неподключённое устройство отказывает внятно, а не падает", async () => {
+      // «Cannot read properties of null» — это не сообщение человеку.
+      const alone = new Owner();
+      await expect(alone.server.issuePairing()).rejects.toThrow(/не подключено/);
+    });
+
+    it("служба сама говорит, нужно ли ей приглашение", async () => {
+      // Спросить это можно только ДО входа, ничего не предъявив, — то есть
+      // только так. Без ответа приложение либо прячет поле там, где без него
+      // не пускают, либо спрашивает его там, где оно не нужно.
+      expect(await probeServer(base)).toEqual({ open: false, reachable: true });
+    });
+
+    it("недоступная служба считается закрытой, а не открытой", async () => {
+      // Умолчание то же, что и на самой службе. Лишнее поле, которое человек
+      // оставит пустым, стоит ему одной попытки; спрятанное поле, без которого
+      // не пускают, стоит ему всего подключения.
+      expect(await probeServer("http://127.0.0.1:1")).toEqual({
+        open: false,
+        reachable: false
+      });
+    });
   });
 });

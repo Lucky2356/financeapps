@@ -38,6 +38,20 @@ export type ServerLink = {
 /** Что служба рассказывает о пароле ДО входа: соль и число прогонов. */
 type AuthParams = { kdf: string; iterations: number; salt: string };
 
+/** Одно устройство в списке «мои устройства». */
+export type LinkedDevice = {
+  id: string;
+  name: string;
+  /** Когда служба видела его последний раз, ISO. */
+  last_seen_at: string;
+};
+
+/** Код связки, выданный первым устройством. */
+export type PairingCode = { code: string; expiresAt: string };
+
+/** Что код связки рассказывает второму устройству. Пароля здесь нет. */
+export type PairingAnswer = { base: string; login: string };
+
 function root(base: string): string {
   return base.trim().replace(/\/+$/, "");
 }
@@ -114,6 +128,47 @@ function stub(params: AuthParams): Vault {
   };
 }
 
+/**
+ * Что служба рассказывает о себе до всякого входа.
+ *
+ * Ровно одно поле — открыта ли запись. Нужно оно затем, чтобы не спрашивать у
+ * человека приглашение там, где оно не нужно, и не молчать о нём там, где оно
+ * обязательно. Спросить это можно только ДО входа, ничего не предъявив, — то
+ * есть только так.
+ *
+ * Не ответила или ответила не службой — считаем запись закрытой. Умолчание
+ * здесь то же, что и на самой службе, и по той же причине: лишнее поле,
+ * которое человек оставит пустым, стоит ему одной попытки; спрятанное поле,
+ * без которого не пускают, стоит ему всего подключения.
+ */
+export async function probeServer(base: string): Promise<{ open: boolean; reachable: boolean }> {
+  try {
+    const { status, data } = await ask(base, "/health");
+    if (status !== 200) return { open: false, reachable: false };
+    return { open: data.open === true, reachable: true };
+  } catch {
+    return { open: false, reachable: false };
+  }
+}
+
+/**
+ * Предъявить код связки. Зовётся на ВТОРОМ устройстве, где ещё ничего нет.
+ *
+ * Возвращает адрес, который назвала сама служба, а если она его не называла —
+ * тот, по которому её и спросили. Разница появляется у службы, доступной под
+ * несколькими именами: правым тогда будет то, которым она зовёт себя сама.
+ */
+export async function redeemPairing(base: string, code: string): Promise<PairingAnswer> {
+  const { status, data } = await ask(base, `/pairing/${encodeURIComponent(code.trim())}`);
+  if (status !== 200) refuse(status, data, "Код не подошёл.");
+
+  const login = String(data.login ?? "");
+  if (!login) refuse(status, data, "Служба не назвала имени входа по этому коду.");
+
+  const named = typeof data.address === "string" ? data.address.trim() : "";
+  return { base: root(named || base), login };
+}
+
 export class ServerAccount {
   private readonly storage: StorageAdapter;
 
@@ -181,6 +236,68 @@ export class ServerAccount {
     });
 
     return { vault: entered.data.vault as Vault };
+  }
+
+  /**
+   * Попросить код связки для второго устройства.
+   *
+   * Живёт пять минут и срабатывает один раз — служба следит за этим сама;
+   * здесь только просят и показывают.
+   */
+  async issuePairing(): Promise<PairingCode> {
+    const link = await this.need();
+    const { status, data } = await ask(link.base, "/pairing", {
+      method: "POST",
+      token: link.token
+    });
+    if (status !== 201) refuse(status, data, "Служба не выдала кода связки.");
+    return { code: String(data.code ?? ""), expiresAt: String(data.expiresAt ?? "") };
+  }
+
+  /** Мои устройства и то, которое спрашивает. */
+  async devices(): Promise<{ devices: LinkedDevice[]; current: string | null }> {
+    const link = await this.need();
+    const { status, data } = await ask(link.base, "/devices", { token: link.token });
+    if (status !== 200) refuse(status, data, "Служба не отдала список устройств.");
+    return {
+      devices: (data.devices ?? []) as LinkedDevice[],
+      current: (data.current as string | null) ?? null
+    };
+  }
+
+  /** Переименовать своё устройство: два «Компьютер (Windows)» неотличимы. */
+  async renameDevice(id: string, name: string): Promise<void> {
+    const link = await this.need();
+    const { status, data } = await ask(link.base, `/devices/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      token: link.token,
+      body: { name }
+    });
+    if (status !== 204) refuse(status, data, "Не удалось переименовать устройство.");
+  }
+
+  /**
+   * Выкинуть устройство — вместе с его билетом.
+   *
+   * ЭТО НЕ СТИРАЕТ ДАННЫХ. Ни на службе, ни на выкинутом устройстве: там книга
+   * остаётся целиком, просто перестаёт ездить. Ради потерянного телефона это
+   * то, что нужно, — а тому, кто рассчитывал стереть данные с потерянного, об
+   * этом надо сказать вслух, и экран это делает.
+   */
+  async forgetDevice(id: string): Promise<void> {
+    const link = await this.need();
+    const { status, data } = await ask(link.base, `/devices/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      token: link.token
+    });
+    if (status !== 204) refuse(status, data, "Не удалось выкинуть устройство.");
+  }
+
+  /** Запись о службе — или внятный отказ вместо «cannot read property of null». */
+  private async need(): Promise<ServerLink> {
+    const link = await this.link();
+    if (!link) throw new ServerRefused(0, "Это устройство не подключено к службе.");
+    return link;
   }
 
   /**
