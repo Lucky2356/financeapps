@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
+import { NamespacedStorageAdapter } from "@/lib/storage/NamespacedStorageAdapter";
 import { SyncingStorageAdapter, type Merge } from "@/lib/storage/SyncingStorageAdapter";
 import { HttpSyncTransport } from "@/lib/sync/HttpSyncTransport";
 import { mergeBooks } from "@/lib/sync/merge";
@@ -105,6 +106,52 @@ class Owner {
   };
 
   /** То же, что делает resumeSync в приложении. */
+  async resume(): Promise<boolean> {
+    const link = await this.server.link();
+    if (!link) return false;
+    await this.sync.start(
+      new HttpSyncTransport({ base: link.base, token: link.token }),
+      this.merge
+    );
+    await this.sync.flush();
+    return true;
+  }
+}
+
+/**
+ * Человек на ОБЩЕМ диске: та же стопка, что в приложении, с разделением внизу.
+ *
+ * Отличие от Owner ровно одно и оно же — всё содержание этого набора: диск
+ * здесь не свой, а общий, и разделяет людей приставка.
+ */
+class Housemate {
+  readonly space: NamespacedStorageAdapter;
+  readonly sync: SyncingStorageAdapter;
+  readonly vault: EncryptingStorageAdapter;
+  readonly account: AccountService;
+  readonly server: ServerAccount;
+
+  constructor(disk: MemoryStorageAdapter, id: string) {
+    this.space = new NamespacedStorageAdapter(disk);
+    this.space.bind(id);
+    this.sync = new SyncingStorageAdapter(this.space);
+    this.vault = new EncryptingStorageAdapter(this.sync);
+    this.account = new AccountService(this.sync, this.vault);
+    this.server = new ServerAccount(this.sync);
+  }
+
+  get app(): LocalApiClient {
+    return new LocalApiClient(this.vault);
+  }
+
+  merge: Merge = async (_slot, mine, theirs, ancestor) => {
+    const ours = mine ? await this.vault.open<Record<string, unknown>>(mine) : {};
+    const incoming = await this.vault.open<Record<string, unknown>>(theirs);
+    const base = ancestor ? await this.vault.open<Record<string, unknown>>(ancestor) : null;
+    const report = mergeBooks(base, ours, incoming);
+    return { body: await this.vault.seal(report.state), differs: report.differs };
+  };
+
   async resume(): Promise<boolean> {
     const link = await this.server.link();
     if (!link) return false;
@@ -503,5 +550,115 @@ describe("приложение через службу", () => {
     unwatch();
 
     expect(heard).toContainEqual({ slot: "книга", version: 1 });
+  });
+});
+
+describe("двое на одном устройстве — через настоящую службу", () => {
+  beforeEach(async () => {
+    app = createApp({ dbPath: ":memory:", adminToken: ADMIN });
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    await app.stop();
+  });
+
+  it("имена ячеек на службе БЕЗ приставки — иначе второе устройство не нашло бы их никогда", async () => {
+    // Самое дорогое свойство всего разделения, и проверить его можно только
+    // здесь: приставка живёт НИЖЕ отправки, значит на службу уходят обычные
+    // имена. Уйди она наверх — и человек, подключивший второе устройство,
+    // увидел бы пустоту, а понял бы это как «синхронизация не работает».
+    //
+    // Доказывается не заглядыванием в базу, а последствием: второе устройство
+    // БЕЗ приставки вообще забирает данные человека С приставкой.
+    const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+    const password = "пароль-маши";
+    const disk = new MemoryStorageAdapter();
+
+    const masha = new Housemate(disk, "маша");
+    await masha.account.create(password, FAST);
+    await masha.app.post("/accounts", { name: "Её карта", type: "DEBIT_CARD", balance: 50000 });
+    await masha.server.register({
+      base,
+      code,
+      login: "masha",
+      password,
+      vault: (await masha.account.vault())!,
+      device: "общий компьютер"
+    });
+    expect(await masha.resume()).toBe(true);
+
+    // Её телефон — отдельное устройство, разделения там нет вовсе.
+    const phone = new Owner();
+    await phone.account.create(password, FAST);
+    await phone.app.get("/accounts");
+    const joined = await phone.server.signIn({ base, login: "masha", password, device: "телефон" });
+    await phone.account.adopt(joined.vault, password);
+    expect(await phone.resume()).toBe(true);
+
+    const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    expect(seen.accounts.map((row) => row.name)).toContain("Её карта");
+  });
+
+  it("двое с разными записями на службе не пересекаются", async () => {
+    // Диск один, служба одна, записи разные — и каждый видит только своё. Тут
+    // сходятся оба разделения сразу: приставка внизу и отдельная учётная
+    // запись наверху.
+    const disk = new MemoryStorageAdapter();
+    const password = "пароль";
+
+    const vasya = new Housemate(disk, "");
+    const masha = new Housemate(disk, "маша");
+
+    for (const [who, login, card] of [
+      [vasya, "vasya", "Его карта"],
+      [masha, "masha", "Её карта"]
+    ] as const) {
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      await who.account.create(password, FAST);
+      await who.app.post("/accounts", { name: card, type: "DEBIT_CARD", balance: 1000 });
+      await who.server.register({
+        base,
+        code,
+        login,
+        password,
+        vault: (await who.account.vault())!,
+        device: "общий компьютер"
+      });
+      expect(await who.resume()).toBe(true);
+    }
+
+    const his = await vasya.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const hers = await masha.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+
+    expect(his.accounts.map((row) => row.name)).toContain("Его карта");
+    expect(his.accounts.map((row) => row.name)).not.toContain("Её карта");
+    expect(hers.accounts.map((row) => row.name)).toContain("Её карта");
+    expect(hers.accounts.map((row) => row.name)).not.toContain("Его карта");
+  });
+
+  it("связь со службой у каждого своя", async () => {
+    // financeServer лежит в пространстве человека, а не устройства. Лежи он
+    // общим — второй, подключившись, забрал бы чужой билет, и его данные
+    // поехали бы в чужую учётную запись.
+    const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+    const disk = new MemoryStorageAdapter();
+    const password = "пароль";
+
+    const vasya = new Housemate(disk, "");
+    await vasya.account.create(password, FAST);
+    await vasya.server.register({
+      base,
+      code,
+      login: "vasya",
+      password,
+      vault: (await vasya.account.vault())!,
+      device: "общий компьютер"
+    });
+
+    const masha = new Housemate(disk, "маша");
+    expect(await masha.server.link()).toBeNull();
+    expect(await vasya.server.link()).not.toBeNull();
   });
 });

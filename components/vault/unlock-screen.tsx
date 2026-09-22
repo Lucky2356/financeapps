@@ -5,7 +5,7 @@
 import { Lock, LifeBuoy } from "lucide-react";
 import { useState } from "react";
 
-import { Head, Problem, Shell } from "@/components/vault/first-run";
+import { Head, Problem, Shell } from "@/components/vault/shell";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

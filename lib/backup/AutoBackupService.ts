@@ -1,6 +1,7 @@
 "use client";
 
 import { apiClient } from "@/lib/api/client";
+import { readMine, writeMine } from "@/lib/storage/mine";
 import {
   backupFileName,
   DEFAULT_AUTO_BACKUP,
@@ -13,7 +14,7 @@ const LAST_RUN_KEY = "auto-backup-last-run";
 
 export function loadAutoBackupConfig(): AutoBackupConfig {
   try {
-    const raw = localStorage.getItem(CONFIG_KEY);
+    const raw = readMine(CONFIG_KEY);
     if (raw) return { ...DEFAULT_AUTO_BACKUP, ...(JSON.parse(raw) as Partial<AutoBackupConfig>) };
   } catch {
     /* ignore */
@@ -23,7 +24,7 @@ export function loadAutoBackupConfig(): AutoBackupConfig {
 
 export function saveAutoBackupConfig(config: AutoBackupConfig): void {
   try {
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    writeMine(CONFIG_KEY, JSON.stringify(config));
   } catch {
     /* ignore quota */
   }
@@ -31,7 +32,7 @@ export function saveAutoBackupConfig(config: AutoBackupConfig): void {
 
 export function getLastBackupRun(): string | null {
   try {
-    return localStorage.getItem(LAST_RUN_KEY);
+    return readMine(LAST_RUN_KEY);
   } catch {
     return null;
   }
@@ -39,7 +40,7 @@ export function getLastBackupRun(): string | null {
 
 export function setLastBackupRun(iso: string): void {
   try {
-    localStorage.setItem(LAST_RUN_KEY, iso);
+    writeMine(LAST_RUN_KEY, iso);
   } catch {
     /* ignore */
   }

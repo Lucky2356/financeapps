@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
+import { NamespacedStorageAdapter } from "@/lib/storage/NamespacedStorageAdapter";
+import { SyncingStorageAdapter } from "@/lib/storage/SyncingStorageAdapter";
 import { AccountService, DEVICE_KEY, VAULT_KEY } from "@/lib/vault/account";
 
 const FAST = { iterations: 1 };
@@ -463,5 +465,105 @@ describe("запись без пароля", () => {
     const { account } = device();
     await account.create("первый-пароль-подлиннее", FAST);
     await expect(account.setPassword("второй")).rejects.toThrow(/уже задан/);
+  });
+});
+
+describe("двое на одном устройстве", () => {
+  /**
+   * Человек на общем диске — стопкой, как в приложении.
+   *
+   * Синхронизация здесь НЕ для красоты: «забыл и пароль, и код» доходит до
+   * хранилища через неё, и её clear() зовёт нижний. Собери мы стопку без неё —
+   * и проверка доказывала бы не тот путь, по которому ходят живые люди.
+   */
+  function personOn(disk: MemoryStorageAdapter, id: string) {
+    const layer = new NamespacedStorageAdapter(disk);
+    layer.bind(id);
+    const sync = new SyncingStorageAdapter(layer);
+    const sealed = new EncryptingStorageAdapter(sync);
+    return { sealed, account: new AccountService(sync, sealed) };
+  }
+
+  it("оба заводят свой замок, и второй не упирается в первый", async () => {
+    // Без разделения второй получил бы «учётная запись уже заведена»: шкатулка
+    // на устройстве одна, и она чужая.
+    const disk = new MemoryStorageAdapter();
+    const vasya = personOn(disk, "");
+    const masha = personOn(disk, "маша");
+
+    await vasya.account.create("пароль-васи", FAST);
+    await masha.account.create("пароль-маши", FAST);
+
+    expect((await vasya.account.state()).status).toBe("unlocked");
+    expect((await masha.account.state()).status).toBe("unlocked");
+  });
+
+  it("сосед не читает чужие записи", async () => {
+    const disk = new MemoryStorageAdapter();
+    const vasya = personOn(disk, "");
+    const masha = personOn(disk, "маша");
+    await vasya.account.create("пароль-васи", FAST);
+    await masha.account.create("пароль-маши", FAST);
+
+    await new LocalApiClient(masha.sealed).post("/accounts", {
+      name: "Её карта",
+      type: "DEBIT_CARD",
+      balance: 50000
+    });
+
+    const seen = JSON.stringify(await vasya.sealed.getItem(BOOK));
+    expect(seen).not.toContain("Её карта");
+    expect(seen).not.toContain("50000");
+  });
+
+  it("«забыл и пароль, и код» у одного оставляет другого целым", async () => {
+    // Самый дорогой путь во всём этапе. forgetEverything доходит до самого
+    // низа, а внизу — общий диск: позови нижний слой clear(), и один человек
+    // стёр бы соседа молча и без возврата.
+    const disk = new MemoryStorageAdapter();
+    const vasya = personOn(disk, "");
+    const masha = personOn(disk, "маша");
+    await vasya.account.create("пароль-васи", FAST);
+    await masha.account.create("пароль-маши", FAST);
+    await new LocalApiClient(masha.sealed).post("/accounts", {
+      name: "Её карта",
+      type: "DEBIT_CARD",
+      balance: 50000
+    });
+
+    await vasya.account.forgetEverything();
+
+    expect((await vasya.account.state()).status).toBe("fresh");
+    // А у соседки всё на месте: и замок, и записи.
+    const mashaAgain = personOn(disk, "маша");
+    expect((await mashaAgain.account.state()).status).not.toBe("fresh");
+    await mashaAgain.account.unlock("пароль-маши");
+    const hers = JSON.stringify(await mashaAgain.sealed.getItem(BOOK));
+    expect(hers).toContain("Её карта");
+  });
+
+  it("подключение второго человека не спотыкается о записи соседа", async () => {
+    // Сегодня это и есть стена, о которую бьётся второй человек: adopt()
+    // отказывает, увидев на устройстве непустые записи, — и неважно, что они
+    // не его. С разделением его пространство пусто, и отказ исчезает сам, а не
+    // оговоркой.
+    const server = device();
+    await server.account.create("общий-пароль", FAST);
+    const fromServer = await server.account.vault();
+
+    const disk = new MemoryStorageAdapter();
+    const vasya = personOn(disk, "");
+    await vasya.account.create("пароль-васи", FAST);
+    await new LocalApiClient(vasya.sealed).post("/accounts", {
+      name: "Его карта",
+      type: "DEBIT_CARD",
+      balance: 12000
+    });
+
+    const masha = personOn(disk, "маша");
+    await expect(masha.account.adopt(fromServer!, "общий-пароль")).resolves.toBeUndefined();
+
+    // И записи соседа при этом на месте — adopt чистит только своё.
+    expect(JSON.stringify(await vasya.sealed.getItem(BOOK))).toContain("Его карта");
   });
 });

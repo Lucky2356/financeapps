@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/select";
 import { markThemeChosen } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
+import { removeMine } from "@/lib/storage/mine";
 
 const shortcuts = [
   { keys: "Alt+N", labelKey: "set.shortcut.add" },
@@ -305,7 +306,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
   function replayOnboarding() {
     try {
-      localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+      removeMine(ONBOARDING_STORAGE_KEY);
       window.dispatchEvent(new Event(ONBOARDING_REPLAY_EVENT));
       toast.success(t("set.toast.onboardingOpened"));
     } catch {

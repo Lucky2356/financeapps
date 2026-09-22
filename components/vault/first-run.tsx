@@ -34,8 +34,15 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
 import { pickTwo } from "@/lib/vault/pick-two";
 import { deviceName } from "@/lib/vault/device-name";
-import { accountService, flushSync, resumeSync, serverAccount } from "@/lib/vault/runtime";
-import { cn } from "@/lib/utils";
+import {
+  accountService,
+  flushSync,
+  refuseSharedServerAccount,
+  rememberMyServer,
+  resumeSync,
+  serverAccount
+} from "@/lib/vault/runtime";
+import { Head, Problem, Shell } from "@/components/vault/shell";
 
 const MIN_PASSWORD = 8;
 
@@ -145,6 +152,9 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     setError(null);
     setBusy(true);
     try {
+      // До подключения, а не после: после него данные уже перемешаны.
+      await refuseSharedServerAccount(base, login);
+
       const joined = await serverAccount.signIn({
         base,
         login,
@@ -152,6 +162,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
         device: deviceName()
       });
       await accountService.adopt(joined.vault, joinPassword);
+      await rememberMyServer(base, login);
       await resumeSync();
       await flushSync();
       onDone();
@@ -434,32 +445,6 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
         </form>
       )}
     </Shell>
-  );
-}
-
-export function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">{children}</div>
-    </div>
-  );
-}
-
-export function Head({ icon, title }: { icon: React.ReactNode; title: string }) {
-  return (
-    <h1 className="flex items-center gap-2 text-lg font-semibold">
-      <span className="text-muted-foreground">{icon}</span>
-      {title}
-    </h1>
-  );
-}
-
-export function Problem({ text, className }: { text: string | null; className?: string }) {
-  if (!text) return null;
-  return (
-    <p role="alert" className={cn("text-sm font-medium text-destructive", className)}>
-      {text}
-    </p>
   );
 }
 
