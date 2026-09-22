@@ -114,7 +114,40 @@ export const peopleReady: Promise<Roster | null> = choosePerson(
  */
 export async function switchPerson(id: string): Promise<void> {
   await rememberLastUsed(device, id);
+  markPersonChosen();
   window.location.reload();
+}
+
+/**
+ * Выбор человека спрашивается ОДИН РАЗ за запуск приложения.
+ *
+ * Пометка живёт в sessionStorage, и это ровно та память, которая здесь нужна:
+ * она переживает перезагрузку страницы — а смена человека идёт именно ею — и
+ * умирает вместе со вкладкой, то есть со следующим запуском приложения
+ * спросят снова.
+ *
+ * Без неё выходит круг, и он не умозрительный: нажатие на человека
+ * перезагружает страницу, ворота видят двоих и показывают тот же экран опять.
+ * Человек нажимает, попадает туда же и не понимает, что сделал не так.
+ * Поймано живым прогоном в браузере — ни одна проверка слоёв такого не видит,
+ * потому что перезагрузки в них нет.
+ */
+const CHOSEN_KEY = "person-chosen";
+
+function markPersonChosen(): void {
+  try {
+    sessionStorage.setItem(CHOSEN_KEY, "1");
+  } catch {
+    /* хранилище недоступно — тогда спросим ещё раз, и это не страшно */
+  }
+}
+
+export function personAlreadyChosen(): boolean {
+  try {
+    return sessionStorage.getItem(CHOSEN_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /** Завести, отпереть, сменить пароль, восстановиться. */

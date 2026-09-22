@@ -17,6 +17,7 @@ import {
   accountService,
   listPeople,
   peopleReady,
+  personAlreadyChosen,
   resumeSync,
   stopSync,
   type PersonCard
@@ -51,7 +52,7 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
       //
       // Спрашивается это ПОСЛЕ выбора человека и ДО замка: список уже прочитан,
       // а чей замок открывать — ещё вопрос.
-      if (!asked.current) {
+      if (!asked.current && !personAlreadyChosen()) {
         asked.current = true;
         const here = await listPeople();
         if (here.length > 1) {
