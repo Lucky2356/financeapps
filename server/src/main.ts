@@ -21,10 +21,12 @@ import {
   login,
   logout,
   register,
+  renameDevice,
   whoIs
 } from "./auth.ts";
 import { openDatabase } from "./db.ts";
 import { EventBus } from "./events.ts";
+import { issuePairing, redeemPairing } from "./pairing.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import {
   listSlots,
@@ -67,6 +69,7 @@ const KNOWN_ROUTES: readonly string[] = [
   "/events",
   "/vault",
   "/devices",
+  "/pairing",
   "/admin/people",
   "/admin/invite"
 ];
@@ -93,6 +96,9 @@ export function whichRoute(url: string | undefined): string {
   // Ячейку и устройство называем видом, а не именем: имя — это данные хозяина.
   if (path.startsWith("/vault/")) return "/vault/…";
   if (path.startsWith("/devices/")) return "/devices/…";
+  // Код связки — это доступ. В журнале ему делать нечего тем более: журнал
+  // читают и пересылают, а код живёт пять минут и отдаёт имя входа.
+  if (path.startsWith("/pairing/")) return "/pairing/…";
   return "неизвестная ручка";
 }
 
@@ -117,6 +123,15 @@ export type AppOptions = {
    * чужие люди на чужой машине, о которых хозяин узнаёт последним.
    */
   openRegistration?: boolean;
+  /**
+   * Каким адресом служба зовётся снаружи, например https://finance.example.org
+   *
+   * Нужен ровно в одном месте — в ответе на код связки. Сама служба своего
+   * внешнего имени не знает и знать не может: она слушает 127.0.0.1, а имя
+   * живёт в настройках Caddy. Не задан — код отдаёт только имя входа, и второе
+   * устройство берёт адрес тот, по которому само же и спросило.
+   */
+  publicUrl?: string;
 };
 
 export function createApp(options: AppOptions) {
@@ -124,6 +139,7 @@ export function createApp(options: AppOptions) {
   const ORIGIN = options.origin ?? "*";
   const LIMITS = options.limits ?? NO_LIMITS;
   const OPEN = options.openRegistration ?? false;
+  const PUBLIC_URL = options.publicUrl ?? "";
 
   const db = openDatabase(options.dbPath);
   const bus = new EventBus();
@@ -144,6 +160,12 @@ export function createApp(options: AppOptions) {
   // делать это чаще. Десять на адрес — с запасом на общий роутер и на того,
   // кто трижды ошибся именем; скрипту десять в час не дают ничего.
   const newcomers = new RateLimiter(10, 60 * 60 * 1000);
+  // Предъявление кода связки. Ручка отвечает БЕЗ входа — иначе второе
+  // устройство, у которого ещё ничего нет, не могло бы её позвать вовсе, — и
+  // это единственная такая ручка, отдающая хоть что-то о человеке. Перебрать
+  // 2^40 кодов по двадцать попыток в минуту нельзя и за век, но без счётчика
+  // об этом пришлось бы рассуждать, а со счётчиком — не приходится.
+  const guessers = new RateLimiter(20);
 
   function now(): string {
     return new Date().toISOString();
@@ -155,7 +177,7 @@ export function createApp(options: AppOptions) {
       "content-type": "application/json; charset=utf-8",
       "access-control-allow-origin": ORIGIN,
       "access-control-allow-headers": "authorization, content-type",
-      "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
       "content-length": Buffer.byteLength(text)
     });
     res.end(text);
@@ -210,6 +232,19 @@ export function createApp(options: AppOptions) {
     if (path === "/health") return send(res, 200, { ok: true, open: OPEN });
 
     // ——— вход ——————————————————————————————————————————————————————
+
+    // Код связки предъявляется ДО входа: у второго устройства ещё ничего нет.
+    if (path.startsWith("/pairing/") && method === "GET") {
+      if (!guessers.allow(`связка:${addressOf(req)}`, Date.now())) {
+        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+      }
+      const code = decodeURIComponent(path.slice("/pairing/".length));
+      const found = redeemPairing(db, code, now());
+      // Адрес отдаётся только если хозяин его назвал. Выдумывать его из
+      // заголовка Host нельзя: заголовок приходит снаружи, и служба
+      // отправила бы второе устройство туда, куда её попросил чужой.
+      return send(res, 200, PUBLIC_URL ? { ...found, address: PUBLIC_URL } : found);
+    }
 
     if (path === "/auth/params" && method === "GET") {
       const params = authParams(db, text(url.searchParams.get("login")));
@@ -297,6 +332,21 @@ export function createApp(options: AppOptions) {
         )
         .all(who.personId);
       return send(res, 200, { devices, current: who.deviceId });
+    }
+
+    if (path === "/pairing" && method === "POST") {
+      return send(res, 201, issuePairing(db, who.personId, now()));
+    }
+
+    if (path.startsWith("/devices/") && method === "PATCH") {
+      const body = await readJson(req);
+      renameDevice(
+        db,
+        who.personId,
+        decodeURIComponent(path.slice("/devices/".length)),
+        text(body.name)
+      );
+      return send(res, 204);
     }
 
     if (path.startsWith("/devices/") && method === "DELETE") {

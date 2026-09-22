@@ -76,6 +76,21 @@ const SCHEMA = `
     last_seen_at text not null
   );
 
+  -- Короткий код связки: «покажите его второму устройству».
+  --
+  -- Хранится ХЕШЕМ, ровно как входной билет, и по той же причине: украденная
+  -- база не должна давать ничего, что можно предъявить службе. Живёт код пять
+  -- минут и срабатывает один раз; погашенный не удаляется сразу, чтобы
+  -- человек, набравший его второй раз, услышал «уже использован», а не
+  -- «не найден» — это разные поломки, и чинят их по-разному.
+  create table if not exists pairings (
+    code_hash  text primary key,
+    person_id  text not null references people(id) on delete cascade,
+    created_at text not null,
+    expires_at text not null,
+    used_at    text
+  );
+
   -- Хранится ХЕШ входного билета, а не он сам: украденная база не даёт войти.
   create table if not exists sessions (
     token_hash text primary key,
@@ -86,6 +101,7 @@ const SCHEMA = `
   );
 
   create index if not exists sessions_person on sessions(person_id);
+  create index if not exists pairings_expiry on pairings(expires_at);
   create index if not exists devices_person on devices(person_id);
 `;
 
@@ -98,4 +114,28 @@ export function openDatabase(path: string): DatabaseSync {
 /** Убирает просроченные билеты. Зовётся при входе — чистки по часам не нужно. */
 export function sweepSessions(db: DatabaseSync, now: string): void {
   db.prepare("delete from sessions where expires_at < ?").run(now);
+}
+
+/**
+ * Убирает коды связки, истёкшие ДАВНО. Час, а не «только что».
+ *
+ * Отсрочка здесь не из осторожности, и цена у неё ровно одна проверка. Убирай
+ * чистка код сразу, как он истёк, — человек, набравший его на минуту позже,
+ * услышал бы «код не найден» вместо «код истёк». Это разные поломки, и чинят
+ * их противоположно: во втором случае просят новый код, в первом — ищут
+ * опечатку, которой нет. Поймано проверкой «истёкший не срабатывает»: она
+ * ждала 410, а получила 404.
+ *
+ * Час спустя опечатку уже никто не ищет, и строке в таблице делать нечего.
+ * Открыть она всё равно ничего не может: лежит хешем, а срок сверяется отдельно
+ * и до всякой чистки.
+ *
+ * Зовётся при выдаче нового и при попытке предъявить — то есть ровно тогда,
+ * когда в таблицу и так лезут. Чистки по часам здесь нет нарочно: таймер в
+ * службе без зависимостей — это ещё одна вещь, которая может не сработать
+ * молча, а кодов за сутки набегает несколько штук.
+ */
+export function sweepPairings(db: DatabaseSync, now: string): void {
+  const long = new Date(Date.parse(now) - 60 * 60 * 1000).toISOString();
+  db.prepare("delete from pairings where expires_at < ?").run(long);
 }

@@ -236,6 +236,31 @@ export function logout(db: DatabaseSync, raw: string): void {
   db.prepare("delete from sessions where token_hash = ?").run(fingerprint(raw));
 }
 
+/**
+ * Переименовать устройство.
+ *
+ * Имя угадывается по строке браузера — «Компьютер (Windows)», — и два
+ * компьютера в доме неотличимы. Выкинуть потерянный телефон из списка, в
+ * котором два одинаковых имени, нельзя: непонятно, который из них чей.
+ *
+ * Хозяин проверяется В САМОМ ЗАПРОСЕ, а не заранее: иначе между проверкой и
+ * записью помещается чужой запрос, и переименовать можно было бы чужое.
+ */
+export function renameDevice(
+  db: DatabaseSync,
+  personId: string,
+  deviceId: string,
+  name: string
+): void {
+  const clean = name.trim().slice(0, 80);
+  if (!clean) throw new AuthError(400, "Пустое имя устройства.");
+
+  const changed = db
+    .prepare("update devices set name = ? where id = ? and person_id = ?")
+    .run(clean, deviceId, personId);
+  if (changed.changes === 0) throw new AuthError(404, "Такого устройства у вас нет.");
+}
+
 /** Выкинуть устройство — вместе со всеми его билетами. */
 export function forgetDevice(db: DatabaseSync, personId: string, deviceId: string): void {
   db.prepare("delete from sessions where person_id = ? and device_id = ?").run(personId, deviceId);

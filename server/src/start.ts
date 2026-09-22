@@ -9,6 +9,7 @@
 //   FINANCE_MAX_SLOTS   сколько книг на человека; пусто — без предела
 //   FINANCE_MAX_MB      сколько всего мегабайт на человека; пусто — без предела
 //   FINANCE_OPEN_REGISTRATION=1  пускать без приглашения; пусто — только по нему
+//   FINANCE_PUBLIC_URL  каким адресом служба зовётся снаружи; нужен коду связки
 //
 // Слушаем только 127.0.0.1: наружу служба смотрит через Caddy, который и держит
 // TLS. Открой она порт всему свету — к ней можно было бы прийти по HTTP в обход
@@ -52,7 +53,8 @@ const app = createApp({
   // Ровно «1», а не «всё, что похоже на да». «true», «yes», «on» сюда не
   // годятся нарочно: переменная открывает службу чужим людям, и угадывать, что
   // хозяин имел в виду, тут нечего. Один способ написать — один способ ошибиться.
-  openRegistration: process.env.FINANCE_OPEN_REGISTRATION === "1"
+  openRegistration: process.env.FINANCE_OPEN_REGISTRATION === "1",
+  publicUrl: process.env.FINANCE_PUBLIC_URL
 });
 
 function shutdown(): void {

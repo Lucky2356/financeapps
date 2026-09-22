@@ -503,6 +503,201 @@ describe("служба", () => {
       await call(`/devices/${deviceId}`, { method: "DELETE", token });
       assert.equal((await call("/vault/книга", { token })).status, 401);
     });
+
+    it("переименовываются — иначе два компьютера в доме неотличимы", async () => {
+      const { token, deviceId } = await signUp("петя");
+      const renamed = await call(`/devices/${deviceId}`, {
+        method: "PATCH",
+        token,
+        body: { name: "Ноутбук на кухне" }
+      });
+
+      assert.equal(renamed.status, 204);
+      const list = (await call("/devices", { token })).body as {
+        devices: Array<{ name: string }>;
+      };
+      assert.equal(list.devices[0].name, "Ноутбук на кухне");
+    });
+
+    it("чужое устройство переименовать нельзя", async () => {
+      // Хозяин сверяется в самом запросе, а не заранее: между проверкой и
+      // записью помещается чужой запрос.
+      const petya = await signUp("петя");
+      const vasya = await signUp("вася");
+
+      const response = await call(`/devices/${vasya.deviceId}`, {
+        method: "PATCH",
+        token: petya.token,
+        body: { name: "моё теперь" }
+      });
+
+      assert.equal(response.status, 404);
+      const his = (await call("/devices", { token: vasya.token })).body as {
+        devices: Array<{ name: string }>;
+      };
+      assert.equal(his.devices[0].name, "проверка");
+    });
+
+    it("пустое имя — отказ, а не устройство без имени", async () => {
+      const { token, deviceId } = await signUp("петя");
+      const response = await call(`/devices/${deviceId}`, {
+        method: "PATCH",
+        token,
+        body: { name: "   " }
+      });
+      assert.equal(response.status, 400);
+    });
+  });
+
+  describe("код связки", () => {
+    // Восемь знаков вместо переноса адреса и имени входа руками. Пароля в коде
+    // нет и не будет: он — единственное, чем завёрнут ключ от данных, и поехав
+    // в коде (а значит и в картинке QR, которую снимают из-за плеча), он сделал
+    // бы бессмысленным всё шифрование разом.
+
+    it("выдаётся только тому, кто уже вошёл", async () => {
+      assert.equal((await call("/pairing", { method: "POST" })).status, 401);
+    });
+
+    it("отдаёт имя входа тому, у кого ещё ничего нет", async () => {
+      // Вся суть ручки: второе устройство зовёт её, НЕ предъявив ничего, —
+      // потому что предъявить ему нечего.
+      const { token } = await signUp("петя");
+      const made = await call("/pairing", { method: "POST", token });
+      const { code } = made.body as { code: string; expiresAt: string };
+
+      const opened = await call(`/pairing/${code}`);
+
+      assert.equal(made.status, 201);
+      assert.equal(opened.status, 200);
+      assert.equal((opened.body as { login: string }).login, "петя");
+    });
+
+    it("в коде восемь знаков и ни одного похожего на другой", async () => {
+      // Ноль и О, единица и I — это ровно та ошибка, после которой код
+      // объявляют неработающим и идут искать другой способ.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      assert.equal(code.length, 8);
+      assert.match(code, /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/);
+    });
+
+    it("набранный как попало — тот же самый код", async () => {
+      // Человек читает с одного экрана и набирает на другом: строчными, с
+      // чёрточкой посередине, с пробелом от автозамены. Отказывать в этом
+      // значило бы отказывать за то, как выглядит клавиатура.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      const messy = `${code.slice(0, 4)}-${code.slice(4)} `.toLowerCase();
+
+      assert.equal((await call(`/pairing/${encodeURIComponent(messy)}`)).status, 200);
+    });
+
+    it("срабатывает один раз", async () => {
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      assert.equal((await call(`/pairing/${code}`)).status, 200);
+      const second = await call(`/pairing/${code}`);
+
+      assert.equal(second.status, 410);
+      // «Уже использован», а не «не найден»: это разные поломки, и человек
+      // чинит их по-разному — во втором случае он ищет опечатку, которой нет.
+      assert.match(String((second.body as { error: string }).error), /использован/);
+    });
+
+    it("истёкший не срабатывает", async () => {
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      // Пять минут назад. Ждать их по-настоящему проверка не будет, а
+      // подменять часы службы ради одной проверки — значит проверять часы.
+      app.db
+        .prepare("update pairings set expires_at = ?")
+        .run(new Date(Date.now() - 60_000).toISOString());
+
+      assert.equal((await call(`/pairing/${code}`)).status, 410);
+    });
+
+    it("выдуманный не срабатывает", async () => {
+      assert.equal((await call("/pairing/ABCD2345")).status, 404);
+    });
+
+    it("лежит хешем, а не как есть", async () => {
+      // Украденная база не должна давать ничего, что можно предъявить службе.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      const row = app.db.prepare("select code_hash from pairings").get<{ code_hash: string }>();
+      assert.ok(row);
+      assert.notEqual(row?.code_hash, code);
+      assert.ok(!JSON.stringify(row).includes(code));
+    });
+
+    it("в журнал не попадает", async () => {
+      // Код — это доступ. Журнал читают и пересылают.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      const lines = await captured(() => call(`/pairing/${code}`));
+
+      assert.ok(!lines.join("\n").includes(code), lines.join("\n"));
+      assert.match(lines[0], /^GET \/pairing\/… → 200 за \d+ мс$/);
+    });
+
+    it("перебор ограничен", async () => {
+      let last = 0;
+      for (let attempt = 0; attempt < 21; attempt += 1) {
+        last = (await call(`/pairing/ABCD234${attempt % 9}`)).status;
+      }
+      assert.equal(last, 429);
+    });
+
+    it("адрес отдаётся, только когда хозяин его назвал", async () => {
+      // Выдумывать его из заголовка Host нельзя: заголовок приходит снаружи, и
+      // служба отправила бы второе устройство туда, куда её попросил чужой.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      const plain = (await call(`/pairing/${code}`)).body as Record<string, unknown>;
+      assert.deepEqual(Object.keys(plain), ["login"]);
+
+      await restart({ publicUrl: "https://finance.example.org" });
+      const again = await signUp("петя");
+      const second = (await call("/pairing", { method: "POST", token: again.token })).body as {
+        code: string;
+      };
+      const named = (await call(`/pairing/${second.code}`)).body as { address: string };
+
+      assert.equal(named.address, "https://finance.example.org");
+    });
+
+    it("код чужого человека не открывает его данных", async () => {
+      // Код отдаёт имя входа — и всё. Пароль остаётся у человека, и без него
+      // имя не открывает ничего.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      const opened = (await call(`/pairing/${code}`)).body as Record<string, unknown>;
+
+      assert.ok(!("token" in opened));
+      assert.ok(!("vault" in opened));
+      assert.ok(!("secret" in opened));
+    });
   });
 
   describe("пределы на человека", () => {
