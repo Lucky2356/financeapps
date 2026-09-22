@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { readMine, writeMine } from "@/lib/storage/mine";
 import {
   Select,
   SelectContent,
@@ -50,7 +51,7 @@ function CloudSyncPanelInner() {
   useEffect(() => {
     void Promise.resolve().then(() => {
       try {
-        setFolder(localStorage.getItem(FOLDER_KEY));
+        setFolder(readMine(FOLDER_KEY));
       } catch {
         /* ignore */
       }
@@ -62,7 +63,7 @@ function CloudSyncPanelInner() {
       const picked = await pickSyncFolder();
       if (!picked) return;
       setFolder(picked);
-      localStorage.setItem(FOLDER_KEY, picked);
+      writeMine(FOLDER_KEY, picked);
     } catch {
       toast.error(t("sync.err.folder"));
     }

@@ -34,6 +34,7 @@ import { mergeBooks } from "@/lib/sync/merge";
 import type { SyncTransport } from "@/lib/sync/protocol";
 import { AccountService } from "@/lib/vault/account";
 import { ConflictStore } from "@/lib/vault/conflicts";
+import { rememberWho } from "@/lib/storage/mine";
 import { choosePerson, rememberLastUsed, type Roster } from "@/lib/vault/people";
 import { ServerAccount } from "@/lib/vault/server-account";
 
@@ -80,7 +81,15 @@ export const peopleReady: Promise<Roster | null> = choosePerson(
   device,
   people,
   typeof indexedDB !== "undefined"
-);
+).then((roster) => {
+  // Мелочи из localStorage делятся той же приставкой, и узнаёт её тот же выбор.
+  //
+  // Второго способа сказать «это моё» здесь заводить нельзя: разойдись он с
+  // первым — и человек видел бы свои данные, но чужие сохранённые фильтры, то
+  // есть чужие названия категорий и суммы.
+  rememberWho(roster?.lastUsedId ?? "");
+  return roster;
+});
 
 /**
  * Открыть данные другого человека.

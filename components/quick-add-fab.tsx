@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { readMine, writeMine } from "@/lib/storage/mine";
 
 type AccountOption = ImportPageData["accounts"][number];
 type CategoryOption = ImportPageData["categories"][number];
@@ -128,7 +129,7 @@ export function QuickAddFab({
     // own form used to do.
     let last: string | null = null;
     try {
-      last = localStorage.getItem(LAST_ACCOUNT_KEY);
+      last = readMine(LAST_ACCOUNT_KEY);
     } catch {
       /* storage unavailable */
     }
@@ -244,7 +245,7 @@ export function QuickAddFab({
         categoryId
       });
       try {
-        localStorage.setItem(LAST_ACCOUNT_KEY, accountId);
+        writeMine(LAST_ACCOUNT_KEY, accountId);
       } catch {
         /* ignore */
       }

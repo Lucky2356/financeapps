@@ -36,6 +36,7 @@ import {
 } from "@/lib/transactions/filter-chips";
 import { parseCategoryIds } from "@/lib/transactions/filter";
 import { cn } from "@/lib/utils";
+import { readMine, writeMine } from "@/lib/storage/mine";
 
 type SavedFilter = { name: string; params: string };
 const SAVED_FILTERS_KEY = "tx-saved-filters";
@@ -708,7 +709,7 @@ function SavedFilters({
   useEffect(() => {
     let raw: string | null = null;
     try {
-      raw = localStorage.getItem(SAVED_FILTERS_KEY);
+      raw = readMine(SAVED_FILTERS_KEY);
     } catch {
       raw = null;
     }
@@ -724,7 +725,7 @@ function SavedFilters({
   function persist(next: SavedFilter[]) {
     setSaved(next);
     try {
-      localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next));
+      writeMine(SAVED_FILTERS_KEY, JSON.stringify(next));
     } catch {
       /* ignore quota */
     }

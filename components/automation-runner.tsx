@@ -11,6 +11,7 @@ import { isAndroidShell } from "@/lib/platform/device";
 import { isDesktopShell } from "@/lib/updates/desktop";
 import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
+import { readMine, writeMine } from "@/lib/storage/mine";
 
 // True when the cached FX rates are missing or not from today (local date).
 function isFxStale(updatedAt: string | null | undefined): boolean {
@@ -222,7 +223,7 @@ const NOTIFY_KEY = "notif-fired";
 function notifyState(): { date: string; ids: string[] } {
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
   try {
-    const raw = JSON.parse(localStorage.getItem(NOTIFY_KEY) ?? "{}") as {
+    const raw = JSON.parse(readMine(NOTIFY_KEY) ?? "{}") as {
       date?: string;
       ids?: string[];
     };
@@ -241,7 +242,7 @@ function markNotified(id: string): void {
   const state = notifyState();
   if (!state.ids.includes(id)) state.ids.push(id);
   try {
-    localStorage.setItem(NOTIFY_KEY, JSON.stringify(state));
+    writeMine(NOTIFY_KEY, JSON.stringify(state));
   } catch {
     /* storage unavailable — best effort */
   }

@@ -25,6 +25,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
+import { readMine, writeMine } from "@/lib/storage/mine";
 
 const STEPS = [
   { icon: CircleDollarSign, titleKey: "ob.step0.title", descKey: "ob.step0.descDesktop" },
@@ -60,7 +61,7 @@ export function OnboardingTour() {
     // run in an effect rather than during render.
     try {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (!localStorage.getItem(ONBOARDING_STORAGE_KEY)) setOpen(true);
+      if (!readMine(ONBOARDING_STORAGE_KEY)) setOpen(true);
     } catch {
       /* localStorage unavailable — skip onboarding */
     }
@@ -78,7 +79,7 @@ export function OnboardingTour() {
 
   function markDone() {
     try {
-      localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+      writeMine(ONBOARDING_STORAGE_KEY, "1");
     } catch {
       /* ignore */
     }
