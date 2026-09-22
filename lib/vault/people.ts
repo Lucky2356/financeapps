@@ -253,6 +253,50 @@ export async function rememberServer(
   });
 }
 
+/**
+ * Слой разделения глазами выбора: ровно две ручки, и больше ничего не нужно.
+ *
+ * Описан здесь, а не взят целым классом, чтобы выбор можно было проверить без
+ * настоящего хранилища: это самое опасное место этапа, и оставлять его
+ * непроверяемым нельзя.
+ */
+export type PersonSlot = {
+  bind(id: string): void;
+  fail(reason: string): void;
+};
+
+/**
+ * Решить, чьи данные открываем, и сказать об этом слою.
+ *
+ * Не бросает никогда. Отказ доходит до ждущего иначе — через сам слой, который
+ * на любое обращение ответит внятной причиной. Брось это обещание, и
+ * необработанный отказ при загрузке модуля стал бы шумом, за которым настоящей
+ * причины не видно.
+ *
+ * @param hasStorage есть ли хранилище в этом окружении вовсе. При сборке
+ *   статики `indexedDB` не существует, и ждать там нечего: отказываем сразу, не
+ *   выдерживая сторожевой срок впустую.
+ */
+export async function choosePerson(
+  device: StorageAdapter,
+  slot: PersonSlot,
+  hasStorage: boolean
+): Promise<Roster | null> {
+  if (!hasStorage) {
+    slot.fail("Хранилище этому окружению недоступно — выбирать человека не из чего.");
+    return null;
+  }
+  try {
+    const roster = await readRoster(device);
+    slot.bind(roster.lastUsedId);
+    return roster;
+  } catch (cause) {
+    const why = cause instanceof Error ? cause.message : String(cause);
+    slot.fail(`Не удалось прочитать список людей этого устройства: ${why}`);
+    return null;
+  }
+}
+
 export async function forgetServer(device: StorageAdapter, id: string): Promise<void> {
   const roster = await readRoster(device);
   await writeRoster(device, {

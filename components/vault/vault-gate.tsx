@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FirstRun } from "@/components/vault/first-run";
 import { UnlockScreen } from "@/components/vault/unlock-screen";
 import { useI18n } from "@/lib/i18n/context";
-import { accountService, resumeSync, stopSync } from "@/lib/vault/runtime";
+import { accountService, peopleReady, resumeSync, stopSync } from "@/lib/vault/runtime";
 
 type Phase = "checking" | "fresh" | "locked" | "open";
 
@@ -22,6 +22,13 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
+      // Сперва — чьи данные открываем, и только потом — заперты ли они.
+      //
+      // Порядок обязательный. Спроси мы замок раньше, вопрос ушёл бы в
+      // хранилище, ещё не знающее, чьё оно, — и человек с заведённым паролем
+      // увидел бы первый запуск поверх собственных данных.
+      await peopleReady;
+
       const { status } = await accountService.state();
       setPhase(status === "unlocked" ? "open" : status);
 

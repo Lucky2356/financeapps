@@ -13,31 +13,89 @@
 // ПОРЯДОК СЛОЁВ — не вкусовщина:
 //
 //     LocalApiClient
-//       └─ EncryptingStorageAdapter   книга шифруется здесь
-//            └─ SyncingStorageAdapter и только потом уезжает на сервер
-//                 └─ DesktopStorageAdapter
+//       └─ EncryptingStorageAdapter       данные шифруются здесь
+//            └─ SyncingStorageAdapter     и только потом уезжают на сервер
+//                 └─ NamespacedStorageAdapter   чьи это данные
+//                      └─ DesktopStorageAdapter
 //
-// Синхронизация ниже шифрования, поэтому отправить открытую книгу она не может
-// физически: открытой книги в том слое нет.
+// Синхронизация ниже шифрования, поэтому отправить открытые данные она не может
+// физически: открытых данных в том слое нет.
+//
+// Разделение людей — ещё ниже синхронизации, и это тоже обязательное место:
+// имена ячеек на службе берутся из имён ключей, и уйди приставка наверх, второе
+// устройство ТОГО ЖЕ человека не нашло бы его ячеек никогда.
 
 import { DesktopStorageAdapter } from "@/lib/storage/DesktopStorageAdapter";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
+import { NamespacedStorageAdapter } from "@/lib/storage/NamespacedStorageAdapter";
 import { SyncingStorageAdapter, type Merge } from "@/lib/storage/SyncingStorageAdapter";
 import { HttpSyncTransport } from "@/lib/sync/HttpSyncTransport";
 import { mergeBooks } from "@/lib/sync/merge";
 import type { SyncTransport } from "@/lib/sync/protocol";
 import { AccountService } from "@/lib/vault/account";
 import { ConflictStore } from "@/lib/vault/conflicts";
+import { choosePerson, rememberLastUsed, type Roster } from "@/lib/vault/people";
 import { ServerAccount } from "@/lib/vault/server-account";
 
-/** Настоящее хранилище устройства — пишет и читает как есть. */
+/**
+ * Настоящее хранилище устройства — пишет и читает как есть.
+ *
+ * Список людей читается ИМЕННО ОТСЮДА, мимо приставки: иначе выбор приставки
+ * ждал бы сам себя.
+ */
 const device = new DesktopStorageAdapter();
 
+/** Оно же, но открытое на одного человека. До выбора — ждёт, а не врёт. */
+const people = new NamespacedStorageAdapter(device);
+
 /** Оно же, но с отправкой на сервер. Пока не запущено — просто хранилище. */
-export const syncStorage = new SyncingStorageAdapter(device);
+export const syncStorage = new SyncingStorageAdapter(people);
 
 /** Оно же, но сквозь шифрование. Через него ходит всё приложение. */
 export const vaultStorage = new EncryptingStorageAdapter(syncStorage);
+
+/**
+ * Кого открываем — решается здесь, при загрузке, и ровно один раз.
+ *
+ * Загвоздка в том, что стопка выше собирается СИНХРОННО, а список людей лежит в
+ * хранилище, то есть читается асинхронно. Решается это тем, что слой заводится
+ * непривязанным и ждёт: асинхронным от этого никто не становится — хранилище и
+ * так всё на обещаниях.
+ *
+ * Три исхода предусмотрены прямо, потому что каждый иначе обернулся бы пустым
+ * экраном, неотличимым от медленного диска:
+ *
+ *   1. хранилища нет вовсе (сборка статики, где indexedDB не существует) —
+ *      отказываем сразу, не дожидаясь сторожевого срока;
+ *   2. список не прочитался — отказываем с внятной причиной, и она доходит до
+ *      того, кто ждёт;
+ *   3. привязка уже была — бросаем: смена человека идёт перезагрузкой страницы,
+ *      и только ей, иначе читающий прямо сейчас получил бы чужое на полпути.
+ *
+ * Обещание это НЕ отклоняется никогда: его ждут ворота, а необработанный отказ
+ * при загрузке модуля — шум, за которым не видно настоящей причины. Неудача
+ * видна иначе: хранилище на любое обращение ответит отказом, называющим себя.
+ */
+export const peopleReady: Promise<Roster | null> = choosePerson(
+  device,
+  people,
+  typeof indexedDB !== "undefined"
+);
+
+/**
+ * Открыть данные другого человека.
+ *
+ * Перезагрузкой страницы, а не переключением слоя на ходу. Слой на вторую
+ * привязку бросает нарочно: живую стопку уже держат ворота, шифрование и
+ * очередь отправки, и молчаливый перевод означал бы, что читающий прямо сейчас
+ * получит чужие данные на полпути. Тем же приёмом в приложении меняют профиль
+ * и грузят пример — он единственный, про который точно известно, что ничего не
+ * осталось висеть в памяти.
+ */
+export async function switchPerson(id: string): Promise<void> {
+  await rememberLastUsed(device, id);
+  window.location.reload();
+}
 
 /** Завести, отпереть, сменить пароль, восстановиться. */
 export const accountService = new AccountService(syncStorage, vaultStorage);

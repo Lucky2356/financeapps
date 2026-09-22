@@ -8,6 +8,7 @@ import {
 } from "@/lib/storage/NamespacedStorageAdapter";
 import {
   addPerson,
+  choosePerson,
   FIRST_PERSON,
   forgetPerson,
   forgetServer,
@@ -20,6 +21,7 @@ import {
   whoAlreadyUses,
   writeRoster
 } from "@/lib/vault/people";
+import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 
 function forPerson(disk: MemoryStorageAdapter, id: string): NamespacedStorageAdapter {
   const storage = new NamespacedStorageAdapter(disk);
@@ -250,5 +252,104 @@ describe("список людей устройства", () => {
 
       expect(await whoAlreadyUses(disk, "https://finance.example", "vasya", second.id)).toBeNull();
     });
+  });
+});
+
+describe("кого открывать при запуске", () => {
+  /** Слой разделения, который только запоминает, что ему сказали. */
+  function slot() {
+    const said: { bound: string | null; failed: string | null } = { bound: null, failed: null };
+    return {
+      said,
+      bind: (id: string) => {
+        said.bound = id;
+      },
+      fail: (reason: string) => {
+        said.failed = reason;
+      }
+    };
+  }
+
+  it("на чистом устройстве открывает первого человека", async () => {
+    const disk = new MemoryStorageAdapter();
+    const layer = slot();
+
+    await choosePerson(disk, layer, true);
+
+    expect(layer.said.bound).toBe(FIRST_PERSON);
+    expect(layer.said.failed).toBeNull();
+  });
+
+  it("на устройстве с данными открывает того, кто заходил последним", async () => {
+    const disk = new MemoryStorageAdapter();
+    await forPerson(disk, FIRST_PERSON).setItem("profileList", []);
+    const second = await addPerson(disk, "Маша");
+    await forPerson(disk, second.id).setItem("profileList", []);
+    await rememberLastUsed(disk, second.id);
+
+    const layer = slot();
+    await choosePerson(disk, layer, true);
+
+    expect(layer.said.bound).toBe(second.id);
+  });
+
+  it("без хранилища отказывает сразу, а не ждёт срок впустую", async () => {
+    // Сборка статики: indexedDB там не существует вовсе, и выдерживать
+    // сторожевые десять секунд не за чем — ждать нечего.
+    const layer = slot();
+
+    await choosePerson(new MemoryStorageAdapter(), layer, false);
+
+    expect(layer.said.bound).toBeNull();
+    expect(layer.said.failed).toMatch(/недоступно/);
+  });
+
+  it("непрочитавшийся список отказывает с причиной, а не вешает хранилище", async () => {
+    // Вечное ожидание выглядит пустым экраном навсегда и неотличимо от
+    // медленного диска. Отказ хотя бы называет себя.
+    const broken: StorageAdapter = {
+      getItem: async () => {
+        throw new Error("диск не читается");
+      },
+      setItem: async () => {},
+      removeItem: async () => {},
+      clear: async () => {},
+      keys: async () => []
+    };
+    const layer = slot();
+
+    await choosePerson(broken, layer, true);
+
+    expect(layer.said.bound).toBeNull();
+    expect(layer.said.failed).toMatch(/диск не читается/);
+  });
+
+  it("не бросает сам — иначе отказ всплыл бы при загрузке модуля", async () => {
+    const broken: StorageAdapter = {
+      getItem: async () => {
+        throw new Error("диск не читается");
+      },
+      setItem: async () => {},
+      removeItem: async () => {},
+      clear: async () => {},
+      keys: async () => []
+    };
+
+    await expect(choosePerson(broken, slot(), true)).resolves.toBeNull();
+  });
+
+  it("выбранный человек и правда открывает свои данные", async () => {
+    // Проверка стыка: выбор говорит имя, слой по нему открывает, и данные
+    // приходят те же, что клал этот человек, а не сосед.
+    const disk = new MemoryStorageAdapter();
+    await forPerson(disk, FIRST_PERSON).setItem("profileList", ["моё"]);
+    const second = await addPerson(disk, "Маша");
+    await forPerson(disk, second.id).setItem("profileList", ["её"]);
+    await rememberLastUsed(disk, second.id);
+
+    const layer = new NamespacedStorageAdapter(disk);
+    await choosePerson(disk, layer, true);
+
+    expect(await layer.getItem("profileList")).toEqual(["её"]);
   });
 });
