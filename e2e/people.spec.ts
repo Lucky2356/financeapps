@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { openSettled, seedExampleData } from "./helpers";
+
 // Двое на одном устройстве — в настоящем браузере.
 //
 // Всё, что ниже, проверено и по слоям, и через настоящую службу. Здесь другое:
@@ -124,5 +126,32 @@ test("второй человек заводится, и каждый откры
   await page.getByRole("button", { name: "Открыть" }).click();
   await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
     timeout: 30_000
+  });
+});
+
+// Дверь к «второму человеку» — в настройках, и она обязана быть открыта тому,
+// кто на устройстве ОДИН.
+//
+// Это не придирка к расположению кнопки. Возможность «двое на одном
+// устройстве» была выпущена, а войти в неё было неоткуда: заводит человека
+// экран «Кто за компьютером?», а тот показывается, только когда людей уже
+// больше одного. У каждого в первый день двери не было вовсе.
+//
+// Свой storageState: здесь нужен снимок с заведённым замком — то есть обычное
+// устройство обычного человека, а не чистое, как в сценарии выше.
+test.describe("дверь к второму человеку", () => {
+  test.use({ storageState: "e2e/.auth/vault.json" });
+
+  test("«Добавить человека» видно в настройках, когда человек один", async ({ page }) => {
+    await seedExampleData(page);
+    await openSettled(page, "/settings?section=data");
+
+    const card = page.locator("#set-people");
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await expect(card.getByRole("button", { name: "Добавить человека" })).toBeVisible();
+
+    // И там же видно, заперты ли данные того, кто сейчас за компьютером, —
+    // ровно то же, что говорит экран выбора.
+    await expect(card).toContainText("это вы");
   });
 });

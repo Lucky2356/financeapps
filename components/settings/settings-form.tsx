@@ -31,6 +31,7 @@ import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
 import { DevicesPanel } from "@/components/settings/devices-panel";
+import { PeoplePanel } from "@/components/settings/people-panel";
 import { ServerPanel } from "@/components/settings/server-panel";
 import { VaultPanel } from "@/components/settings/vault-panel";
 import { ImportExportPanel } from "@/components/import/import-export-panel";
@@ -692,6 +693,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           <CloudSyncPanel />
           <ServerPanel />
           <DevicesPanel />
+          <PeoplePanel />
           <VaultPanel />
         </div>
       )
