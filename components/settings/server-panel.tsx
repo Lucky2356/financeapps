@@ -33,7 +33,7 @@
 // оставит пустым, стоит ему одной попытки; спрятанное поле, без которого не
 // пускают, стоит ему всего подключения.
 
-import { Cloud, CloudOff } from "lucide-react";
+import { Camera, Cloud, CloudOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -43,6 +43,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
 import { DEFAULT_SERVER, hasDefaultServer } from "@/lib/sync/default-server";
+import { readPairing } from "@/lib/sync/pairing-link";
+import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
 import {
   accountService,
   flushSync,
@@ -104,14 +106,26 @@ export function ServerPanel() {
     setOpen(answer.reachable ? answer.open : false);
   }
 
-  async function useCode(event: React.FormEvent) {
-    event.preventDefault();
+  /**
+   * Предъявить то, что принесли, — из камеры или с клавиатуры.
+   *
+   * Разборщик ОДИН на оба пути нарочно. Заведи мы два, они однажды разойдутся
+   * молча: набранное руками работает, снятое камерой нет, а выглядит это как
+   * «камера не читает».
+   */
+  async function redeem(raw: string) {
+    const parsed = readPairing(raw);
+    if (!parsed) {
+      toast.error(t("server.pairCodeBad"));
+      return;
+    }
+
     setBusy(true);
     try {
-      // Спрашиваем сначала службу приложения: код выдан ею в подавляющем
-      // большинстве случаев. Не нашла — значит служба своя, и человек назовёт
-      // её сам; отправлять его за этим молча мы не можем, адреса у нас нет.
-      const answer = await redeemPairing(DEFAULT_SERVER, pairing);
+      // Адрес из картинки, а если его там не было — служба приложения: код
+      // выдан ею в подавляющем большинстве случаев.
+      const at = parsed.base ?? DEFAULT_SERVER;
+      const answer = await redeemPairing(at, parsed.code);
       setFound(answer);
       setLogin(answer.login);
     } catch (cause) {
@@ -119,6 +133,34 @@ export function ServerPanel() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Имена нарочно не начинаются с «use»: линтер принимает такое за хук, и
+  // вызов из обработчика роняет сборку правилом rules-of-hooks.
+  async function submitCode(event: React.FormEvent) {
+    event.preventDefault();
+    await redeem(pairing);
+  }
+
+  /** Навести камеру. Отказы камеры — обычные исходы, и каждый назван словом. */
+  async function openCamera() {
+    setBusy(true);
+    const shot = await scanQr();
+    setBusy(false);
+
+    if (shot.ok) {
+      setPairing(shot.text);
+      await redeem(shot.text);
+      return;
+    }
+    if (shot.why === "cancelled") return;
+    toast.error(
+      shot.why === "denied"
+        ? t("server.cameraDenied")
+        : shot.why === "absent"
+          ? t("server.cameraAbsent")
+          : t("server.cameraBroken")
+    );
   }
 
   async function connect(event: React.FormEvent) {
@@ -272,7 +314,7 @@ export function ServerPanel() {
             </fieldset>
 
             {way === "code" && !found ? (
-              <form onSubmit={useCode} className="space-y-3">
+              <form onSubmit={submitCode} className="space-y-3">
                 <div className="space-y-2">
                   <Label htmlFor="server-pairing">{t("server.pairCode")}</Label>
                   <Input
@@ -285,13 +327,26 @@ export function ServerPanel() {
                     required
                   />
                 </div>
-                <Button
-                  type="submit"
-                  disabled={busy}
-                  className="h-auto w-full whitespace-normal py-2 sm:w-auto"
-                >
-                  {busy ? t("server.pairCodeCheck") : t("server.pairCodeUse")}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={busy} className="h-auto whitespace-normal py-2">
+                    {busy ? t("server.pairCodeCheck") : t("server.pairCodeUse")}
+                  </Button>
+                  {/* Камера — только там, где она есть. На компьютере кнопки
+                      нет вовсе: предлагать путь, которого нет, хуже, чем не
+                      предлагать ничего. */}
+                  {cameraPossible() ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={busy}
+                      className="h-auto whitespace-normal py-2"
+                      onClick={() => void openCamera()}
+                    >
+                      <Camera className="size-4" />
+                      {t("server.cameraUse")}
+                    </Button>
+                  ) : null}
+                </div>
               </form>
             ) : (
               <form onSubmit={connect} className="space-y-3">

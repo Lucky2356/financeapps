@@ -1963,6 +1963,12 @@ const ru: Messages = {
   "server.pairCode": "Код связки",
   "server.pairCodeCheck": "Проверяем код…",
   "server.pairCodeUse": "Продолжить",
+  "server.pairCodeBad": "Это не код связки. Наберите восемь знаков с первого устройства.",
+  "server.cameraUse": "Навести камеру",
+  "server.cameraDenied":
+    "Приложению не разрешён доступ к камере. Это меняется в настройках телефона — или наберите восемь знаков руками.",
+  "server.cameraAbsent": "На этом устройстве камеры нет. Наберите восемь знаков руками.",
+  "server.cameraBroken": "Камера не открылась. Наберите восемь знаков руками.",
   "server.pairCodeFound": "Это {login} на {base}. Введите пароль от своих данных.",
   "server.closedHere":
     "Эта служба пускает только по приглашению — спросите его у того, кто её держит.",
@@ -1989,6 +1995,8 @@ const ru: Messages = {
     "Наберите этот код на втором устройстве. Он живёт пять минут и срабатывает один раз.",
   "dev.pairNote":
     "Пароля в коде нет и не будет: он единственное, чем заперты ваши данные. На втором устройстве его вводят руками.",
+  "dev.pairCamera":
+    "На втором устройстве можно навести камеру на картинку — или набрать восемь знаков руками, если камеры нет.",
   "dev.pairAgain": "Показать новый код",
   "dev.copy": "Скопировать",
   "dev.copied": "Код скопирован.",
@@ -3979,6 +3987,13 @@ const en: Messages = {
   "server.pairCode": "Pairing code",
   "server.pairCodeCheck": "Checking the code…",
   "server.pairCodeUse": "Continue",
+  "server.pairCodeBad":
+    "That is not a pairing code. Type the eight characters from your first device.",
+  "server.cameraUse": "Point the camera",
+  "server.cameraDenied":
+    "The app is not allowed to use the camera. That is changed in the phone's settings — or type the eight characters by hand.",
+  "server.cameraAbsent": "This device has no camera. Type the eight characters by hand.",
+  "server.cameraBroken": "The camera did not open. Type the eight characters by hand.",
   "server.pairCodeFound": "That is {login} at {base}. Enter the password for your data.",
   "server.closedHere": "This service is invitation-only — ask whoever runs it for one.",
   "dev.title": "My devices",
@@ -4001,6 +4016,8 @@ const en: Messages = {
   "dev.pairLead": "Type this code on the second device. It lives five minutes and works once.",
   "dev.pairNote":
     "The password is not in the code and never will be: it is the only thing your data is locked with. On the second device you type it by hand.",
+  "dev.pairCamera":
+    "On the second device you can point the camera at the image — or type the eight characters by hand if there is no camera.",
   "dev.pairAgain": "Show a new code",
   "dev.copy": "Copy",
   "dev.copied": "Code copied.",

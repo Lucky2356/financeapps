@@ -1,6 +1,6 @@
 [package]
 name = "financial-assistant"
-version = "1.44.1"
+version = "1.45.0"
 description = "Financial Assistant MVP desktop shell"
 authors = ["Financial Assistant"]
 edition = "2021"
@@ -30,6 +30,13 @@ serde_json = "1"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-window-state = "2"
 tauri-plugin-updater = "2"
+
+# Mobile-only: the camera. Gated the same way and for the same reason, only
+# mirrored — the scanner has no desktop implementation, and linking it into the
+# Windows build would fail to compile. A computer reading a QR off its own
+# screen is not a case that exists anyway: the picture is SHOWN there.
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
 
 # Optimized release profile for the Windows 10/11 desktop build: smaller and
 # faster binary (link-time optimization, single codegen unit, stripped symbols).

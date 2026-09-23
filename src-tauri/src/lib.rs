@@ -24,6 +24,13 @@ pub fn run() {
     .plugin(tauri_plugin_window_state::Builder::new().build())
     .plugin(tauri_plugin_updater::Builder::new().build());
 
+  // Mobile-only — the camera, for reading the pairing QR. Mirrors the block
+  // above: the scanner has no desktop implementation and would not compile
+  // into the Windows build. A computer reading a QR off its own screen is not
+  // a case that exists: the picture is SHOWN there, not read.
+  #[cfg(mobile)]
+  let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+
   builder
     .setup(|_app| {
       // Future secure tokens must use OS keychain / secure storage, never plain files.
