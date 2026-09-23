@@ -19,21 +19,25 @@
 // моменту показывает «отвязать», и место для «связать ещё одно» там же, где
 // список уже связанных.
 //
-// QR ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ ПРОПУСК. Картинку некому прочитать: камера
-// приезжает следующим этапом, вместе с tauri-plugin-barcode-scanner. QR, на
-// который можно только посмотреть, экономит ровно ноль — восемь знаков человек
-// и так набирает быстрее, чем наводит телефон. Появится читатель — появится и
-// картинка.
+// КАРТИНКА ПОЯВИЛАСЬ ВМЕСТЕ С ЧИТАТЕЛЕМ, И ИМЕННО В ЭТОМ ПОРЯДКЕ. Пока камеры
+// на втором устройстве не было, QR экономил ровно ноль: восемь знаков человек
+// набирает быстрее, чем наводит телефон, — и показывать картинку, которую
+// некому прочитать, значило бы делать вид, что путь есть. Теперь читатель есть,
+// и картинка встала рядом с кодом, а не вместо него: набрать руками можно
+// по-прежнему, и это по-прежнему единственный путь, если камера занята,
+// запрещена или её нет вовсе.
 
 import { Copy, Laptop, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { PairingQr } from "@/components/vault/pairing-qr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
+import { makePairingLink } from "@/lib/sync/pairing-link";
 import { serverAccount } from "@/lib/vault/runtime";
 import type { LinkedDevice } from "@/lib/vault/server-account";
 
@@ -52,6 +56,8 @@ export function DevicesPanel() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [code, setCode] = useState<string | null>(null);
+  /** Адрес своей службы — он едет в картинке вместе с кодом. */
+  const [base, setBase] = useState("");
 
   const refresh = useCallback(async () => {
     const link = await serverAccount.link();
@@ -60,6 +66,7 @@ export function DevicesPanel() {
       return;
     }
     setLinked(true);
+    setBase(link.base);
     const list = await serverAccount.devices();
     setDevices(list.devices);
     setCurrent(list.current);
@@ -220,7 +227,13 @@ export function DevicesPanel() {
               >
                 {groupCode(code)}
               </p>
+              {base ? (
+                <div className="flex justify-center">
+                  <PairingQr value={makePairingLink(base, code)} />
+                </div>
+              ) : null}
               <p className="text-sm text-muted-foreground">{t("dev.pairLead")}</p>
+              <p className="text-sm text-muted-foreground">{t("dev.pairCamera")}</p>
               <p className="text-xs text-muted-foreground">{t("dev.pairNote")}</p>
               <div className="flex flex-wrap gap-2">
                 <Button

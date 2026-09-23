@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Камера — только для чтения картинки связки. Плагин сканера объявляет
+         это разрешение и сам, но манифест читают люди: оставлять единственный
+         повод просить камеру невидимым в складе неправильно. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- И тут же — что камера НЕ обязательна. Без этой строки установщики
+         считают её требованием и прячут приложение от устройств без камеры, а
+         оно работает на них полностью: код связки набирают руками. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
