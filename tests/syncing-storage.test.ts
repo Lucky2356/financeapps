@@ -9,6 +9,7 @@ import {
   SyncingStorageAdapter,
   type Merge
 } from "@/lib/storage/SyncingStorageAdapter";
+import type { SyncTransport } from "@/lib/sync/protocol";
 import type { SealedBook } from "@/lib/sync/vault-crypto";
 import { FakeSyncServer } from "./helpers/fake-sync-server";
 
@@ -355,6 +356,84 @@ describe("синхронизирующее хранилище", () => {
       await storage.flush();
 
       expect(seen).toEqual([box("а")]);
+    });
+  });
+
+  describe("запись, сделанная ПОКА идёт отправка", () => {
+    // Найдено разбором живой поломки, а не придумано. Выглядело это так:
+    // человек подключил компьютер к службе, поработал в приложении, потом
+    // поставил приложение на телефон — и телефон приехал ПУСТЫМ. При этом на
+    // компьютере всё на месте, значок говорит «Всё на сервере», а на службе
+    // лежит ячейка первой версии с пустыми данными.
+    //
+    // Причина — здесь. Отправка убирает ячейку из очереди ПОСЛЕ успеха, и это
+    // правильно: иначе оборвавшаяся связь уносила бы очередь с собой. Но
+    // очередь — это набор ИМЁН, и запись, сделанная человеком, пока отправка
+    // висела на сети, ставила в неё то же самое имя. Убирая имя после успеха,
+    // отправка выносила из очереди не отправленное, а как раз новое — и
+    // написанное исчезало из очереди навсегда, молча и с состоянием «синхронно».
+    //
+    // Почему это не всплывало раньше: все прежние проверки пишут ДО того, как
+    // поднимут синхронизацию, — и тогда запись и отправка не пересекаются.
+
+    /** Служба, которая даёт вклиниться в середину отправки. */
+    class Slow implements SyncTransport {
+      readonly inner: FakeSyncServer;
+      private during: (() => Promise<void>) | null;
+
+      constructor(inner: FakeSyncServer, during: () => Promise<void>) {
+        this.inner = inner;
+        this.during = during;
+      }
+
+      list() {
+        return this.inner.list();
+      }
+      pull(slot: string) {
+        return this.inner.pull(slot);
+      }
+      watch(onChange: (event: { slot: string; version: number }) => void) {
+        return this.inner.watch(onChange);
+      }
+      async push(slot: string, request: Parameters<FakeSyncServer["push"]>[1]) {
+        // Ровно один раз: человек пишет, пока запрос висит на сети.
+        const interrupt = this.during;
+        this.during = null;
+        if (interrupt) await interrupt();
+        return this.inner.push(slot, request);
+      }
+    }
+
+    it("не теряется: она уходит на сервер, а не исчезает из очереди", async () => {
+      const slow = new Slow(server, async () => {
+        await storage.setItem(SLOT, box("после"));
+      });
+
+      await storage.start(slow, glue);
+      await storage.setItem(SLOT, box("до"));
+      await storage.flush();
+      // Второй заход — на случай, если первая отправка честно ушла с «до»:
+      // тогда «после» просто стоит следующим в очереди, и это законно.
+      await storage.flush();
+
+      expect(server.peek(SLOT)?.body).toEqual(box("после"));
+    });
+
+    it("состояние не врёт «всё на сервере», пока что-то не отправлено", async () => {
+      // Это вторая половина той же поломки и, пожалуй, худшая. Потерю ещё
+      // можно заметить, если сверять устройства; «Всё на сервере» при
+      // неотправленном — это прямая ложь человеку в тот момент, когда он
+      // решает, можно ли закрывать приложение.
+      const slow = new Slow(server, async () => {
+        await storage.setItem(SLOT, box("после"));
+      });
+
+      await storage.start(slow, glue);
+      await storage.setItem(SLOT, box("до"));
+      await storage.flush();
+
+      expect(server.peek(SLOT)?.body).toEqual(box("после"));
+      expect(storage.status).toBe("synced");
     });
   });
 

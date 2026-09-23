@@ -729,6 +729,49 @@ describe("двое на одном устройстве — через наст�
       ).rejects.toThrow();
     });
 
+    it("написанное ПОСЛЕ подключения доезжает до второго устройства", async () => {
+      // Самый обычный порядок на свете: человек пользуется приложением, а
+      // телефон подключает потом. Все прежние проверки этого набора пишут ДО
+      // подключения — и ровно поэтому поломка прожила незамеченной.
+      //
+      // Выглядела она так: на компьютере всё на месте, значок говорит «Всё на
+      // сервере», а телефон приезжает ПУСТЫМ. Причина лежала в очереди
+      // отправки (см. lib/storage/SyncingStorageAdapter): запись, сделанная
+      // пока шла отправка, вылетала из очереди вместе с отправленной.
+      const password = "пароль";
+      const pc = new Owner();
+      await pc.account.create(password, FAST);
+      const { code } = (await callServer("/admin/invite", {}, ADMIN)) as { code: string };
+      await pc.server.register({
+        base,
+        code,
+        login: "petya",
+        password,
+        vault: (await pc.account.vault())!,
+        device: "компьютер"
+      });
+      expect(await pc.resume()).toBe(true);
+
+      // И только ТЕПЕРЬ — работа в приложении.
+      await pc.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
+      await pc.sync.flush();
+
+      const phone = new Owner();
+      await phone.account.create("свой первый запуск", FAST);
+      await phone.app.get("/accounts");
+      const joined = await phone.server.signIn({
+        base,
+        login: "petya",
+        password,
+        device: "телефон"
+      });
+      await phone.account.adopt(joined.vault, password);
+      expect(await phone.resume()).toBe(true);
+
+      const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+      expect(seen.accounts.map((row) => row.name)).toContain("Карта");
+    });
+
     it("своим кодом второе устройство доезжает до тех же данных", async () => {
       // Путь целиком, как его пройдёт человек: код → адрес и имя → пароль →
       // шкатулка со службы → те же записи.
