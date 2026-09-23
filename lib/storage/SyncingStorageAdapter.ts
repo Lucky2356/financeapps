@@ -169,13 +169,31 @@ function first(set: Set<SlotName>): SlotName | null {
   return null;
 }
 
+function firstKey(map: Map<SlotName, number>): SlotName | null {
+  for (const key of map.keys()) return key;
+  return null;
+}
+
 export class SyncingStorageAdapter implements StorageAdapter {
   private transport: SyncTransport | null = null;
   private merge: Merge | null = null;
   private unwatch: (() => void) | null = null;
 
-  /** Ячейки, которые надо отправить. */
-  private readonly outbox = new Set<SlotName>();
+  /**
+   * Ячейки, которые надо отправить, и НОМЕР ЗАПИСИ, с которой каждая встала в
+   * очередь.
+   *
+   * Номер здесь не для порядка, а чтобы отличить «отправил то, что стояло» от
+   * «отправил, а пока отправлял, человек написал ещё раз». Набором имён это
+   * неразличимо: имя одно и то же, и снятие его после удачной отправки выносит
+   * из очереди не отправленное, а как раз новое.
+   *
+   * Чем это было на живой машине: человек подключил компьютер, поработал,
+   * поставил приложение на телефон — и телефон приехал пустым. На компьютере
+   * при этом всё на месте и значок говорит «Всё на сервере». Написанное во
+   * время отправки не уезжало никогда и никак себя не выдавало.
+   */
+  private readonly outbox = new Map<SlotName, number>();
   /** Ячейки, которые надо забрать. */
   private readonly inbox = new Set<SlotName>();
 
@@ -268,7 +286,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
         this.applied.delete(key);
         await this.inner.setItem(key, merged.body);
         this.writes += 1;
-        this.outbox.add(key);
+        this.queue(key);
         // Записанное НЕ равно тому, что приложение просило записать: сюда
         // подмешались строки с другого устройства. Промолчи мы здесь, экран
         // показал бы свою правку без них, и узнать об этом ему было бы неоткуда.
@@ -278,7 +296,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
       }
       await this.inner.setItem(key, value);
       this.writes += 1;
-      this.outbox.add(key);
+      this.queue(key);
       void this.pump();
       return;
     }
@@ -487,10 +505,14 @@ export class SyncingStorageAdapter implements StorageAdapter {
           this.inbox.delete(incoming);
           continue;
         }
-        const outgoing = first(this.outbox);
+        const outgoing = firstKey(this.outbox);
         if (outgoing === null) break;
+        // Отметка снимается ДО отправки и сверяется ПОСЛЕ. Совпала — из
+        // очереди уходит ровно то, что уехало. Не совпала — значит человек
+        // написал, пока мы отправляли, и его запись остаётся в очереди.
+        const queued = this.outbox.get(outgoing);
         await this.send(outgoing);
-        this.outbox.delete(outgoing);
+        if (this.outbox.get(outgoing) === queued) this.outbox.delete(outgoing);
       }
       this.attempt = 0;
       this.set("synced");
@@ -502,6 +524,11 @@ export class SyncingStorageAdapter implements StorageAdapter {
         this.set("error");
       }
     }
+  }
+
+  /** Поставить ячейку в очередь на отправку, пометив её текущей записью. */
+  private queue(slot: SlotName): void {
+    this.outbox.set(slot, this.writes);
   }
 
   /** Ставит повтор. Задержка растёт, но не бесконечно. */
@@ -524,7 +551,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
     const snapshot = await transport.pull(slot);
     if (snapshot.body === null) {
       // На сервере пусто, а у нас что-то есть — значит, мы первые.
-      if (sealed(await this.inner.getItem(slot))) this.outbox.add(slot);
+      if (sealed(await this.inner.getItem(slot))) this.queue(slot);
       return;
     }
     if (snapshot.version === this.versions[slot]) return;
@@ -555,7 +582,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
 
       // Отправляем обратно, только если в слитом есть что-то наше. Иначе два
       // устройства перекидывали бы одну и ту же книгу друг другу без конца.
-      if (result.differs) this.outbox.add(slot);
+      if (result.differs) this.queue(slot);
       return;
     }
 

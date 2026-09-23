@@ -67,6 +67,7 @@ function id(prefix: string): string {
 }
 
 export type RegisterInput = {
+  /** Приглашение. Пусто — «без приглашения»; пустят только при открытой записи. */
   code: string;
   login: string;
   /** Шкатулка целиком, как её собрало устройство. */
@@ -117,15 +118,39 @@ export function authParams(db: DatabaseSync, login: string): { vaultMeta: string
   };
 }
 
-export async function register(db: DatabaseSync, input: RegisterInput, now: string) {
+/**
+ * Завести учётную запись.
+ *
+ * ДВА РЕЖИМА, И ПО УМОЛЧАНИЮ — СТАРЫЙ. `open = false` значит ровно то, что
+ * служба делала всегда: без приглашения никого. Открытая запись включается
+ * одной переменной окружения и только тем, кто держит службу для чужих людей.
+ * Порядок умолчания здесь не мелочь: переменную ставят осознанно, а вот не
+ * поставить её можно и по невнимательности — и тогда служба обязана остаться
+ * закрытой, а не открыться сама.
+ *
+ * ПРЕДЪЯВЛЕННОЕ ПРИГЛАШЕНИЕ ПРОВЕРЯЕТСЯ ВСЕГДА, даже при открытой записи.
+ * Соблазн «раз пускаем всех, то и код смотреть незачем» стоил бы вот чего:
+ * человек с опечаткой в коде завёлся бы успешно, а его приглашение осталось бы
+ * непогашенным — и хозяин службы, глядя на список, считал бы, что этот человек
+ * ещё не пришёл. Пустой код — это «у меня приглашения нет»; непустой — это
+ * «вот моё», и на него отвечают по существу.
+ */
+export async function register(db: DatabaseSync, input: RegisterInput, now: string, open = false) {
   const login = normalizeLogin(input.login);
   if (login.length < 3) throw new AuthError(400, "Имя входа короче трёх знаков.");
 
-  const invitation = db
-    .prepare("select code, used_by from invitations where code = ?")
-    .get<{ code: string; used_by: string | null }>(input.code.trim());
-  if (!invitation) throw new AuthError(403, "Приглашение не найдено.");
-  if (invitation.used_by) throw new AuthError(403, "Приглашение уже использовано.");
+  const code = input.code.trim();
+  let invitation: { code: string; used_by: string | null } | undefined;
+
+  if (code === "") {
+    if (!open) throw new AuthError(403, "Приглашение не найдено.");
+  } else {
+    invitation = db
+      .prepare("select code, used_by from invitations where code = ?")
+      .get<{ code: string; used_by: string | null }>(code);
+    if (!invitation) throw new AuthError(403, "Приглашение не найдено.");
+    if (invitation.used_by) throw new AuthError(403, "Приглашение уже использовано.");
+  }
 
   if (db.prepare("select id from people where login = ?").get(login)) {
     throw new AuthError(409, "Такое имя уже занято.");
@@ -138,11 +163,13 @@ export async function register(db: DatabaseSync, input: RegisterInput, now: stri
   db.prepare(
     "insert into people (id, login, secret_hash, secret_salt, vault, created_at) values (?,?,?,?,?,?)"
   ).run(personId, login, hash, salt, input.vault, now);
-  db.prepare("update invitations set used_by = ?, used_at = ? where code = ?").run(
-    personId,
-    now,
-    invitation.code
-  );
+  if (invitation) {
+    db.prepare("update invitations set used_by = ?, used_at = ? where code = ?").run(
+      personId,
+      now,
+      invitation.code
+    );
+  }
 
   return { personId };
 }
@@ -207,6 +234,31 @@ export function whoIs(
 
 export function logout(db: DatabaseSync, raw: string): void {
   db.prepare("delete from sessions where token_hash = ?").run(fingerprint(raw));
+}
+
+/**
+ * Переименовать устройство.
+ *
+ * Имя угадывается по строке браузера — «Компьютер (Windows)», — и два
+ * компьютера в доме неотличимы. Выкинуть потерянный телефон из списка, в
+ * котором два одинаковых имени, нельзя: непонятно, который из них чей.
+ *
+ * Хозяин проверяется В САМОМ ЗАПРОСЕ, а не заранее: иначе между проверкой и
+ * записью помещается чужой запрос, и переименовать можно было бы чужое.
+ */
+export function renameDevice(
+  db: DatabaseSync,
+  personId: string,
+  deviceId: string,
+  name: string
+): void {
+  const clean = name.trim().slice(0, 80);
+  if (!clean) throw new AuthError(400, "Пустое имя устройства.");
+
+  const changed = db
+    .prepare("update devices set name = ? where id = ? and person_id = ?")
+    .run(clean, deviceId, personId);
+  if (changed.changes === 0) throw new AuthError(404, "Такого устройства у вас нет.");
 }
 
 /** Выкинуть устройство — вместе со всеми его билетами. */

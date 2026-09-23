@@ -88,6 +88,21 @@ async function captured(work: () => Promise<unknown>): Promise<string[]> {
   return lines;
 }
 
+/**
+ * Поднять службу заново с другими настройками.
+ *
+ * Пределы задаются при сборке службы, а общий beforeEach собирает её без них —
+ * иначе каждая проверка платила бы за чужие настройки. Перезапуск стоит
+ * миллисекунды (база в памяти), а проверка при этом гоняет настоящие запросы
+ * по настоящей службе, собранной ровно так, как её соберёт start.ts.
+ */
+async function restart(options: Partial<Parameters<typeof createApp>[0]>): Promise<void> {
+  await app.stop();
+  app = createApp({ dbPath: ":memory:", adminToken: ADMIN, ...options });
+  await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+}
+
 describe("служба", () => {
   // Служба поднимается заново на каждую проверку. Дороже, чем чистить базу
   // между ними, и честнее: счётчики частоты живут в памяти службы, и проверка,
@@ -218,6 +233,17 @@ describe("служба", () => {
       assert.equal(second.status, 403);
     });
 
+    it("пустое приглашение — это не «приглашения не нужно»", async () => {
+      // Пустое поле и негодный код на закрытой службе отвечают одинаково, и
+      // это не случайность: «у меня его нет» — такой же отказ, как «вот
+      // неправильный».
+      const response = await call("/auth/register", {
+        method: "POST",
+        body: { code: "", login: "петя", vault: VAULT, secret: "с" }
+      });
+      assert.equal(response.status, 403);
+    });
+
     it("имя занято — отказ, а не вторая запись", async () => {
       await signUp("петя");
       const code = await invite();
@@ -226,6 +252,79 @@ describe("служба", () => {
         body: { code, login: "ПЕТЯ", vault: VAULT, secret: "другой" }
       });
       assert.equal(response.status, 409);
+    });
+  });
+
+  describe("открытая запись", () => {
+    // Переключатель, а не новое поведение: по умолчанию служба остаётся ровно
+    // такой, какой была. Включает его тот, кто держит службу для чужих людей,
+    // — и вместе с ним обязаны работать пределы, иначе это не служба, а
+    // бесплатный диск для кого угодно.
+
+    it("выключена по умолчанию — и это главное в ней", async () => {
+      // Незаданная переменная окружения — самое частое состояние на свете.
+      // Открывшись при ней, служба пускала бы чужих на машину человека,
+      // который об этом не просил и узнал бы последним.
+      assert.equal(((await call("/health")).body as { open: boolean }).open, false);
+    });
+
+    it("при включённой заводятся без приглашения", async () => {
+      await restart({ openRegistration: true });
+      const response = await call("/auth/register", {
+        method: "POST",
+        body: { code: "", login: "петя", vault: VAULT, secret: "с" }
+      });
+      assert.equal(response.status, 201);
+    });
+
+    it("проверка живости говорит устройству, спрашивать ли приглашение", async () => {
+      // Узнать это устройство может только до входа, ничего не предъявив.
+      await restart({ openRegistration: true });
+      assert.equal(((await call("/health")).body as { open: boolean }).open, true);
+    });
+
+    it("предъявленное приглашение проверяется и при открытой записи", async () => {
+      // Соблазн «раз пускаем всех, код можно не смотреть» стоил бы вот чего:
+      // человек с опечаткой завёлся бы, а его приглашение осталось бы
+      // непогашенным — и хозяин считал бы, что этот человек ещё не пришёл.
+      await restart({ openRegistration: true });
+      const response = await call("/auth/register", {
+        method: "POST",
+        body: { code: "выдуманное", login: "петя", vault: VAULT, secret: "с" }
+      });
+      assert.equal(response.status, 403);
+    });
+
+    it("годное приглашение гасится и при открытой записи", async () => {
+      await restart({ openRegistration: true });
+      const code = await invite();
+      await call("/auth/register", {
+        method: "POST",
+        body: { code, login: "петя", vault: VAULT, secret: "с" }
+      });
+
+      const row = app.db
+        .prepare("select used_by from invitations where code = ?")
+        .get<{ used_by: string | null }>(code);
+      assert.ok(row?.used_by, "приглашение осталось непогашенным");
+    });
+
+    it("поток новых записей с одного адреса ограничен", async () => {
+      // Пока пускали по приглашениям, пределом было само приглашение. Открытая
+      // запись убирает его целиком, и без замены один скрипт заводит тысячу
+      // записей за минуту — каждая ценой полного прогона scrypt.
+      await restart({ openRegistration: true });
+
+      let last = 0;
+      for (let attempt = 0; attempt < 11; attempt += 1) {
+        const response = await call("/auth/register", {
+          method: "POST",
+          body: { code: "", login: `человек-${attempt}`, vault: VAULT, secret: "с" }
+        });
+        last = response.status;
+      }
+
+      assert.equal(last, 429);
     });
   });
 
@@ -403,6 +502,353 @@ describe("служба", () => {
       const { token, deviceId } = await signUp("петя");
       await call(`/devices/${deviceId}`, { method: "DELETE", token });
       assert.equal((await call("/vault/книга", { token })).status, 401);
+    });
+
+    it("переименовываются — иначе два компьютера в доме неотличимы", async () => {
+      const { token, deviceId } = await signUp("петя");
+      const renamed = await call(`/devices/${deviceId}`, {
+        method: "PATCH",
+        token,
+        body: { name: "Ноутбук на кухне" }
+      });
+
+      assert.equal(renamed.status, 204);
+      const list = (await call("/devices", { token })).body as {
+        devices: Array<{ name: string }>;
+      };
+      assert.equal(list.devices[0].name, "Ноутбук на кухне");
+    });
+
+    it("чужое устройство переименовать нельзя", async () => {
+      // Хозяин сверяется в самом запросе, а не заранее: между проверкой и
+      // записью помещается чужой запрос.
+      const petya = await signUp("петя");
+      const vasya = await signUp("вася");
+
+      const response = await call(`/devices/${vasya.deviceId}`, {
+        method: "PATCH",
+        token: petya.token,
+        body: { name: "моё теперь" }
+      });
+
+      assert.equal(response.status, 404);
+      const his = (await call("/devices", { token: vasya.token })).body as {
+        devices: Array<{ name: string }>;
+      };
+      assert.equal(his.devices[0].name, "проверка");
+    });
+
+    it("пустое имя — отказ, а не устройство без имени", async () => {
+      const { token, deviceId } = await signUp("петя");
+      const response = await call(`/devices/${deviceId}`, {
+        method: "PATCH",
+        token,
+        body: { name: "   " }
+      });
+      assert.equal(response.status, 400);
+    });
+  });
+
+  describe("код связки", () => {
+    // Восемь знаков вместо переноса адреса и имени входа руками. Пароля в коде
+    // нет и не будет: он — единственное, чем завёрнут ключ от данных, и поехав
+    // в коде (а значит и в картинке QR, которую снимают из-за плеча), он сделал
+    // бы бессмысленным всё шифрование разом.
+
+    it("выдаётся только тому, кто уже вошёл", async () => {
+      assert.equal((await call("/pairing", { method: "POST" })).status, 401);
+    });
+
+    it("отдаёт имя входа тому, у кого ещё ничего нет", async () => {
+      // Вся суть ручки: второе устройство зовёт её, НЕ предъявив ничего, —
+      // потому что предъявить ему нечего.
+      const { token } = await signUp("петя");
+      const made = await call("/pairing", { method: "POST", token });
+      const { code } = made.body as { code: string; expiresAt: string };
+
+      const opened = await call(`/pairing/${code}`);
+
+      assert.equal(made.status, 201);
+      assert.equal(opened.status, 200);
+      assert.equal((opened.body as { login: string }).login, "петя");
+    });
+
+    it("в коде восемь знаков и ни одного похожего на другой", async () => {
+      // Ноль и О, единица и I — это ровно та ошибка, после которой код
+      // объявляют неработающим и идут искать другой способ.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      assert.equal(code.length, 8);
+      assert.match(code, /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/);
+    });
+
+    it("набранный как попало — тот же самый код", async () => {
+      // Человек читает с одного экрана и набирает на другом: строчными, с
+      // чёрточкой посередине, с пробелом от автозамены. Отказывать в этом
+      // значило бы отказывать за то, как выглядит клавиатура.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      const messy = `${code.slice(0, 4)}-${code.slice(4)} `.toLowerCase();
+
+      assert.equal((await call(`/pairing/${encodeURIComponent(messy)}`)).status, 200);
+    });
+
+    it("срабатывает один раз", async () => {
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      assert.equal((await call(`/pairing/${code}`)).status, 200);
+      const second = await call(`/pairing/${code}`);
+
+      assert.equal(second.status, 410);
+      // «Уже использован», а не «не найден»: это разные поломки, и человек
+      // чинит их по-разному — во втором случае он ищет опечатку, которой нет.
+      assert.match(String((second.body as { error: string }).error), /использован/);
+    });
+
+    it("истёкший не срабатывает", async () => {
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      // Пять минут назад. Ждать их по-настоящему проверка не будет, а
+      // подменять часы службы ради одной проверки — значит проверять часы.
+      app.db
+        .prepare("update pairings set expires_at = ?")
+        .run(new Date(Date.now() - 60_000).toISOString());
+
+      assert.equal((await call(`/pairing/${code}`)).status, 410);
+    });
+
+    it("выдуманный не срабатывает", async () => {
+      assert.equal((await call("/pairing/ABCD2345")).status, 404);
+    });
+
+    it("лежит хешем, а не как есть", async () => {
+      // Украденная база не должна давать ничего, что можно предъявить службе.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      const row = app.db.prepare("select code_hash from pairings").get<{ code_hash: string }>();
+      assert.ok(row);
+      assert.notEqual(row?.code_hash, code);
+      assert.ok(!JSON.stringify(row).includes(code));
+    });
+
+    it("в журнал не попадает", async () => {
+      // Код — это доступ. Журнал читают и пересылают.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+
+      const lines = await captured(() => call(`/pairing/${code}`));
+
+      assert.ok(!lines.join("\n").includes(code), lines.join("\n"));
+      assert.match(lines[0], /^GET \/pairing\/… → 200 за \d+ мс$/);
+    });
+
+    it("перебор ограничен", async () => {
+      let last = 0;
+      for (let attempt = 0; attempt < 21; attempt += 1) {
+        last = (await call(`/pairing/ABCD234${attempt % 9}`)).status;
+      }
+      assert.equal(last, 429);
+    });
+
+    it("адрес отдаётся, только когда хозяин его назвал", async () => {
+      // Выдумывать его из заголовка Host нельзя: заголовок приходит снаружи, и
+      // служба отправила бы второе устройство туда, куда её попросил чужой.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      const plain = (await call(`/pairing/${code}`)).body as Record<string, unknown>;
+      assert.deepEqual(Object.keys(plain), ["login"]);
+
+      await restart({ publicUrl: "https://finance.example.org" });
+      const again = await signUp("петя");
+      const second = (await call("/pairing", { method: "POST", token: again.token })).body as {
+        code: string;
+      };
+      const named = (await call(`/pairing/${second.code}`)).body as { address: string };
+
+      assert.equal(named.address, "https://finance.example.org");
+    });
+
+    it("код чужого человека не открывает его данных", async () => {
+      // Код отдаёт имя входа — и всё. Пароль остаётся у человека, и без него
+      // имя не открывает ничего.
+      const { token } = await signUp("петя");
+      const { code } = (await call("/pairing", { method: "POST", token })).body as {
+        code: string;
+      };
+      const opened = (await call(`/pairing/${code}`)).body as Record<string, unknown>;
+
+      assert.ok(!("token" in opened));
+      assert.ok(!("vault" in opened));
+      assert.ok(!("secret" in opened));
+    });
+  });
+
+  describe("пределы на человека", () => {
+    // Пределы появились вместе с открытой регистрацией и только ради неё. До
+    // того единственным, кто мог переполнить службу, был её хозяин; с открытой
+    // регистрацией — любой желающий, и кончившийся диск останавливает службу
+    // для ВСЕХ, включая тех, кто ничего не делал.
+
+    it("без настроек служба считает так же, как считала всегда, — никак", async () => {
+      // Это главная из проверок здесь. Пределы выкатываются на машины, которые
+      // уже работают; включись они сами собой, у людей молча перестала бы
+      // ехать синхронизация — и выглядело бы это не как «кончилось место», а
+      // как «приложение сломалось».
+      const { token } = await signUp("петя");
+      for (const slot of ["одна", "вторая", "третья", "четвёртая"]) {
+        const put = await call(`/vault/${slot}`, {
+          method: "PUT",
+          token,
+          body: { baseVersion: 0, body: BOOK }
+        });
+        assert.equal(put.status, 200, slot);
+      }
+    });
+
+    it("новая книга сверх предела не заводится", async () => {
+      await restart({ limits: { slots: 1, bytes: null } });
+      const { token } = await signUp("петя");
+
+      const first = await call("/vault/первая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: BOOK }
+      });
+      const second = await call("/vault/вторая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: BOOK }
+      });
+
+      assert.equal(first.status, 200);
+      assert.equal(second.status, 507);
+      assert.match(String((second.body as { error: string }).error), /разрешено 1/);
+    });
+
+    it("уже заведённая книга правится и тогда, когда предел книг исчерпан", async () => {
+      // Предел на ЧИСЛО книг — не предел на работу в них. Считай он и правки,
+      // человек с одной разрешённой книгой не смог бы записать в неё ни одной
+      // операции после первой.
+      await restart({ limits: { slots: 1, bytes: null } });
+      const { token } = await signUp("петя");
+
+      await call("/vault/первая", { method: "PUT", token, body: { baseVersion: 0, body: BOOK } });
+      const again = await call("/vault/первая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 1, body: BOOK }
+      });
+
+      assert.equal(again.status, 200);
+    });
+
+    it("из переполнения можно выбраться, удалив у себя половину", async () => {
+      // Западня, ради которой старый размер ячейки вычитается: считай мы
+      // запись добавкой к тому, что уже лежит, — и единственный выход из
+      // переполнения оказался бы закрыт самим переполнением. Человек чистит
+      // у себя операции, жмёт «отправить» и получает тот же отказ.
+      // Числа подобраны так, чтобы проверка отличала вычитание от его
+      // отсутствия. Предел 14 336 байт, книга занимает 12 000. Человек убирает
+      // половину операций — остаётся 6000. С вычитанием это 6000 из 14 336;
+      // без вычитания — 12 000 + 6000, и служба отказывает человеку, который
+      // только что освободил место, ровно за то, что он его освободил.
+      await restart({ limits: { slots: null, bytes: 14 * 1024 } });
+      const { token } = await signUp("петя");
+
+      // 6000 кириллических знаков — это 12 000 байт; см. проверку про единицы.
+      const big = { ...BOOK, ct: "х".repeat(6000) };
+      const filled = await call("/vault/книга", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: big }
+      });
+      assert.equal(filled.status, 200);
+
+      // Ещё столько же не влезает...
+      const overflow = await call("/vault/вторая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: big }
+      });
+      assert.equal(overflow.status, 507);
+
+      // ...а «убрал у себя половину» — влезает.
+      const cleaned = await call("/vault/книга", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 1, body: { ...BOOK, ct: "х".repeat(3000) } }
+      });
+      assert.equal(cleaned.status, 200);
+    });
+
+    it("отказ по месту не трогает того, что уже лежит", async () => {
+      // «Не уехало» не значит «потеряно» — ни на службе, ни на устройстве.
+      await restart({ limits: { slots: 1, bytes: null } });
+      const { token } = await signUp("петя");
+      await call("/vault/первая", { method: "PUT", token, body: { baseVersion: 0, body: BOOK } });
+      await call("/vault/вторая", { method: "PUT", token, body: { baseVersion: 0, body: BOOK } });
+
+      const stored = await call("/vault/первая", { token });
+      assert.equal((stored.body as { version: number }).version, 1);
+      assert.equal((await call("/vault", { token })).status, 200);
+      assert.equal(
+        ((await call("/vault", { token })).body as { slots: unknown[] }).slots.length,
+        1
+      );
+    });
+
+    it("место считается байтами, а не знаками", async () => {
+      // Поймано этой проверкой, а не на живой машине, — и разница тут в цене.
+      // `length()` у SQLite считает текст ЗНАКАМИ: для латиницы это то же
+      // самое, для кириллицы — ровно вдвое меньше правды. Хозяин выставил бы
+      // предел в мегабайтах, сверял бы его по `df` — и получил бы вдвое
+      // больше занятого, чем разрешал.
+      await restart({ limits: { slots: null, bytes: 8 * 1024 } });
+      const { token } = await signUp("петя");
+
+      // 5000 знаков — меньше предела в 8192, будь он в знаках. В байтах это
+      // 10 000, и записи здесь нечего делать.
+      const cyrillic = await call("/vault/книга", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: { ...BOOK, ct: "я".repeat(5000) } }
+      });
+
+      assert.equal(cyrillic.status, 507);
+    });
+
+    it("«вас обогнали» отвечается раньше, чем «кончилось место»", async () => {
+      // Порядок не вкусовой: узнай человек сначала про место, он пошёл бы
+      // чистить — и вернулся бы к тому же отказу «вас обогнали», потому что
+      // дело было не в месте.
+      await restart({ limits: { slots: 1, bytes: null } });
+      const { token } = await signUp("петя");
+      await call("/vault/первая", { method: "PUT", token, body: { baseVersion: 0, body: BOOK } });
+
+      const stale = await call("/vault/вторая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 7, body: BOOK }
+      });
+
+      assert.equal(stale.status, 409);
     });
   });
 
