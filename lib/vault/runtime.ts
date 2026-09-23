@@ -38,11 +38,13 @@ import { rememberWho } from "@/lib/storage/mine";
 import {
   addPerson,
   choosePerson,
+  FIRST_PERSON,
   hasVault,
   forgetServer,
   opensWithoutPassword,
   readRoster,
   rememberLastUsed,
+  renamePerson,
   rememberServer,
   whoAlreadyUses,
   type Roster
@@ -228,6 +230,29 @@ export type PersonCard = {
   /** Данные откроются соседу без пароля — и экран обязан сказать это вслух. */
   unprotected: boolean;
 };
+
+/**
+ * Кто сейчас за устройством.
+ *
+ * Берётся из того же реестра и того же поля, которым стопка уже собрана, —
+ * заводить второй ответ на этот вопрос нельзя. Разойдись он с первым, и
+ * настройки показали бы «это вы» не на том человеке, а человек переключился бы
+ * на себя же, недоумевая, почему ничего не изменилось.
+ */
+export async function currentPersonId(): Promise<string> {
+  return (await peopleReady)?.lastUsedId ?? FIRST_PERSON;
+}
+
+/**
+ * Переименовать человека. Без перезагрузки: меняется только подпись в списке.
+ *
+ * Данные при этом не трогаются вовсе — приставка в ключах остаётся прежней.
+ * Имя и приставка нарочно разные вещи: приставка живёт в ключах и переименовать
+ * её значило бы переносить чужие деньги с места на место.
+ */
+export async function renamePersonHere(id: string, name: string): Promise<void> {
+  await renamePerson(device, id, name);
+}
 
 /**
  * Кто есть на этом устройстве и чьи данные заперты.
