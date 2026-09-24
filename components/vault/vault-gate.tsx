@@ -63,6 +63,10 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
       }
 
       const { status } = await accountService.state();
+      // Первому запуску нужно знать, есть ли к кому вернуться: только что
+      // добавленный человек попадает сюда, минуя выбор, — и без этого списка
+      // уйти обратно к себе ему было бы некуда.
+      if (status === "fresh") setPeople(await listPeople());
       setPhase(status === "unlocked" ? "open" : status);
 
       // Синхронизация поднимается ТОЛЬКО на отпертой книге, и это не порядок
@@ -117,7 +121,11 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
   }
 
   if (phase === "who") return <WhoIsIt people={people} />;
-  if (phase === "fresh") return <FirstRun onDone={refresh} />;
+  if (phase === "fresh") {
+    return (
+      <FirstRun onDone={refresh} onLeave={people.length > 1 ? () => setPhase("who") : undefined} />
+    );
+  }
   if (phase === "locked") return <UnlockScreen onDone={refresh} />;
   return <>{children}</>;
 }

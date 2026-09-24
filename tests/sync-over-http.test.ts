@@ -964,3 +964,63 @@ describe("«Очистить все данные» при подключённо
     expect(onPhone.accounts.map((account) => account.name)).not.toContain("Карта");
   });
 });
+
+describe("начал без пароля — и подключил телефон", () => {
+  beforeEach(async () => {
+    app = createApp({ dbPath: ":memory:", adminToken: ADMIN, openRegistration: true });
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    await app.stop();
+  });
+
+  // Нашлось прогоном «как новичок». Шкатулка человека, выбравшего «пока без
+  // пароля», завёрнута случайным паролем, которого не знает никто. Экран
+  // подключения просил «пароль от ваших данных» — человек вводил что-то своё,
+  // служба принимала, вход по нему на телефоне проходил… а данные не
+  // открывались никогда: шкатулка этим паролем не завёрнута.
+  it("шкатулку без пароля на службу не отправить", async () => {
+    const pc = new Owner();
+    await pc.account.createWithoutPassword();
+    await expect(
+      pc.server.register({
+        base,
+        code: "",
+        login: "masha",
+        password: "придумала-сейчас",
+        vault: (await pc.account.vault())!,
+        device: "компьютер"
+      })
+    ).rejects.toThrow("Пароль не подходит");
+  });
+
+  it("пароль, заданный перед подключением, открывает данные на телефоне", async () => {
+    const password = "пароль-маши-123";
+    const pc = new Owner();
+    await pc.account.createWithoutPassword();
+    await pc.app.post("/accounts", { name: "Карта Маши", type: "DEBIT_CARD", balance: 1000 });
+
+    // То, что теперь делает экран подключения: сперва пароль данным…
+    await pc.account.setPassword(password);
+    // …и только потом — шкатулку на службу.
+    await pc.server.register({
+      base,
+      code: "",
+      login: "masha",
+      password,
+      vault: (await pc.account.vault())!,
+      device: "компьютер"
+    });
+    expect(await pc.resume()).toBe(true);
+
+    const phone = new Owner();
+    const joined = await phone.server.signIn({ base, login: "masha", password, device: "телефон" });
+    await phone.account.adopt(joined.vault, password);
+    expect(await phone.resume()).toBe(true);
+
+    const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    expect(seen.accounts.map((row) => row.name)).toContain("Карта Маши");
+  });
+});

@@ -107,7 +107,7 @@ export function DashboardClient({
           </Card>
         ) : null,
       metrics: (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {data.metrics.map((metric) => (
             <MetricCard key={metric.title} metric={metric} />
           ))}
@@ -117,7 +117,7 @@ export function DashboardClient({
         <section className="space-y-4">
           {/* Two halves of the same month, side by side: what came in and what
               went out. Reading one without the other only tells half a story. */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="stagger grid gap-4 lg:grid-cols-2">
             <CategoryBreakdownCard
               title={t("dash.categoryIncome")}
               empty={t("dash.categoryIncome.empty")}

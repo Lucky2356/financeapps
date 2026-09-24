@@ -109,7 +109,7 @@ export function HeroCard({
           )}
         >
           <span
-            className={cn("block h-full rounded-full", accent ? "bg-white" : "bg-primary")}
+            className={cn("grow-x block h-full rounded-full", accent ? "bg-white" : "bg-primary")}
             style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
           />
         </div>

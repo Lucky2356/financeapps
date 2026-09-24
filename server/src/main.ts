@@ -13,6 +13,8 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import {
   AuthError,
   authParams,
@@ -20,6 +22,7 @@ import {
   issueInvitation,
   login,
   logout,
+  normalizeLogin,
   register,
   renameDevice,
   whoIs
@@ -83,6 +86,61 @@ const KNOWN_METHODS: readonly string[] = [
   "HEAD",
   "PATCH"
 ];
+
+/**
+ * Часть пути, раскодированная, — или отказ 400.
+ *
+ * decodeURIComponent бросает на битой «%»-последовательности, и такой адрес
+ * становился внутренней ошибкой 500 с полным следом в журнале. Это не поломка
+ * службы, а неверный запрос, и отвечать на него надо как на неверный.
+ */
+export function decodePart(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw new AuthError(400, "Неверный адрес.");
+  }
+}
+
+/** Имя ячейки длиннее этого — не имя, а попытка забить базу мусором. */
+export const MAX_SLOT_NAME = 200;
+
+/**
+ * Совпадает ли предъявленное с пропуском управления — за постоянное время.
+ *
+ * Обычное сравнение строк останавливается на первом несовпавшем знаке, и по
+ * времени ответа пропуск подбирается знак за знаком. Сравниваются отпечатки:
+ * у них одинаковая длина, какой бы ни была длина пропуска.
+ */
+export function sameSecret(given: string | null, expected: string): boolean {
+  if (!given || !expected) return false;
+  const left = createHash("sha256").update(given).digest();
+  const right = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(left, right);
+}
+
+/**
+ * Адрес, с которого пришёл запрос, — для счётчиков попыток.
+ *
+ * X-Forwarded-For присылает КЛИЕНТ, и прежде здесь бралось его первое значение.
+ * Подставив туда случайный адрес на каждый запрос, можно было обойти все
+ * пределы разом: на подбор кода связки, на регистрацию, на вход. Теперь
+ * заголовку верим, только если запрос пришёл от своего посредника (служба
+ * слушает 127.0.0.1, и посредник — это Caddy на той же машине), и берём
+ * ПОСЛЕДНЕЕ значение: его дописал сам посредник, а всё, что левее, мог
+ * написать кто угодно.
+ */
+export function clientAddress(peer: string | undefined, forwarded: string | undefined): string {
+  const local = peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1";
+  if (local && forwarded) {
+    const hops = forwarded
+      .split(",")
+      .map((hop) => hop.trim())
+      .filter(Boolean);
+    if (hops.length > 0) return hops[hops.length - 1];
+  }
+  return peer ?? "неизвестно";
+}
 
 export function whichRoute(url: string | undefined): string {
   let path: string;
@@ -208,10 +266,11 @@ export function createApp(options: AppOptions) {
   }
 
   function addressOf(req: IncomingMessage): string {
-    // За Caddy настоящий адрес приходит заголовком; без посредника берём сокет.
     const forwarded = req.headers["x-forwarded-for"];
-    if (typeof forwarded === "string" && forwarded) return forwarded.split(",")[0].trim();
-    return req.socket.remoteAddress ?? "неизвестно";
+    return clientAddress(
+      req.socket.remoteAddress,
+      typeof forwarded === "string" ? forwarded : undefined
+    );
   }
 
   function text(value: unknown): string {
@@ -238,7 +297,7 @@ export function createApp(options: AppOptions) {
       if (!guessers.allow(`связка:${addressOf(req)}`, Date.now())) {
         return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
       }
-      const code = decodeURIComponent(path.slice("/pairing/".length));
+      const code = decodePart(path.slice("/pairing/".length));
       const found = redeemPairing(db, code, now());
       // Адрес отдаётся только если хозяин его назвал. Выдумывать его из
       // заголовка Host нельзя: заголовок приходит снаружи, и служба
@@ -247,6 +306,12 @@ export function createApp(options: AppOptions) {
     }
 
     if (path === "/auth/params" && method === "GET") {
+      // Ручка без входа, и по ответу видно, заведено ли имя. Без счётчика по
+      // ней перебирают имена подряд — с открытой записью это уже не десять
+      // своих, а кто угодно.
+      if (!byAddress.allow(`имена:${addressOf(req)}`, Date.now())) {
+        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+      }
       const params = authParams(db, text(url.searchParams.get("login")));
       return send(res, 200, JSON.parse(params.vaultMeta));
     }
@@ -264,7 +329,7 @@ export function createApp(options: AppOptions) {
         {
           code: text(body.code),
           login: text(body.login),
-          vault: JSON.stringify(body.vault),
+          vault: body.vault === undefined ? "" : JSON.stringify(body.vault),
           secret: text(body.secret)
         },
         now(),
@@ -275,7 +340,11 @@ export function createApp(options: AppOptions) {
 
     if (path === "/auth/login" && method === "POST") {
       const body = await readJson(req);
-      const name = text(body.login);
+      // Счётчик — по имени В ОБЩЕМ ВИДЕ, тем же, каким его сравнивает вход.
+      // Прежде он брал имя как прислано, а вход сравнивал без учёта регистра:
+      // «петя», «Петя» и «ПЕТЯ» были тремя счётчиками на одного человека, и
+      // предел на подбор пароля обходился сменой регистра.
+      const name = normalizeLogin(text(body.login));
       const stamp = Date.now();
       if (
         !byLogin.allow(`имя:${name}`, stamp) ||
@@ -297,7 +366,7 @@ export function createApp(options: AppOptions) {
 
     const raw = bearer(req);
     const who = whoIs(db, raw, now());
-    const admin = ADMIN_TOKEN !== "" && raw === ADMIN_TOKEN;
+    const admin = sameSecret(raw, ADMIN_TOKEN);
 
     if (path.startsWith("/admin/")) {
       if (!admin) return send(res, 403, { error: "Нужен пропуск управления." });
@@ -340,17 +409,12 @@ export function createApp(options: AppOptions) {
 
     if (path.startsWith("/devices/") && method === "PATCH") {
       const body = await readJson(req);
-      renameDevice(
-        db,
-        who.personId,
-        decodeURIComponent(path.slice("/devices/".length)),
-        text(body.name)
-      );
+      renameDevice(db, who.personId, decodePart(path.slice("/devices/".length)), text(body.name));
       return send(res, 204);
     }
 
     if (path.startsWith("/devices/") && method === "DELETE") {
-      forgetDevice(db, who.personId, decodeURIComponent(path.slice("/devices/".length)));
+      forgetDevice(db, who.personId, decodePart(path.slice("/devices/".length)));
       return send(res, 204);
     }
 
@@ -366,8 +430,10 @@ export function createApp(options: AppOptions) {
     }
 
     if (path.startsWith("/vault/")) {
-      const slot = decodeURIComponent(path.slice("/vault/".length));
+      const slot = decodePart(path.slice("/vault/".length));
       if (!slot) return send(res, 400, { error: "Не указана ячейка." });
+      if (slot.length > MAX_SLOT_NAME)
+        return send(res, 400, { error: "Слишком длинное имя ячейки." });
 
       if (method === "GET") return send(res, 200, readSlot(db, who.personId, slot));
 

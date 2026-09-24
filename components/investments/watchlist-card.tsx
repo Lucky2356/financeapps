@@ -78,7 +78,7 @@ export function WatchlistCard({
       </div>
 
       {expanded ? (
-        <div className="border-t p-4">
+        <div className="border-t p-4 duration-200 animate-in fade-in-0 slide-in-from-top-1">
           <InlineStockChart seed={security} currency={currency} />
           <div className="mt-4">
             <Button variant="outline" size="sm" onClick={onRemove}>

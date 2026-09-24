@@ -28,7 +28,9 @@
 // запрещена или её нет вовсе.
 
 import { Copy, Laptop, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { SERVER_LINK_CHANGED } from "@/components/settings/server-panel";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -58,6 +60,14 @@ export function DevicesPanel() {
   const [code, setCode] = useState<string | null>(null);
   /** Адрес своей службы — он едет в картинке вместе с кодом. */
   const [base, setBase] = useState("");
+  // Код появляется внизу длинной карточки — на компьютере ниже края экрана.
+  // Прогон «как новичок» показал: человек жмёт «Связать» и не видит ничего,
+  // пока не догадается пролистать. Код сам въезжает в поле зрения.
+  const pairingBlock = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!code) return;
+    pairingBlock.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [code]);
 
   const refresh = useCallback(async () => {
     const link = await serverAccount.link();
@@ -82,8 +92,13 @@ export function DevicesPanel() {
       }
       if (alive) setDevices((was) => was ?? []);
     })();
+    // Подключили или отвязали это устройство — без перезагрузки: создание
+    // записи с этого устройства больше не перечитывает приложение.
+    const changed = () => void refresh().catch(() => undefined);
+    window.addEventListener(SERVER_LINK_CHANGED, changed);
     return () => {
       alive = false;
+      window.removeEventListener(SERVER_LINK_CHANGED, changed);
     };
   }, [refresh]);
 
@@ -218,7 +233,7 @@ export function DevicesPanel() {
 
         <p className="rounded-lg border bg-muted/40 p-3 text-sm">{t("dev.forgetNote")}</p>
 
-        <div className="space-y-3 border-t pt-4">
+        <div ref={pairingBlock} className="scroll-mt-24 space-y-3 border-t pt-4">
           {code ? (
             <>
               <p

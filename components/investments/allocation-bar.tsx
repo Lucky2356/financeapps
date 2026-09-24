@@ -43,7 +43,7 @@ export function AllocationBar({ data }: { data: ChartDatum[] }) {
         <InfoHint text="hint.allocation" />
       </p>
       <div
-        className="flex h-3 w-full overflow-hidden rounded-full bg-muted"
+        className="grow-x flex h-3 w-full overflow-hidden rounded-full bg-muted"
         role="img"
         aria-label={t("inv.hero.allocationTitle")}
       >

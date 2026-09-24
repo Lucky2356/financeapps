@@ -12,7 +12,14 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { createApp, whichMethod, whichRoute, type App } from "../src/main.ts";
+import {
+  clientAddress,
+  createApp,
+  sameSecret,
+  whichMethod,
+  whichRoute,
+  type App
+} from "../src/main.ts";
 
 // Только латиница: заголовки HTTP не переносят ничего сверх Latin-1, и
 // кириллический пропуск не отправить в принципе. То же и на живой машине —
@@ -924,5 +931,136 @@ describe("служба", () => {
       assert.equal(response.status, 401);
       await response.text();
     });
+  });
+});
+
+// Проверка кода на безопасность перед 1.46.0. Каждая проверка здесь краснела
+// на прежнем коде — это и есть доказательство, что дыра была и закрыта.
+describe("служба: найденное при проверке безопасности", () => {
+  beforeEach(async () => {
+    app = createApp({ dbPath: ":memory:", adminToken: ADMIN });
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    await app.stop();
+  });
+
+  /** Запрос с заголовком X-Forwarded-For — тем, что присылает клиент. */
+  async function forwarded(path: string, from: string, body: unknown) {
+    const response = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": from },
+      body: JSON.stringify(body)
+    });
+    await response.text();
+    return response.status;
+  }
+
+  it("адрес для счётчиков — последний в X-Forwarded-For, а не первый", () => {
+    // Первый пишет клиент, последний — свой посредник.
+    assert.equal(clientAddress("127.0.0.1", "6.6.6.6, 203.0.113.7"), "203.0.113.7");
+    // Не от своего посредника — заголовку не верим вовсе.
+    assert.equal(clientAddress("198.51.100.9", "6.6.6.6"), "198.51.100.9");
+  });
+
+  it("подставной X-Forwarded-For не обходит предел на регистрацию", async () => {
+    await restart({ openRegistration: true });
+    const statuses: number[] = [];
+    for (let at = 0; at < 11; at += 1) {
+      // Каждый раз «новый» адрес в начале — и один и тот же настоящий в конце.
+      statuses.push(
+        await forwarded("/auth/register", `10.0.0.${at}, 203.0.113.7`, {
+          code: "",
+          login: `chelovek${at}`,
+          vault: VAULT,
+          secret: "s"
+        })
+      );
+    }
+    assert.equal(statuses.at(-1), 429);
+  });
+
+  it("предел на вход не обходится сменой регистра в имени", async () => {
+    const statuses: number[] = [];
+    for (const name of ["petya", "Petya", "PETYA", "pEtya", "peTya", "petYa"]) {
+      statuses.push(
+        (await call("/auth/login", { method: "POST", body: { login: name, secret: "x" } })).status
+      );
+    }
+    assert.equal(statuses.at(-1), 429);
+  });
+
+  it("пропуск управления сравнивается за постоянное время — и верно", () => {
+    assert.equal(sameSecret(ADMIN, ADMIN), true);
+    assert.equal(sameSecret(`${ADMIN}x`, ADMIN), false);
+    assert.equal(sameSecret(null, ADMIN), false);
+    assert.equal(sameSecret(ADMIN, ""), false);
+  });
+
+  it("битая %-последовательность — 400, а не внутренняя ошибка", async () => {
+    const { token } = await signUp("petya");
+    const response = await call("/vault/%E0%A4%A", { token });
+    assert.equal(response.status, 400);
+  });
+
+  it("слишком длинное имя ячейки — 400", async () => {
+    const { token } = await signUp("petya");
+    const response = await call(`/vault/${"я".repeat(300)}`, {
+      method: "PUT",
+      token,
+      body: { baseVersion: 0, body: BOOK }
+    });
+    assert.equal(response.status, 400);
+  });
+
+  it("имя входа: не длиннее 64 знаков и без невидимых знаков", async () => {
+    for (const login of ["x".repeat(65), "petya\nadmin", "pe\u0000tya"]) {
+      const response = await call("/auth/register", {
+        method: "POST",
+        body: { code: await invite(), login, vault: VAULT, secret: "s" }
+      });
+      assert.equal(response.status, 400, JSON.stringify(login));
+    }
+  });
+
+  it("шкатулка — настоящая и небольшая", async () => {
+    for (const vault of [
+      undefined,
+      "строка",
+      { kdf: "x" },
+      { ...VAULT, junk: "я".repeat(70_000) }
+    ]) {
+      const response = await call("/auth/register", {
+        method: "POST",
+        body: { code: await invite(), login: "petya", vault, secret: "s" }
+      });
+      assert.equal(response.status, 400);
+    }
+  });
+
+  it("одно приглашение не заводит двоих, даже одновременно", async () => {
+    const code = await invite();
+    const [first, second] = await Promise.all([
+      call("/auth/register", {
+        method: "POST",
+        body: { code, login: "petya", vault: VAULT, secret: "s" }
+      }),
+      call("/auth/register", {
+        method: "POST",
+        body: { code, login: "vasya", vault: VAULT, secret: "s" }
+      })
+    ]);
+    assert.deepEqual([first.status, second.status].sort(), [201, 403]);
+  });
+
+  it("живых кодов связки у человека — не больше пяти", async () => {
+    const { token } = await signUp("petya");
+    const statuses: number[] = [];
+    for (let at = 0; at < 6; at += 1) {
+      statuses.push((await call("/pairing", { method: "POST", token })).status);
+    }
+    assert.deepEqual(statuses, [201, 201, 201, 201, 201, 429]);
   });
 });

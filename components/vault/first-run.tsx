@@ -23,7 +23,7 @@
 // об этом в тот день, когда забудет пароль, — то есть когда возвращать будет
 // уже нечего. Два слова обратно стоят десяти секунд сейчас и всех данных потом.
 
-import { Camera, KeyRound, Lock, ShieldCheck } from "lucide-react";
+import { Camera, ChevronLeft, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
@@ -65,7 +65,18 @@ type Source = "fresh" | "file" | "device";
  */
 type JoinWay = "code" | "login" | "own";
 
-export function FirstRun({ onDone }: { onDone: () => void }) {
+export function FirstRun({
+  onDone,
+  onLeave
+}: {
+  onDone: () => void;
+  /**
+   * Уйти к выбору человека. Есть, только когда на устройстве людей больше
+   * одного: только что добавленный человек попадал сюда сразу, минуя «Кто за
+   * компьютером», — и если его завели по ошибке, выйти было некуда.
+   */
+  onLeave?: () => void;
+}) {
   const { t } = useI18n();
   const [step, setStep] = useState<Step>("source");
   /** Что человек выбрал на первом экране: решает, куда идти после защиты. */
@@ -258,6 +269,28 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     protectionDone();
   }
 
+  /**
+   * Шаг назад. Без него первый запуск был коридором без обратного хода:
+   * выбрал «данные на другом устройстве» по ошибке — и застрял, как и
+   * описал владелец.
+   */
+  function back(to: Step) {
+    setError(null);
+    setFound(null);
+    setStep(to);
+  }
+
+  const backButton = (to: Step) => (
+    <button
+      type="button"
+      onClick={() => back(to)}
+      className="-ml-1 inline-flex min-h-9 items-center gap-1 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+    >
+      <ChevronLeft className="size-4" />
+      {t("vault.back")}
+    </button>
+  );
+
   return (
     <Shell>
       {step === "source" && (
@@ -291,6 +324,12 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
               }}
             />
           </div>
+
+          {onLeave ? (
+            <Button type="button" variant="ghost" className="w-full" onClick={onLeave}>
+              {t("vault.leave")}
+            </Button>
+          ) : null}
         </div>
       )}
 
@@ -324,6 +363,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
 
       {step === "join" && (
         <div className="space-y-4">
+          {backButton("source")}
           <Head icon={<ShieldCheck className="size-5" />} title={t("vault.join.title")} />
 
           {joinWay === "code" && !found ? (
@@ -453,6 +493,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
 
       {step === "choose" && (
         <div className="space-y-4">
+          {backButton("source")}
           <Head icon={<Lock className="size-5" />} title={t("vault.choose.title")} />
           <p className="text-sm text-muted-foreground">{t("vault.choose.lead")}</p>
 
@@ -482,6 +523,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
 
       {step === "password" && (
         <form onSubmit={createAccount} className="space-y-4">
+          {backButton("choose")}
           <Head icon={<Lock className="size-5" />} title={t("vault.setup.title")} />
           <p className="text-sm text-muted-foreground">{t("vault.setup.lead")}</p>
 

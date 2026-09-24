@@ -106,4 +106,36 @@ describe("забрать данные с другого устройства", (
     await user.click(screen.getByRole("button", { name: "У меня своя служба" }));
     expect(screen.getByLabelText("Адрес службы")).toBeInTheDocument();
   });
+
+  // Жалоба владельца: выбрал «забрать с сервера» — и «тупо застревал», назад
+  // было не выйти.
+  it("со связки можно вернуться назад, к выбору", async () => {
+    const user = await openJoin();
+    await user.click(screen.getByRole("button", { name: "Назад" }));
+    expect(await screen.findByText("Данные уже есть на другом устройстве")).toBeInTheDocument();
+  });
+});
+
+describe("выход к выбору человека", () => {
+  it("есть, когда на устройстве есть к кому вернуться", async () => {
+    let left = false;
+    const user = userEvent.setup();
+    render(
+      <I18nProvider>
+        <FirstRun onDone={() => undefined} onLeave={() => (left = true)} />
+      </I18nProvider>
+    );
+    await user.click(await screen.findByRole("button", { name: "Выбрать другого человека" }));
+    expect(left).toBe(true);
+  });
+
+  it("нет, когда человек на устройстве один", async () => {
+    render(
+      <I18nProvider>
+        <FirstRun onDone={() => undefined} />
+      </I18nProvider>
+    );
+    await screen.findByText("Данные уже есть на другом устройстве");
+    expect(screen.queryByRole("button", { name: "Выбрать другого человека" })).toBeNull();
+  });
 });

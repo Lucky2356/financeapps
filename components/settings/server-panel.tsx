@@ -11,21 +11,27 @@
 //   * «отвязать» — это про связь, а не про данные: они остаются на устройстве
 //     целиком, и человек должен видеть это прежде, чем нажмёт.
 //
-// ТРИ ПУТИ ВМЕСТО ОДНОГО, и порядок между ними не случаен.
+// ЧЕТЫРЕ ПУТИ, И НАЗВАНЫ ОНИ ТЕМ, ЧТО ЧЕЛОВЕК ДЕЛАЕТ, А НЕ ТЕМ, КУДА.
 //
-// 1. КОД СВЯЗКИ — первый и главный. Он для того, у кого данные уже есть на
-//    другом устройстве, а это и есть самый частый случай: человек ставит
-//    приложение на телефон, имея его на компьютере. Раньше ему приходилось
-//    переносить руками адрес службы и имя входа, и ошибался он ровно там, где
-//    ошибиться проще всего, — в адресе.
-// 2. СЛУЖБА ПРИЛОЖЕНИЯ — для того, у кого ещё ничего нет. Адрес зашит в
-//    сборку, вводить нечего. Цена названа на самом экране, а не в памятке: тот,
-//    кто держит службу, видит, что у вас есть запись, как она называется и
-//    когда вы вносили правки. Содержимого он не видит, и это не обещание, а
-//    свойство шифрования.
-// 3. СВОЯ СЛУЖБА — для того, кто поднял её сам. Была единственным путём,
-//    осталась полноценным — просто перестала быть первым вопросом человеку,
-//    который слова «служба» не знает.
+// Прежде здесь было «У меня есть код связки / Служба приложения / Своя
+// служба» — и прогон «как новичок» показал две беды. На первом устройстве
+// заранее был выбран код, которого у человека нет и взяться неоткуда. А
+// «Служба приложения» на открытой службе всегда ЗАВОДИЛА запись: человек, у
+// которого она уже есть, получал «имя занято» и войти по имени не мог вовсе.
+//
+// 1. СОЗДАТЬ УЧЁТНУЮ ЗАПИСЬ — первое устройство. Выбран по умолчанию: сюда, в
+//    настройки, приходят с устройства, где данные уже ведутся.
+// 2. КОД СВЯЗКИ — ещё одно устройство, код показывает первое.
+// 3. ПО ИМЕНИ И ПАРОЛЮ — запись есть, кода под рукой нет.
+// 4. СВОЯ СЛУЖБА — для того, кто поднял её сам.
+//
+// ПАРОЛЬ — ДО ОТПРАВКИ. Шкатулку заворачивает пароль, и второе устройство
+// откроет её только им. У того, кто начинал «без пароля», шкатулка завёрнута
+// случайным паролем, которого не знает никто: отправь мы её так, вход по
+// введённому паролю прошёл бы, а данные на втором устройстве не открылись бы
+// никогда. Поэтому такому человеку пароль задаётся здесь же, до отправки, — с
+// показом кода восстановления. А у кого пароль есть, введённый сначала
+// сверяется с данными на устройстве: неверный на службу не уезжает.
 //
 // ПРИГЛАШЕНИЕ СПРАШИВАЕТСЯ, ТОЛЬКО ЕСЛИ ОНО НУЖНО. Открыта ли запись, служба
 // говорит сама (`GET /health`), и спросить это можно до всякого входа. Не
@@ -34,6 +40,8 @@
 // пускают, стоит ему всего подключения.
 
 import { Camera, Cloud, CloudOff } from "lucide-react";
+
+import { RecoveryWords } from "@/components/vault/recovery-words";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -56,10 +64,16 @@ import {
   stopSync
 } from "@/lib/vault/runtime";
 import { deviceName } from "@/lib/vault/device-name";
+import { unlockWithPassword } from "@/lib/sync/vault-crypto";
 import { probeServer, redeemPairing, type ServerLink } from "@/lib/vault/server-account";
 
+/** Связь этого устройства со службой сменилась — для «Моих устройств». */
+export const SERVER_LINK_CHANGED = "server-link-changed";
+
 /** Каким путём человек подключается. */
-type Way = "code" | "app" | "own";
+type Way = "create" | "code" | "login" | "own";
+
+const MIN_PASSWORD = 8;
 
 export function ServerPanel() {
   const { t } = useI18n();
@@ -67,7 +81,12 @@ export function ServerPanel() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [way, setWay] = useState<Way>(hasDefaultServer() ? "code" : "own");
+  const [way, setWay] = useState<Way>(hasDefaultServer() ? "create" : "own");
+  /** Есть ли у данных пароль. null — ещё не спрашивали. */
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+  const [repeat, setRepeat] = useState("");
+  /** Код восстановления, если пароль задан только что. Показать до перезагрузки. */
+  const [recovery, setRecovery] = useState<string | null>(null);
   const [base, setBase] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -83,9 +102,14 @@ export function ServerPanel() {
     let alive = true;
     void (async () => {
       const stored = await serverAccount.link();
+      const protectedByPassword = await accountService.hasPassword();
       if (!alive) return;
       setLink(stored);
+      setHasPassword(protectedByPassword);
       setReady(true);
+      // Первое устройство заводит запись на службе приложения — и сразу надо
+      // знать, нужно ли ей приглашение.
+      if (hasDefaultServer()) void askOpenness(DEFAULT_SERVER);
     })();
     return () => {
       alive = false;
@@ -95,8 +119,15 @@ export function ServerPanel() {
   /** Адрес, по которому пойдём: от кода связки, из сборки или от человека. */
   function address(): string {
     if (way === "code") return found?.base ?? DEFAULT_SERVER;
-    if (way === "app") return DEFAULT_SERVER;
-    return base;
+    if (way === "own") return base;
+    return DEFAULT_SERVER;
+  }
+
+  /** Заводим ли запись (а не входим в существующую). */
+  function registering(): boolean {
+    if (way === "create") return true;
+    if (way === "own") return code.trim() !== "" || open === true;
+    return false;
   }
 
   /** Спросить службу, нужно ли ей приглашение. Молча: это не действие человека. */
@@ -167,8 +198,7 @@ export function ServerPanel() {
     event.preventDefault();
     setBusy(true);
     try {
-      const vault = await accountService.vault();
-      if (!vault) throw new Error(t("server.noVault"));
+      if (!(await accountService.vault())) throw new Error(t("server.noVault"));
 
       const at = address();
       // Сначала — не занята ли эта запись службы соседом по компьютеру.
@@ -176,18 +206,39 @@ export function ServerPanel() {
       await refuseSharedServerAccount(at, login);
 
       const device = deviceName();
-      if (way !== "code" && code.trim()) {
-        await serverAccount.register({ base: at, code, login, password, vault, device });
-      } else if (way !== "code" && open === true) {
-        // Открытая запись: приглашения нет и не нужно. Заводим здесь же.
-        await serverAccount.register({ base: at, code: "", login, password, vault, device });
+      let fresh: string | null = null;
+      if (registering()) {
+        if (hasPassword === false) {
+          // Пароля у данных нет — задаём его сейчас, до отправки шкатулки.
+          if (password.length < MIN_PASSWORD) throw new Error(t("vault.setup.tooShort"));
+          if (password !== repeat) throw new Error(t("vault.setup.mismatch"));
+          fresh = (await accountService.setPassword(password)).recoveryCode;
+          setHasPassword(true);
+        } else {
+          // Пароль есть — введённый обязан быть им. Иначе вход по нему пройдёт,
+          // а данные на втором устройстве не откроются.
+          const current = await accountService.vault();
+          try {
+            await unlockWithPassword(current!, password);
+          } catch {
+            throw new Error(t("server.passwordWrong"));
+          }
+        }
+        // Шкатулка перечитывается: после установки пароля она уже другая.
+        const vault = (await accountService.vault())!;
+        await serverAccount.register({
+          base: at,
+          code: code.trim(),
+          login,
+          password,
+          vault,
+          device
+        });
       } else {
-        // Вход БЕЗ приглашения — это второе устройство, и шкатулку, которую
-        // отдаёт служба, надо принять как свою. Ключ данных придумывался на
-        // первом устройстве; здесь первый запуск завёл свой, и данными с
-        // сервера он не открывается. Выбрось мы её здесь — устройство
-        // подключилось бы, показало «Всё на сервере» и не смогло бы прочитать
-        // ни одной записи.
+        // Вход в существующую запись — это ещё одно устройство, и шкатулку,
+        // которую отдаёт служба, надо принять как свою. Ключ данных придумывался
+        // на первом устройстве; здесь первый запуск завёл свой, и данными с
+        // сервера он не открывается.
         const joined = await serverAccount.signIn({ base: at, login, password, device });
         await accountService.adopt(joined.vault, password);
       }
@@ -195,24 +246,26 @@ export function ServerPanel() {
       await rememberMyServer(at, login);
       await resumeSync();
       setLink(await serverAccount.link());
+      window.dispatchEvent(new Event(SERVER_LINK_CHANGED));
       setPassword("");
+      setRepeat("");
       setCode("");
       setPairing("");
       toast.success(t("server.connected"));
 
-      // Дождаться первого обмена и перечитать приложение целиком.
-      //
-      // Данные приезжают в хранилище, а не на экран: слой синхронизации пишет
-      // их под всеми открытыми экранами, и сказать им об этом некому — на
-      // onApplied никто не подписан. Без перечитывания человек, подключивший
-      // второе устройство, видит ровно то же, что при неудаче: «подключено» и
-      // пустоту. Разбираться, что данные уже на диске и надо всего лишь
-      // перезапустить приложение, он не должен.
-      //
-      // Тем же способом сделаны «Очистить все данные» и «Загрузить пример»:
-      // данные под приложением сменились целиком, и перечитать их проще и
-      // надёжнее, чем обновлять полторы сотни экранов по одному.
       await flushSync();
+      if (registering()) {
+        // Запись заведена С ЭТОГО устройства: со службы ничего не приезжает, и
+        // перечитывать приложение незачем. Больше того — вредно: перезагрузка
+        // теряет ключ из памяти, и человек, только что задавший пароль, тут же
+        // упирался бы в «введите пароль». Если пароль задан сейчас — показать
+        // код восстановления: второй раз его не покажут.
+        if (fresh) setRecovery(fresh);
+        return;
+      }
+      // Вошли в существующую запись: данные приезжают в хранилище, а не на
+      // экран, и сказать об этом полутора сотням экранов некому. Перечитать
+      // приложение целиком проще и надёжнее.
       await new Promise((resolve) => setTimeout(resolve, 600));
       window.location.reload();
     } catch (cause) {
@@ -229,6 +282,7 @@ export function ServerPanel() {
       await serverAccount.signOut();
       await forgetMyServer();
       setLink(null);
+      window.dispatchEvent(new Event(SERVER_LINK_CHANGED));
       toast.success(t("server.disconnected"));
     } catch (cause) {
       toast.error((cause as Error).message);
@@ -240,19 +294,22 @@ export function ServerPanel() {
   function pick(next: Way) {
     setWay(next);
     setFound(null);
-    setOpen(null);
-    if (next === "app") void askOpenness(DEFAULT_SERVER);
+    if (next === "own") setOpen(null);
+    else if (hasDefaultServer()) void askOpenness(DEFAULT_SERVER);
   }
 
   const ways: Array<{ id: Way; title: string; note: string }> = [
     ...(hasDefaultServer()
       ? [
+          { id: "create" as Way, title: t("server.wayCreate"), note: t("server.wayCreateNote") },
           { id: "code" as Way, title: t("server.haveCode"), note: t("server.haveCodeNote") },
-          { id: "app" as Way, title: t("server.whereApp"), note: t("server.whereAppNote") }
+          { id: "login" as Way, title: t("server.wayLogin"), note: t("server.wayLoginNote") }
         ]
       : [{ id: "code" as Way, title: t("server.haveCode"), note: t("server.haveCodeNote") }]),
     { id: "own", title: t("server.whereOwn"), note: t("server.whereOwnNote") }
   ];
+  /** Задаём пароль здесь же: заводим запись, а у данных его нет. */
+  const settingPassword = hasPassword === false && registering();
 
   return (
     <Card id="set-server" className="scroll-mt-24">
@@ -266,7 +323,9 @@ export function ServerPanel() {
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{t("server.lead")}</p>
 
-        {!ready ? null : link ? (
+        {recovery ? (
+          <RecoveryWords code={recovery} onDone={() => setRecovery(null)} />
+        ) : !ready ? null : link ? (
           <div className="space-y-3">
             <dl className="grid gap-1 text-sm">
               <div className="flex justify-between gap-4">
@@ -386,21 +445,38 @@ export function ServerPanel() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="server-password">{t("server.password")}</Label>
+                  <Label htmlFor="server-password">
+                    {settingPassword ? t("server.newPassword") : t("server.password")}
+                  </Label>
                   <Input
                     id="server-password"
                     type="password"
-                    autoComplete="current-password"
+                    autoComplete={settingPassword ? "new-password" : "current-password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">{t("server.passwordHint")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {settingPassword ? t("server.newPasswordHint") : t("server.passwordHint")}
+                  </p>
                 </div>
+                {settingPassword ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="server-repeat">{t("vault.setup.repeat")}</Label>
+                    <Input
+                      id="server-repeat"
+                      type="password"
+                      autoComplete="new-password"
+                      value={repeat}
+                      onChange={(event) => setRepeat(event.target.value)}
+                      required
+                    />
+                  </div>
+                ) : null}
 
                 {/* Приглашение — только там, где оно может понадобиться: своей
                     записи по коду связки не заводят, её там уже завели. */}
-                {!found && open !== true ? (
+                {registering() && open !== true ? (
                   <div className="space-y-2">
                     <Label htmlFor="server-code">{t("server.code")}</Label>
                     <Input

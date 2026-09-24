@@ -16,12 +16,13 @@ test("«Данные» открывает вкладку настроек со �
 
   // The copy of the data comes first — it is the one thing here that matters
   // when something has gone wrong.
-  await expect(page.getByRole("button", { name: "Скачать backup" })).toBeVisible({
+  // Словами, а не «backup»: с 1.46.0 настройки говорят с человеком по-русски.
+  await expect(page.getByRole("button", { name: "Скачать копию" })).toBeVisible({
     timeout: 20_000
   });
-  await expect(page.getByRole("button", { name: "Восстановить backup" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Восстановить из копии" })).toBeVisible();
   // The CSV import is on the same tab, not a screen of its own.
-  await expect(page.getByText("Импорт CSV")).toBeVisible();
+  await expect(page.getByText("Импорт из банка (CSV)")).toBeVisible();
   // And the exports are one quiet row rather than a card of their own.
   await expect(page.getByRole("button", { name: "CSV", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "JSON", exact: true })).toBeVisible();

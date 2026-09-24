@@ -20,7 +20,7 @@ import { LOCAL_ONLY_KEYS } from "@/lib/storage/SyncingStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { ServerRefused } from "@/lib/sync/HttpSyncTransport";
 import { shellFetch } from "@/lib/sync/shell-fetch";
-import { authSecret, type Vault } from "@/lib/sync/vault-crypto";
+import { authSecret, unlockWithPassword, type Vault } from "@/lib/sync/vault-crypto";
 
 /** Где лежит запись о сервере. Это же имя стоит в LOCAL_ONLY_KEYS. */
 export const SERVER_KEY = "financeServer";
@@ -193,6 +193,17 @@ export class ServerAccount {
     vault: Vault;
     device: string;
   }): Promise<void> {
+    // Шкатулка обязана открываться этим паролем — иначе вход по нему пройдёт, а
+    // данные на втором устройстве не откроются никогда. Так и было у того, кто
+    // начинал «без пароля»: его шкатулка завёрнута случайным паролем, и
+    // отправлялась она на службу вместе с секретом от пароля совсем другого.
+    try {
+      await unlockWithPassword(input.vault, input.password);
+    } catch {
+      throw new Error(
+        "Пароль не подходит к данным на этом устройстве. Введите тот, которым они открываются."
+      );
+    }
     const secret = await authSecret(input.vault, input.password);
     const { status, data } = await ask(input.base, "/auth/register", {
       method: "POST",

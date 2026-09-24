@@ -23,4 +23,20 @@ describe("sync crypto (AES-GCM + PBKDF2)", () => {
   it("requires a passphrase to encrypt", async () => {
     await expect(encryptString("x", "")).rejects.toThrow();
   });
+
+  it("шифрует теми же 600 000 прогонов, что и основной замок", async () => {
+    const envelope = JSON.parse(await encryptString("x", "пароль")) as { iterations: number };
+    expect(envelope.iterations).toBe(600_000);
+  });
+
+  // Число прогонов берётся из самого файла, а файл лежит в чужом облаке.
+  // Подсунутый с миллиардом прогонов вешал бы приложение на расшифровке.
+  it("не принимает из файла безумное число прогонов", async () => {
+    const envelope = JSON.parse(await encryptString("x", "пароль")) as Record<string, unknown>;
+    for (const iterations of [1_000_000_000, 1, -5, 0.5, "600000"]) {
+      await expect(
+        decryptString(JSON.stringify({ ...envelope, iterations }), "пароль")
+      ).rejects.toThrow("Неизвестный формат");
+    }
+  });
 });

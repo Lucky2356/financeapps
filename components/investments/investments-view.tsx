@@ -42,6 +42,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -359,7 +360,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="grid gap-3">
+              <CardContent className="stagger grid gap-3">
                 {data.portfolio.map((position) => (
                   <HoldingCard
                     key={position.ticker}
@@ -450,7 +451,9 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               <p className="text-sm text-muted-foreground">{t("inv.suggestIntro")}</p>
               <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <div className="space-y-2">
-                  <Label htmlFor="invest-budget">{t("inv.budgetLabel")}</Label>
+                  <FieldLabel htmlFor="invest-budget" help={t("help.inv.budget")}>
+                    {t("inv.budgetLabel")}
+                  </FieldLabel>
                   <Input
                     id="invest-budget"
                     type="number"
@@ -462,7 +465,9 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="invest-risk">{t("inv.riskAllowed")}</Label>
+                  <FieldLabel htmlFor="invest-risk" help={t("help.inv.risk")}>
+                    {t("inv.riskAllowed")}
+                  </FieldLabel>
                   <Select
                     value={riskCode}
                     onValueChange={(value) => setRiskCode(value as typeof riskCode)}
@@ -764,7 +769,7 @@ function PositionDialog({
                 average from it so the stored figure can never drift from the
                 purchases it is supposed to summarize. */}
             <input type="hidden" name="lots" value={JSON.stringify(usableLots)} />
-            <Label>{t("inv.lots.title")}</Label>
+            <FieldLabel help={t("help.inv.lots")}>{t("inv.lots.title")}</FieldLabel>
             {lots.map((lot, index) => (
               <div key={index} className="flex flex-wrap items-end gap-2">
                 <div className="min-w-[8rem] grow basis-[calc(50%-0.25rem)] space-y-1">
@@ -854,7 +859,9 @@ function PositionDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="pos-avg-price">{t("inv.avgPrice")}</Label>
+              <FieldLabel htmlFor="pos-avg-price" help={t("help.inv.avgPrice")}>
+                {t("inv.avgPrice")}
+              </FieldLabel>
               <Input
                 id="pos-avg-price"
                 name="averageBuyPrice"
@@ -872,7 +879,9 @@ function PositionDialog({
             own table of liquid tickers. Anything it does not know — a bond, a
             fresh listing — is the owner's to file, and what they choose wins. */}
         <div className="space-y-2">
-          <Label htmlFor="pos-sector">{t("inv.col.sector")}</Label>
+          <FieldLabel htmlFor="pos-sector" help={t("help.inv.sector")}>
+            {t("inv.col.sector")}
+          </FieldLabel>
           <input type="hidden" name="sector" value={sector} />
           <Select value={sector} onValueChange={setSector}>
             <SelectTrigger id="pos-sector">

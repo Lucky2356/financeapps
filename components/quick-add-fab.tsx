@@ -38,6 +38,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
 import { LAST_ACCOUNT_KEY, readMine, writeMine } from "@/lib/storage/mine";
 
@@ -675,7 +676,9 @@ export function QuickAddFab({
 
               {type !== "TRANSFER" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="fab-tags">{t("tx.dialog.tags")}</Label>
+                  <FieldLabel htmlFor="fab-tags" help={t("help.tx.tags")}>
+                    {t("tx.dialog.tags")}
+                  </FieldLabel>
                   <Input
                     id="fab-tags"
                     name="tags"

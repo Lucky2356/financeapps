@@ -106,10 +106,13 @@ function summarizeBackupPayload(payload: unknown): BackupPreview {
 
 export function ImportExportPanel({
   data,
-  transactions
+  transactions,
+  afterBackup
 }: {
   data: ImportPageData;
   transactions: TransactionsPageData["transactions"];
+  /** Что встаёт сразу под резервной копией — копии по расписанию. */
+  afterBackup?: React.ReactNode;
 }) {
   const { t, locale } = useI18n();
   const { data: pageData, reload: reloadReferences } = useApiPageData(data, "/import");
@@ -517,6 +520,8 @@ export function ImportExportPanel({
         </CardContent>
       </Card>
 
+      {afterBackup}
+
       {/* ── Import Wizard ────────────────────────────────────── */}
       <Card>
         <CardHeader className="border-b bg-muted/20">
@@ -844,38 +849,6 @@ export function ImportExportPanel({
               </div>
             </form>
           )}
-        </CardContent>
-      </Card>
-
-      {/* ── Reference table ──────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("imp.refTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{t("imp.refAccounts")}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {pageData.accounts.map((a) => (
-                <span key={a.id} className="rounded-md border bg-muted/30 px-2 py-0.5 text-xs">
-                  {a.name}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{t("imp.refExpenseCats")}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {pageData.categories
-                .filter((c) => c.kind === "EXPENSE")
-                .slice(0, 12)
-                .map((c) => (
-                  <span key={c.id} className="rounded-md border bg-muted/30 px-2 py-0.5 text-xs">
-                    {c.label}
-                  </span>
-                ))}
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

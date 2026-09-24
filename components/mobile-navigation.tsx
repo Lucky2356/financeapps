@@ -76,7 +76,15 @@ export function MobileBottomNav() {
           active ? "text-primary" : "text-muted-foreground"
         )}
       >
-        <Icon className="size-[23px]" strokeWidth={1.6} />
+        {/* Выбранный пункт чуть приподнимается: видно, куда перешли, ещё до
+            того, как глаз дочитал подпись. */}
+        <Icon
+          className={cn(
+            "size-[23px] transition-transform duration-200 ease-out",
+            active && "-translate-y-0.5 scale-110"
+          )}
+          strokeWidth={active ? 1.9 : 1.6}
+        />
         <span className="max-w-full truncate">{t(item.labelKey)}</span>
       </Link>
     );

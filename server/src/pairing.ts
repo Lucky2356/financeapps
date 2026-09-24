@@ -73,8 +73,24 @@ function fresh(): string {
 export type IssuedCode = { code: string; expiresAt: string };
 
 /** Выдать код. Прежние коды человека при этом не гасятся: они истекут сами. */
+/**
+ * Сколько живых кодов может быть у одного человека сразу. Каждый — ещё одна
+ * дверь, которую перебирают; пять хватит на любую связку, а сотня нужна только
+ * тому, кто хочет расширить себе поле для перебора.
+ */
+const MAX_LIVE = 5;
+
 export function issuePairing(db: DatabaseSync, personId: string, now: string): IssuedCode {
   sweepPairings(db, now);
+
+  const live = db
+    .prepare(
+      "select count(*) as n from pairings where person_id = ? and used_at is null and expires_at > ?"
+    )
+    .get<{ n: number }>(personId, now);
+  if ((live?.n ?? 0) >= MAX_LIVE) {
+    throw new AuthError(429, "Слишком много кодов подряд. Подождите пять минут.");
+  }
 
   const code = fresh();
   const expires = new Date(Date.parse(now) + LIVES_MS).toISOString();

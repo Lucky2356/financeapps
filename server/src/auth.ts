@@ -135,40 +135,103 @@ export function authParams(db: DatabaseSync, login: string): { vaultMeta: string
  * ещё не пришёл. Пустой код — это «у меня приглашения нет»; непустой — это
  * «вот моё», и на него отвечают по существу.
  */
-export async function register(db: DatabaseSync, input: RegisterInput, now: string, open = false) {
-  const login = normalizeLogin(input.login);
-  if (login.length < 3) throw new AuthError(400, "Имя входа короче трёх знаков.");
+/** Имя входа длиннее этого — не имя. */
+const MAX_LOGIN = 64;
 
-  const code = input.code.trim();
-  let invitation: { code: string; used_by: string | null } | undefined;
+/**
+ * Шкатулка — это завёрнутый ключ и соли, килобайт-другой. Предел с запасом в
+ * десятки раз, но не 32 МиБ, как у тела запроса вообще: иначе каждая новая
+ * запись, а с открытой записью их заводит кто угодно, могла положить в базу
+ * тридцать мегабайт мусора.
+ */
+const MAX_VAULT_BYTES = 64 * 1024;
 
-  if (code === "") {
-    if (!open) throw new AuthError(403, "Приглашение не найдено.");
-  } else {
-    invitation = db
-      .prepare("select code, used_by from invitations where code = ?")
-      .get<{ code: string; used_by: string | null }>(code);
+/** Управляющие знаки — перевод строки, табуляция и прочее невидимое. */
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
+/**
+ * Шкатулка должна быть шкатулкой: без соли и числа прогонов второе устройство
+ * не сможет войти, а /auth/params упадёт на ней ошибкой 500.
+ */
+function checkVault(raw: string): void {
+  if (!raw || Buffer.byteLength(raw) > MAX_VAULT_BYTES) {
+    throw new AuthError(400, "Неверная шкатулка.");
+  }
+  let vault: { kdf?: unknown; iterations?: unknown; password?: { salt?: unknown } } | null;
+  try {
+    vault = JSON.parse(raw) as typeof vault;
+  } catch {
+    vault = null;
+  }
+  const good =
+    !!vault &&
+    typeof vault.kdf === "string" &&
+    typeof vault.iterations === "number" &&
+    Number.isFinite(vault.iterations) &&
+    vault.iterations > 0 &&
+    typeof vault.password?.salt === "string";
+  if (!good) throw new AuthError(400, "Неверная шкатулка.");
+}
+
+/** Свободно ли имя и годится ли приглашение — отказ, если нет. */
+function checkFree(db: DatabaseSync, login: string, code: string): void {
+  if (code !== "") {
+    const invitation = db
+      .prepare("select used_by from invitations where code = ?")
+      .get<{ used_by: string | null }>(code);
     if (!invitation) throw new AuthError(403, "Приглашение не найдено.");
     if (invitation.used_by) throw new AuthError(403, "Приглашение уже использовано.");
   }
-
   if (db.prepare("select id from people where login = ?").get(login)) {
     throw new AuthError(409, "Такое имя уже занято.");
   }
+}
+
+export async function register(db: DatabaseSync, input: RegisterInput, now: string, open = false) {
+  const login = normalizeLogin(input.login);
+  if (login.length < 3) throw new AuthError(400, "Имя входа короче трёх знаков.");
+  if (login.length > MAX_LOGIN) throw new AuthError(400, "Имя входа длиннее 64 знаков.");
+  if (CONTROL.test(login)) throw new AuthError(400, "В имени входа есть недопустимые знаки.");
+  if (!input.secret) throw new AuthError(400, "Нет секрета входа.");
+  checkVault(input.vault);
+
+  const code = input.code.trim();
+  if (code === "" && !open) throw new AuthError(403, "Приглашение не найдено.");
+
+  // Проверки — до scrypt, чтобы отказать быстро и не жечь на отказе
+  // процессор...
+  checkFree(db, login, code);
 
   const salt = randomBytes(16).toString("hex");
   const hash = (await derive(input.secret, salt)).toString("hex");
   const personId = id("person");
 
-  db.prepare(
-    "insert into people (id, login, secret_hash, secret_salt, vault, created_at) values (?,?,?,?,?,?)"
-  ).run(personId, login, hash, salt, input.vault, now);
-  if (invitation) {
-    db.prepare("update invitations set used_by = ?, used_at = ? where code = ?").run(
-      personId,
-      now,
-      invitation.code
-    );
+  // ...и ещё раз ПОСЛЕ него. scrypt идёт десятки миллисекунд, и в этот промежуток
+  // помещается второй запрос с тем же приглашением или тем же именем: прежде
+  // оба проходили проверку, и одно приглашение заводило двоих. Отсюда и до
+  // конца — ни одного await: база синхронная, и чужой запрос между этими
+  // строками не встанет.
+  checkFree(db, login, code);
+  // Человек и погашение приглашения — одной транзакцией: приглашение ссылается
+  // на человека, значит он заводится первым, а если погасить не вышло, его
+  // запись откатывается вместе со всем остальным.
+  db.exec("begin immediate");
+  try {
+    db.prepare(
+      "insert into people (id, login, secret_hash, secret_salt, vault, created_at) values (?,?,?,?,?,?)"
+    ).run(personId, login, hash, salt, input.vault, now);
+    if (code !== "") {
+      const burned = db
+        .prepare(
+          "update invitations set used_by = ?, used_at = ? where code = ? and used_by is null"
+        )
+        .run(personId, now, code);
+      if (burned.changes !== 1) throw new AuthError(403, "Приглашение уже использовано.");
+    }
+    db.exec("commit");
+  } catch (error) {
+    db.exec("rollback");
+    throw error;
   }
 
   return { personId };
