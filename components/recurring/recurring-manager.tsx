@@ -31,6 +31,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -139,7 +140,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
 
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile label={t("rec.summary.active")} value={String(pageData.summary.activeCount)} />
         <SummaryTile
           label={t("rec.summary.dueToday")}
@@ -277,7 +278,7 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
                 </Table>
               </div>
 
-              <div className="space-y-3 md:hidden">
+              <div className="stagger space-y-3 md:hidden">
                 {pageData.recurringTransactions.map((item) => (
                   <div key={item.id} className="rounded-lg border bg-card p-4 shadow-soft">
                     <div className="flex items-start justify-between gap-3">
@@ -691,7 +692,7 @@ function RecurringDialog({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>{t("rec.dialog.period")}</Label>
+            <FieldLabel help={t("help.rec.period")}>{t("rec.dialog.period")}</FieldLabel>
             <Select name="frequency" defaultValue={recurring?.frequency ?? "MONTHLY"}>
               <SelectTrigger>
                 <SelectValue />
@@ -706,7 +707,7 @@ function RecurringDialog({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>{t("rec.dialog.nextDate")}</Label>
+            <FieldLabel help={t("help.rec.nextDate")}>{t("rec.dialog.nextDate")}</FieldLabel>
             <Input
               name="nextDate"
               type="date"

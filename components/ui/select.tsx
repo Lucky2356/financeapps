@@ -26,7 +26,63 @@ export function normalizeSelectValues<T extends Record<string, unknown>>(obj: T)
   return out;
 }
 
-const Select = SelectPrimitive.Root;
+/**
+ * Сколько после открытия списка смена размера окна считается уходом
+ * клавиатуры, а не действием человека. Клавиатура Android уезжает за
+ * 250–400 мс и дёргает окно несколько раз по дороге; секунды хватает с
+ * запасом и не мешает ничему: закрыть список человек может всегда.
+ */
+const KEYBOARD_GRACE_MS = 1000;
+
+/**
+ * Выпадающий список, который не закрывается от ухода клавиатуры.
+ *
+ * Radix закрывает список на ЛЮБОЕ изменение размера окна. На телефоне это
+ * значило: ввёл сумму, коснулся «Категории» — список открылся, поле суммы
+ * потеряло фокус, клавиатура ушла, окно выросло, и список тут же закрылся.
+ * Человек видел, что нажатие «не сработало», и нажимал второй раз — тогда
+ * клавиатуры уже не было и окну нечего было менять.
+ *
+ * Отличить такое закрытие от настоящего можно только по соседству: слушатель
+ * размера окна здесь заводится при появлении списка на экране, раньше, чем
+ * свой заводит Radix (тот — при открытии), а слушатели одного события зовутся
+ * в порядке подписки. Значит к моменту его «закрыть» мы уже знаем, что окно
+ * только что поменяло размер. Стережёт e2e/quick-add-touch.spec.ts.
+ */
+function Select({
+  open: openProp,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  const [own, setOwn] = React.useState(defaultOpen ?? false);
+  const openedAt = React.useRef(-Infinity);
+  const resizedAt = React.useRef(-Infinity);
+
+  React.useEffect(() => {
+    const mark = () => {
+      resizedAt.current = performance.now();
+    };
+    window.addEventListener("resize", mark);
+    return () => window.removeEventListener("resize", mark);
+  }, []);
+
+  const change = React.useCallback(
+    (next: boolean) => {
+      const now = performance.now();
+      if (next) {
+        openedAt.current = now;
+      } else if (now - resizedAt.current < 50 && now - openedAt.current < KEYBOARD_GRACE_MS) {
+        return;
+      }
+      setOwn(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange]
+  );
+
+  return <SelectPrimitive.Root open={openProp ?? own} onOpenChange={change} {...props} />;
+}
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 

@@ -208,7 +208,7 @@ function CategoryColumn({
             </div>
 
             {/* Mobile cards */}
-            <div className="grid gap-3 md:hidden">
+            <div className="stagger grid gap-3 md:hidden">
               {categories.map((category) => (
                 <CategoryCard
                   key={category.id}

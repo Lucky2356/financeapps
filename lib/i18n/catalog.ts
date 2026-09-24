@@ -61,8 +61,6 @@ const ru: Messages = {
   "notFound.home": "На главную",
   // Settings: language
   "settings.language.title": "Язык интерфейса",
-  "settings.language.hint":
-    "Часть интерфейса уже переведена; остальные разделы переводятся постепенно.",
   "settings.language.ru": "Русский",
   "settings.language.en": "English",
   // Command palette
@@ -176,7 +174,6 @@ const ru: Messages = {
     "факт берётся из остатков: основные — наличные и карты, сбережения — накопительные и брокерские счета плюс деньги, отложенные в цели",
   "plan.result.hint":
     "факт — остатки на конец месяца, теми же двумя группами счетов; план и разница делению не поддаются и стоят одной цифрой на обе колонки",
-  "plan.unsplit": "одной цифрой на обе колонки: у плана нет счёта, только категория",
   "plan.note": "Комментарий",
   "plan.note.placeholder": "Например: гасим рассрочку полностью",
   "plan.saved": "Сохранено",
@@ -187,7 +184,7 @@ const ru: Messages = {
   "page.import.desc":
     "Загрузка CSV с предпросмотром, маппингом колонок и экспорт операций в CSV/JSON.",
   "page.settings.title": "Настройки",
-  "page.settings.desc": "Валюта, внешний вид, автоматизация, аккаунт и управление данными.",
+  "page.settings.desc": "Валюта, оформление, синхронизация, пароль и данные.",
   // Generic loading fallbacks
   "loading.generic": "Загрузка…",
   "loading.transactions": "Загружаем операции...",
@@ -529,11 +526,6 @@ const ru: Messages = {
   "tx.onePage": "На одной странице",
   "tx.future.notice":
     "Операций с датой в будущем: {count}, на {sum}. Они уже учтены в остатке и капитале.",
-  "backup.notice.never":
-    "Резервной копии нет. Все данные живут только на этом устройстве — переустановка системы или поломка диска сотрёт их без следа.",
-  "backup.notice.stale":
-    "Последняя резервная копия — {date}. Всё, что записано после неё, есть только на этом устройстве.",
-  "backup.notice.cta": "Сделать копию",
   "tx.future.show": "Показать их",
   "tx.future.confirm.title": "Дата ещё не наступила",
   "tx.future.confirm.desc":
@@ -756,6 +748,50 @@ const ru: Messages = {
     "Резерв на накопительных счетах в месяцах ваших средних расходов. Цель — 3–6 месяцев на случай форс-мажора.",
   "hint.riskProfile":
     "Ваша готовность к колебаниям стоимости инвестиций. Влияет на анализ рисков и подбор бумаг.",
+  "help.goal.target":
+    "Сколько вы хотите накопить. Можно поменять в любой момент — прогресс пересчитается.",
+  "help.goal.deadline":
+    "К какому дню собрать сумму. По этой дате приложение считает, сколько откладывать в месяц. Без даты — копите в своём темпе.",
+  "help.goal.linkedAccount":
+    "Счёт, с которого по умолчанию берутся деньги при пополнении цели и на который возвращаются, если их из цели снять. Пополнение — это перевод, а не трата: на лимиты и статистику расходов оно не влияет.",
+  "help.goal.planned":
+    "Сколько вы сами собираетесь откладывать в месяц — ориентир для себя. Показывается на карточке цели.",
+  "help.debt.balance": "Сколько осталось вернуть прямо сейчас. Уменьшается с каждым платежом.",
+  "help.debt.original":
+    "Сколько было взято изначально. Из неё видно, какая часть долга уже погашена.",
+  "help.debt.rate":
+    "Процентная ставка из договора, % годовых. По ней видно, во что обходится долг.",
+  "help.debt.payment":
+    "Ежемесячный платёж по графику. Если включён автоплатёж, в день платежа запишется ровно эта сумма.",
+  "help.debt.dueDay":
+    "Число месяца, когда вносится платёж. Учитывается в прогнозе денег; с автоплатежом в этот день платёж запишется сам.",
+  "help.debt.autoAccount":
+    "С какого счёта списывать ежемесячный платёж, когда наступит день платежа.",
+  "help.debt.autoCategory":
+    "Под какой категорией расходов записывать платёж — чтобы он попадал в статистику и лимиты.",
+  "help.rec.period": "Как часто повторяется платёж: каждую неделю, месяц, год.",
+  "help.rec.nextDate":
+    "Когда платёж случится в следующий раз. Когда он будет записан, дата сама сдвинется на период вперёд.",
+  "help.acc.type":
+    "От типа зависит, где считаются деньги счёта. Накопительный и брокерский — это «Сбережения»: финансовая подушка, сбережения в план/факте. Карта и наличные — повседневные деньги.",
+  "help.acc.balance":
+    "Сколько денег на счёте прямо сейчас. Дальше остаток меняется сам — от операций, которые вы записываете.",
+  "help.acc.rate":
+    "Процент по вкладу или накопительному счёту. Приложение покажет в прогнозе, сколько он принесёт. На счёт проценты сами не зачисляются — запишите их, когда банк выплатит.",
+  "help.acc.compounding":
+    "Как часто банк добавляет проценты к остатку. Чем чаще, тем быстрее растёт сумма: следующие проценты начисляются и на прошлые.",
+  "help.inv.budget":
+    "Сколько вы готовы вложить сейчас. Кнопка «Подобрать» предложит бумаги на эту сумму.",
+  "help.inv.risk":
+    "Насколько сильные колебания цены вы готовы терпеть. Выше риск — выше и возможный доход, и возможные потери.",
+  "help.inv.lots":
+    "Каждая покупка отдельно: дата, количество, цена. Из них приложение само считает общее количество и среднюю цену.",
+  "help.inv.avgPrice":
+    "Средняя цена одной бумаги с учётом всех докупок. С ней сравнивается цена сейчас — отсюда прибыль или убыток.",
+  "help.inv.sector":
+    "Отрасль компании. По отраслям видно, не сложены ли все деньги в одну корзину.",
+  "help.tx.tags":
+    "Метки поверх категорий: «отпуск», «ремонт», «подарки». Одной операции можно дать несколько и потом найти всё по метке в фильтре операций.",
   "hint.dayChange": "Сколько ваш портфель заработал или потерял за сегодняшнюю торговую сессию.",
   "hint.pnl":
     "Разница между текущей стоимостью бумаг и суммой, которую вы за них заплатили, — «бумажная» прибыль или убыток, пока бумаги не проданы.",
@@ -883,11 +919,11 @@ const ru: Messages = {
   "an.noData": "Нет данных",
   // Import / export
   "imp.step.upload": "Загрузка",
-  "imp.step.mapping": "Маппинг",
+  "imp.step.mapping": "Столбцы",
   "imp.step.import": "Импорт",
-  "imp.csvTitle": "Импорт CSV",
+  "imp.csvTitle": "Импорт из банка (CSV)",
   "imp.intro":
-    "Загрузите файл CSV с вашими транзакциями. Поддерживаются выгрузки большинства банков.",
+    "Выгрузите операции из интернет-банка в файл CSV и загрузите его сюда. Подходит выгрузка большинства банков.",
   "imp.uploadCsv": "Загрузить CSV",
   "imp.uploadHint": "Нажмите, чтобы выбрать файл",
   "imp.downloadTemplate": "Скачать шаблон",
@@ -919,10 +955,10 @@ const ru: Messages = {
   "imp.backupTitle": "Резервная копия",
   "imp.backupDue": "Пора обновить резервную копию",
   "imp.backupFresh": "Резервная копия свежая",
-  "imp.lastBackup": "Последний backup: {label}",
-  "imp.neverBackup": "Пока не создавалась",
-  "imp.downloadBackup": "Скачать backup",
-  "imp.restoreBackup": "Восстановить backup",
+  "imp.lastBackup": "Последняя копия: {label}",
+  "imp.neverBackup": "ещё не делалась",
+  "imp.downloadBackup": "Скачать копию",
+  "imp.restoreBackup": "Восстановить из копии",
   "imp.restoreTitle": "Восстановить резервную копию?",
   "imp.restoreDesc": "Текущие данные будут заменены данными из выбранного backup-файла.",
   "imp.restoreWarn": "Сначала скачайте резервную копию текущих данных.",
@@ -943,15 +979,12 @@ const ru: Messages = {
   "imp.restoring": "Восстановление...",
   "imp.restoreConfirm": "Восстановить выбранный backup",
   "imp.backupIncludes":
-    "Включает настройки, счета, категории, операции, бюджеты, цели, портфель и watchlist.",
+    "В копии всё: счета, категории, операции, лимиты, цели, портфель, настройки.",
   "imp.preUpgradeTitle": "Данные до последнего обновления",
   "imp.preUpgradeLead":
     "Обновление перевело данные на новый формат, и прежняя версия приложения новый формат не откроет. Эта копия — данные такими, какими они были до перевода: выгрузите их файлом, и прежняя версия примет его обычным восстановлением.",
   "imp.preUpgradeSave": "Выгрузить файлом",
   "imp.preUpgradeFrom": "формат",
-  "imp.refTitle": "Доступные счета и категории",
-  "imp.refAccounts": "Счета",
-  "imp.refExpenseCats": "Категории расходов",
   "imp.template.header": "Дата,Сумма,Описание,Категория,Счет",
   "imp.template.row1": "{date},-1200,Кофе,Рестораны,Дебетовая карта",
   "imp.template.row2": "{date},150000,Зарплата,Зарплата,Дебетовая карта",
@@ -1346,6 +1379,7 @@ const ru: Messages = {
   "inv.col.comment": "Комментарий",
   "inv.col.ticker": "Тикер",
   "inv.col.qty": "Кол-во",
+  "inv.card.average": "{qty} шт. · средняя цена покупки {avg}",
   "inv.col.avg": "Средняя",
   "inv.col.current": "Текущая",
   "inv.col.value": "Стоимость",
@@ -1530,41 +1564,83 @@ const ru: Messages = {
   "legal.privacy": "Конфиденциальность",
   "legal.privacyPolicy": "Политике конфиденциальности",
   // Settings: status & search
-  "set.autosaveHint": "Изменения применяются и сохраняются автоматически.",
   "set.saving": "Сохранение…",
   "set.saved": "Сохранено",
   "set.search": "Поиск по настройкам…",
   "set.sections": "Разделы настроек",
   "set.nothingFound": "Ничего не найдено по запросу «{query}».",
   "set.saveError": "Не удалось сохранить настройки",
+  "set.back": "Все настройки",
+  "set.nav.general": "Основные",
+  "set.nav.general.summary": "Валюта, язык, тема",
+  "set.nav.general.lead": "Как приложение выглядит и в какой валюте показывает суммы.",
+  "set.nav.finance": "Финансы",
+  "set.nav.finance.summary": "Платежи, подушка, риск",
+  "set.nav.finance.lead": "Что приложение делает за вас само и к каким целям ведёт.",
+  "set.nav.ai": "ИИ-помощник",
+  "set.nav.ai.summary": "Операции обычной фразой",
+  "set.nav.ai.lead":
+    "Запись операций фразой вроде «кофе 250 с карты» — сумму, категорию и счёт помощник заполнит сам.",
+  "set.nav.sync": "Синхронизация",
+  "set.nav.sync.summary": "Телефон и компьютер вместе",
+  "set.nav.sync.lead": "Одни и те же данные на телефоне и компьютере.",
+  "set.nav.security": "Пароль и доступ",
+  "set.nav.security.summary": "Пароль, люди на устройстве",
+  "set.nav.security.lead":
+    "Кто и как открывает ваши данные на этом устройстве. Логины и пароли от банков приложение не спрашивает и не хранит.",
+  "set.nav.data": "Данные",
+  "set.nav.data.summary": "Копия, импорт, очистка",
+  "set.nav.data.lead":
+    "Резервная копия, перенос из банка или другой программы, выгрузка в таблицу.",
+  "set.nav.about": "О приложении",
+  "set.nav.about.summary": "Версия и обновления",
+  "set.nav.about.lead": "Версия, обновления и знакомство с приложением.",
+  "set.sync.other": "Другой способ: через облачную папку",
+  "set.sync.otherHint": "Без службы — через Dropbox, Google Диск или OneDrive, вручную.",
+  "set.group.display": "Отображение",
+  "set.group.look": "Оформление",
+  "set.group.recurring": "Регулярные платежи",
+  "set.group.goals": "Цели и риск",
+  "set.group.sample": "Пример",
+  "set.group.danger": "Опасно",
+  "set.help.currency":
+    "Каким знаком подписаны суммы по всему приложению. Сами числа не пересчитываются: если вы вели учёт в рублях и выберете доллары, 1 000 ₽ станет $1 000. Меняйте, только если ведёте учёт в другой валюте.",
+  "set.help.language":
+    "Язык кнопок и подписей. Ваши собственные записи — названия счетов, категорий, описания операций — не переводятся.",
+  "set.help.theme":
+    "«Системная» повторяет устройство: если телефон или компьютер вечером переходит на тёмное оформление, приложение перейдёт вместе с ним.",
+  "set.help.density":
+    "«Компактная» уменьшает отступы и шрифт, чтобы на экран помещалось больше строк. Удобна на большом мониторе, на телефоне обычно мелковата.",
+  "set.help.autoMaterialize":
+    "Регулярный платёж — то, что повторяется: зарплата, аренда, подписки. Если включено, при каждом запуске приложение само записывает платежи, срок которых уже наступил. Выключено — записываете их сами: «Планирование» → «Плановые».",
+  "set.help.reminders":
+    "Когда вы открываете приложение, оно присылает уведомление устройства о срочном: платёж сегодня, превышенный лимит, нехватка денег впереди. Об одном и том же — не чаще раза в день. Пока приложение закрыто, напоминаний нет. В первый раз устройство спросит разрешение на уведомления.",
+  "set.help.ai":
+    "На экране операций появится строка, куда можно написать обычную фразу: «кофе 250 с карты», «зарплата 80 000». Помощник разберёт её и заполнит форму — вы проверяете и сохраняете. Работает через внешний сервис ИИ по вашему ключу.",
+  "set.help.aiProvider":
+    "Компания, чья нейросеть разбирает ваш текст. С простыми фразами все справляются одинаково — выбирайте ту, где у вас уже есть ключ.",
+  "set.help.aiKey":
+    "Ключ — это пропуск к вашему счёту в сервисе ИИ; платите за запросы вы сервису напрямую, приложение ничего не берёт. Где его взять, написано под полем. Приложение отправляет ключ только выбранному сервису.",
+  "set.help.aiModel":
+    "«По умолчанию» подходит почти всегда. Более мощные модели точнее разбирают сложные фразы, но отвечают дольше и стоят дороже.",
+  "set.help.aiEffort":
+    "Сколько нейросеть «думает» перед ответом. Для записи операций хватает «Сбалансированно»; «Глубоко» — дольше и дороже.",
+  "set.help.sample":
+    "Готовые счета, операции, лимиты и цели — чтобы посмотреть приложение в деле, прежде чем вносить своё. Ваши текущие данные будут заменены примером, поэтому сначала сохраните копию.",
+  "set.data.loadSampleShort": "Загрузить пример",
+  "set.data.clearShort": "Очистить",
+  "set.about.versionLabel": "Версия",
+  "set.about.tour": "Знакомство с приложением",
+  "set.about.tourHint": "Короткий показ главных экранов — тот же, что при первом запуске.",
   // Settings: sections
-  "set.section.general": "Основные",
-  "set.section.automation": "Автоматизация",
-  "set.section.appearance": "Внешний вид",
-  "set.section.ai": "ИИ-ассистент",
-  "set.section.risk": "Риск и подушка",
-  "set.section.account": "Аккаунт",
-  "set.section.data": "Данные",
-  "set.section.about": "О приложении",
   // Settings: general
-  "set.general.title": "Основные настройки",
   "set.currency": "Валюта",
-  "set.currency.hint":
-    "Валюта отображения для всего приложения. Суммы не пересчитываются — меняется только обозначение валюты.",
-  "set.demo.title": "Режим демо-данных",
-  "set.demo.desc": "Показывает встроенный пример, когда у вас ещё нет своих данных.",
-  "set.defaultType": "Тип операции по умолчанию",
-  "set.type.expense": "Расход",
-  "set.type.income": "Доход",
-  "set.defaultType.hint": "Выбран при открытии формы быстрого добавления.",
   // Settings: automation
-  "set.automation.title": "Автоматизация",
   "set.autoMaterialize.title": "Авто-проведение регулярных",
   "set.autoMaterialize.desc": "При запуске автоматически создавать просроченные плановые платежи.",
   "set.reminders.title": "Напоминания о платежах",
-  "set.reminders.desc": "Системные уведомления о платежах, которые нужно провести сегодня.",
+  "set.reminders.desc": "Уведомления устройства о срочном: платежах, лимитах, нехватке денег.",
   // Settings: appearance
-  "set.appearance.title": "Внешний вид",
   "set.theme": "Тема оформления",
   "set.theme.light": "Светлая",
   "set.theme.system": "Системная",
@@ -1573,18 +1649,13 @@ const ru: Messages = {
   "set.density.comfortable": "Комфортная",
   "set.density.compact": "Компактная",
   // Settings: AI
-  "set.ai.title": "ИИ-ассистент",
   "set.ai.enable.title": "Включить ИИ-ассистент",
   "set.ai.enable.desc":
     "Ввод операций текстом на странице «Операции» через нейросеть на ваш выбор.",
   "set.ai.provider": "Провайдер ИИ",
-  "set.ai.provider.hint":
-    "Выберите нейросеть: Claude (Anthropic), ChatGPT (OpenAI) или DeepSeek. Нужен API-ключ выбранного провайдера.",
   "set.ai.key.storage":
     "Ключ хранится на этом устройстве без шифрования и не попадает в резервную копию — на новом компьютере его нужно ввести заново.",
   "set.ai.key": "API-ключ",
-  "set.ai.key.hint":
-    "Ключ хранится только на вашем устройстве и используется для запросов к выбранному провайдеру.",
   "set.ai.key.hint.anthropic":
     "Ключ хранится только на вашем устройстве. Получить: console.anthropic.com → API Keys.",
   "set.ai.key.hint.openai":
@@ -1593,11 +1664,7 @@ const ru: Messages = {
     "Ключ хранится только на вашем устройстве. Получить: platform.deepseek.com → API keys.",
   "set.ai.model": "Модель",
   "set.ai.model.default": "По умолчанию",
-  "set.ai.model.hint":
-    "Более мощные модели точнее, но дороже и медленнее. Для коротких фраз хватает быстрой модели.",
   "set.ai.effort": "Глубина обдумывания",
-  "set.ai.effort.hint":
-    "Глубже — точнее, но медленнее и дороже. Для ввода операций обычно хватает среднего уровня.",
   "set.ai.effort.low": "Быстро",
   "set.ai.effort.medium": "Сбалансированно",
   "set.ai.effort.high": "Глубоко",
@@ -1608,9 +1675,9 @@ const ru: Messages = {
   "fx.refreshed": "Курсы валют обновлены.",
   "fx.refreshFail": "Не удалось загрузить курсы ЦБ.",
   // Cloud-folder sync (desktop)
-  "sync.title": "Синхронизация через облачную папку",
+  "sync.title": "Через облачную папку",
   "sync.desc":
-    "Приложение шифрует снимок данных и кладёт его в выбранную папку. Если эту папку синхронизирует ваш клиент Dropbox / Google Drive / OneDrive — данные попадут на другие устройства. Своего сервера не нужно.",
+    "Способ без службы: приложение кладёт зашифрованную копию данных в папку, которую ваш Dropbox, Google Диск или OneDrive переносит на другие устройства. Переносить приходится вручную — кнопками ниже.",
   "sync.folder": "Папка синхронизации",
   "sync.folderPlaceholder": "Папка не выбрана",
   "sync.choose": "Выбрать папку",
@@ -1628,16 +1695,16 @@ const ru: Messages = {
   "sync.pull.confirmDesc":
     "Данные из облачной папки заменят текущие данные на этом устройстве. Действие нельзя отменить.",
   "sync.warning":
-    "Последняя выгрузка перезаписывает облако, загрузка перезаписывает это устройство (last-write-wins). Автослияния нет — синхронизируйте по очереди.",
+    "Выгрузка заменяет копию в папке, загрузка — данные на этом устройстве. Сами они не объединяются: работайте по очереди — выгрузили здесь, загрузили там.",
   "sync.err.folder": "Не удалось открыть выбор папки.",
   "sync.err.noFolder": "Сначала выберите папку.",
   "sync.err.noPass": "Введите пароль шифрования.",
   "sync.err.push": "Не удалось выгрузить данные.",
   "sync.err.pull": "Не удалось загрузить данные.",
   // Auto-backup (desktop)
-  "backup.title": "Автобэкапы (локально)",
+  "backup.title": "Копии по расписанию",
   "backup.desc":
-    "По расписанию сохраняет снимок данных в выбранную папку на этом компьютере и удаляет самые старые копии. Это локальная резервная копия — без пароля и без облака (для облака используйте синхронизацию выше).",
+    "Приложение само сохраняет копию данных в выбранную папку на этом устройстве — раз в день или в неделю — и удаляет самые старые. Работает при запуске приложения.",
   "backup.frequency": "Частота",
   "backup.freq.off": "Выключено",
   "backup.freq.daily": "Ежедневно",
@@ -1677,10 +1744,7 @@ const ru: Messages = {
   "aiq.err.failed": "Не удалось получить ответ ассистента.",
   "set.ai.warning":
     "Текст, который вы вводите, отправляется во внешний сервис выбранного провайдера. Не указывайте конфиденциальные данные. Функцию можно отключить в любой момент.",
-  "set.ai.warning.web":
-    " На сайте используется серверный ключ — если ИИ не настроен на сервере, запрос вернёт ошибку.",
   // Settings: risk
-  "set.risk.title": "Риск и финансовая подушка",
   "set.risk.profile": "Риск-профиль",
   "set.risk.profile.hint":
     "Используется для анализа концентрации и риска в инвестиционном портфеле.",
@@ -1689,18 +1753,18 @@ const ru: Messages = {
   "set.risk.fund.months12": "{n} месяцев расходов",
   "set.risk.fund.hint": "Рекомендуется минимум 3 месяца. 6–12 — для большей уверенности.",
   // Settings: data
-  "set.data.title": "Управление данными",
   "set.data.sampleHint":
     "Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы посмотреть, как всё работает. Текущие данные при этом будут заменены.",
   "set.data.loadSample": "Загрузить демо-данные",
   "set.data.loading": "Загрузка…",
   "set.data.clearHint":
-    "Очистка удалит все счета, операции, цели, бюджеты и настройки. Это действие необратимо.",
+    "Удалит все счета, операции, цели, бюджеты и настройки — здесь и на других ваших устройствах, связанных с этим. Вернуть можно только из резервной копии.",
   "set.data.clear": "Очистить все данные",
   "set.data.clearConfirm": "Очистить все данные?",
   "set.data.clearConfirmDesc":
-    "Все ваши операции, счета, цели, бюджеты, плановые платежи, портфель и настройки будут безвозвратно удалены. Резервную копию можно сохранить на странице Импорт.",
-  "set.data.clearWarning": "Это действие нельзя отменить. Сначала сделайте резервную копию.",
+    "Операции, счета, цели, бюджеты, плановые платежи, портфель и настройки будут удалены. Если устройства связаны через службу, удаление доедет и до них.",
+  "set.data.clearWarning":
+    "Отменить нельзя. Сначала сохраните резервную копию — она в начале этого раздела.",
   "set.data.clearing": "Очистка...",
   "set.data.clearYes": "Да, удалить всё",
   "set.toast.sampleLoaded": "Демо-данные загружены.",
@@ -1718,11 +1782,6 @@ const ru: Messages = {
   "set.about.checkUpdates": "Проверить обновления",
   "set.about.checking": "Проверка…",
   "set.about.version": "Финансовый помощник · версия {version}",
-  "set.about.security": "Безопасность и интеграции",
-  "set.about.securityText1":
-    "Приложение не хранит банковские логины и пароли и не выполняет screen scraping банков.",
-  "set.about.securityText2":
-    "Будущие банковские интеграции должны использовать официальные API, явное согласие пользователя и encrypted/secure storage для токенов.",
   "set.toast.onboardingOpened": "Обучение открыто.",
   "set.toast.onboardingError": "Не удалось открыть обучение",
   "set.update.current": "У вас актуальная версия.",
@@ -1762,8 +1821,15 @@ const ru: Messages = {
   "vault.restore.broken": "Файл не похож на резервную копию этого приложения.",
   "vault.restore.skip": "Пропустить и начать с нуля",
   "vault.join.title": "Забрать данные с другого устройства",
+  "vault.back": "Назад",
+  "vault.leave": "Выбрать другого человека",
   "vault.join.lead":
     "Понадобится адрес службы, имя входа и пароль — те же, что на устройстве, где данные уже есть.",
+  "vault.join.codeLead":
+    "На устройстве, где данные уже есть, откройте Настройки → Синхронизация → «Мои устройства» → «Связать ещё одно устройство». Там появятся восемь знаков и картинка QR.",
+  "vault.join.loginLead": "Имя входа и пароль — те же, что на устройстве, где данные уже есть.",
+  "vault.join.byCode": "У меня есть код связки",
+  "vault.join.byLogin": "Войти по имени и паролю",
   "vault.join.submit": "Забрать данные",
   "vault.join.working": "Забираем…",
   "vault.choose.title": "Защитить данные паролем?",
@@ -1817,7 +1883,7 @@ const ru: Messages = {
   "vault.wipe.body":
     "Данные заперты ключом, которого больше нет ни у кого. Открыть их нечем — ни нам, ни вам. Можно только стереть всё и начать с чистого листа: счета, операции, планы пропадут навсегда. Если у вас есть файл резервной копии, сначала закройте это окно — копию можно будет развернуть после того, как вы зададите новый пароль.",
   "vault.wipe.confirm": "Стереть всё безвозвратно",
-  "vault.settings.title": "Пароль и доступ",
+  "vault.settings.title": "Пароль",
   "vault.settings.desc": "Пароль, которым открываются ваши данные на этом устройстве.",
   "vault.settings.noPassword":
     "Пароль не задан: данные на этом устройстве откроет любой, кто до него добрался. Задайте пароль — и его начнут спрашивать при запуске.",
@@ -1848,53 +1914,6 @@ const ru: Messages = {
   "set.update.downloading": "Загрузка обновления…",
   "set.update.unavailable": "Автообновление недоступно — открываю страницу релизов.",
   // Settings: account & security (web)
-  "set.account.title": "Аккаунт и безопасность",
-  "set.profile.title": "Профиль",
-  "set.profile.name": "Отображаемое имя",
-  "set.profile.name.hint": "Как к вам обращаться в приложении.",
-  "set.profile.save": "Сохранить имя",
-  "set.profile.saved": "Профиль обновлён.",
-  "set.profile.saveFail": "Не удалось сохранить профиль.",
-  "set.profile.nameRequired": "Введите имя.",
-  "set.profile.email": "Email",
-  "set.profile.email.hint": "Используется для входа. Смена email пока недоступна.",
-  "set.profile.joined": "Дата регистрации",
-  "set.2fa.title": "Двухфакторная аутентификация",
-  "set.2fa.desc":
-    "Дополнительный код из приложения-аутентификатора (Google Authenticator, Authy и т.п.) при входе.",
-  "set.2fa.on": "2FA включена.",
-  "set.2fa.enable": "Включить 2FA",
-  "set.2fa.disable": "Отключить 2FA",
-  "set.2fa.disablePassword": "Подтвердите паролем для отключения",
-  "set.2fa.scan":
-    "Отсканируйте QR-код в приложении-аутентификаторе и введите 6-значный код для подтверждения.",
-  "set.2fa.manualKey": "Или введите ключ вручную",
-  "set.2fa.code": "Код из приложения",
-  "set.2fa.confirm": "Подтвердить и включить",
-  "set.2fa.error": "Не удалось обновить 2FA",
-  "set.2fa.toast.enabled": "Двухфакторная аутентификация включена.",
-  "set.2fa.toast.disabled": "Двухфакторная аутентификация отключена.",
-  "set.account.changePassword": "Смена пароля",
-  "set.account.current": "Текущий пароль",
-  "set.account.new": "Новый пароль (мин. 8)",
-  "set.account.confirm": "Подтвердите пароль",
-  "set.account.changeBtn": "Изменить пароль",
-  "set.account.mismatch": "Новый пароль и подтверждение не совпадают",
-  "set.account.changeFail": "Не удалось изменить пароль",
-  "set.account.changed": "Пароль изменён",
-  "set.account.deleteSection": "Удаление аккаунта",
-  "set.account.deleteDesc":
-    "Аккаунт и все ваши данные (счета, операции, бюджеты, цели и т.д.) будут удалены безвозвратно. Перед удалением рекомендуем скачать резервную копию на странице «Импорт».",
-  "set.account.deleteBtn": "Удалить аккаунт",
-  "set.account.deleteConfirmTitle": "Удалить аккаунт навсегда?",
-  "set.account.deleteConfirmDesc":
-    "Это действие необратимо. Введите пароль, чтобы подтвердить удаление аккаунта и всех данных.",
-  "set.account.password": "Пароль",
-  "set.account.deleteFail": "Не удалось удалить аккаунт",
-  "set.account.deleted": "Аккаунт удалён",
-  "set.account.needPassword": "Введите пароль для подтверждения",
-  "set.account.deleting": "Удаление…",
-  "set.account.deleteForever": "Удалить навсегда",
   // Profiles (desktop)
   "prof.title": "Профили",
   "prof.add": "Добавить профиль",
@@ -1933,15 +1952,15 @@ const ru: Messages = {
   "lmp.cleared": "Локальное хранилище очищено",
   "lmp.clearFail": "Не удалось очистить локальные данные",
   // --- Свой сервер ---
-  "server.title": "Свой сервер",
+  "server.title": "Подключение",
   "server.lead":
-    "Данные уезжают на сервер зашифрованными: открыть их он не может — ключа у него нет и взяться ему неоткуда. Пароль на сервер тоже не уходит, уходит выведенный из него секрет входа.",
+    "Данные уезжают зашифрованными: служба их хранит, но прочитать не может — ключ есть только у вас. Пароль тоже никуда не отправляется.",
   "server.address": "Адрес службы",
   "server.login": "Имя входа",
   "server.password": "Пароль от ваших данных",
-  "server.passwordHint": "Тот самый, которым открываются данные на этом устройстве.",
+  "server.passwordHint": "Тот, которым открываются данные на этом устройстве.",
   "server.code": "Приглашение",
-  "server.codeHint": "Только для первой записи. Входите на второе устройство — оставьте пустым.",
+  "server.codeHint": "Выдаёт тот, кто держит службу. Если запись открыта, оставьте пустым.",
   "server.connect": "Подключить устройство",
   "server.connecting": "Подключаем…",
   "server.connected": "Устройство подключено к серверу.",
@@ -1952,14 +1971,22 @@ const ru: Messages = {
   "server.noVault": "Сначала задайте пароль на этом устройстве.",
   // --- Как подключаются: служба приложения, своя служба, код связки ---
   "server.where": "Куда подключаемся",
-  "server.whereApp": "Служба приложения",
-  "server.whereAppNote":
-    "Готовый сервер: ничего настраивать не надо. Данные лежат на нём зашифрованными, и ключа от них у него нет. Но то, что у вас есть учётная запись, как она называется и когда вы вносили записи, — видно тому, кто её держит.",
   "server.whereOwn": "У меня своя служба",
-  "server.whereOwnNote": "Свой сервер по инструкции из server/README.md.",
+  "server.whereOwnNote":
+    "Если вы или ваш знакомый держите свой сервер. Адрес вам скажет тот, кто его поднял.",
+  "server.wayCreate": "Создать учётную запись",
+  "server.wayCreateNote":
+    "Это первое ваше устройство. Придумайте имя входа и пароль — остальные устройства подключите кодом связки.",
+  "server.wayLogin": "Войти по имени и паролю",
+  "server.wayLoginNote": "Учётная запись уже есть, а кода связки под рукой нет.",
+  "server.newPassword": "Придумайте пароль",
+  "server.newPasswordHint":
+    "Сейчас у ваших данных пароля нет. Он появится — и им же вы откроете данные на других устройствах.",
+  "server.passwordWrong":
+    "Пароль не подходит к данным на этом устройстве. Введите тот, которым они открываются.",
   "server.haveCode": "У меня есть код связки",
   "server.haveCodeNote":
-    "Восемь знаков с первого устройства. Они заменяют адрес и имя входа — останется ввести пароль.",
+    "Учётная запись уже есть — подключаю ещё одно устройство. Восемь знаков покажет первое: Синхронизация → «Связать ещё одно устройство».",
   "server.pairCode": "Код связки",
   "server.pairCodeCheck": "Проверяем код…",
   "server.pairCodeUse": "Продолжить",
@@ -1972,7 +1999,6 @@ const ru: Messages = {
   "server.pairCodeFound": "Это {login} на {base}. Введите пароль от своих данных.",
   "server.closedHere":
     "Эта служба пускает только по приглашению — спросите его у того, кто её держит.",
-  "set.section.server": "Свой сервер",
   // --- Мои устройства ---
   "dev.title": "Мои устройства",
   "dev.lead": "Всё, что подключено к вашей учётной записи. Потерянное — выкидывайте.",
@@ -2097,7 +2123,6 @@ const en: Messages = {
   "notFound.home": "Go home",
   // Settings: language
   "settings.language.title": "Interface language",
-  "settings.language.hint": "Part of the interface is translated; the rest is migrated gradually.",
   "settings.language.ru": "Русский",
   "settings.language.en": "English",
   // Command palette
@@ -2208,7 +2233,6 @@ const en: Messages = {
     "actual comes from balances: everyday is cash and cards, savings is deposit and brokerage accounts plus money set aside in goals",
   "plan.result.hint":
     "actual is the closing balance of the same two groups of accounts; the plan and the difference cannot be split and stand as one figure across both columns",
-  "plan.unsplit": "one figure across both columns: a plan carries a category, never an account",
   "plan.note": "Comment",
   "plan.note.placeholder": "E.g. paying the instalment off in full",
   "plan.saved": "Saved",
@@ -2219,7 +2243,7 @@ const en: Messages = {
   "page.import.desc":
     "Upload CSV with preview and column mapping, and export transactions to CSV/JSON.",
   "page.settings.title": "Settings",
-  "page.settings.desc": "Currency, appearance, automation, account and data management.",
+  "page.settings.desc": "Currency, appearance, sync, password and data.",
   // Generic loading fallbacks
   "loading.generic": "Loading…",
   "loading.transactions": "Loading transactions...",
@@ -2561,11 +2585,6 @@ const en: Messages = {
   "tx.onePage": "On one page",
   "tx.future.notice":
     "Operations dated in the future: {count}, for {sum}. They already count against the balance.",
-  "backup.notice.never":
-    "There is no backup. Everything lives on this device alone — a reinstall or a dead disk takes it with no trace.",
-  "backup.notice.stale":
-    "Last backup: {date}. Everything recorded since then exists on this device only.",
-  "backup.notice.cta": "Make a backup",
   "tx.future.show": "Show them",
   "tx.future.confirm.title": "That day has not arrived",
   "tx.future.confirm.desc":
@@ -2787,6 +2806,50 @@ const en: Messages = {
     "A reserve in savings accounts measured in months of your average expenses. Target: 3–6 months for emergencies.",
   "hint.riskProfile":
     "Your tolerance for swings in investment value. Affects risk analysis and security selection.",
+  "help.goal.target":
+    "How much you want to save. You can change it any time — the progress is recalculated.",
+  "help.goal.deadline":
+    "The day you want to have the amount by. From it the app works out how much to set aside each month. No date — save at your own pace.",
+  "help.goal.linkedAccount":
+    "The account money is taken from by default when you top the goal up, and returned to if you take it back out. A top-up is a transfer, not spending: it does not touch limits or spending statistics.",
+  "help.goal.planned":
+    "How much you yourself mean to set aside each month — a guide for you. Shown on the goal card.",
+  "help.debt.balance": "How much is left to repay right now. It goes down with every payment.",
+  "help.debt.original":
+    "How much was borrowed at the start. Shows how much of the debt is already repaid.",
+  "help.debt.rate":
+    "The interest rate from the contract, % per year. It shows what the debt costs you.",
+  "help.debt.payment":
+    "The monthly payment on the schedule. With auto-payment on, exactly this amount is recorded on the due day.",
+  "help.debt.dueDay":
+    "The day of the month the payment is due. It is counted in the cash forecast; with auto-payment the payment is recorded on that day by itself.",
+  "help.debt.autoAccount":
+    "Which account the monthly payment is taken from when the due day comes.",
+  "help.debt.autoCategory":
+    "Which spending category the payment is recorded under — so it shows up in statistics and limits.",
+  "help.rec.period": "How often the payment repeats: weekly, monthly, yearly.",
+  "help.rec.nextDate":
+    "When the payment happens next. Once it is recorded, the date moves one period ahead by itself.",
+  "help.acc.type":
+    "The type decides where the account's money counts. Savings and brokerage accounts are “Savings”: the emergency cushion and savings in plan vs actual. Cards and cash are everyday money.",
+  "help.acc.balance":
+    "How much money is on the account right now. From then on the balance changes by itself — from the transactions you record.",
+  "help.acc.rate":
+    "The interest on a deposit or savings account. The app shows in the forecast how much it will bring. Interest is not added to the account by itself — record it when the bank pays it.",
+  "help.acc.compounding":
+    "How often the bank adds interest to the balance. The more often, the faster the sum grows: later interest is earned on earlier interest too.",
+  "help.inv.budget":
+    "How much you are ready to invest now. The “Pick” button offers securities for this amount.",
+  "help.inv.risk":
+    "How big price swings you are ready to live with. Higher risk means both higher possible returns and higher possible losses.",
+  "help.inv.lots":
+    "Each purchase separately: date, quantity, price. From them the app works out the total quantity and the average price itself.",
+  "help.inv.avgPrice":
+    "The average price of one share across all purchases. The current price is compared with it — that is your gain or loss.",
+  "help.inv.sector":
+    "The company's industry. By industry you can see whether all your money sits in one basket.",
+  "help.tx.tags":
+    "Labels on top of categories: “holiday”, “repairs”, “gifts”. One transaction can have several, and later you can find everything with a label in the transactions filter.",
   "hint.dayChange": "How much your portfolio gained or lost during today's trading session.",
   "hint.pnl":
     "The gap between your securities' current value and what you paid for them — an unrealized (paper) gain or loss until you sell.",
@@ -2914,10 +2977,11 @@ const en: Messages = {
   "an.noData": "No data",
   // Import / export
   "imp.step.upload": "Upload",
-  "imp.step.mapping": "Mapping",
+  "imp.step.mapping": "Columns",
   "imp.step.import": "Import",
-  "imp.csvTitle": "CSV import",
-  "imp.intro": "Upload a CSV file with your transactions. Exports from most banks are supported.",
+  "imp.csvTitle": "Import from a bank (CSV)",
+  "imp.intro":
+    "Export your transactions from online banking as a CSV file and load it here. Most banks' exports work.",
   "imp.uploadCsv": "Upload CSV",
   "imp.uploadHint": "Click to choose a file",
   "imp.downloadTemplate": "Download template",
@@ -2948,10 +3012,10 @@ const en: Messages = {
   "imp.backupTitle": "Backup",
   "imp.backupDue": "Time to refresh your backup",
   "imp.backupFresh": "Backup is up to date",
-  "imp.lastBackup": "Last backup: {label}",
-  "imp.neverBackup": "Not created yet",
-  "imp.downloadBackup": "Download backup",
-  "imp.restoreBackup": "Restore backup",
+  "imp.lastBackup": "Last copy: {label}",
+  "imp.neverBackup": "never made",
+  "imp.downloadBackup": "Download a copy",
+  "imp.restoreBackup": "Restore from a copy",
   "imp.restoreTitle": "Restore backup?",
   "imp.restoreDesc": "Current data will be replaced with data from the selected backup file.",
   "imp.restoreWarn": "Download a backup of your current data first.",
@@ -2972,15 +3036,12 @@ const en: Messages = {
   "imp.restoring": "Restoring...",
   "imp.restoreConfirm": "Restore selected backup",
   "imp.backupIncludes":
-    "Includes settings, accounts, categories, transactions, budgets, goals, portfolio and watchlist.",
+    "A copy holds everything: accounts, categories, transactions, limits, goals, portfolio, settings.",
   "imp.preUpgradeTitle": "Your data before the last update",
   "imp.preUpgradeLead":
     "An update moved your data to a new format, and the previous version of the app cannot open it. This copy is your data as it was before that move: save it to a file and the previous version will take it through its usual restore.",
   "imp.preUpgradeSave": "Save to a file",
   "imp.preUpgradeFrom": "format",
-  "imp.refTitle": "Available accounts and categories",
-  "imp.refAccounts": "Accounts",
-  "imp.refExpenseCats": "Expense categories",
   "imp.template.header": "Date,Amount,Description,Category,Account",
   "imp.template.row1": "{date},-1200,Coffee,Restaurants,Debit card",
   "imp.template.row2": "{date},150000,Salary,Salary,Debit card",
@@ -3374,6 +3435,7 @@ const en: Messages = {
   "inv.col.comment": "Comment",
   "inv.col.ticker": "Ticker",
   "inv.col.qty": "Qty",
+  "inv.card.average": "{qty} pcs · average purchase price {avg}",
   "inv.col.avg": "Average",
   "inv.col.current": "Current",
   "inv.col.value": "Value",
@@ -3557,41 +3619,84 @@ const en: Messages = {
   "legal.privacy": "Privacy",
   "legal.privacyPolicy": "Privacy Policy",
   // Settings: status & search
-  "set.autosaveHint": "Changes are applied and saved automatically.",
   "set.saving": "Saving…",
   "set.saved": "Saved",
   "set.search": "Search settings…",
   "set.sections": "Settings sections",
   "set.nothingFound": "Nothing found for “{query}”.",
   "set.saveError": "Failed to save settings",
+  "set.back": "All settings",
+  "set.nav.general": "General",
+  "set.nav.general.summary": "Currency, language, theme",
+  "set.nav.general.lead": "How the app looks and which currency it shows amounts in.",
+  "set.nav.finance": "Finances",
+  "set.nav.finance.summary": "Payments, cushion, risk",
+  "set.nav.finance.lead": "What the app does for you on its own, and which goals it steers you to.",
+  "set.nav.ai": "AI helper",
+  "set.nav.ai.summary": "Transactions in plain words",
+  "set.nav.ai.lead":
+    "Record a transaction with a phrase like “coffee 250 from card” — the helper fills in the amount, category and account.",
+  "set.nav.sync": "Sync",
+  "set.nav.sync.summary": "Phone and computer together",
+  "set.nav.sync.lead": "The same data on your phone and computer.",
+  "set.nav.security": "Password & access",
+  "set.nav.security.summary": "Password, people on device",
+  "set.nav.security.lead":
+    "Who opens your data on this device, and how. The app never asks for or stores bank logins and passwords.",
+  "set.nav.data": "Data",
+  "set.nav.data.summary": "Backup, import, clearing",
+  "set.nav.data.lead":
+    "Backups, moving data in from a bank or another app, exporting to a spreadsheet.",
+  "set.nav.about": "About",
+  "set.nav.about.summary": "Version and updates",
+  "set.nav.about.lead": "Version, updates and the app tour.",
+  "set.sync.other": "Another way: a cloud folder",
+  "set.sync.otherHint": "Without the service — through Dropbox, Google Drive or OneDrive, by hand.",
+  "set.group.display": "Display",
+  "set.group.look": "Appearance",
+  "set.group.recurring": "Recurring payments",
+  "set.group.goals": "Goals and risk",
+  "set.group.sample": "Example",
+  "set.group.danger": "Danger zone",
+  "set.help.currency":
+    "The sign put on amounts across the app. The numbers themselves are not converted: if you kept records in roubles and pick dollars, ₽1,000 becomes $1,000. Change it only if you keep records in another currency.",
+  "set.help.language":
+    "The language of buttons and labels. Your own entries — account and category names, descriptions — are not translated.",
+  "set.help.theme":
+    "“System” follows the device: if your phone or computer switches to dark in the evening, the app switches with it.",
+  "set.help.density":
+    "“Compact” shrinks spacing and text so more rows fit on screen. Handy on a large monitor, usually too small on a phone.",
+  "set.help.autoMaterialize":
+    "A recurring payment is one that repeats: salary, rent, subscriptions. When on, every time the app starts it records the payments that have come due. When off, you record them yourself: Planning → Scheduled.",
+  "set.help.reminders":
+    "When you open the app, it sends a device notification about anything urgent: a payment due today, a limit exceeded, a cash shortfall ahead. The same thing at most once a day. While the app is closed there are no reminders. The first time, the device asks for permission.",
+  "set.help.ai":
+    "The transactions screen gets a line where you type a plain phrase: “coffee 250 from card”, “salary 80,000”. The helper reads it and fills in the form — you check it and save. It works through an external AI service with your key.",
+  "set.help.aiProvider":
+    "The company whose AI reads your text. All of them handle simple phrases equally well — pick the one you already have a key for.",
+  "set.help.aiKey":
+    "The key is a pass to your account with the AI service; you pay the service for requests directly, the app takes nothing. Where to get it is written under the field. The app sends the key only to the chosen service.",
+  "set.help.aiModel":
+    "“Default” is right almost always. Stronger models read complicated phrases better, but answer slower and cost more.",
+  "set.help.aiEffort":
+    "How long the AI “thinks” before answering. “Balanced” is enough for recording transactions; “Deep” is slower and costs more.",
+  "set.help.sample":
+    "Ready-made accounts, transactions, limits and goals — to see the app at work before entering your own. Your current data is replaced by the example, so save a backup first.",
+  "set.data.loadSampleShort": "Load the example",
+  "set.data.clearShort": "Clear",
+  "set.about.versionLabel": "Version",
+  "set.about.tour": "App tour",
+  "set.about.tourHint": "A short walk through the main screens — the same as on first launch.",
   // Settings: sections
-  "set.section.general": "General",
-  "set.section.automation": "Automation",
-  "set.section.appearance": "Appearance",
-  "set.section.ai": "AI assistant",
-  "set.section.risk": "Risk & cushion",
-  "set.section.account": "Account",
-  "set.section.data": "Data",
-  "set.section.about": "About",
   // Settings: general
-  "set.general.title": "General settings",
   "set.currency": "Currency",
-  "set.currency.hint":
-    "Display currency for the whole app. Amounts are not recalculated — only the currency symbol changes.",
-  "set.demo.title": "Demo data mode",
-  "set.demo.desc": "Shows a built-in example when you don't have your own data yet.",
-  "set.defaultType": "Default transaction type",
-  "set.type.expense": "Expense",
-  "set.type.income": "Income",
-  "set.defaultType.hint": "Pre-selected when the quick-add form opens.",
   // Settings: automation
-  "set.automation.title": "Automation",
   "set.autoMaterialize.title": "Auto-post recurring",
   "set.autoMaterialize.desc": "On startup, automatically create overdue scheduled payments.",
   "set.reminders.title": "Payment reminders",
-  "set.reminders.desc": "System notifications for payments due today.",
+  "set.reminders.desc":
+    "Device notifications about anything urgent: payments, limits, cash shortfalls.",
   // Settings: appearance
-  "set.appearance.title": "Appearance",
   "set.theme": "Theme",
   "set.theme.light": "Light",
   "set.theme.system": "System",
@@ -3600,18 +3705,13 @@ const en: Messages = {
   "set.density.comfortable": "Comfortable",
   "set.density.compact": "Compact",
   // Settings: AI
-  "set.ai.title": "AI assistant",
   "set.ai.enable.title": "Enable AI assistant",
   "set.ai.enable.desc":
     "Enter transactions as text on the Transactions page via the AI of your choice.",
   "set.ai.provider": "AI provider",
-  "set.ai.provider.hint":
-    "Choose the AI: Claude (Anthropic), ChatGPT (OpenAI) or DeepSeek. Requires an API key for the selected provider.",
   "set.ai.key.storage":
     "The key is stored on this device unencrypted and is kept out of the backup file — enter it again on a new computer.",
   "set.ai.key": "API key",
-  "set.ai.key.hint":
-    "The key is stored only on your device and used for requests to the selected provider.",
   "set.ai.key.hint.anthropic":
     "The key is stored only on your device. Get one at console.anthropic.com → API Keys.",
   "set.ai.key.hint.openai":
@@ -3620,11 +3720,7 @@ const en: Messages = {
     "The key is stored only on your device. Get one at platform.deepseek.com → API keys.",
   "set.ai.model": "Model",
   "set.ai.model.default": "Default",
-  "set.ai.model.hint":
-    "More powerful models are more accurate but pricier and slower. A fast model is enough for short phrases.",
   "set.ai.effort": "Thinking depth",
-  "set.ai.effort.hint":
-    "Deeper is more accurate but slower and pricier. Balanced is usually enough for entering transactions.",
   "set.ai.effort.low": "Fast",
   "set.ai.effort.medium": "Balanced",
   "set.ai.effort.high": "Deep",
@@ -3635,9 +3731,9 @@ const en: Messages = {
   "fx.refreshed": "Exchange rates updated.",
   "fx.refreshFail": "Couldn't load CBR rates.",
   // Cloud-folder sync (desktop)
-  "sync.title": "Sync via a cloud folder",
+  "sync.title": "Through a cloud folder",
   "sync.desc":
-    "The app encrypts a snapshot of your data into a folder you choose. If that folder is synced by your Dropbox / Google Drive / OneDrive client, the data reaches your other devices. No server needed.",
+    "A way without the service: the app puts an encrypted copy of your data into a folder that Dropbox, Google Drive or OneDrive carries to your other devices. You move it by hand, with the buttons below.",
   "sync.folder": "Sync folder",
   "sync.folderPlaceholder": "No folder selected",
   "sync.choose": "Choose folder",
@@ -3655,16 +3751,16 @@ const en: Messages = {
   "sync.pull.confirmDesc":
     "Data from the cloud folder will replace the current data on this device. This can't be undone.",
   "sync.warning":
-    "The latest push overwrites the cloud, a pull overwrites this device (last-write-wins). No auto-merge — sync one device at a time.",
+    "Uploading replaces the copy in the folder; downloading replaces the data on this device. They are not merged: take turns — upload here, download there.",
   "sync.err.folder": "Couldn't open the folder picker.",
   "sync.err.noFolder": "Choose a folder first.",
   "sync.err.noPass": "Enter the encryption passphrase.",
   "sync.err.push": "Couldn't push the data.",
   "sync.err.pull": "Couldn't pull the data.",
   // Auto-backup (desktop)
-  "backup.title": "Auto-backups (local)",
+  "backup.title": "Scheduled copies",
   "backup.desc":
-    "On a schedule, saves a snapshot of your data into a chosen folder on this computer and prunes the oldest copies. This is a local backup — no passphrase, no cloud (use the sync above for the cloud).",
+    "The app saves a copy of your data to a chosen folder on this device by itself — daily or weekly — and removes the oldest ones. It runs when the app starts.",
   "backup.frequency": "Frequency",
   "backup.freq.off": "Off",
   "backup.freq.daily": "Daily",
@@ -3704,10 +3800,7 @@ const en: Messages = {
   "aiq.err.failed": "Couldn't get an answer from the assistant.",
   "set.ai.warning":
     "The text you enter is sent to the selected provider's external service. Do not include confidential data. You can disable this feature at any time.",
-  "set.ai.warning.web":
-    " On the website a server key is used — if AI is not configured on the server, the request will return an error.",
   // Settings: risk
-  "set.risk.title": "Risk & emergency fund",
   "set.risk.profile": "Risk profile",
   "set.risk.profile.hint": "Used to analyze concentration and risk in the investment portfolio.",
   "set.risk.fund": "Emergency fund target",
@@ -3715,18 +3808,18 @@ const en: Messages = {
   "set.risk.fund.months12": "{n} months of expenses",
   "set.risk.fund.hint": "At least 3 months is recommended. 6–12 for more confidence.",
   // Settings: data
-  "set.data.title": "Data management",
   "set.data.sampleHint":
     "Demo data fills the app with an example (accounts, transactions, budgets, goals) so you can see how everything works. Your current data will be replaced.",
   "set.data.loadSample": "Load demo data",
   "set.data.loading": "Loading…",
   "set.data.clearHint":
-    "Clearing deletes all accounts, transactions, goals, budgets and settings. This action is irreversible.",
+    "Deletes all accounts, transactions, goals, budgets and settings — here and on your other devices linked to this one. Only a backup can bring them back.",
   "set.data.clear": "Clear all data",
   "set.data.clearConfirm": "Clear all data?",
   "set.data.clearConfirmDesc":
-    "All your transactions, accounts, goals, budgets, scheduled payments, portfolio and settings will be permanently deleted. You can save a backup on the Import page.",
-  "set.data.clearWarning": "This action cannot be undone. Make a backup first.",
+    "Transactions, accounts, goals, budgets, scheduled payments, portfolio and settings will be deleted. If your devices are linked through the server, the deletion reaches them too.",
+  "set.data.clearWarning":
+    "This cannot be undone. Save a backup first — it is at the top of this section.",
   "set.data.clearing": "Clearing...",
   "set.data.clearYes": "Yes, delete everything",
   "set.toast.sampleLoaded": "Demo data loaded.",
@@ -3744,11 +3837,6 @@ const en: Messages = {
   "set.about.checkUpdates": "Check for updates",
   "set.about.checking": "Checking…",
   "set.about.version": "Financial Assistant · version {version}",
-  "set.about.security": "Security & integrations",
-  "set.about.securityText1":
-    "The app does not store bank logins or passwords and does not perform bank screen scraping.",
-  "set.about.securityText2":
-    "Future bank integrations must use official APIs, explicit user consent and encrypted/secure storage for tokens.",
   "set.toast.onboardingOpened": "Tutorial opened.",
   "set.toast.onboardingError": "Failed to open the tutorial",
   "set.update.current": "You have the latest version.",
@@ -3788,8 +3876,16 @@ const en: Messages = {
   "vault.restore.broken": "That file does not look like a backup of this app.",
   "vault.restore.skip": "Skip and start from scratch",
   "vault.join.title": "Fetch data from another device",
+  "vault.back": "Back",
+  "vault.leave": "Choose another person",
   "vault.join.lead":
     "You will need the service address, the login name and the password — the same ones as on the device that already has the data.",
+  "vault.join.codeLead":
+    "On the device that already has the data, open Settings → Sync → “My devices” → “Link another device”. Eight characters and a QR picture appear there.",
+  "vault.join.loginLead":
+    "The login name and password are the same as on the device that already has the data.",
+  "vault.join.byCode": "I have a pairing code",
+  "vault.join.byLogin": "Sign in with name and password",
   "vault.join.submit": "Fetch the data",
   "vault.join.working": "Fetching…",
   "vault.choose.title": "Protect your data with a password?",
@@ -3843,7 +3939,7 @@ const en: Messages = {
   "vault.wipe.body":
     "Your data is locked with a key nobody holds any more. Nothing can open it — not us, not you. All that is left is to erase everything and start from scratch: accounts, operations and plans go for good. If you have a backup file, close this window first — you can restore it once you have set a new password.",
   "vault.wipe.confirm": "Erase everything permanently",
-  "vault.settings.title": "Password and access",
+  "vault.settings.title": "Password",
   "vault.settings.desc": "The password your data on this device opens with.",
   "vault.settings.noPassword":
     "No password is set: anyone who gets to this device opens your data. Set one and it will be asked on launch.",
@@ -3874,53 +3970,6 @@ const en: Messages = {
   "set.update.downloading": "Downloading update…",
   "set.update.unavailable": "Auto-update unavailable — opening the releases page.",
   // Settings: account & security (web)
-  "set.account.title": "Account & security",
-  "set.profile.title": "Profile",
-  "set.profile.name": "Display name",
-  "set.profile.name.hint": "How you're addressed in the app.",
-  "set.profile.save": "Save name",
-  "set.profile.saved": "Profile updated.",
-  "set.profile.saveFail": "Couldn't save the profile.",
-  "set.profile.nameRequired": "Enter a name.",
-  "set.profile.email": "Email",
-  "set.profile.email.hint": "Used to sign in. Changing email isn't available yet.",
-  "set.profile.joined": "Member since",
-  "set.2fa.title": "Two-factor authentication",
-  "set.2fa.desc":
-    "An extra code from an authenticator app (Google Authenticator, Authy, etc.) at sign-in.",
-  "set.2fa.on": "2FA is enabled.",
-  "set.2fa.enable": "Enable 2FA",
-  "set.2fa.disable": "Disable 2FA",
-  "set.2fa.disablePassword": "Confirm with your password to disable",
-  "set.2fa.scan":
-    "Scan the QR code in your authenticator app, then enter the 6-digit code to confirm.",
-  "set.2fa.manualKey": "Or enter the key manually",
-  "set.2fa.code": "Code from the app",
-  "set.2fa.confirm": "Confirm and enable",
-  "set.2fa.error": "Could not update 2FA",
-  "set.2fa.toast.enabled": "Two-factor authentication enabled.",
-  "set.2fa.toast.disabled": "Two-factor authentication disabled.",
-  "set.account.changePassword": "Change password",
-  "set.account.current": "Current password",
-  "set.account.new": "New password (min. 8)",
-  "set.account.confirm": "Confirm password",
-  "set.account.changeBtn": "Change password",
-  "set.account.mismatch": "New password and confirmation do not match",
-  "set.account.changeFail": "Could not change the password",
-  "set.account.changed": "Password changed",
-  "set.account.deleteSection": "Delete account",
-  "set.account.deleteDesc":
-    "Your account and all your data (accounts, transactions, budgets, goals, etc.) will be deleted permanently. We recommend downloading a backup from the Import page first.",
-  "set.account.deleteBtn": "Delete account",
-  "set.account.deleteConfirmTitle": "Delete account permanently?",
-  "set.account.deleteConfirmDesc":
-    "This action is irreversible. Enter your password to confirm deletion of your account and all data.",
-  "set.account.password": "Password",
-  "set.account.deleteFail": "Could not delete the account",
-  "set.account.deleted": "Account deleted",
-  "set.account.needPassword": "Enter your password to confirm",
-  "set.account.deleting": "Deleting…",
-  "set.account.deleteForever": "Delete permanently",
   // Profiles (desktop)
   "prof.title": "Profiles",
   "prof.add": "Add profile",
@@ -3958,15 +4007,15 @@ const en: Messages = {
   "lmp.cleared": "Local storage cleared",
   "lmp.clearFail": "Could not clear local data",
   // --- Your own server ---
-  "server.title": "Your own server",
+  "server.title": "Connection",
   "server.lead":
-    "Your data travels to the server encrypted: it cannot open it — there is no key there and nowhere for one to come from. Your password does not go to the server either; a sign-in secret derived from it does.",
+    "Your data travels encrypted: the service stores it but cannot read it — only you have the key. Your password is never sent either.",
   "server.address": "Service address",
   "server.login": "Login name",
   "server.password": "Password for your data",
-  "server.passwordHint": "The same one that opens your data on this device.",
+  "server.passwordHint": "The one that opens the data on this device.",
   "server.code": "Invitation",
-  "server.codeHint": "Only for the first account. Signing in on a second device — leave it empty.",
+  "server.codeHint": "Given out by whoever runs the service. Leave empty if sign-up is open.",
   "server.connect": "Connect this device",
   "server.connecting": "Connecting…",
   "server.connected": "This device is connected to the server.",
@@ -3976,14 +4025,22 @@ const en: Messages = {
   "server.disconnected": "Device disconnected. Your data is where it was.",
   "server.noVault": "Set a password on this device first.",
   "server.where": "Where to connect",
-  "server.whereApp": "The app's service",
-  "server.whereAppNote":
-    "A ready-made server: nothing to set up. Your data sits there encrypted and it holds no key to it. But that you have an account, what it is called and when you added entries is visible to whoever runs it.",
   "server.whereOwn": "I run my own service",
-  "server.whereOwnNote": "Your own server, per server/README.md.",
+  "server.whereOwnNote":
+    "If you or someone you know runs their own server. Whoever set it up will tell you the address.",
+  "server.wayCreate": "Create an account",
+  "server.wayCreateNote":
+    "This is your first device. Pick a login name and a password — connect your other devices with a pairing code.",
+  "server.wayLogin": "Sign in with name and password",
+  "server.wayLoginNote": "You already have an account but no pairing code at hand.",
+  "server.newPassword": "Choose a password",
+  "server.newPasswordHint":
+    "Your data has no password yet. It gets one now — and the same password opens it on your other devices.",
+  "server.passwordWrong":
+    "This password does not fit the data on this device. Enter the one that opens it.",
   "server.haveCode": "I have a pairing code",
   "server.haveCodeNote":
-    "Eight characters from your first device. They stand in for the address and the login name — only the password is left to type.",
+    "You already have an account — this is another device. The first one shows the eight characters: Sync → “Link another device”.",
   "server.pairCode": "Pairing code",
   "server.pairCodeCheck": "Checking the code…",
   "server.pairCodeUse": "Continue",
@@ -4041,7 +4098,6 @@ const en: Messages = {
   "people.newHint":
     "We will set up empty data and open it right away. Yours stays where it is — you can switch back from here.",
   "people.create": "Done",
-  "set.section.server": "Your own server",
   // --- Sync with the server ---
   "sync.status.synced": "Everything is on the server",
   "sync.status.sending": "Sending…",

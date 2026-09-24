@@ -5,6 +5,7 @@ import { HubTabs } from "@/components/hub-tabs";
 import { SkipLink } from "@/components/layout/skip-link";
 import { ToastListener } from "@/components/toast-listener";
 import { MobileBottomNav, MobileTopBar } from "@/components/mobile-navigation";
+import { PageTransition } from "@/components/page-transition";
 import { QuickAddFab } from "@/components/quick-add-fab";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { getImportPageData } from "@/lib/data";
@@ -43,7 +44,7 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
             top of the last table row and the pagination under it. */}
         <div className="mx-auto w-full max-w-[1760px] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 md:pb-24 lg:px-8 2xl:px-12">
           <HubTabs />
-          {children}
+          <PageTransition>{children}</PageTransition>
         </div>
       </main>
       <MobileBottomNav />

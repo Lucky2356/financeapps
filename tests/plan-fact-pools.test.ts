@@ -337,3 +337,94 @@ describe("планируемый перевод в сбережения", () => 
     expect(month.toSavings.fact).toBeCloseTo(12000, 2);
   });
 });
+
+// Просьба владельца: «в итогах должно быть разделение для Основных и
+// Сбережений». До 1.46.0 делился только факт итога, а план и разница стояли
+// одной цифрой на обе колонки.
+describe("итоги доходов и расходов по двум группам — во всех строках", () => {
+  const plan = (client: LocalApiClient, categoryId: string, amount: number) =>
+    client.post("/plan", { month: monthKey(), categoryId, amount: String(amount) });
+
+  it("план статьи без истории идёт через основные", async () => {
+    const client = api();
+    await twoPools(client);
+    const salary = await category(client, "Зарплата-итог", "INCOME");
+    const food = await category(client, "Еда-итог", "EXPENSE");
+    await plan(client, salary.id, 100000);
+    await plan(client, food.id, 30000);
+
+    const month = await thisMonth(client);
+    expect(month.incomePools.main.plan).toBeCloseTo(100000, 2);
+    expect(month.incomePools.savings.plan).toBeCloseTo(0, 2);
+    expect(month.expensePools.main.plan).toBeCloseTo(30000, 2);
+    expect(month.expensePools.savings.plan).toBeCloseTo(0, 2);
+  });
+
+  it("план статьи, чьи деньги оседают на вкладе, идёт в сбережения", async () => {
+    // Проценты приходят на вклад. Запиши их план в основные — и в каждом
+    // месяце вышла бы ложная разница в обе стороны: «основные недобрали»,
+    // «сбережения перевыполнили», хотя всё пришло ровно как задумано.
+    const client = api();
+    const { deposit } = await twoPools(client);
+    const percent = await category(client, "Проценты-итог", "INCOME");
+    await record(client, {
+      accountId: deposit.id,
+      categoryId: percent.id,
+      type: "INCOME",
+      amount: 5000
+    });
+    await plan(client, percent.id, 5000);
+
+    const month = await thisMonth(client);
+    expect(month.incomePools.savings.plan).toBeCloseTo(5000, 2);
+    expect(month.incomePools.savings.fact).toBeCloseTo(5000, 2);
+    expect(month.incomePools.savings.diff).toBeCloseTo(0, 2);
+    expect(month.incomePools.main.diff).toBeCloseTo(0, 2);
+  });
+
+  it("половины складываются в целое — и итог месяца сходится с ними", async () => {
+    const client = api();
+    const { card, deposit } = await twoPools(client);
+    const salary = await category(client, "Зарплата-сумма", "INCOME");
+    const percent = await category(client, "Проценты-сумма", "INCOME");
+    const food = await category(client, "Еда-сумма", "EXPENSE");
+    await record(client, {
+      accountId: card.id,
+      categoryId: salary.id,
+      type: "INCOME",
+      amount: 90000
+    });
+    await record(client, {
+      accountId: deposit.id,
+      categoryId: percent.id,
+      type: "INCOME",
+      amount: 3000
+    });
+    await record(client, {
+      accountId: card.id,
+      categoryId: food.id,
+      type: "EXPENSE",
+      amount: 20000
+    });
+    await plan(client, salary.id, 100000);
+    await plan(client, percent.id, 2500);
+    await plan(client, food.id, 25000);
+
+    const month = await thisMonth(client);
+    for (const [pools, whole] of [
+      [month.incomePools, month.income],
+      [month.expensePools, month.expense]
+    ] as const) {
+      expect(pools.main.plan + pools.savings.plan).toBeCloseTo(whole.plan, 2);
+      expect(pools.main.fact + pools.savings.fact).toBeCloseTo(whole.fact, 2);
+      expect(pools.main.diff + pools.savings.diff).toBeCloseTo(whole.diff, 2);
+    }
+    // Итог месяца — одна сумма, как бы её ни делили.
+    expect(month.resultBy.main.plan + month.resultBy.savings.plan).toBeCloseTo(
+      month.result.plan,
+      2
+    );
+    // Проценты по плану осели в сбережениях — и итог сбережений их видит.
+    expect(month.resultBy.savings.plan).toBeCloseTo(2500, 2);
+  });
+});

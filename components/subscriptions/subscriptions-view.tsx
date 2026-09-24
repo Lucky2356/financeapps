@@ -207,7 +207,7 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
             </CardTitle>
             <p className="text-sm text-muted-foreground">{t("sub.detect.desc")}</p>
           </CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="stagger grid gap-3">
             {detected.map((item) => (
               <div
                 key={item.key}

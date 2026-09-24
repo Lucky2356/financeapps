@@ -5,7 +5,19 @@
 
 import { fromBase64, toBase64 } from "@/lib/sync/bytes";
 
-const KDF_ITERATIONS = 200_000;
+// 600 000 — как у основного замка (lib/sync/vault-crypto) и как советует
+// OWASP для PBKDF2-SHA256. Прежде здесь было 200 000: файл в облачной папке
+// лежит у чужой компании, и перебирать пароль к нему можно было втрое дешевле,
+// чем к самим данным на устройстве.
+const KDF_ITERATIONS = 600_000;
+// Чем были зашифрованы файлы до этого. Нужен, чтобы прочитать старый файл без
+// поля iterations.
+const LEGACY_ITERATIONS = 200_000;
+// Сколько прогонов готовы принять из чужого файла. Число берётся из самого
+// файла, а файл лежит в облаке: подсунутый с миллиардом прогонов повесил бы
+// приложение, с единицей — ничего бы не открыл, но и проверять его незачем.
+const MIN_ITERATIONS = 100_000;
+const MAX_ITERATIONS = 10_000_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
 
@@ -76,12 +88,15 @@ export async function decryptString(payload: string, passphrase: string): Promis
   if (envelope.alg !== "AES-GCM" || !envelope.salt || !envelope.iv || !envelope.ct) {
     throw new Error("Неизвестный формат файла синхронизации.");
   }
-  const rounds =
-    typeof envelope.iterations === "number" &&
-    Number.isFinite(envelope.iterations) &&
-    envelope.iterations > 0
-      ? envelope.iterations
-      : KDF_ITERATIONS;
+  const rounds = envelope.iterations === undefined ? LEGACY_ITERATIONS : envelope.iterations;
+  if (
+    typeof rounds !== "number" ||
+    !Number.isInteger(rounds) ||
+    rounds < MIN_ITERATIONS ||
+    rounds > MAX_ITERATIONS
+  ) {
+    throw new Error("Неизвестный формат файла синхронизации.");
+  }
   const key = await deriveKey(passphrase, fromBase64(envelope.salt), rounds);
   try {
     const plaintext = await crypto.subtle.decrypt(

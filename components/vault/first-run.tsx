@@ -23,7 +23,7 @@
 // об этом в тот день, когда забудет пароль, — то есть когда возвращать будет
 // уже нечего. Два слова обратно стоят десяти секунд сейчас и всех данных потом.
 
-import { KeyRound, Lock, ShieldCheck } from "lucide-react";
+import { Camera, ChevronLeft, KeyRound, Lock, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
@@ -32,6 +32,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
+import { DEFAULT_SERVER, hasDefaultServer } from "@/lib/sync/default-server";
+import { readPairing } from "@/lib/sync/pairing-link";
+import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
+import { redeemPairing } from "@/lib/vault/server-account";
 import { pickTwo } from "@/lib/vault/pick-two";
 import { deviceName } from "@/lib/vault/device-name";
 import {
@@ -49,7 +53,30 @@ const MIN_PASSWORD = 8;
 type Step = "source" | "choose" | "password" | "code" | "verify" | "restore" | "join";
 type Source = "fresh" | "file" | "device";
 
-export function FirstRun({ onDone }: { onDone: () => void }) {
+/**
+ * Как новое устройство находит данные.
+ *
+ * Код связки — первым и по умолчанию. Прежде этот экран спрашивал адрес
+ * службы, имя входа и пароль, и первое из трёх обычный человек не знает и
+ * знать не обязан: что такое «служба», ему никто не объяснял. Код и картинку
+ * я сделал в настройках, а сюда, куда человек попадает первым делом, не донёс.
+ * Адрес теперь приезжает с кодом или берётся из сборки; поле для него осталось
+ * только за «У меня своя служба».
+ */
+type JoinWay = "code" | "login" | "own";
+
+export function FirstRun({
+  onDone,
+  onLeave
+}: {
+  onDone: () => void;
+  /**
+   * Уйти к выбору человека. Есть, только когда на устройстве людей больше
+   * одного: только что добавленный человек попадал сюда сразу, минуя «Кто за
+   * компьютером», — и если его завели по ошибке, выйти было некуда.
+   */
+  onLeave?: () => void;
+}) {
   const { t } = useI18n();
   const [step, setStep] = useState<Step>("source");
   /** Что человек выбрал на первом экране: решает, куда идти после защиты. */
@@ -64,6 +91,10 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
   const [base, setBase] = useState("");
   const [login, setLogin] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
+  const [joinWay, setJoinWay] = useState<JoinWay>(hasDefaultServer() ? "code" : "own");
+  const [pairing, setPairing] = useState("");
+  /** Что приехало по коду связки. Пока null — пароль спрашивать рано. */
+  const [found, setFound] = useState<{ base: string; login: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [ask, setAsk] = useState<[number, number]>([0, 1]);
   const [answers, setAnswers] = useState(["", ""]);
@@ -151,18 +182,20 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     event.preventDefault();
     setError(null);
     setBusy(true);
+    const at = found?.base ?? (joinWay === "own" ? base : DEFAULT_SERVER);
+    const who = found?.login ?? login;
     try {
       // До подключения, а не после: после него данные уже перемешаны.
-      await refuseSharedServerAccount(base, login);
+      await refuseSharedServerAccount(at, who);
 
       const joined = await serverAccount.signIn({
-        base,
-        login,
+        base: at,
+        login: who,
         password: joinPassword,
         device: deviceName()
       });
       await accountService.adopt(joined.vault, joinPassword);
-      await rememberMyServer(base, login);
+      await rememberMyServer(at, who);
       await resumeSync();
       await flushSync();
       onDone();
@@ -171,6 +204,58 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * Предъявить код связки — набранный руками или снятый камерой.
+   *
+   * Разбирает его тот же разборщик, что и в настройках: заведи мы второй, они
+   * однажды разойдутся молча, и выглядеть это будет как «камера не читает».
+   */
+  async function redeem(raw: string) {
+    setError(null);
+    const parsed = readPairing(raw);
+    if (!parsed) return setError(t("server.pairCodeBad"));
+    setBusy(true);
+    try {
+      setFound(await redeemPairing(parsed.base ?? DEFAULT_SERVER, parsed.code));
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Имена нарочно не начинаются с «use»: линтер принял бы их за хуки.
+  async function submitPairing(event: React.FormEvent) {
+    event.preventDefault();
+    await redeem(pairing);
+  }
+
+  async function openCamera() {
+    setError(null);
+    setBusy(true);
+    const shot = await scanQr();
+    setBusy(false);
+    if (shot.ok) {
+      setPairing(shot.text);
+      await redeem(shot.text);
+      return;
+    }
+    if (shot.why === "cancelled") return;
+    setError(
+      shot.why === "denied"
+        ? t("server.cameraDenied")
+        : shot.why === "absent"
+          ? t("server.cameraAbsent")
+          : t("server.cameraBroken")
+    );
+  }
+
+  function switchJoin(next: JoinWay) {
+    setJoinWay(next);
+    setFound(null);
+    setError(null);
   }
 
   function answer(slot: number, value: string) {
@@ -183,6 +268,28 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     if (!ok) return setError(t("vault.verify.wrong"));
     protectionDone();
   }
+
+  /**
+   * Шаг назад. Без него первый запуск был коридором без обратного хода:
+   * выбрал «данные на другом устройстве» по ошибке — и застрял, как и
+   * описал владелец.
+   */
+  function back(to: Step) {
+    setError(null);
+    setFound(null);
+    setStep(to);
+  }
+
+  const backButton = (to: Step) => (
+    <button
+      type="button"
+      onClick={() => back(to)}
+      className="-ml-1 inline-flex min-h-9 items-center gap-1 rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+    >
+      <ChevronLeft className="size-4" />
+      {t("vault.back")}
+    </button>
+  );
 
   return (
     <Shell>
@@ -217,6 +324,12 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
               }}
             />
           </div>
+
+          {onLeave ? (
+            <Button type="button" variant="ghost" className="w-full" onClick={onLeave}>
+              {t("vault.leave")}
+            </Button>
+          ) : null}
         </div>
       )}
 
@@ -249,53 +362,138 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
       )}
 
       {step === "join" && (
-        <form onSubmit={join} className="space-y-4">
+        <div className="space-y-4">
+          {backButton("source")}
           <Head icon={<ShieldCheck className="size-5" />} title={t("vault.join.title")} />
-          <p className="text-sm text-muted-foreground">{t("vault.join.lead")}</p>
 
-          <div className="space-y-2">
-            <Label htmlFor="join-base">{t("server.address")}</Label>
-            <Input
-              id="join-base"
-              inputMode="url"
-              autoCapitalize="none"
-              placeholder="https://finance.example.org"
-              value={base}
-              onChange={(event) => setBase(event.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="join-login">{t("server.login")}</Label>
-            <Input
-              id="join-login"
-              autoCapitalize="none"
-              value={login}
-              onChange={(event) => setLogin(event.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="join-password">{t("server.password")}</Label>
-            <Input
-              id="join-password"
-              type="password"
-              autoComplete="current-password"
-              value={joinPassword}
-              onChange={(event) => setJoinPassword(event.target.value)}
-              required
-            />
-          </div>
+          {joinWay === "code" && !found ? (
+            <form onSubmit={submitPairing} className="space-y-4">
+              <p className="text-sm text-muted-foreground">{t("vault.join.codeLead")}</p>
+              <div className="space-y-2">
+                <Label htmlFor="join-pairing">{t("server.pairCode")}</Label>
+                <Input
+                  id="join-pairing"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  placeholder="ABCD-EFGH"
+                  value={pairing}
+                  onChange={(event) => setPairing(event.target.value)}
+                  required
+                />
+              </div>
+              <Problem text={error} />
+              <div className="grid gap-2">
+                <Button type="submit" disabled={busy}>
+                  {busy ? t("server.pairCodeCheck") : t("server.pairCodeUse")}
+                </Button>
+                {/* Камера — только там, где она есть: предлагать путь, которого
+                    нет, хуже, чем не предлагать ничего. */}
+                {cameraPossible() ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => void openCamera()}
+                  >
+                    <Camera className="size-4" />
+                    {t("server.cameraUse")}
+                  </Button>
+                ) : null}
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={join} className="space-y-4">
+              {found ? (
+                <p className="rounded-lg border bg-muted/40 p-3 text-sm">
+                  {t("server.pairCodeFound", { login: found.login, base: found.base })}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {joinWay === "own" ? t("vault.join.lead") : t("vault.join.loginLead")}
+                </p>
+              )}
 
-          <Problem text={error} />
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? t("vault.join.working") : t("vault.join.submit")}
-          </Button>
-        </form>
+              {joinWay === "own" && !found ? (
+                <div className="space-y-2">
+                  <Label htmlFor="join-base">{t("server.address")}</Label>
+                  <Input
+                    id="join-base"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    placeholder="https://finance.example.org"
+                    value={base}
+                    onChange={(event) => setBase(event.target.value)}
+                    required
+                  />
+                </div>
+              ) : null}
+              {found ? null : (
+                <div className="space-y-2">
+                  <Label htmlFor="join-login">{t("server.login")}</Label>
+                  <Input
+                    id="join-login"
+                    autoCapitalize="none"
+                    value={login}
+                    onChange={(event) => setLogin(event.target.value)}
+                    required
+                  />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="join-password">{t("server.password")}</Label>
+                <Input
+                  id="join-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={joinPassword}
+                  onChange={(event) => setJoinPassword(event.target.value)}
+                  required
+                />
+              </div>
+
+              <Problem text={error} />
+              <Button type="submit" className="w-full" disabled={busy}>
+                {busy ? t("vault.join.working") : t("vault.join.submit")}
+              </Button>
+            </form>
+          )}
+
+          {/* Другие пути — мелко и ниже: основной один, и он наверху. */}
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+            {hasDefaultServer() && (joinWay !== "code" || found) ? (
+              <button
+                type="button"
+                className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                onClick={() => switchJoin("code")}
+              >
+                {t("vault.join.byCode")}
+              </button>
+            ) : null}
+            {hasDefaultServer() && joinWay !== "login" ? (
+              <button
+                type="button"
+                className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                onClick={() => switchJoin("login")}
+              >
+                {t("vault.join.byLogin")}
+              </button>
+            ) : null}
+            {joinWay !== "own" ? (
+              <button
+                type="button"
+                className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                onClick={() => switchJoin("own")}
+              >
+                {t("server.whereOwn")}
+              </button>
+            ) : null}
+          </div>
+        </div>
       )}
 
       {step === "choose" && (
         <div className="space-y-4">
+          {backButton("source")}
           <Head icon={<Lock className="size-5" />} title={t("vault.choose.title")} />
           <p className="text-sm text-muted-foreground">{t("vault.choose.lead")}</p>
 
@@ -325,6 +523,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
 
       {step === "password" && (
         <form onSubmit={createAccount} className="space-y-4">
+          {backButton("choose")}
           <Head icon={<Lock className="size-5" />} title={t("vault.setup.title")} />
           <p className="text-sm text-muted-foreground">{t("vault.setup.lead")}</p>
 

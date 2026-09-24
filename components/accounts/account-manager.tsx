@@ -27,6 +27,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -239,7 +240,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                 </Table>
               </div>
 
-              <div className="grid gap-3 md:hidden">
+              <div className="stagger grid gap-3 md:hidden">
                 {pageData.accounts.map((account) => (
                   <div key={account.id} className="rounded-lg border p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -435,7 +436,7 @@ function AccountDialog({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>{t("common.type")}</Label>
+          <FieldLabel help={t("help.acc.type")}>{t("common.type")}</FieldLabel>
           <Select name="type" value={type} onValueChange={setType}>
             <SelectTrigger>
               <SelectValue />
@@ -449,7 +450,7 @@ function AccountDialog({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>{t("common.balance")}</Label>
+          <FieldLabel help={t("help.acc.balance")}>{t("common.balance")}</FieldLabel>
           <Input
             name="balance"
             type="number"
@@ -461,7 +462,7 @@ function AccountDialog({
         {earnsInterest ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>{t("acc.rate")}</Label>
+              <FieldLabel help={t("help.acc.rate")}>{t("acc.rate")}</FieldLabel>
               <Input
                 name="interestRate"
                 type="number"
@@ -473,7 +474,7 @@ function AccountDialog({
               <p className="text-xs text-muted-foreground">{t("acc.rate.hint")}</p>
             </div>
             <div className="space-y-2">
-              <Label>{t("acc.compounding")}</Label>
+              <FieldLabel help={t("help.acc.compounding")}>{t("acc.compounding")}</FieldLabel>
               <Select
                 name="interestCompounding"
                 defaultValue={account?.interestCompounding ?? "MONTHLY"}

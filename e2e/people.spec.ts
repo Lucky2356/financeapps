@@ -144,7 +144,9 @@ test.describe("дверь к второму человеку", () => {
 
   test("«Добавить человека» видно в настройках, когда человек один", async ({ page }) => {
     await seedExampleData(page);
-    await openSettled(page, "/settings?section=data");
+    // С 1.46.0 люди на устройстве — в разделе «Пароль и доступ», а не в
+    // «Данных»: это про то, кто открывает данные, а не про сами данные.
+    await openSettled(page, "/settings?section=security");
 
     const card = page.locator("#set-people");
     await expect(card).toBeVisible({ timeout: 30_000 });

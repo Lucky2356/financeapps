@@ -59,6 +59,18 @@ export function HoldingCard({
           <p className="truncate text-xs text-muted-foreground">
             {t(`inv.kind.${position.assetKind ?? "STOCK"}`)} · {position.name}
           </p>
+          {/* Средняя цена покупки — на виду, а не в развёрнутой карточке: по ней
+              человек решает, докупать ли, и сверяет с ценой сейчас. Прятать её
+              за нажатие значило заставлять раскрывать каждую бумагу по очереди. */}
+          <p
+            className="mt-1 truncate text-xs tabular-nums text-muted-foreground"
+            data-testid="holding-average"
+          >
+            {t("inv.card.average", {
+              qty: position.quantity.toLocaleString(),
+              avg: formatCurrency(position.averageBuyPrice, currency)
+            })}
+          </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="font-semibold leading-tight">
@@ -80,7 +92,7 @@ export function HoldingCard({
       </button>
 
       {expanded ? (
-        <div className="border-t p-4">
+        <div className="border-t p-4 duration-200 animate-in fade-in-0 slide-in-from-top-1">
           <dl className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
             <Detail label={t("inv.col.qty")} value={position.quantity.toLocaleString()} />
             <Detail

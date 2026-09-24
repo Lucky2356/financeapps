@@ -243,6 +243,14 @@ async function strangerAddress() {
   await closeDialogs();
   await press("Настройки");
   await closeDialogs();
+  // Поле адреса с 1.44.0 спрятано за «У меня своя служба»: обычному человеку
+  // адрес не нужен, он зашит в сборку. Шов проверяет именно СВОЮ службу —
+  // адрес, которого нет в политике, — значит и путь к нему тот же, что у
+  // человека, поднявшего службу сам.
+  // С 1.46.0 настройки открываются одним разделом, «Основными»; служба — в
+  // «Синхронизации».
+  await press("Синхронизация");
+  await press("У меня своя служба");
   await type(await waitFor("#server-base"), STRANGER);
   await type(await find("#server-login"), "прогон");
   await type(await find("#server-password"), PASSWORD);
@@ -284,6 +292,12 @@ const UPDATER_FINE = ["У вас актуальная версия", "Досту
 const UPDATER_BROKEN = "Автообновление недоступно";
 
 async function updates() {
+  // Кнопка — в разделе «О приложении». Идём туда сами, а не полагаемся на то,
+  // где оставил приложение прошлый шов: упади он на полпути, этот шов искал
+  // бы кнопку на чужом экране и краснел бы не за своё.
+  await closeDialogs();
+  await press("Настройки");
+  await press("О приложении");
   await press("Проверить обновления");
   const answer = await until(
     "ответ обновлялки",

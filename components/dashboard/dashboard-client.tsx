@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CashflowChart, ExpenseCategoryChart, NetWorthChart } from "@/components/charts/lazy";
 import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
-import { BackupNotice } from "@/components/dashboard/backup-notice";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
 import { NetWorthBreakdownCard } from "@/components/dashboard/net-worth-breakdown";
@@ -108,7 +107,7 @@ export function DashboardClient({
           </Card>
         ) : null,
       metrics: (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {data.metrics.map((metric) => (
             <MetricCard key={metric.title} metric={metric} />
           ))}
@@ -118,7 +117,7 @@ export function DashboardClient({
         <section className="space-y-4">
           {/* Two halves of the same month, side by side: what came in and what
               went out. Reading one without the other only tells half a story. */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="stagger grid gap-4 lg:grid-cols-2">
             <CategoryBreakdownCard
               title={t("dash.categoryIncome")}
               empty={t("dash.categoryIncome.empty")}
@@ -154,7 +153,6 @@ export function DashboardClient({
       {/* Единственное, что стоит выше денег: сообщение о том, что этих денег
           можно лишиться. Появляется, только если есть что терять и копии давно
           не было, и уходит само, как только копия сделана. */}
-      <BackupNotice />
 
       {layout.order.map((widget) => {
         if (isHidden(layout, widget)) return null;

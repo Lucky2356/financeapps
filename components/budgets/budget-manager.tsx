@@ -335,7 +335,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
           </Table>
         </div>
 
-        <div className="grid gap-3 md:hidden">
+        <div className="stagger grid gap-3 md:hidden">
           {pageData.budgets.map((budget) => (
             <div
               key={budget.categoryId}

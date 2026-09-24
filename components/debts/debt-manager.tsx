@@ -25,6 +25,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -176,7 +177,7 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
           }
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="stagger grid gap-4 lg:grid-cols-2">
           {[...activeDebts(pageData.liabilities), ...settledDebts(pageData.liabilities)].map(
             (liability) => (
               <Card key={liability.id} className={cn(Boolean(liability.settledAt) && "opacity-70")}>
@@ -357,7 +358,7 @@ function DebtDialog({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>{t("debt.dialog.balance")}</Label>
+            <FieldLabel help={t("help.debt.balance")}>{t("debt.dialog.balance")}</FieldLabel>
             {/* step="0.01" (not 100): a coarse step makes the browser reject any
                 real-world amount that isn't a round hundred ("281285"). */}
             <AmountInput
@@ -370,7 +371,7 @@ function DebtDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>{t("debt.dialog.original")}</Label>
+            <FieldLabel help={t("help.debt.original")}>{t("debt.dialog.original")}</FieldLabel>
             <AmountInput
               name="originalAmount"
               min="0"
@@ -380,7 +381,7 @@ function DebtDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>{t("debt.dialog.rate")}</Label>
+            <FieldLabel help={t("help.debt.rate")}>{t("debt.dialog.rate")}</FieldLabel>
             <Input
               name="interestRate"
               type="number"
@@ -391,7 +392,7 @@ function DebtDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>{t("debt.dialog.payment")}</Label>
+            <FieldLabel help={t("help.debt.payment")}>{t("debt.dialog.payment")}</FieldLabel>
             <AmountInput
               name="minPayment"
               min="0"
@@ -401,7 +402,7 @@ function DebtDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>{t("debt.dialog.dueDay")}</Label>
+            <FieldLabel help={t("help.debt.dueDay")}>{t("debt.dialog.dueDay")}</FieldLabel>
             {/* `max` alone doesn't stop typing (27678890 got in), so clamp on blur. */}
             <Input
               name="dueDay"
@@ -457,7 +458,9 @@ function DebtDialog({
           {autoPay ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>{t("debt.autoPay.account")}</Label>
+                <FieldLabel help={t("help.debt.autoAccount")}>
+                  {t("debt.autoPay.account")}
+                </FieldLabel>
                 <Select
                   name="paymentAccountId"
                   defaultValue={liability?.paymentAccountId ?? accounts[0]?.id}
@@ -475,7 +478,9 @@ function DebtDialog({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>{t("debt.autoPay.category")}</Label>
+                <FieldLabel help={t("help.debt.autoCategory")}>
+                  {t("debt.autoPay.category")}
+                </FieldLabel>
                 <Select
                   name="paymentCategoryId"
                   defaultValue={liability?.paymentCategoryId ?? categories[0]?.id}

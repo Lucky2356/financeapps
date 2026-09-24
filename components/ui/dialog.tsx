@@ -40,8 +40,16 @@ const DialogContent = React.forwardRef<
           fixed containing block IS the viewport — any transformed, filtered or
           zoomed ancestor moves it, and one desktop window showed the dialog
           sitting off in a corner because of exactly that. The layer itself
-          passes clicks through, so closing by clicking outside still works. */}
-      <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+          passes clicks through, so closing by clicking outside still works.
+
+          НА ТЕЛЕФОНЕ — К ВЕРХУ, А НЕ К ЦЕНТРУ. Середина окна зависит от его
+          высоты, а высоту меняет клавиатура. Человек вводил сумму, касался
+          «Категории» — поле теряло фокус, клавиатура уходила, окно вырастало,
+          и диалог съезжал вниз на полклавиатуры. Список на касание открывается
+          по click, а click приходит, когда палец поднят, — уже мимо кнопки.
+          Приходилось нажимать дважды. Верхний край от высоты окна не зависит.
+          Стережёт e2e/quick-add-touch.spec.ts. */}
+      <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:items-center sm:pt-4">
         <DialogPrimitive.Content
           ref={ref}
           className={cn(

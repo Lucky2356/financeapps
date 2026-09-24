@@ -32,16 +32,10 @@ const FOLDER_KEY = "sync-folder";
 // Desktop-only server-less sync: writes an encrypted snapshot into a folder the
 // user's cloud client (Dropbox / Google Drive / OneDrive) mirrors across
 // devices. The passphrase is never stored — it is entered per push/pull.
-export function CloudSyncPanel() {
-  return (
-    <>
-      <CloudSyncPanelInner />
-      <AutoBackupSection />
-    </>
-  );
-}
-
-function CloudSyncPanelInner() {
+//
+// Копии по расписанию жили здесь же и уехали в «Данные», к резервной копии:
+// это не синхронизация, а страховка, и искать её человек будет рядом с копией.
+export function CloudSyncPanel({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const [folder, setFolder] = useState<string | null>(null);
@@ -105,8 +99,8 @@ function CloudSyncPanelInner() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={embedded ? "border-0 bg-transparent shadow-none" : undefined}>
+      <CardHeader className={embedded ? "hidden" : undefined}>
         <CardTitle className="flex items-center gap-2">
           <RefreshCw className="size-4" />
           {t("sync.title")}
@@ -165,7 +159,7 @@ function CloudSyncPanelInner() {
 
 // Scheduled local backups: a timestamped snapshot written to a chosen folder on
 // app start, with rotation. No passphrase (on-disk safety copy, not cloud sync).
-function AutoBackupSection() {
+export function AutoBackupPanel() {
   const { t } = useI18n();
   const [config, setConfig] = useState<AutoBackupConfig>({
     frequency: "off",

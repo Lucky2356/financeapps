@@ -168,8 +168,15 @@
      sideways. `clip` rather than `hidden` so sticky headers keep working. The
      layout rules below are what actually keep content inside the screen — this
      only guarantees that a floating overlay (a chart tooltip under the finger)
-     can never shift the whole page and clip the fixed navigation. */
-  html,
+     can never shift the whole page and clip the fixed navigation.
+
+     ТОЛЬКО body, НЕ html. Выпадающий список на время открытия запрещает
+     прокрутку, вешая на body `overflow: hidden`. Пока у html свой overflow был
+     не `visible`, overflow body не передавался окну, и body сам становился
+     прокручиваемым контейнером — боковая колонка (sticky) прилипала к нему, то
+     есть к верху документа, и на прокрученной странице улетала вверх ровно на
+     прокрутку. С одним body его overflow уходит окну: запрет замораживает само
+     окно, и колонка стоит где стояла. Стережёт e2e/settings-select-scroll.spec.ts. */
   body {
     overflow-x: clip;
   }
@@ -262,7 +269,13 @@
     border-color: hsl(var(--border) / 0.6);
   }
 
-  /* Gentle entrance for sections/cards as they appear. */
+  /* Gentle entrance for sections/cards as they appear.
+
+     Конечный кадр — `transform: none`, а не translateY(0), и это не
+     придирка. Заливка `both` оставляет последний кадр навсегда, а любой
+     transform, кроме none, делает элемент опорой для position: fixed внутри
+     него. С 1.46.0 этот класс стоит на обёртке КАЖДОГО экрана — и всё
+     закреплённое внутри экранов прилипало бы не к окну, а к обёртке. */
   .reveal {
     animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -273,7 +286,64 @@
     }
     to {
       opacity: 1;
-      transform: translateY(0);
+      transform: none;
+    }
+  }
+
+  /* Каскад: дети появляются по очереди, с шагом в 40 мс. Список карточек
+     читается как собранный, а не как вспыхнувший разом. Шаг кончается на
+     десятом: пятидесятая карточка, появившаяся через две секунды, — это уже
+     не красиво, а медленно. */
+  .stagger > * {
+    animation: reveal 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+  .stagger > *:nth-child(7) {
+    animation-delay: 240ms;
+  }
+  .stagger > *:nth-child(8) {
+    animation-delay: 280ms;
+  }
+  .stagger > *:nth-child(9) {
+    animation-delay: 320ms;
+  }
+  .stagger > *:nth-child(n + 10) {
+    animation-delay: 360ms;
+  }
+
+  /* Полоса прогресса наливается от нуля до своего значения. Ключевой кадр
+     один — начальный: конечным браузер берёт то, что стоит в style полосы,
+     поэтому одна запись годится для любого процента. */
+  .fill-in {
+    animation: fill-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes fill-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  /* То же для полос, у которых доля задана шириной, а не сдвигом. */
+  .grow-x {
+    transform-origin: left center;
+    animation: grow-x 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes grow-x {
+    from {
+      transform: scaleX(0);
     }
   }
 

@@ -1,41 +1,41 @@
 "use client";
 
 import {
+  AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Database,
   Download,
   GraduationCap,
   Info,
-  Keyboard,
   Loader2,
-  Monitor,
-  Moon,
-  Palette,
-  Repeat,
+  PiggyBank,
+  RefreshCw,
   Search,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
-  Sun,
   Trash2,
   type LucideIcon
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useId, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
-import { CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
+import { AutoBackupPanel, CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
 import { DevicesPanel } from "@/components/settings/devices-panel";
 import { PeoplePanel } from "@/components/settings/people-panel";
 import { ServerPanel } from "@/components/settings/server-panel";
 import { VaultPanel } from "@/components/settings/vault-panel";
 import { ImportExportPanel } from "@/components/import/import-export-panel";
-import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
+import { InfoHint } from "@/components/info-hint";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { AI_EFFORTS, AI_PROVIDERS, providerInfo, type AiProvider } from "@/lib/ai/models";
@@ -43,7 +43,6 @@ import { APP_VERSION } from "@/lib/constants";
 import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
@@ -56,6 +55,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import {
   ALL_OPTION,
@@ -67,7 +67,7 @@ import {
 } from "@/components/ui/select";
 import { markThemeChosen } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
-import { removeMine } from "@/lib/storage/mine";
+import { forgetMyData, removeMine } from "@/lib/storage/mine";
 
 const shortcuts = [
   { keys: "Alt+N", labelKey: "set.shortcut.add" },
@@ -113,14 +113,33 @@ function toEditable(data: SettingsPageData): EditableSettings {
   };
 }
 
+/** Подписка-пустышка: платформа за время жизни страницы не меняется. */
+const noSubscribe = () => () => undefined;
+
 const RELEASES_URL = "https://github.com/Lucky2356/financeapps/releases/latest";
 
 type Section = {
   id: string;
   label: string;
+  /** Что внутри — строкой под названием в списке разделов. */
+  summary: string;
+  /** О чём раздел — под заголовком открытого раздела. */
+  lead: string;
   icon: LucideIcon;
   keywords: string;
   node: React.ReactNode;
+};
+
+/**
+ * Разделы, которых больше нет, — и куда их содержимое переехало. Старые
+ * ссылки (закладки, прежние выпуски памяток) ведут в нужное место, а не на
+ * пустой экран.
+ */
+const MOVED_SECTIONS: Record<string, string> = {
+  appearance: "general",
+  automation: "finance",
+  risk: "finance",
+  account: "security"
 };
 
 export function SettingsForm({ data }: { data: SettingsPageData }) {
@@ -133,17 +152,18 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [settings, setSettings] = useState<EditableSettings>(() => toEditable(pageData));
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
-  // A link may name the section to open — the ledger's «Данные» tab points
-  // straight here, so it has to land on the data section rather than on the
-  // first one.
+  const router = useRouter();
+  // Открытый раздел живёт в адресе (?section=data), а не в состоянии экрана.
+  // Так ссылка «Данные» из меню открывает нужный раздел, а кнопка «назад» на
+  // телефоне возвращает к списку разделов, а не уводит с настроек вовсе.
   const requestedSection = useSearchParams().get("section");
-  const [activeId, setActiveId] = useState(requestedSection || "general");
-  const [syncedSection, setSyncedSection] = useState(requestedSection);
-  if (syncedSection !== requestedSection) {
-    setSyncedSection(requestedSection);
-    if (requestedSection) setActiveId(requestedSection);
-  }
+  const chosen = requestedSection ? (MOVED_SECTIONS[requestedSection] ?? requestedSection) : null;
+  const activeId = chosen ?? "general";
   const [query, setQuery] = useState("");
+  // Папку на диске выбрать можно только на компьютере: у телефона такого
+  // окна нет. Через внешнее хранилище, а не проверкой при отрисовке, — чтобы
+  // собранная заранее страница и живая не разошлись при оживлении.
+  const android = useSyncExternalStore(noSubscribe, isAndroidShell, () => false);
 
   // Re-sync controlled fields whenever fresh data arrives (e.g. the real values
   // load from IndexedDB after mount, or a save round-trips through reload()).
@@ -210,6 +230,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     try {
       setClearing(true);
       await apiClient.delete("/storage/clear");
+      forgetMyData();
       toast.success(t("set.toast.cleared"));
       await new Promise((r) => setTimeout(r, 600));
       window.location.reload();
@@ -316,207 +337,176 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     }
   }
 
-  // ── Section definitions ─────────────────────────────────────────────
+  // ── Разделы ─────────────────────────────────────────────────────────
+  //
+  // Семь разделов, и на экране всегда один. Прежде они шли одной лентой в
+  // девять экранов телефона, и владелец сказал прямо: «чтоб человеку не нужно
+  // было миллион лет листать». Раскладка по смыслу, а не по тому, в каком
+  // выпуске настройка появилась: всё, что про другие устройства, — в
+  // «Синхронизации», всё, что про пароль и соседей по устройству, — в «Пароле и
+  // доступе», и «Данные» перестали быть свалкой из восьми карточек.
   const sections = useMemo<Section[]>(() => {
     const list: Section[] = [];
 
     list.push({
       id: "general",
-      label: t("set.section.general"),
+      label: t("set.nav.general"),
+      summary: t("set.nav.general.summary"),
+      lead: t("set.nav.general.lead"),
       icon: SlidersHorizontal,
       keywords:
-        "основные general валюта currency демо demo тип type операции transaction доход income расход expense по умолчанию default",
+        "основные general валюта currency язык language русский english тема theme светлая light тёмная dark системная system плотность density внешний вид appearance",
       node: (
-        <SectionCard id="set-general" title={t("set.general.title")}>
-          <SelectField
-            label={t("set.currency")}
-            value={settings.currency}
-            onValueChange={(value) => void persist({ currency: value as CurrencyCode })}
-            hint={t("set.currency.hint")}
-          >
-            {SUPPORTED_CURRENCIES.map((item) => (
-              <SelectItem key={item.code} value={item.code}>
-                {item.code} — {item.label}
-              </SelectItem>
-            ))}
-          </SelectField>
-          <ToggleRow
-            title={t("set.demo.title")}
-            description={t("set.demo.desc")}
-            checked={settings.demoMode}
-            onChange={(v) => void persist({ demoMode: v })}
-          />
-          <SelectField
-            label={t("set.defaultType")}
-            value={settings.defaultTransactionType}
-            onValueChange={(value) =>
-              void persist({
-                defaultTransactionType: value as EditableSettings["defaultTransactionType"]
-              })
-            }
-            hint={t("set.defaultType.hint")}
-          >
-            <SelectItem value="EXPENSE">{t("set.type.expense")}</SelectItem>
-            <SelectItem value="INCOME">{t("set.type.income")}</SelectItem>
-          </SelectField>
-        </SectionCard>
-      )
-    });
-
-    list.push({
-      id: "automation",
-      label: t("set.section.automation"),
-      icon: Repeat,
-      keywords:
-        "автоматизация automation авто-проведение регулярные recurring напоминания reminders платежи payments уведомления notifications",
-      node: (
-        <SectionCard id="set-automation" title={t("set.automation.title")}>
-          <ToggleRow
-            title={t("set.autoMaterialize.title")}
-            description={t("set.autoMaterialize.desc")}
-            checked={settings.autoMaterializeRecurring}
-            onChange={(v) => void persist({ autoMaterializeRecurring: v })}
-          />
-          <ToggleRow
-            title={t("set.reminders.title")}
-            description={t("set.reminders.desc")}
-            checked={settings.paymentReminders}
-            onChange={(v) => void persist({ paymentReminders: v })}
-          />
-        </SectionCard>
-      )
-    });
-
-    list.push({
-      id: "appearance",
-      label: t("set.section.appearance"),
-      icon: Palette,
-      keywords:
-        "внешний вид appearance тема theme оформление светлая light тёмная dark системная system плотность density язык language русский english",
-      node: (
-        <SectionCard id="set-appearance" title={t("set.appearance.title")}>
-          <SettingRow label={t("set.theme")} block>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { value: "light", label: t("set.theme.light"), icon: Sun },
-                  { value: "system", label: t("set.theme.system"), icon: Monitor },
-                  { value: "dark", label: t("set.theme.dark"), icon: Moon }
-                ] as const
-              ).map(({ value, label, icon: Icon }) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex min-h-11 cursor-pointer flex-col items-center gap-2 rounded-lg border p-3 text-center text-sm transition-colors hover:bg-muted/40",
-                    selectedTheme === value &&
-                      "border-primary bg-primary/8 font-medium text-primary"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="theme"
-                    value={value}
-                    checked={selectedTheme === value}
-                    onChange={() => void persist({ theme: value })}
-                    className="sr-only"
-                  />
-                  <Icon className="size-5" />
-                  {label}
-                </label>
+        <>
+          <Group title={t("set.group.display")}>
+            <SelectField
+              id="set-currency"
+              label={t("set.currency")}
+              help={t("set.help.currency")}
+              value={settings.currency}
+              onValueChange={(value) => void persist({ currency: value as CurrencyCode })}
+            >
+              {SUPPORTED_CURRENCIES.map((item) => (
+                <SelectItem key={item.code} value={item.code}>
+                  {item.code} — {item.label}
+                </SelectItem>
               ))}
-            </div>
-          </SettingRow>
-          <SettingRow label={t("set.density")} block>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  { value: "comfortable", label: t("set.density.comfortable") },
-                  { value: "compact", label: t("set.density.compact") }
-                ] as const
-              ).map(({ value, label }) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex min-h-11 cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
-                    selectedDensity === value &&
-                      "border-primary bg-primary/8 font-medium text-primary"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="density"
-                    value={value}
-                    checked={selectedDensity === value}
-                    onChange={() => void persist({ density: value })}
-                    className="sr-only"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </SettingRow>
-          <SettingRow label={t("settings.language.title")} block>
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
+            </SelectField>
+            <SettingRow label={t("settings.language.title")} help={t("set.help.language")}>
+              <Segmented
+                ariaLabel={t("settings.language.title")}
+                value={locale}
+                onChange={(value) => setLocale(value)}
+                options={[
                   { value: "ru", label: t("settings.language.ru") },
                   { value: "en", label: t("settings.language.en") }
-                ] as const
-              ).map(({ value, label }) => (
-                <label
-                  key={value}
-                  className={cn(
-                    "flex min-h-11 cursor-pointer items-center justify-center rounded-lg border p-3 text-sm transition-colors hover:bg-muted/40",
-                    locale === value && "border-primary bg-primary/8 font-medium text-primary"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="locale"
-                    value={value}
-                    checked={locale === value}
-                    onChange={() => setLocale(value)}
-                    className="sr-only"
-                  />
-                  {label}
-                </label>
+                ]}
+              />
+            </SettingRow>
+          </Group>
+          <Group title={t("set.group.look")}>
+            <SettingRow label={t("set.theme")} help={t("set.help.theme")}>
+              <Segmented
+                ariaLabel={t("set.theme")}
+                value={selectedTheme}
+                onChange={(value) => void persist({ theme: value })}
+                options={[
+                  { value: "light", label: t("set.theme.light") },
+                  { value: "system", label: t("set.theme.system") },
+                  { value: "dark", label: t("set.theme.dark") }
+                ]}
+              />
+            </SettingRow>
+            <SettingRow label={t("set.density")} help={t("set.help.density")}>
+              <Segmented
+                ariaLabel={t("set.density")}
+                value={selectedDensity}
+                onChange={(value) => void persist({ density: value })}
+                options={[
+                  { value: "comfortable", label: t("set.density.comfortable") },
+                  { value: "compact", label: t("set.density.compact") }
+                ]}
+              />
+            </SettingRow>
+          </Group>
+        </>
+      )
+    });
+
+    list.push({
+      id: "finance",
+      label: t("set.nav.finance"),
+      summary: t("set.nav.finance.summary"),
+      lead: t("set.nav.finance.lead"),
+      icon: PiggyBank,
+      keywords:
+        "финансы finance регулярные recurring автоматизация automation проведение напоминания reminders платежи payments уведомления notifications риск risk профиль profile подушка cushion резерв reserve",
+      node: (
+        <>
+          <Group title={t("set.group.recurring")}>
+            <ToggleRow
+              title={t("set.autoMaterialize.title")}
+              description={t("set.autoMaterialize.desc")}
+              help={t("set.help.autoMaterialize")}
+              checked={settings.autoMaterializeRecurring}
+              onChange={(v) => void persist({ autoMaterializeRecurring: v })}
+            />
+            <ToggleRow
+              title={t("set.reminders.title")}
+              description={t("set.reminders.desc")}
+              help={t("set.help.reminders")}
+              checked={settings.paymentReminders}
+              onChange={(v) => void persist({ paymentReminders: v })}
+            />
+          </Group>
+          <Group title={t("set.group.goals")}>
+            <SelectField
+              id="set-fund"
+              label={t("set.risk.fund")}
+              help={t("hint.cushion")}
+              hint={t("set.risk.fund.hint")}
+              value={String(settings.emergencyFundMonthsTarget)}
+              onValueChange={(value) => void persist({ emergencyFundMonthsTarget: Number(value) })}
+            >
+              <SelectItem value="3">{t("set.risk.fund.months", { n: 3 })}</SelectItem>
+              <SelectItem value="6">{t("set.risk.fund.months12", { n: 6 })}</SelectItem>
+              <SelectItem value="12">{t("set.risk.fund.months12", { n: 12 })}</SelectItem>
+            </SelectField>
+            <SelectField
+              id="set-risk-profile"
+              label={t("set.risk.profile")}
+              help={t("hint.riskProfile")}
+              hint={t("set.risk.profile.hint")}
+              value={settings.riskProfileCode}
+              onValueChange={(value) =>
+                void persist({
+                  riskProfileCode: value as EditableSettings["riskProfileCode"]
+                })
+              }
+            >
+              {pageData.riskProfiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.code}>
+                  {t(`riskProfile.${profile.code}`)} — {t(`riskProfile.${profile.code}.desc`)}
+                </SelectItem>
               ))}
-            </div>
-            <p className="text-xs text-muted-foreground">{t("settings.language.hint")}</p>
-          </SettingRow>
-        </SectionCard>
+            </SelectField>
+          </Group>
+        </>
       )
     });
 
     list.push({
       id: "ai",
-      label: t("set.section.ai"),
+      label: t("set.nav.ai"),
+      summary: t("set.nav.ai.summary"),
+      lead: t("set.nav.ai.lead"),
       icon: Sparkles,
-      keywords: "ии ai claude ассистент assistant ключ key api модель model",
+      keywords:
+        "ии ai claude chatgpt deepseek ассистент помощник assistant ключ key api модель model",
       node: (
-        <SectionCard id="set-ai" title={t("set.ai.title")} icon={Sparkles}>
+        <Group>
           <ToggleRow
             title={t("set.ai.enable.title")}
             description={t("set.ai.enable.desc")}
+            help={t("set.help.ai")}
             checked={settings.aiEnabled}
             onChange={(v) => void persist({ aiEnabled: v })}
           />
-          {settings.aiEnabled && (
-            <>
-              {(() => {
+          {settings.aiEnabled
+            ? (() => {
                 const activeProvider = providerInfo(settings.aiProvider);
                 return (
                   <>
                     <SelectField
                       id="ai-provider"
                       label={t("set.ai.provider")}
+                      help={t("set.help.aiProvider")}
                       value={activeProvider.id}
                       onValueChange={(value) => {
                         // Switching provider resets the model to that provider's
                         // default (empty = its default model).
                         void persist({ aiProvider: value as AiProvider, aiModel: "" });
                       }}
-                      hint={t("set.ai.provider.hint")}
                     >
                       {AI_PROVIDERS.map((provider) => (
                         <SelectItem key={provider.id} value={provider.id}>
@@ -524,8 +514,13 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                         </SelectItem>
                       ))}
                     </SelectField>
-                    <div className="space-y-2">
-                      <Label htmlFor="ai-key">{t("set.ai.key")}</Label>
+                    <SettingRow
+                      label={t("set.ai.key")}
+                      help={t("set.help.aiKey")}
+                      hint={t(activeProvider.keyHintKey)}
+                      htmlFor="ai-key"
+                      block
+                    >
                       <Input
                         id="ai-key"
                         type="password"
@@ -535,23 +530,20 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                         onBlur={(e) => void persist({ aiApiKey: e.target.value.trim() })}
                         placeholder={activeProvider.id === "anthropic" ? "sk-ant-..." : "sk-..."}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        {t(activeProvider.keyHintKey)}
-                      </p>
                       {/* Where the key lives, said plainly. It is stored beside
                           the ledger without encryption, and since 1.24.0 it is
                           the one thing kept OUT of the backup file — which is
                           worth knowing before moving to a second computer. */}
                       <p className="text-xs text-muted-foreground">{t("set.ai.key.storage")}</p>
-                    </div>
+                    </SettingRow>
                     <SelectField
                       id="ai-model"
                       label={t("set.ai.model")}
+                      help={t("set.help.aiModel")}
                       value={settings.aiModel || ALL_OPTION}
                       onValueChange={(value) =>
                         void persist({ aiModel: value === ALL_OPTION ? "" : value })
                       }
-                      hint={t("set.ai.model.hint")}
                     >
                       <SelectItem value={ALL_OPTION}>{t("set.ai.model.default")}</SelectItem>
                       {activeProvider.models.map((model) => (
@@ -563,9 +555,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                     <SelectField
                       id="ai-effort"
                       label={t("set.ai.effort")}
+                      help={t("set.help.aiEffort")}
                       value={settings.aiEffort || "medium"}
                       onValueChange={(value) => void persist({ aiEffort: value })}
-                      hint={t("set.ai.effort.hint")}
                     >
                       {AI_EFFORTS.map((effort) => (
                         <SelectItem key={effort} value={effort}>
@@ -573,80 +565,92 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                         </SelectItem>
                       ))}
                     </SelectField>
+                    <p className="flex gap-2 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:px-5">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                      {t("set.ai.warning")}
+                    </p>
                   </>
                 );
-              })()}
-              <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                {t("set.ai.warning")}
-              </div>
-            </>
-          )}
-        </SectionCard>
+              })()
+            : null}
+        </Group>
       )
     });
 
     list.push({
-      id: "risk",
-      label: t("set.section.risk"),
+      id: "sync",
+      label: t("set.nav.sync"),
+      summary: t("set.nav.sync.summary"),
+      lead: t("set.nav.sync.lead"),
+      icon: RefreshCw,
+      keywords:
+        "синхронизация sync устройства devices телефон phone компьютер служба server сервер код связки pairing qr облако cloud папка folder dropbox drive",
+      node: (
+        <>
+          <ServerPanel />
+          <DevicesPanel />
+          {/* Старый способ — ручной перенос через облачную папку. Не удалён:
+              им могли пользоваться. Но и на виду ему не место — рядом со
+              службой он выглядел вторым равноправным путём и сбивал с толку. */}
+          {android ? null : (
+            <details className="group rounded-xl border bg-card">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0 space-y-1">
+                  <span className="block text-sm font-medium">{t("set.sync.other")}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t("set.sync.otherHint")}
+                  </span>
+                </span>
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180" />
+              </summary>
+              <div className="border-t">
+                <CloudSyncPanel embedded />
+              </div>
+            </details>
+          )}
+        </>
+      )
+    });
+
+    list.push({
+      id: "security",
+      label: t("set.nav.security"),
+      summary: t("set.nav.security.summary"),
+      lead: t("set.nav.security.lead"),
       icon: ShieldCheck,
       keywords:
-        "риск risk профиль profile подушка cushion резерв reserve emergency fund инвестиции investments",
+        "пароль password доступ access замок lock код восстановления recovery люди people человек person безопасность security",
       node: (
-        <SectionCard id="set-risk" title={t("set.risk.title")}>
-          <SelectField
-            labelClassName="inline-flex items-center gap-1"
-            label={
-              <>
-                {t("set.risk.profile")} <InfoHint text={FINANCE_TERM_HINTS["Риск-профиль"]} />
-              </>
-            }
-            value={settings.riskProfileCode}
-            onValueChange={(value) =>
-              void persist({
-                riskProfileCode: value as EditableSettings["riskProfileCode"]
-              })
-            }
-            hint={t("set.risk.profile.hint")}
-          >
-            {pageData.riskProfiles.map((profile) => (
-              <SelectItem key={profile.id} value={profile.code}>
-                {t(`riskProfile.${profile.code}`)} — {t(`riskProfile.${profile.code}.desc`)}
-              </SelectItem>
-            ))}
-          </SelectField>
-          <SelectField
-            labelClassName="inline-flex items-center gap-1"
-            label={
-              <>
-                {t("set.risk.fund")} <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
-              </>
-            }
-            value={String(settings.emergencyFundMonthsTarget)}
-            onValueChange={(value) => void persist({ emergencyFundMonthsTarget: Number(value) })}
-            hint={t("set.risk.fund.hint")}
-          >
-            <SelectItem value="3">{t("set.risk.fund.months", { n: 3 })}</SelectItem>
-            <SelectItem value="6">{t("set.risk.fund.months12", { n: 6 })}</SelectItem>
-            <SelectItem value="12">{t("set.risk.fund.months12", { n: 12 })}</SelectItem>
-          </SelectField>
-        </SectionCard>
+        <>
+          <VaultPanel />
+          <PeoplePanel />
+        </>
       )
     });
 
     list.push({
       id: "data",
-      label: t("set.section.data"),
+      label: t("set.nav.data"),
+      summary: t("set.nav.data.summary"),
+      lead: t("set.nav.data.lead"),
       icon: Database,
       keywords:
-        "данные data импорт import csv выгрузка экспорт export загрузить restore демо demo очистить clear backup резервная копия snapshot синхронизация sync облако cloud папка folder dropbox drive",
+        "данные data импорт import csv выгрузка экспорт export загрузить restore демо demo пример очистить clear удалить backup резервная копия snapshot",
       node: (
-        <div id="set-data" className="scroll-mt-24 space-y-4">
-          <Card className="border-destructive/30">
-            <CardHeader>
-              <CardTitle className="text-destructive">{t("set.data.title")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">{t("set.data.sampleHint")}</p>
+        <>
+          {/* Everything that moves data in or out of the app: the copy of it,
+              the CSV import and the exports. */}
+          <ImportExportPanel
+            data={{ source: "database", accounts: [], categories: [] } as ImportPageData}
+            transactions={[]}
+            afterBackup={android ? null : <AutoBackupPanel />}
+          />
+          <Group title={t("set.group.sample")}>
+            <SettingRow
+              label={t("set.data.loadSample")}
+              help={t("set.help.sample")}
+              hint={t("set.data.sampleHint")}
+            >
               <Button
                 variant="outline"
                 type="button"
@@ -655,14 +659,18 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 disabled={loadingSample}
               >
                 <Sparkles className="size-4" />
-                {loadingSample ? t("set.data.loading") : t("set.data.loadSample")}
+                {loadingSample ? t("set.data.loading") : t("set.data.loadSampleShort")}
               </Button>
-              <p className="pt-1 text-sm text-muted-foreground">{t("set.data.clearHint")}</p>
+            </SettingRow>
+          </Group>
+          {/* Опасное — последним и отдельно: сюда не попадают, листая. */}
+          <Group title={t("set.group.danger")} danger>
+            <SettingRow label={t("set.data.clear")} hint={t("set.data.clearHint")}>
               <Dialog>
                 <DialogTrigger asChild>
                   <Button variant="destructive" type="button" className="w-full">
                     <Trash2 className="size-4" />
-                    {t("set.data.clear")}
+                    {t("set.data.clearShort")}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
@@ -680,265 +688,312 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-            </CardContent>
-          </Card>
-          {/* Everything that moves data in or out of the app lives here now:
-              the copy of it, the CSV import, the exports and the folder sync.
-              The import used to be a screen of its own, one menu entry away
-              from a settings tab doing the same kind of work. */}
-          <ImportExportPanel
-            data={{ source: "database", accounts: [], categories: [] } as ImportPageData}
-            transactions={[]}
-          />
-          <CloudSyncPanel />
-          <ServerPanel />
-          <DevicesPanel />
-          <PeoplePanel />
-          <VaultPanel />
-        </div>
+            </SettingRow>
+          </Group>
+        </>
       )
     });
 
     list.push({
       id: "about",
-      label: t("set.section.about"),
+      label: t("set.nav.about"),
+      summary: t("set.nav.about.summary"),
+      lead: t("set.nav.about.lead"),
       icon: Info,
       keywords:
-        "о приложении about версия version обновления updates горячие клавиши shortcuts обучение onboarding безопасность security интеграции integrations банк bank",
+        "о приложении about версия version обновления updates горячие клавиши shortcuts обучение onboarding знакомство",
       node: (
-        <div id="set-about" className="scroll-mt-24 space-y-4">
-          <SectionCard title={t("set.about.shortcuts")} icon={Keyboard}>
-            <div className="grid gap-2">
+        <>
+          <Group>
+            <SettingRow
+              label={t("set.about.versionLabel")}
+              hint={t("set.about.version", { version: APP_VERSION })}
+            >
+              <Button
+                variant="outline"
+                type="button"
+                className="w-full"
+                onClick={() => void checkForUpdates()}
+                disabled={checkingUpdate}
+              >
+                <Download className="size-4" />
+                {checkingUpdate ? t("set.about.checking") : t("set.about.checkUpdates")}
+              </Button>
+            </SettingRow>
+            <SettingRow label={t("set.about.tour")} hint={t("set.about.tourHint")}>
+              <Button variant="outline" type="button" className="w-full" onClick={replayOnboarding}>
+                <GraduationCap className="size-4" />
+                {t("set.about.replayOnboarding")}
+              </Button>
+            </SettingRow>
+          </Group>
+          {/* Клавиш на телефоне нет — и списка на нём тоже. */}
+          <div className="hidden md:block">
+            <Group title={t("set.about.shortcuts")}>
               {shortcuts.map((s) => (
                 <div
                   key={s.keys}
-                  className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2"
+                  className="flex items-center justify-between gap-4 px-4 py-2.5 sm:px-5"
                 >
                   <span className="text-sm text-muted-foreground">{t(s.labelKey)}</span>
-                  <kbd className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{s.keys}</kbd>
+                  <kbd className="rounded-md border bg-muted px-2 py-0.5 font-mono text-xs">
+                    {s.keys}
+                  </kbd>
                 </div>
               ))}
-            </div>
-            <Button
-              variant="outline"
-              type="button"
-              className="mt-4 w-full"
-              onClick={replayOnboarding}
-            >
-              <GraduationCap className="size-4" />
-              {t("set.about.replayOnboarding")}
-            </Button>
-            <Button
-              variant="outline"
-              type="button"
-              className="mt-2 w-full"
-              onClick={() => void checkForUpdates()}
-              disabled={checkingUpdate}
-            >
-              <Download className="size-4" />
-              {checkingUpdate ? t("set.about.checking") : t("set.about.checkUpdates")}
-            </Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              {t("set.about.version", { version: APP_VERSION })}
-            </p>
-          </SectionCard>
-          <SectionCard title={t("set.about.security")} icon={ShieldCheck}>
-            <p className="text-sm text-muted-foreground">{t("set.about.securityText1")}</p>
-            <p className="text-sm text-muted-foreground">{t("set.about.securityText2")}</p>
-          </SectionCard>
-        </div>
+            </Group>
+          </div>
+        </>
       )
     });
 
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, pageData, status, locale, loadingSample, clearing, checkingUpdate]);
-
-  // Оглавление слева подсвечивает раздел, который сейчас на виду.
-  //
-  // Наблюдателем, а не обработчиком прокрутки: обработчик срабатывает десятки
-  // раз в секунду и считает положение каждого раздела заново, наблюдатель —
-  // только когда раздел въехал в окно или выехал из него. Верхняя полоса
-  // отсечения поднята к шапке, нижняя опущена почти до низа, чтобы «текущим»
-  // считался тот раздел, который читают, а не тот, что мелькнул краем.
-  useEffect(() => {
-    const anchors = Array.from(document.querySelectorAll<HTMLElement>("[id^='set-']"));
-    if (anchors.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const seen = entries.filter((entry) => entry.isIntersecting);
-        if (seen.length === 0) return;
-        const topmost = seen.reduce((best, entry) =>
-          entry.boundingClientRect.top < best.boundingClientRect.top ? entry : best
-        );
-        setActiveId(topmost.target.id.replace(/^set-/, ""));
-      },
-      { rootMargin: "-88px 0px -55% 0px" }
-    );
-    for (const anchor of anchors) observer.observe(anchor);
-    return () => observer.disconnect();
-  }, [sections]);
-
-  // Ссылка вида /settings?section=data должна ОТКРЫВАТЬ нужный раздел, а не
-  // просто подсвечивать его в оглавлении. Пока показывался один раздел за раз,
-  // переход случался сам собой; теперь разделы идут лентой, и без прокрутки
-  // человек, пришедший из «Данных», попадал бы в её начало и искал глазами.
-  //
-  // Один раз на каждый запрошенный раздел, а не при каждой перерисовке: список
-  // разделов пересобирается на любое изменение настройки, и без этой памяти
-  // страница прыгала бы к якорю после каждого щелчка по переключателю.
-  const scrolledTo = useRef<string | null>(null);
-  useEffect(() => {
-    if (!requestedSection || scrolledTo.current === requestedSection) return;
-    const target = document.getElementById(`set-${requestedSection}`);
-    if (!target) return;
-    scrolledTo.current = requestedSection;
-    target.scrollIntoView({ block: "start" });
-  }, [requestedSection, sections]);
+  }, [settings, pageData, status, locale, loadingSample, clearing, checkingUpdate, android]);
 
   const trimmedQuery = query.trim().toLowerCase();
   const matches = trimmedQuery
     ? sections.filter(
         (s) =>
           s.label.toLowerCase().includes(trimmedQuery) ||
+          s.summary.toLowerCase().includes(trimmedQuery) ||
           s.keywords.toLowerCase().includes(trimmedQuery)
       )
-    : sections;
+    : [];
+  const current = sections.find((section) => section.id === activeId) ?? sections[0];
+
+  function open(id: string) {
+    setQuery("");
+    router.push(`/settings?section=${id}`, { scroll: false });
+    // На телефоне раздел открывается «страницей» — с её начала, а не с того
+    // места, где был список.
+    window.scrollTo({ top: 0 });
+  }
+
+  const statusLine = (
+    <div className="flex h-5 items-center gap-1.5 text-xs text-muted-foreground" aria-live="polite">
+      {status === "saving" ? (
+        <>
+          <Loader2 className="size-3.5 animate-spin" />
+          {t("set.saving")}
+        </>
+      ) : status === "saved" ? (
+        <>
+          <Check className="size-3.5 text-success" />
+          <span className="text-success">{t("set.saved")}</span>
+        </>
+      ) : null}
+    </div>
+  );
+
+  const search = (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={t("set.search")}
+        className="pl-9"
+        aria-label={t("set.search")}
+      />
+    </div>
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {status === "saving" ? (
-            <>
-              <Loader2 className="size-3.5 animate-spin" />
-              {t("set.saving")}
-            </>
-          ) : status === "saved" ? (
-            <>
-              <Check className="size-3.5 text-primary" />
-              <span className="text-primary">{t("set.saved")}</span>
-            </>
-          ) : (
-            t("set.autosaveHint")
-          )}
-        </div>
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("set.search")}
-            className="pl-9"
-            aria-label={t("set.search")}
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-        {/* Оглавление, а не переключатель экранов.
-            Раньше оно показывало один раздел за раз, и на широком экране две-три
-            настройки висели посреди пустоты, а чтобы увидеть остальные, надо было
-            щёлкнуть ещё шесть раз. Теперь разделы идут подряд одной лентой, а
-            это — список переходов, который подсвечивает то, что сейчас на виду.
-            На телефоне его нет вовсе: там он занимал четыре ряда и отодвигал
-            первую настройку на пол-экрана вниз, а искать удобнее поиском. */}
+    <div className="grid gap-6 lg:grid-cols-[272px_minmax(0,1fr)] lg:items-start">
+      {/* Оглавление. На компьютере — всегда слева; на телефоне — это и есть
+          первый экран настроек, как в настройках самого телефона: разделы с
+          пояснением «что внутри», раздел открывается касанием. */}
+      <aside
+        className={cn(
+          "space-y-3 lg:sticky lg:top-6",
+          chosen || trimmedQuery ? "hidden lg:block" : ""
+        )}
+      >
+        {search}
         <nav
           aria-label={t("set.sections")}
-          data-testid="section-tabs"
-          className="sticky top-20 hidden gap-1 lg:flex lg:flex-col"
+          data-testid="settings-nav"
+          className="overflow-hidden rounded-xl border bg-card lg:border-0 lg:bg-transparent"
         >
-          {sections.map((section) => {
-            const Icon = section.icon;
-            const isActive = section.id === activeId;
-            return (
-              <a
-                key={section.id}
-                href={`#set-${section.id}`}
-                aria-current={isActive ? "true" : undefined}
-                className={cn(
-                  "flex min-h-10 items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors",
-                  isActive
-                    ? "border-primary/30 bg-primary/10 font-medium text-primary"
-                    : "border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                )}
-              >
-                <Icon className="size-4 shrink-0" />
-                {section.label}
-              </a>
-            );
-          })}
+          <ul className="divide-y divide-border/60 lg:space-y-0.5 lg:divide-y-0">
+            {sections.map((section) => {
+              const Icon = section.icon;
+              const isActive = section.id === current.id && !trimmedQuery;
+              return (
+                <li key={section.id}>
+                  <button
+                    type="button"
+                    onClick={() => open(section.id)}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "group flex w-full items-center gap-3 px-3 py-3 text-left transition-colors lg:rounded-lg lg:py-2.5",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isActive ? "lg:bg-primary/10" : "hover:bg-muted/50"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors lg:size-8",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground group-hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={cn(
+                          "block text-sm font-medium",
+                          isActive ? "lg:text-primary" : undefined
+                        )}
+                      >
+                        {section.label}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {section.summary}
+                      </span>
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground/60 lg:hidden" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </nav>
+      </aside>
 
-        <div className="min-w-0 space-y-4">
-          {matches.length === 0 ? (
-            <p className="rounded-lg border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-              {t("set.nothingFound", { query })}
-            </p>
-          ) : (
-            matches.map((section) => (
-              <div key={section.id} data-section={section.id}>
-                {section.node}
-              </div>
-            ))
-          )}
-        </div>
+      <div className={cn("min-w-0", chosen || trimmedQuery ? "" : "hidden lg:block")}>
+        {trimmedQuery ? (
+          <div className="space-y-6">
+            <div className="lg:hidden">{search}</div>
+            {matches.length === 0 ? (
+              <p className="rounded-xl border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+                {t("set.nothingFound", { query })}
+              </p>
+            ) : (
+              matches.map((section) => (
+                <SectionView key={section.id} section={section} status={null} />
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Назад к списку — только на телефоне: на компьютере список и так
+                рядом. Ссылкой на сам экран настроек, а не history.back(): сюда
+                приходят и по ссылке «Данные» из меню, и назад там был бы чужой
+                экран. */}
+            <button
+              type="button"
+              onClick={() => {
+                router.push("/settings", { scroll: false });
+                window.scrollTo({ top: 0 });
+              }}
+              className="-ml-1 inline-flex min-h-10 items-center gap-1 rounded-md px-1 text-sm text-primary lg:hidden"
+            >
+              <ChevronLeft className="size-4" />
+              {t("set.back")}
+            </button>
+            <SectionView key={current.id} section={current} status={statusLine} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Раздел настроек: одна карточка, внутри — строки, разделённые волосками.
-//
-// Раньше здесь было три рамки вокруг одного выпадающего списка: карточка
-// раздела, внутри неё коробка поля, внутри неё сам список. Рамка означает
-// «отдельный предмет», и когда ею обведено всё подряд, она не означает уже
-// ничего — экран рассыпается на одинаковые коробочки, между которыми глазу не
-// за что зацепиться. Теперь предмет один, раздел, а строки внутри разделены
-// волоском: дёшево, тихо и ровно настолько заметно, насколько нужно.
-function SectionCard({
-  id,
-  title,
-  icon: Icon,
-  children
-}: {
-  id?: string;
-  title: string;
-  icon?: LucideIcon;
-  children: React.ReactNode;
-}) {
+/**
+ * Один раздел: заголовок, строка «о чём он», и его группы.
+ *
+ * Появляется мягко — коротким проявлением со сдвигом на пару пикселей, чтобы
+ * смена раздела читалась как смена, а не как мигание. Кто просил систему не
+ * двигать ничего, получает раздел сразу.
+ */
+function SectionView({ section, status }: { section: Section; status: React.ReactNode }) {
   return (
-    // scroll-mt — чтобы переход по якорю не прятал заголовок под шапку.
-    <Card id={id} className="scroll-mt-24">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          {Icon ? <Icon className="size-4 text-muted-foreground" /> : null}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="divide-y divide-border/60 p-0">{children}</CardContent>
-    </Card>
+    <section
+      id={`set-${section.id}`}
+      aria-labelledby={`set-${section.id}-title`}
+      className="space-y-5 duration-200 animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none"
+    >
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+        <div className="min-w-0 space-y-1">
+          <h2 id={`set-${section.id}-title`} className="text-xl font-semibold tracking-tight">
+            {section.label}
+          </h2>
+          <p className="text-sm text-muted-foreground">{section.lead}</p>
+        </div>
+        {status}
+      </header>
+      <div className="space-y-5">{section.node}</div>
+    </section>
   );
 }
 
 /**
- * Одна настройка: слева — как она называется и что делает, справа — чем её
- * меняют.
+ * Группа строк под маленьким заголовком — как в настройках телефона.
  *
- * `block` — для тех случаев, где управление само по себе широкое (сетка тем,
- * поле ключа): такое под подписью читается лучше, чем ужатое в правую колонку.
+ * Одна рамка на группу, строки внутри разделены волоском. Рамка означает
+ * «отдельный предмет», и когда ею обведено всё подряд — карточка раздела,
+ * коробка поля, сам список, — она не означает уже ничего.
+ */
+function Group({
+  title,
+  danger,
+  children
+}: {
+  title?: string;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      {title ? (
+        <h3
+          className={cn(
+            "px-1 text-xs font-medium uppercase tracking-wider",
+            danger ? "text-destructive" : "text-muted-foreground"
+          )}
+        >
+          {title}
+        </h3>
+      ) : null}
+      <div
+        className={cn(
+          "divide-y divide-border/60 overflow-hidden rounded-xl border bg-card",
+          danger && "border-destructive/40"
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Одна настройка: слева — как она называется, «?» с объяснением простыми
+ * словами и короткая строка под названием; справа — чем её меняют.
+ *
+ * «?» — не повтор строки под названием. Строка говорит, ЧТО делает настройка;
+ * вопросик — ЗАЧЕМ она и что будет, если её тронуть. Первое нужно каждому,
+ * второе — тому, кто сомневается, и незачем показывать его всем.
+ *
+ * `block` — для широкого управления (поле ключа): под подписью оно читается
+ * лучше, чем ужатое в правую колонку.
  */
 function SettingRow({
   label,
   hint,
+  help,
   htmlFor,
   block,
   children
 }: {
   label: React.ReactNode;
   hint?: string;
+  help?: string;
   htmlFor?: string;
   block?: boolean;
   children: React.ReactNode;
@@ -946,47 +1001,48 @@ function SettingRow({
   return (
     <div
       className={cn(
-        "gap-x-6 gap-y-3 px-4 py-4 sm:px-5",
-        block ? "space-y-3" : "sm:flex sm:items-start sm:justify-between"
+        "gap-x-8 gap-y-3 px-4 py-4 sm:px-5",
+        block ? "space-y-3" : "sm:flex sm:items-center sm:justify-between"
       )}
     >
       <div className={cn("min-w-0 space-y-1", block ? undefined : "sm:max-w-md")}>
-        <Label htmlFor={htmlFor} className="text-sm font-medium">
-          {label}
-        </Label>
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor={htmlFor} className="text-sm font-medium">
+            {label}
+          </Label>
+          {help ? <InfoHint text={help} /> : null}
+        </div>
         {hint ? <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p> : null}
       </div>
-      <div className={cn("min-w-0", block ? "space-y-2" : "mt-3 sm:mt-0 sm:w-64 sm:shrink-0")}>
+      <div className={cn("min-w-0", block ? "space-y-2" : "mt-3 sm:mt-0 sm:w-[22rem] sm:shrink-0")}>
         {children}
       </div>
     </div>
   );
 }
 
-// A setting that is chosen from a list. Seven of them sit across this screen,
-// and every one is the same four parts: a label, a select, the options, and a
-// line of explanation under it. Written out seven times, that shape drifted —
-// one field would get an `htmlFor` and its neighbour would not — so it is one
-// component now, and the call sites carry only what actually differs.
+// A setting that is chosen from a list: a label, a select, the options, and a
+// line of explanation. One component, so the call sites carry only what
+// actually differs.
 function SelectField({
   id,
   label,
-  labelClassName,
   value,
   onValueChange,
   hint,
+  help,
   children
 }: {
   id?: string;
   label: React.ReactNode;
-  labelClassName?: string;
   value: string;
   onValueChange: (value: string) => void;
-  hint: string;
+  hint?: string;
+  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <SettingRow label={<span className={labelClassName}>{label}</span>} hint={hint} htmlFor={id}>
+    <SettingRow label={label} hint={hint} help={help} htmlFor={id}>
       <Select value={value} onValueChange={onValueChange}>
         <SelectTrigger id={id}>
           <SelectValue />
@@ -1000,28 +1056,41 @@ function SelectField({
 /**
  * Строка-переключатель.
  *
- * Нажимается вся строка целиком, а не квадратик в её дальнем углу: на телефоне
- * до квадратика ещё надо дотянуться, а промахнуться по нему легко. Поэтому
- * обёртка — label: попадание по любому слову засчитывается переключателю.
+ * Нажимаются и название, и строка под ним, а не только квадратик в дальнем
+ * углу: на телефоне до квадратика ещё надо дотянуться. Вопросик стоит вне
+ * подписей — нажатие на него открывает объяснение и не щёлкает переключателем.
  */
 function ToggleRow({
   title,
   description,
+  help,
   checked,
   onChange
 }: {
   title: string;
   description: string;
+  help?: string;
   checked: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const id = useId();
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-6 px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5">
-      <span className="min-w-0 space-y-1">
-        <span className="block text-sm font-medium">{title}</span>
-        <span className="block text-xs leading-relaxed text-muted-foreground">{description}</span>
-      </span>
-      <Switch checked={checked} onChange={onChange} aria-label={title} />
-    </label>
+    <div className="flex items-center justify-between gap-6 px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5">
+      <div className="min-w-0 space-y-1">
+        <div className="flex items-center gap-1.5">
+          <label htmlFor={id} className="cursor-pointer text-sm font-medium">
+            {title}
+          </label>
+          {help ? <InfoHint text={help} /> : null}
+        </div>
+        <label
+          htmlFor={id}
+          className="block cursor-pointer text-xs leading-relaxed text-muted-foreground"
+        >
+          {description}
+        </label>
+      </div>
+      <Switch id={id} checked={checked} onChange={onChange} aria-label={title} />
+    </div>
   );
 }

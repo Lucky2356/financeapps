@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RecoveryWords } from "@/components/vault/recovery-words";
 import { announceVaultChanged } from "@/components/vault/vault-gate";
 import { useI18n } from "@/lib/i18n/context";
 import { accountService } from "@/lib/vault/runtime";
@@ -18,6 +19,7 @@ export function VaultPanel() {
   const { t } = useI18n();
   const [remembered, setRemembered] = useState<boolean | null>(null);
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
+  const [recovery, setRecovery] = useState<string | null>(null);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,7 +42,10 @@ export function VaultPanel() {
     event.preventDefault();
     setBusy(true);
     try {
-      await accountService.setPassword(next);
+      const { recoveryCode } = await accountService.setPassword(next);
+      // Код восстановления показывается ЗДЕСЬ: пароль появился только что, и
+      // других слов, которыми его заменить, человек не видел ни разу.
+      setRecovery(recoveryCode);
       setNext("");
       setHasPassword(true);
       setRemembered(false);
@@ -102,6 +107,8 @@ export function VaultPanel() {
             </Button>
           ) : null}
         </div>
+
+        {recovery ? <RecoveryWords code={recovery} onDone={() => setRecovery(null)} /> : null}
 
         {hasPassword === false ? (
           <form onSubmit={setFirstPassword} className="space-y-3 border-t pt-4">

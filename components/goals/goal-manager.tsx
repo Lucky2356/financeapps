@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 
@@ -139,7 +140,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
           }
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="stagger grid gap-4 lg:grid-cols-2">
           {pageData.goals.map((goal) => {
             const pace = describeGoalPace(goal, new Date(), locale);
             return (
@@ -555,7 +556,7 @@ function GoalDialog({
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>{t("goal.dialog.target")}</Label>
+            <FieldLabel help={t("help.goal.target")}>{t("goal.dialog.target")}</FieldLabel>
             <AmountInput
               name="targetAmount"
               min="0"
@@ -616,7 +617,7 @@ function GoalDialog({
           </div>
         ) : null}
         <div className="space-y-2">
-          <Label>{t("goal.dialog.deadline")}</Label>
+          <FieldLabel help={t("help.goal.deadline")}>{t("goal.dialog.deadline")}</FieldLabel>
           <Input
             name="deadline"
             type="date"
@@ -626,7 +627,9 @@ function GoalDialog({
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>{t("goal.dialog.linkedAccount")}</Label>
+            <FieldLabel help={t("help.goal.linkedAccount")}>
+              {t("goal.dialog.linkedAccount")}
+            </FieldLabel>
             <Select name="linkedAccountId" defaultValue={goal?.linkedAccountId || "none"}>
               <SelectTrigger>
                 <SelectValue />
@@ -642,7 +645,7 @@ function GoalDialog({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>{t("goal.dialog.planned")}</Label>
+            <FieldLabel help={t("help.goal.planned")}>{t("goal.dialog.planned")}</FieldLabel>
             <AmountInput
               name="plannedContribution"
               min="0"
