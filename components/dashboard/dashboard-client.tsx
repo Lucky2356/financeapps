@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { CashflowChart, ExpenseCategoryChart, NetWorthChart } from "@/components/charts/lazy";
 import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
-import { BackupNotice } from "@/components/dashboard/backup-notice";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
 import { NetWorthBreakdownCard } from "@/components/dashboard/net-worth-breakdown";
@@ -154,7 +153,6 @@ export function DashboardClient({
       {/* Единственное, что стоит выше денег: сообщение о том, что этих денег
           можно лишиться. Появляется, только если есть что терять и копии давно
           не было, и уходит само, как только копия сделана. */}
-      <BackupNotice />
 
       {layout.order.map((widget) => {
         if (isHidden(layout, widget)) return null;

@@ -37,8 +37,7 @@ import type {
   PlanFactPoolCells,
   PlanFactColumn,
   PlanFactMonth,
-  PlanFactPageData,
-  PlanFactSplit
+  PlanFactPageData
 } from "@/types/finance";
 
 /** Полоса таблицы: план, факт или разница между ними. */
@@ -549,73 +548,53 @@ function ResultCells({
 }
 
 /**
- * One total, in the two sub-columns the header promises.
+ * Итог доходов или расходов — в двух колонках, в каждой строке.
  *
- * Only the fact band can fill both. A plan is typed against a category and
- * carries no account, so there is no pool to put it in, and the difference
- * between a split figure and an unsplit one is not a split figure either.
- * Those two bands span the pair with the single number they honestly have,
- * rather than showing an invented half.
- *
- * Итог месяца этим больше не ограничен — см. ResultCells выше.
+ * Раньше делился только факт, а план и разница стояли одной цифрой на обе
+ * колонки: у плановой статьи нет счёта, и сказать, в какую группу она пойдёт,
+ * было нечем. Теперь план статьи идёт туда, куда её деньги ходят на самом деле
+ * (см. planFactPage), и итог делится во всех трёх строках — о чём владелец и
+ * просил: «в итогах должно быть разделение для Основных и Сбережений».
  */
 function TotalCells({
   band,
   column,
-  cell,
-  split,
+  pools,
   money,
-  tone,
+  goodWhenNegative,
   className,
   onDrill
 }: {
   band: Band;
   column: string;
-  cell: PlanFactCell;
-  split: PlanFactSplit;
+  pools: PlanFactPoolCells;
   money: (value: number) => string;
-  tone?: string;
+  /** Расход: меньше плана — хорошо. Доход — наоборот. */
+  goodWhenNegative: boolean;
   className?: string;
-  /** Absent on the closing balance: it is a balance, not a sum of rows. */
   onDrill?: () => void;
 }) {
-  const { t } = useI18n();
-
-  if (band !== "fact") {
-    // Посередине пары, а не по правому краю. Прижатая вправо, эта цифра
-    // вставала ровно под заголовком «Сбережения» и читалась как сбережения —
-    // на экране, где рядом стоит настоящая цифра сбережений, разойтись с ней
-    // на порядок и не заметить проще всего. Посередине она не принадлежит ни
-    // одной из двух колонок, чем и является.
-    return (
-      <Cell
-        className={cn("text-center font-semibold", className)}
-        column={column}
-        colSpan={2}
-        title={t("plan.unsplit")}
-      >
-        <Figure value={cell[band]} money={money} tone={tone} />
-      </Cell>
-    );
-  }
-
-  const pools = [
-    { pool: "main", value: split.main },
-    { pool: "savings", value: split.savings }
+  const halves = [
+    { pool: "main", cell: pools.main },
+    { pool: "savings", cell: pools.savings }
   ] as const;
 
   return (
     <>
-      {pools.map(({ pool, value }, index) => (
+      {halves.map(({ pool, cell }, index) => (
         <Cell
           key={pool}
           className={cn("font-semibold", index === 0 && className)}
           column={`${column}-${pool}`}
         >
-          {onDrill ? (
-            <DrillFigure value={value} money={money} onOpen={onDrill} />
+          {band === "fact" && onDrill ? (
+            <DrillFigure value={cell.fact} money={money} onOpen={onDrill} />
           ) : (
-            <Figure value={value} money={money} />
+            <Figure
+              value={cell[band]}
+              money={money}
+              tone={band === "diff" ? diffTone(cell, goodWhenNegative) : undefined}
+            />
           )}
         </Cell>
       ))}
@@ -795,10 +774,9 @@ function BandRow({
       <TotalCells
         band={band}
         column="income-total"
-        cell={month.income}
-        split={month.incomeBy}
+        pools={month.incomePools}
         money={money}
-        tone={band === "diff" ? diffTone(month.income, true) : undefined}
+        goodWhenNegative={true}
         onDrill={() =>
           drillTo(
             t("plan.income"),
@@ -811,10 +789,9 @@ function BandRow({
       <TotalCells
         band={band}
         column="expense-total"
-        cell={month.expense}
-        split={month.expenseBy}
+        pools={month.expensePools}
         money={money}
-        tone={band === "diff" ? diffTone(month.expense, false) : undefined}
+        goodWhenNegative={false}
         onDrill={() =>
           drillTo(
             t("plan.expense"),

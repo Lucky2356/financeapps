@@ -67,7 +67,7 @@ import {
 } from "@/components/ui/select";
 import { markThemeChosen } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
-import { removeMine } from "@/lib/storage/mine";
+import { forgetMyData, removeMine } from "@/lib/storage/mine";
 
 const shortcuts = [
   { keys: "Alt+N", labelKey: "set.shortcut.add" },
@@ -210,6 +210,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     try {
       setClearing(true);
       await apiClient.delete("/storage/clear");
+      forgetMyData();
       toast.success(t("set.toast.cleared"));
       await new Promise((r) => setTimeout(r, 600));
       window.location.reload();

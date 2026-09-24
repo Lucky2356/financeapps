@@ -695,15 +695,7 @@ export class LocalApiClient implements ApiClient {
       await this.deleteProfile(itemId);
       return undefined as T;
     } else if (pathname === "/storage/clear") {
-      // Wipe everything, then write a single blank profile so the app reloads
-      // into a completely empty state instead of re-seeding demo defaults.
-      await this.storage.clear();
-      await this.storage.setItem(PROFILE_LIST_KEY, {
-        profiles: [DEFAULT_PROFILE],
-        activeProfileId: DEFAULT_PROFILE.id
-      } satisfies ProfileList);
-      await this.storage.setItem(profileStateKey(DEFAULT_PROFILE.id), createBlankState());
-      this.invalidateStateCache();
+      await this.clearEverything();
       return undefined as T;
     } else {
       throw new Error(`Local API delete route is not implemented: ${pathname}`);
@@ -2819,14 +2811,15 @@ export class LocalApiClient implements ApiClient {
     // lookup rather than another pass over every operation.
     const fact = new Map<string, Map<string, number>>();
     // The same money again, split by which pool of accounts it passed through.
-    // Only the fact side can carry this: a planned figure is typed against a
-    // category and has no account behind it, so there is nothing to split.
     const savingsAccounts = new Set(
       state.accounts
         .filter((account) => !account.isArchived && SAVINGS_ACCOUNT_TYPES.includes(account.type))
         .map((account) => account.id)
     );
     const pools = new Map<string, { income: PlanFactSplit; expense: PlanFactSplit }>();
+    // Куда деньги каждой статьи ходят на самом деле, за всю историю. По этому
+    // и делится её план: у плановой цифры счёта нет, а у статьи есть привычка.
+    const categoryPools = new Map<string, PlanFactSplit>();
     for (const transaction of countableRows(state.transactions, includeTransfers)) {
       const month = transaction.date.slice(0, 7);
       const byCategory = fact.get(month) ?? new Map<string, number>();
@@ -2841,10 +2834,21 @@ export class LocalApiClient implements ApiClient {
         expense: { main: 0, savings: 0 }
       };
       const side = transaction.type === "INCOME" ? pool.income : pool.expense;
-      if (savingsAccounts.has(transaction.account.id)) side.savings += transaction.amount;
-      else side.main += transaction.amount;
+      const habit = categoryPools.get(transaction.category.id) ?? { main: 0, savings: 0 };
+      if (savingsAccounts.has(transaction.account.id)) {
+        side.savings += transaction.amount;
+        habit.savings += transaction.amount;
+      } else {
+        side.main += transaction.amount;
+        habit.main += transaction.amount;
+      }
+      categoryPools.set(transaction.category.id, habit);
       pools.set(month, pool);
     }
+    const plannedOnSavings = (categoryId: string) => {
+      const habit = categoryPools.get(categoryId);
+      return !!habit && habit.savings > habit.main;
+    };
 
     const plan = new Map<string, Map<string, number>>();
     for (const entry of state.plans) {
@@ -2921,6 +2925,8 @@ export class LocalApiClient implements ApiClient {
       let incomeFact = 0;
       let expensePlan = 0;
       let expenseFact = 0;
+      let incomePlanSavings = 0;
+      let expensePlanSavings = 0;
 
       for (const column of columns) {
         const cell = cellOf(
@@ -2928,12 +2934,15 @@ export class LocalApiClient implements ApiClient {
           factOf?.get(column.categoryId) ?? 0
         );
         cells[column.categoryId] = cell;
+        const onSavings = plannedOnSavings(column.categoryId);
         if (column.kind === "INCOME") {
           incomePlan += cell.plan;
           incomeFact += cell.fact;
+          if (onSavings) incomePlanSavings += cell.plan;
         } else {
           expensePlan += cell.plan;
           expenseFact += cell.fact;
+          if (onSavings) expensePlanSavings += cell.plan;
         }
       }
 
@@ -2963,14 +2972,31 @@ export class LocalApiClient implements ApiClient {
         endSavings - savings.fact - (pool?.income.savings ?? 0) + (pool?.expense.savings ?? 0);
       const toSavings = cellOf(planOf?.get(SAVINGS_TRANSFER_ID) ?? 0, roundMoney(movedToSavings));
 
-      // План раскладывается на две группы ровно так, как его задумывали:
-      // повседневные доходы и расходы идут через основные счета, а на вклад
-      // попадает то, что владелец собрался отложить. Факт по-прежнему берётся
+      // План раскладывается на две группы так, как ходят деньги: статья идёт
+      // туда, куда её деньги оседают по истории (проценты по вкладу — на
+      // сбережения), статья без истории — через основные счета, а на вклад
+      // сверх того попадает то, что владелец собрался отложить. Факт по-прежнему берётся
       // из остатков — складывать его заново значило бы разойтись со строкой
       // «остаток на начало» следующего месяца, стоящей прямо над ним.
+      const incomeBy = pool?.income ?? { main: 0, savings: 0 };
+      const expenseBy = pool?.expense ?? { main: 0, savings: 0 };
+      const incomePools = {
+        main: cellOf(income.plan - incomePlanSavings, incomeBy.main),
+        savings: cellOf(incomePlanSavings, incomeBy.savings)
+      };
+      const expensePools = {
+        main: cellOf(expense.plan - expensePlanSavings, expenseBy.main),
+        savings: cellOf(expensePlanSavings, expenseBy.savings)
+      };
       const resultBy = {
-        main: cellOf(opening.plan + income.plan - expense.plan - toSavings.plan, endMain),
-        savings: cellOf(savings.plan + toSavings.plan, endSavings)
+        main: cellOf(
+          opening.plan + incomePools.main.plan - expensePools.main.plan - toSavings.plan,
+          endMain
+        ),
+        savings: cellOf(
+          savings.plan + toSavings.plan + incomePools.savings.plan - expensePools.savings.plan,
+          endSavings
+        )
       };
 
       // The fact bottom line is the two pools added up — the very numbers the
@@ -2989,8 +3015,10 @@ export class LocalApiClient implements ApiClient {
         cells,
         income,
         expense,
-        incomeBy: pool?.income ?? { main: 0, savings: 0 },
-        expenseBy: pool?.expense ?? { main: 0, savings: 0 },
+        incomeBy,
+        expenseBy,
+        incomePools,
+        expensePools,
         toSavings,
         resultBy,
         // Итог — те же две половины, сложенные. Одно число из одного источника:
@@ -3707,6 +3735,52 @@ export class LocalApiClient implements ApiClient {
     if (!list.profiles.find((p) => p.id === profileId)) throw new Error("Profile not found");
     list.activeProfileId = profileId;
     await this.storage.setItem(PROFILE_LIST_KEY, list);
+    this.invalidateStateCache();
+  }
+
+  /**
+   * «Очистить все данные» — ПРАВКА данных, а не стирание файлов.
+   *
+   * Раньше здесь стоял `storage.clear()`, и при подключённой службе кнопка
+   * врала. Очистка хранилища убирает книгу с диска и забывает номер версии —
+   * а слой синхронизации нарочно не трогает сервер. Первый же обмен шёл от
+   * версии ноль, получал «вас обогнали» и сливал пустое с полным без общей
+   * основы, то есть возвращал всё обратно. Человек видел пустой экран, а через
+   * секунду — свои данные. На экране при этом было написано «необратимо».
+   *
+   * Теперь пустота записывается ПОВЕРХ текущего, как любая другая правка. Она
+   * уезжает на службу с верным номером версии, и другие устройства получают
+   * её как удаление строк, а не как «у нас ещё не добавили».
+   *
+   * Тетрадки, кроме основной, тоже записываются пустыми, а не убираются:
+   * убрать ключ значит снова «убрать с устройства, но не со службы», и на
+   * службе осталась бы полная копия каждой.
+   */
+  private async clearEverything(): Promise<void> {
+    const list = await this.profileList();
+    for (const profile of list.profiles) {
+      await this.storage.setItem(profileStateKey(profile.id), createBlankState());
+    }
+    if (!list.profiles.some((profile) => profile.id === DEFAULT_PROFILE.id)) {
+      await this.storage.setItem(profileStateKey(DEFAULT_PROFILE.id), createBlankState());
+    }
+    await this.storage.setItem(PROFILE_LIST_KEY, {
+      profiles: [DEFAULT_PROFILE],
+      activeProfileId: DEFAULT_PROFILE.id
+    } satisfies ProfileList);
+
+    // Местные копии — отложенные перед обновлением схемы и при поломке. Каждая
+    // держит книгу ЦЕЛИКОМ, и «удалить всё», оставив их, значило бы удалить
+    // не всё. На службу они не ездят, так что убрать их с диска и есть удалить.
+    for (const key of await this.storage.keys()) {
+      if (
+        key === LEGACY_STATE_KEY ||
+        key.endsWith(PRE_UPGRADE_SUFFIX) ||
+        key.endsWith(RESCUE_SUFFIX)
+      ) {
+        await this.storage.removeItem(key);
+      }
+    }
     this.invalidateStateCache();
   }
 

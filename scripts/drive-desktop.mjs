@@ -243,6 +243,11 @@ async function strangerAddress() {
   await closeDialogs();
   await press("Настройки");
   await closeDialogs();
+  // Поле адреса с 1.44.0 спрятано за «У меня своя служба»: обычному человеку
+  // адрес не нужен, он зашит в сборку. Шов проверяет именно СВОЮ службу —
+  // адрес, которого нет в политике, — значит и путь к нему тот же, что у
+  // человека, поднявшего службу сам.
+  await press("У меня своя служба");
   await type(await waitFor("#server-base"), STRANGER);
   await type(await find("#server-login"), "прогон");
   await type(await find("#server-password"), PASSWORD);

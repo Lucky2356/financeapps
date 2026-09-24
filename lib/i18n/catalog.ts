@@ -176,7 +176,6 @@ const ru: Messages = {
     "факт берётся из остатков: основные — наличные и карты, сбережения — накопительные и брокерские счета плюс деньги, отложенные в цели",
   "plan.result.hint":
     "факт — остатки на конец месяца, теми же двумя группами счетов; план и разница делению не поддаются и стоят одной цифрой на обе колонки",
-  "plan.unsplit": "одной цифрой на обе колонки: у плана нет счёта, только категория",
   "plan.note": "Комментарий",
   "plan.note.placeholder": "Например: гасим рассрочку полностью",
   "plan.saved": "Сохранено",
@@ -529,11 +528,6 @@ const ru: Messages = {
   "tx.onePage": "На одной странице",
   "tx.future.notice":
     "Операций с датой в будущем: {count}, на {sum}. Они уже учтены в остатке и капитале.",
-  "backup.notice.never":
-    "Резервной копии нет. Все данные живут только на этом устройстве — переустановка системы или поломка диска сотрёт их без следа.",
-  "backup.notice.stale":
-    "Последняя резервная копия — {date}. Всё, что записано после неё, есть только на этом устройстве.",
-  "backup.notice.cta": "Сделать копию",
   "tx.future.show": "Показать их",
   "tx.future.confirm.title": "Дата ещё не наступила",
   "tx.future.confirm.desc":
@@ -1346,6 +1340,7 @@ const ru: Messages = {
   "inv.col.comment": "Комментарий",
   "inv.col.ticker": "Тикер",
   "inv.col.qty": "Кол-во",
+  "inv.card.average": "{qty} шт. · средняя цена покупки {avg}",
   "inv.col.avg": "Средняя",
   "inv.col.current": "Текущая",
   "inv.col.value": "Стоимость",
@@ -1695,12 +1690,13 @@ const ru: Messages = {
   "set.data.loadSample": "Загрузить демо-данные",
   "set.data.loading": "Загрузка…",
   "set.data.clearHint":
-    "Очистка удалит все счета, операции, цели, бюджеты и настройки. Это действие необратимо.",
+    "Удалит все счета, операции, цели, бюджеты и настройки — здесь и на других ваших устройствах, связанных с этим. Вернуть можно только из резервной копии.",
   "set.data.clear": "Очистить все данные",
   "set.data.clearConfirm": "Очистить все данные?",
   "set.data.clearConfirmDesc":
-    "Все ваши операции, счета, цели, бюджеты, плановые платежи, портфель и настройки будут безвозвратно удалены. Резервную копию можно сохранить на странице Импорт.",
-  "set.data.clearWarning": "Это действие нельзя отменить. Сначала сделайте резервную копию.",
+    "Операции, счета, цели, бюджеты, плановые платежи, портфель и настройки будут удалены. Если устройства связаны через службу, удаление доедет и до них.",
+  "set.data.clearWarning":
+    "Отменить нельзя. Сначала сохраните резервную копию — она ниже, в разделе «Резервная копия».",
   "set.data.clearing": "Очистка...",
   "set.data.clearYes": "Да, удалить всё",
   "set.toast.sampleLoaded": "Демо-данные загружены.",
@@ -1764,6 +1760,11 @@ const ru: Messages = {
   "vault.join.title": "Забрать данные с другого устройства",
   "vault.join.lead":
     "Понадобится адрес службы, имя входа и пароль — те же, что на устройстве, где данные уже есть.",
+  "vault.join.codeLead":
+    "На устройстве, где данные уже есть, откройте Настройки → Синхронизация → «Мои устройства» → «Связать ещё одно устройство». Там появятся восемь знаков и картинка QR.",
+  "vault.join.loginLead": "Имя входа и пароль — те же, что на устройстве, где данные уже есть.",
+  "vault.join.byCode": "У меня есть код связки",
+  "vault.join.byLogin": "Войти по имени и паролю",
   "vault.join.submit": "Забрать данные",
   "vault.join.working": "Забираем…",
   "vault.choose.title": "Защитить данные паролем?",
@@ -2208,7 +2209,6 @@ const en: Messages = {
     "actual comes from balances: everyday is cash and cards, savings is deposit and brokerage accounts plus money set aside in goals",
   "plan.result.hint":
     "actual is the closing balance of the same two groups of accounts; the plan and the difference cannot be split and stand as one figure across both columns",
-  "plan.unsplit": "one figure across both columns: a plan carries a category, never an account",
   "plan.note": "Comment",
   "plan.note.placeholder": "E.g. paying the instalment off in full",
   "plan.saved": "Saved",
@@ -2561,11 +2561,6 @@ const en: Messages = {
   "tx.onePage": "On one page",
   "tx.future.notice":
     "Operations dated in the future: {count}, for {sum}. They already count against the balance.",
-  "backup.notice.never":
-    "There is no backup. Everything lives on this device alone — a reinstall or a dead disk takes it with no trace.",
-  "backup.notice.stale":
-    "Last backup: {date}. Everything recorded since then exists on this device only.",
-  "backup.notice.cta": "Make a backup",
   "tx.future.show": "Show them",
   "tx.future.confirm.title": "That day has not arrived",
   "tx.future.confirm.desc":
@@ -3374,6 +3369,7 @@ const en: Messages = {
   "inv.col.comment": "Comment",
   "inv.col.ticker": "Ticker",
   "inv.col.qty": "Qty",
+  "inv.card.average": "{qty} pcs · average purchase price {avg}",
   "inv.col.avg": "Average",
   "inv.col.current": "Current",
   "inv.col.value": "Value",
@@ -3721,12 +3717,13 @@ const en: Messages = {
   "set.data.loadSample": "Load demo data",
   "set.data.loading": "Loading…",
   "set.data.clearHint":
-    "Clearing deletes all accounts, transactions, goals, budgets and settings. This action is irreversible.",
+    "Deletes all accounts, transactions, goals, budgets and settings — here and on your other devices linked to this one. Only a backup can bring them back.",
   "set.data.clear": "Clear all data",
   "set.data.clearConfirm": "Clear all data?",
   "set.data.clearConfirmDesc":
-    "All your transactions, accounts, goals, budgets, scheduled payments, portfolio and settings will be permanently deleted. You can save a backup on the Import page.",
-  "set.data.clearWarning": "This action cannot be undone. Make a backup first.",
+    "Transactions, accounts, goals, budgets, scheduled payments, portfolio and settings will be deleted. If your devices are linked through the server, the deletion reaches them too.",
+  "set.data.clearWarning":
+    "This cannot be undone. Save a backup first — it is below, under “Backup”.",
   "set.data.clearing": "Clearing...",
   "set.data.clearYes": "Yes, delete everything",
   "set.toast.sampleLoaded": "Demo data loaded.",
@@ -3790,6 +3787,12 @@ const en: Messages = {
   "vault.join.title": "Fetch data from another device",
   "vault.join.lead":
     "You will need the service address, the login name and the password — the same ones as on the device that already has the data.",
+  "vault.join.codeLead":
+    "On the device that already has the data, open Settings → Sync → “My devices” → “Link another device”. Eight characters and a QR picture appear there.",
+  "vault.join.loginLead":
+    "The login name and password are the same as on the device that already has the data.",
+  "vault.join.byCode": "I have a pairing code",
+  "vault.join.byLogin": "Sign in with name and password",
   "vault.join.submit": "Fetch the data",
   "vault.join.working": "Fetching…",
   "vault.choose.title": "Protect your data with a password?",

@@ -36,10 +36,9 @@ import {
 } from "@/lib/transactions/filter-chips";
 import { parseCategoryIds } from "@/lib/transactions/filter";
 import { cn } from "@/lib/utils";
-import { readMine, writeMine } from "@/lib/storage/mine";
+import { SAVED_FILTERS_KEY, readMine, writeMine } from "@/lib/storage/mine";
 
 type SavedFilter = { name: string; params: string };
-const SAVED_FILTERS_KEY = "tx-saved-filters";
 
 /**
  * The filters of the operations list: one line beside the list's own title.

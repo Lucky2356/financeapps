@@ -11,7 +11,7 @@ import { isAndroidShell } from "@/lib/platform/device";
 import { isDesktopShell } from "@/lib/updates/desktop";
 import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
-import { readMine, writeMine } from "@/lib/storage/mine";
+import { NOTIFY_KEY, readMine, writeMine } from "@/lib/storage/mine";
 
 // True when the cached FX rates are missing or not from today (local date).
 function isFxStale(updatedAt: string | null | undefined): boolean {
@@ -218,7 +218,6 @@ async function runAutomation() {
 
 // Per-day dedupe for system notifications, backed by localStorage. Resets when
 // the local date changes so each actionable item notifies at most once a day.
-const NOTIFY_KEY = "notif-fired";
 
 function notifyState(): { date: string; ids: string[] } {
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local

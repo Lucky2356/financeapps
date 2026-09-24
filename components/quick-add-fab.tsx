@@ -39,12 +39,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { readMine, writeMine } from "@/lib/storage/mine";
+import { LAST_ACCOUNT_KEY, readMine, writeMine } from "@/lib/storage/mine";
 
 type AccountOption = ImportPageData["accounts"][number];
 type CategoryOption = ImportPageData["categories"][number];
-
-const LAST_ACCOUNT_KEY = "quick-add-last-account";
 
 type QuickAddType = "INCOME" | "EXPENSE" | "TRANSFER";
 

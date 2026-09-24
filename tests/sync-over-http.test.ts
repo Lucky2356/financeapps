@@ -885,3 +885,82 @@ describe("двое на одном устройстве — через наст�
     });
   });
 });
+
+describe("«Очистить все данные» при подключённой службе", () => {
+  beforeEach(async () => {
+    app = createApp({ dbPath: ":memory:", adminToken: ADMIN });
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    await app.stop();
+  });
+
+  // Кнопка обещала «удалит всё, необратимо», а делала перезалив: стирала диск,
+  // забывала номер версии — и первый же обмен со службой возвращал всё обратно.
+  // Человек нажимал, видел пустой экран, а через секунду — свои данные. Ровно
+  // так владелец это и описал: «по факту не очищаются».
+  it("очищенное не возвращается со службы на том же устройстве", async () => {
+    const { token, bookKey } = await signUp("петя");
+    const phone = new Device(bookKey);
+    await phone.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
+    await phone.sync.start(new HttpSyncTransport({ base, token }), phone.merge);
+    await phone.sync.flush();
+
+    await phone.app.delete("/storage/clear");
+    await phone.sync.flush();
+
+    const accounts = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    expect(accounts.accounts.map((account) => account.name)).not.toContain("Карта");
+  });
+
+  it("и после перезапуска приложения тоже", async () => {
+    const { token, bookKey } = await signUp("петя");
+    const phone = new Device(bookKey);
+    await phone.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
+    await phone.sync.start(new HttpSyncTransport({ base, token }), phone.merge);
+    await phone.sync.flush();
+    await phone.app.delete("/storage/clear");
+    await phone.sync.flush();
+
+    // Перезапуск: та же стопка заново над тем же диском.
+    const again = new SyncingStorageAdapter(phone.disk);
+    const vault = new EncryptingStorageAdapter(again);
+    vault.unlock(bookKey);
+    await again.start(new HttpSyncTransport({ base, token }), phone.merge);
+    await again.flush();
+
+    const accounts = await new LocalApiClient(vault).get<{ accounts: Array<{ name: string }> }>(
+      "/accounts"
+    );
+    expect(accounts.accounts.map((account) => account.name)).not.toContain("Карта");
+  });
+
+  it("второе устройство получает пустоту, а не возвращает старое", async () => {
+    const { token, bookKey } = await signUp("петя");
+    const phone = new Device(bookKey);
+    const desktop = new Device(bookKey);
+    await phone.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
+    await phone.sync.start(new HttpSyncTransport({ base, token }), phone.merge);
+    await phone.sync.flush();
+    await desktop.sync.start(new HttpSyncTransport({ base, token }), desktop.merge);
+    await desktop.sync.flush();
+    expect(
+      (await desktop.app.get<{ accounts: Array<{ name: string }> }>("/accounts")).accounts.map(
+        (a) => a.name
+      )
+    ).toContain("Карта");
+
+    await phone.app.delete("/storage/clear");
+    await phone.sync.flush();
+    await desktop.sync.flush();
+
+    const onDesktop = await desktop.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    expect(onDesktop.accounts.map((account) => account.name)).not.toContain("Карта");
+    // И обратно не приезжает: компьютер не переотправил старое на телефон.
+    await phone.sync.flush();
+    const onPhone = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    expect(onPhone.accounts.map((account) => account.name)).not.toContain("Карта");
+  });
+});
