@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useId, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -36,7 +36,7 @@ import { ServerPanel } from "@/components/settings/server-panel";
 import { VaultPanel } from "@/components/settings/vault-panel";
 import { ImportExportPanel } from "@/components/import/import-export-panel";
 import { InfoHint } from "@/components/info-hint";
-import type { ImportPageData, SettingsPageData } from "@/lib/data";
+import type { AccountsPageData, ImportPageData, SettingsPageData } from "@/lib/data";
 import { ONBOARDING_REPLAY_EVENT, ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { AI_EFFORTS, AI_PROVIDERS, providerInfo, type AiProvider } from "@/lib/ai/models";
 import { APP_VERSION } from "@/lib/constants";
@@ -67,7 +67,26 @@ import {
 } from "@/components/ui/select";
 import { markThemeChosen } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
-import { forgetMyData, removeMine } from "@/lib/storage/mine";
+import {
+  DEFAULT_ACCOUNT_KEY,
+  forgetMyData,
+  readMine,
+  removeMine,
+  writeMine
+} from "@/lib/storage/mine";
+import {
+  START_SCREENS,
+  areAmountsHidden,
+  areKopecksShown,
+  readStartScreen,
+  readTextSize,
+  setAmountsHidden,
+  setKopecksShown,
+  setStartScreen,
+  setTextSize,
+  type StartScreen,
+  type TextSize
+} from "@/lib/preferences";
 
 const shortcuts = [
   { keys: "Alt+N", labelKey: "set.shortcut.add" },
@@ -160,6 +179,25 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   const chosen = requestedSection ? (MOVED_SECTIONS[requestedSection] ?? requestedSection) : null;
   const activeId = chosen ?? "general";
   const [query, setQuery] = useState("");
+  // Житейские настройки этого устройства (lib/preferences.ts). Скрытые суммы и
+  // копейки перерисовывают экраны сами — через событие, — поэтому здесь их
+  // достаточно прочитать; остальные три помнятся тут же.
+  const [textSize, setTextSizeState] = useState<TextSize>(readTextSize);
+  const [startScreen, setStartScreenState] = useState<StartScreen>(readStartScreen);
+  const [defaultAccount, setDefaultAccount] = useState(() => readMine(DEFAULT_ACCOUNT_KEY) ?? "");
+  const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
+  useEffect(() => {
+    let alive = true;
+    apiClient
+      .get<AccountsPageData>("/accounts")
+      .then((page) => {
+        if (alive) setAccounts(page.accounts);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   // Папку на диске выбрать можно только на компьютере: у телефона такого
   // окна нет. Через внешнее хранилище, а не проверкой при отрисовке, — чтобы
   // собранная заранее страница и живая не разошлись при оживлении.
@@ -355,7 +393,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       lead: t("set.nav.general.lead"),
       icon: SlidersHorizontal,
       keywords:
-        "основные general валюта currency язык language русский english тема theme светлая light тёмная dark системная system плотность density внешний вид appearance",
+        "основные general валюта currency язык language русский english тема theme светлая light тёмная dark системная system плотность density внешний вид appearance копейки kopecks крупный текст шрифт large text font запуск start экран screen счёт account по умолчанию default скрыть суммы hide amounts privacy",
       node: (
         <>
           <Group title={t("set.group.display")}>
@@ -383,6 +421,13 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 ]}
               />
             </SettingRow>
+            <ToggleRow
+              title={t("prefs.kopecks.title")}
+              description={t("prefs.kopecks.desc")}
+              help={t("prefs.kopecks.help")}
+              checked={areKopecksShown()}
+              onChange={setKopecksShown}
+            />
           </Group>
           <Group title={t("set.group.look")}>
             <SettingRow label={t("set.theme")} help={t("set.help.theme")}>
@@ -408,6 +453,75 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 ]}
               />
             </SettingRow>
+            <SettingRow label={t("prefs.text.title")} help={t("prefs.text.help")}>
+              <Segmented
+                ariaLabel={t("prefs.text.title")}
+                value={textSize}
+                onChange={(value) => {
+                  setTextSize(value);
+                  setTextSizeState(value);
+                }}
+                options={[
+                  { value: "normal", label: t("prefs.text.normal") },
+                  { value: "large", label: t("prefs.text.large") }
+                ]}
+              />
+            </SettingRow>
+          </Group>
+          <Group title={t("set.group.everyday")}>
+            <SelectField
+              id="set-start-screen"
+              label={t("prefs.start.title")}
+              help={t("prefs.start.help")}
+              value={startScreen}
+              onValueChange={(value) => {
+                setStartScreen(value as StartScreen);
+                setStartScreenState(value as StartScreen);
+              }}
+            >
+              {START_SCREENS.map((screen) => (
+                <SelectItem key={screen} value={screen}>
+                  {t(`prefs.start.${screen === "/" ? "home" : screen.slice(1)}`)}
+                </SelectItem>
+              ))}
+            </SelectField>
+            <SettingRow label={t("prefs.type.title")} help={t("prefs.type.help")}>
+              <Segmented
+                ariaLabel={t("prefs.type.title")}
+                value={settings.defaultTransactionType}
+                onChange={(value) => void persist({ defaultTransactionType: value })}
+                options={[
+                  { value: "EXPENSE", label: t("prefs.type.expense") },
+                  { value: "INCOME", label: t("prefs.type.income") }
+                ]}
+              />
+            </SettingRow>
+            <SelectField
+              id="set-default-account"
+              label={t("prefs.account.title")}
+              help={t("prefs.account.help")}
+              value={defaultAccount || "last"}
+              onValueChange={(value) => {
+                const next = value === "last" ? "" : value;
+                if (next) writeMine(DEFAULT_ACCOUNT_KEY, next);
+                else removeMine(DEFAULT_ACCOUNT_KEY);
+                setDefaultAccount(next);
+              }}
+            >
+              <SelectItem value="last">{t("prefs.account.last")}</SelectItem>
+              {accounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectField>
+            <ToggleRow
+              title={t("prefs.hide.title")}
+              description={t("prefs.hide.desc")}
+              help={t("prefs.hide.help")}
+              checked={areAmountsHidden()}
+              onChange={setAmountsHidden}
+            />
           </Group>
         </>
       )
@@ -749,7 +863,20 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
 
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, pageData, status, locale, loadingSample, clearing, checkingUpdate, android]);
+  }, [
+    settings,
+    pageData,
+    status,
+    locale,
+    loadingSample,
+    clearing,
+    checkingUpdate,
+    android,
+    textSize,
+    startScreen,
+    defaultAccount,
+    accounts
+  ]);
 
   const trimmedQuery = query.trim().toLowerCase();
   const matches = trimmedQuery

@@ -8,6 +8,8 @@ import { AppSettingsSync } from "@/components/app-settings-sync";
 import { AutomationRunner } from "@/components/automation-runner";
 import { CommandPalette } from "@/components/command-palette";
 import { OnboardingTour } from "@/components/onboarding-tour";
+import { PreferencesRoot } from "@/components/preferences-root";
+import { StartScreen } from "@/components/start-screen";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { I18nProvider } from "@/lib/i18n/context";
 import { VaultGate } from "@/components/vault/vault-gate";
@@ -35,7 +37,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <AutomationRunner />
             <CommandPalette />
             <OnboardingTour />
-            {children}
+            <StartScreen />
+            <PreferencesRoot>{children}</PreferencesRoot>
           </VaultGate>
           <Toaster richColors closeButton position="top-right" />
         </ConfirmProvider>

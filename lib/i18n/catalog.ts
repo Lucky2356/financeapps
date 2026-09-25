@@ -31,7 +31,6 @@ const ru: Messages = {
   // Navigation sections
   "section.accounting": "Учёт",
   "section.planning": "Планирование",
-  "section.market": "Рынок",
   "section.other": "Прочее",
   // Navigation items
   "nav.home": "Главная",
@@ -50,8 +49,6 @@ const ru: Messages = {
   "nav.planFact": "План/факт",
   "nav.import": "Данные",
   "nav.settings": "Настройки",
-  "nav.market": "Рынок",
-  "nav.more": "Ещё",
   // Error boundaries
   "error.title": "Что-то пошло не так",
   "error.description": "Произошла ошибка при отображении этой страницы.",
@@ -67,11 +64,6 @@ const ru: Messages = {
   "cmd.placeholder": "Поиск разделов, счетов, категорий, операций…",
   "cmd.nothingFound": "Ничего не найдено",
   "cmd.footer": "↑↓ выбрать · Enter открыть · Esc закрыть",
-  "cmd.group.navigation": "Навигация",
-  "cmd.group.actions": "Действия",
-  "cmd.group.accounts": "Счета",
-  "cmd.group.categories": "Категории",
-  "cmd.group.transactions": "Операции",
   "cmd.addTransaction": "Добавить операцию",
   "cmd.recurring": "Плановые платежи",
   "cmd.importExport": "Импорт и экспорт",
@@ -155,7 +147,7 @@ const ru: Messages = {
   "plan.removeMonth": "Удалить месяц",
   "plan.remove.title": "Удалить месяц из плана?",
   "plan.remove.desc":
-    "План и комментарии за {month} будут удалены. Операции этого месяца останутся на месте.",
+    "План, лимиты и комментарии за {month} будут удалены. Лимит, который действовал и дальше, останется следующему месяцу. Операции этого месяца останутся на месте.",
   "plan.removed": "Месяц удалён из плана",
   "plan.removeKeptFacts": "План удалён, но месяц остался: в нём есть операции.",
   "plan.units": "Все суммы в {currency}",
@@ -180,9 +172,6 @@ const ru: Messages = {
   "plan.saveError": "Не удалось сохранить",
   "page.reports.title": "Отчёты",
   "page.reports.desc": "Сводный финансовый отчёт — можно распечатать или сохранить в PDF.",
-  "page.import.title": "Импорт и экспорт",
-  "page.import.desc":
-    "Загрузка CSV с предпросмотром, маппингом колонок и экспорт операций в CSV/JSON.",
   "page.settings.title": "Настройки",
   "page.settings.desc": "Валюта, оформление, синхронизация, пароль и данные.",
   // Generic loading fallbacks
@@ -271,7 +260,6 @@ const ru: Messages = {
   "debt.tile.rate": "Ставка",
   "debt.tile.rateCaption": "Средняя по остатку",
   "debt.tile.due": "Ближайший платёж",
-  "debt.tile.dueValue": "{day} числа",
   "debt.tile.dueCaption": "По графику",
   "debt.tile.dueNow": "Пора платить",
   "debt.tile.dueNowCaption": "Срок уже наступил",
@@ -284,7 +272,6 @@ const ru: Messages = {
   "accountType.SAVINGS": "Накопительный счет",
   "accountType.BROKERAGE": "Брокерский счет",
   // Accounts manager
-  "acc.totalBalance": "Общий баланс",
   "acc.title": "Счета",
   "acc.addButton": "Счет",
   "acc.new": "Новый счет",
@@ -313,11 +300,14 @@ const ru: Messages = {
   "cat.new": "Новая категория — {title}",
   "cat.empty.title": "Нет категорий",
   "cat.empty.desc": "Добавьте первую категорию.",
-  "cat.tags": "Метки",
   "cat.essential": "Обязательная",
   "cat.subscription": "Подписка",
   "cat.deleteAria": "Удалить категорию",
   "cat.cantDelete": "Нельзя удалить: {count} операций",
+  "cat.standard": "Стандартная категория",
+  "cat.standardLocked": "Стандартную категорию нельзя удалить — только изменить",
+  "cat.hint":
+    "Категория — это ответ на вопрос «на что ушли деньги» или «откуда пришли». Категории с замочком стандартные: их можно переименовать, перекрасить и сменить им значок, но не удалить — и «Очистить все данные» их оставляет. Свои категории удаляются, если в них нет операций.",
   "cat.count": "{count} опер.",
   "cat.icon": "Иконка",
   "cat.icons.finance": "Финансы",
@@ -437,9 +427,6 @@ const ru: Messages = {
   "goal.plannedLine": "План: {amount}/мес",
   // Transactions manager
   "tx.filters": "Фильтры",
-  "tx.filters.title": "Фильтры операций",
-  "tx.filters.desc": "Изменения применяются сразу.",
-  "tx.filters.done": "Готово",
   "tx.filters.clearAll": "Сбросить всё",
   "tx.filters.clearOne": "Убрать фильтр",
   "tx.period": "Период",
@@ -459,23 +446,11 @@ const ru: Messages = {
   "tx.chip.tag": "Тег: {value}",
   "tx.shown": "Показано: {count}",
   "tx.transfer": "Перевод",
-  "tx.split": "Разбить",
   "tx.tag": "Тег",
   "tx.tagPlaceholder": "напр. отпуск",
   "tx.dialog.tags": "Теги (через запятую)",
   "tx.dialog.tagsPlaceholder": "отпуск, работа",
-  "tx.split.title": "Разбить операцию",
-  "tx.split.desc":
-    "Разнесите один платёж по нескольким категориям. Каждая строка — отдельная операция.",
-  "tx.split.descPlaceholder": "Например: покупка в супермаркете",
-  "tx.split.addRow": "Добавить строку",
-  "tx.split.total": "Итого",
-  "tx.split.submit": "Создать операции",
-  "tx.split.created": "Создано операций: {count}",
   "tx.split.badge": "разбивка",
-  "tx.add": "Добавить операцию",
-  "tx.new": "Новая операция",
-  "tx.new.desc": "Доход или расход с привязкой к счету и категории.",
   "tx.edit": "Редактировать операцию",
   "tx.edit.desc": "Изменение пересчитает баланс счета.",
   "tx.search": "Поиск",
@@ -493,7 +468,6 @@ const ru: Messages = {
   "tx.account": "Счет",
   "tx.minAmount": "Сумма от",
   "tx.maxAmount": "Сумма до",
-  "tx.clearCategories": "Сбросить категории",
   "tx.checkAll": "Отметить все",
   "tx.uncheckAll": "Снять все",
   "tx.saved.title": "Сохранённые фильтры:",
@@ -531,10 +505,6 @@ const ru: Messages = {
   "tx.future.confirm.desc":
     "{date} — это будущее. Сумма уйдёт из остатка и капитала сразу, как будто уже потрачена. Сохранить с этой датой?",
   "tx.future.confirm.ok": "Да, дата верная",
-  "tx.apply": "Применить",
-  "tx.reset": "Сбросить",
-  "tx.sumIncome": "Доходы в выборке",
-  "tx.sumExpense": "Расходы в выборке",
   "tx.sumNet": "Итоговый поток",
   "tx.title": "Операции",
   "tx.empty.title": "Операции не найдены",
@@ -552,14 +522,8 @@ const ru: Messages = {
   "tx.toast.budgetWarning": "Превышен лимит «{category}»: потрачено {spent} из {limit}",
   "tx.toast.transferCreated": "Перевод между счетами создан",
   "tx.toast.transferError": "Не удалось создать перевод",
-  "tx.transfer.title": "Перевод между счетами",
-  "tx.transfer.desc":
-    "Создаст две связанные операции: расход со счета списания и доход на счет зачисления.",
   "tx.transfer.from": "Списать со счета",
   "tx.transfer.to": "Зачислить на счет",
-  "tx.transfer.descPlaceholder": "Например: перевод в накопления",
-  "tx.transfer.creating": "Создание...",
-  "tx.transfer.create": "Создать перевод",
   "tx.dialog.cancel": "Отмена",
   "tx.dialog.newCategory": "+ Новая",
   "tx.dialog.newAccount": "+ Новый",
@@ -594,7 +558,6 @@ const ru: Messages = {
   "debt.payoff.notCovering": "Платёж не покрывает проценты",
   "debt.payoff.months": "≈ {months} мес.{interest}",
   "debt.payoff.overpay": ", переплата {amount}",
-  "debt.total": "Всего обязательств:",
   "debt.add": "Добавить долг",
   "debt.new": "Новое обязательство",
   "debt.edit": "Редактировать обязательство",
@@ -792,10 +755,6 @@ const ru: Messages = {
     "Отрасль компании. По отраслям видно, не сложены ли все деньги в одну корзину.",
   "help.tx.tags":
     "Метки поверх категорий: «отпуск», «ремонт», «подарки». Одной операции можно дать несколько и потом найти всё по метке в фильтре операций.",
-  "hint.dayChange": "Сколько ваш портфель заработал или потерял за сегодняшнюю торговую сессию.",
-  "hint.pnl":
-    "Разница между текущей стоимостью бумаг и суммой, которую вы за них заплатили, — «бумажная» прибыль или убыток, пока бумаги не проданы.",
-  "hint.return": "Прибыль или убыток в процентах от вложенной суммы.",
   "hint.allocation":
     "Как ваши деньги распределены между бумагами. Чем разнообразнее портфель, тем меньше он зависит от одной бумаги.",
   "ks.footer": "Горячие клавиши не работают, когда фокус находится в поле ввода.",
@@ -838,8 +797,6 @@ const ru: Messages = {
   "ob.step0.title": "Добро пожаловать в Финансовый помощник",
   "ob.step0.descDesktop":
     "Все данные хранятся локально на вашем устройстве — без облака. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках.",
-  "ob.step0.descWeb":
-    "Ваши данные привязаны к аккаунту и защищены — доступны после входа с любого устройства. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках.",
   "ob.step1.title": "1. Добавьте счета",
   "ob.step1.desc":
     "На вкладке «Счета» создайте свои счета (наличные, карта, накопительный, брокерский) и укажите текущий баланс. Расходы будут списываться с этих счетов, а доходы — зачисляться на них.",
@@ -910,13 +867,11 @@ const ru: Messages = {
   "an.expense": "Расходы",
   "an.savings": "Сбережения",
   "an.share": "Доля",
-  "an.topCategories": "Топ категорий расходов",
   "an.includeTransfers": "Учитывать переводы между счетами",
   "an.structure": "Структура расходов",
   "an.structureIncome": "Структура доходов",
   "an.noIncome6m": "Нет доходов за последние 6 месяцев",
   "an.noData6m": "Нет данных за последние 6 месяцев",
-  "an.noData": "Нет данных",
   // Import / export
   "imp.step.upload": "Загрузка",
   "imp.step.mapping": "Столбцы",
@@ -1004,13 +959,8 @@ const ru: Messages = {
   "ef.reached": "Цель достигнута: резерв покрывает {months} мес. расходов.",
   "ef.covers": "Покрывает {months} из {target} мес. расходов ({pct}%).",
   "dfs.forecast30": "Прогноз на 30 дней",
-  "dfs.expectedBalance": "Ожидаемый доступный остаток",
   "dfs.plannedFlow": "Плановый поток",
-  "dfs.incomeMinusExpense": "Доходы минус расходы по шаблонам",
-  "dfs.risks": "Риски прогноза",
   "dfs.noWarnings": "Нет предупреждений",
-  "dfs.stable": "Плановые платежи выглядят устойчиво.",
-  "dfs.open": "Открыть прогноз",
   "dfs.upcoming": "Ближайшие платежи",
   "dfs.noUpcoming": "Запланированных платежей пока нет.",
   "dc.free": "Свободный остаток: {label}",
@@ -1059,7 +1009,6 @@ const ru: Messages = {
   "dash.netWorth": "Чистый капитал",
   "dash.netWorthDesc": "Счета, инвестиции и накопления по целям.",
   "dash.health": "Финансовое здоровье",
-  "dash.health.short": "Здоровье",
   "dash.health.noData": "Пока нечего оценивать",
   "dash.health.good": "Устойчиво",
   "dash.health.warning": "Нужен контроль",
@@ -1081,7 +1030,6 @@ const ru: Messages = {
   "rep.printTitle": "Финансовый отчёт",
   "rep.cashflowChart": "Доходы и расходы по месяцам",
   "rep.period": "Период: {from} — {to}",
-  "rep.allTime": "За всё время",
   "rep.netWorth": "Капитал (net worth)",
   "rep.avgIncome": "Средний доход / мес",
   "rep.avgExpense": "Средний расход / мес",
@@ -1109,8 +1057,6 @@ const ru: Messages = {
   "inv.educationTips": "Образовательные подсказки",
   "inv.tab.overview": "Обзор",
   "inv.tab.market": "Рынок",
-  "inv.tab.portfolio": "Портфель",
-  "inv.tab.watchlist": "Список наблюдения",
   "inv.tab.analytics": "Аналитика",
   "alerts.title": "Флажки по показателям (smart-lab)",
   "alerts.hint":
@@ -1145,8 +1091,6 @@ const ru: Messages = {
   "alerts.metric.net_income": "Чистая прибыль",
   "alerts.metric.div_yield": "Дивдоходность, %",
   "alerts.metric.market_cap": "Капитализация",
-  "inv.tab.suggest": "Подбор",
-  "inv.summary.dayChange": "Изменение за день",
   "inv.expandChart": "Нажмите, чтобы открыть график",
   "inv.valueChartTitle": "Стоимость портфеля во времени",
   "inv.valueChartHint":
@@ -1179,12 +1123,9 @@ const ru: Messages = {
   "qa.parsed.willSave": "В описание уйдёт: {text}",
   "qa.parsed.willSaveEmpty": "Описание останется пустым",
   // Misc chrome
-  "menu.logout": "Выйти",
   "layout.skipLink": "Перейти к содержимому",
   "cmd.appName": "Финансовый помощник",
   "cmd.title": "Командная палитра",
-  "auto.notifTitle": "Платежи сегодня",
-  "auto.notifBody": "{count} к оплате на сумму {amount}",
   // ── Generated content (services / data layer) ──────────────────────
   // Dashboard metrics
   "svc.metric.totalBalance": "Общий баланс",
@@ -1369,34 +1310,19 @@ const ru: Messages = {
   "inv.watchlistEmpty.title": "Watchlist пуст",
   "inv.watchlistEmpty.desc":
     "Добавьте интересные бумаги в список наблюдения, чтобы следить за ценой и динамикой. Это не инвестиционная рекомендация.",
-  "inv.col.name": "Название",
   "inv.col.sector": "Сектор",
   "inv.sectorPlaceholder": "Выберите отрасль",
-  "inv.col.price": "Цена",
   "inv.col.day": "День",
   "inv.col.30d": "30 дней",
-  "inv.col.risk": "Риск",
-  "inv.col.comment": "Комментарий",
-  "inv.col.ticker": "Тикер",
   "inv.col.qty": "Кол-во",
   "inv.card.average": "{qty} шт. · средняя цена покупки {avg}",
   "inv.col.avg": "Средняя",
   "inv.col.current": "Текущая",
-  "inv.col.value": "Стоимость",
   "inv.col.pnl": "P/L",
-  "inv.col.return": "Доходность",
   "inv.col.share": "Доля",
-  "inv.openChart": "Открыть график",
-  "inv.removeWatchlist": "Удалить из watchlist",
-  "inv.portfolioTitle": "Портфель пользователя",
   "inv.addPosition": "Добавить позицию",
   "inv.addPosition.desc":
     "Найдите бумагу, укажите количество и среднюю цену покупки. Это учетная запись портфеля, не инвестиционный совет.",
-  "inv.portfolioEmpty.title": "Портфель пуст",
-  "inv.portfolioEmpty.desc":
-    "Подберите бумаги по бюджету и риску в блоке выше или добавьте позицию вручную — стоимость и P/L будут обновляться автоматически.",
-  "inv.editPosition": "Редактировать позицию",
-  "inv.removePosition": "Удалить позицию",
   "inv.tax.title": "Оценка налога (при продаже сейчас)",
   "inv.tax.gain": "Прибыль по позициям",
   "inv.tax.loss": "Убыток по позициям",
@@ -1493,11 +1419,9 @@ const ru: Messages = {
   "inv.lots.hint": "Средняя = сумма всех затрат ÷ общее количество.",
   "inv.lots.summary": "Итого {n} шт · средняя {avg} · вложено {total}",
   "inv.invested": "Вложено",
-  "inv.currentValue": "Текущая стоимость",
   "inv.pnlLabel": "Прибыль/убыток",
   "inv.returnLabel": "Доходность",
   "inv.hero.value": "Стоимость портфеля",
-  "inv.hero.today": "сегодня",
   "inv.hero.allocationTitle": "Где ваши деньги",
   "inv.hero.allocationOther": "Прочее",
   "inv.holdingsTitle": "Ваши бумаги",
@@ -1529,40 +1453,7 @@ const ru: Messages = {
   "inv.toast.marketRefreshed": "Рыночные данные обновлены: {n} бумаг, источник {source}",
   "inv.toast.marketRefreshError": "Не удалось обновить рыночные данные",
   // Auth marketing panel
-  "auth.tagline": "Личные финансы — на десктопе и в вебе",
-  "auth.heading": "Держите личные финансы под контролем — без таблиц и хаоса.",
-  "auth.feature.accounts": "Счета, операции, переводы и импорт выписок из банков",
-  "auth.feature.budgets": "Бюджеты, цели, долги и плановые платежи",
-  "auth.feature.forecast": "Прогноз денежного потока, капитал и аналитика",
-  "auth.feature.privacy": "Данные изолированы по аккаунту; на десктопе — полностью офлайн",
-  "auth.disclaimer":
-    "Бесплатно и без рекламы. Инвестиционный раздел носит образовательный характер и не является индивидуальной инвестиционной рекомендацией.",
-  "auth.download.title": "Скачать приложение для Windows (.exe)",
-  "auth.download.hint": "Или пользуйтесь прямо в браузере — без установки",
   // Auth forms
-  "auth.login.title": "Вход",
-  "auth.register.title": "Регистрация",
-  "auth.field.email": "Email",
-  "auth.field.password": "Пароль",
-  "auth.field.totp": "Код 2FA (если включена)",
-  "auth.field.passwordMin": "Пароль (минимум 8 символов)",
-  "auth.field.name": "Имя (необязательно)",
-  "auth.submit.login": "Войти",
-  "auth.submit.loginLoading": "Вход…",
-  "auth.submit.register": "Создать аккаунт",
-  "auth.submit.registerLoading": "Создание…",
-  "auth.noAccount": "Нет аккаунта?",
-  "auth.haveAccount": "Уже есть аккаунт?",
-  "auth.toRegister": "Зарегистрироваться",
-  "auth.toLogin": "Войти",
-  "auth.invalidCredentials": "Неверный email или пароль.",
-  "auth.registerFailed": "Не удалось зарегистрироваться.",
-  "auth.networkError": "Сеть недоступна. Попробуйте ещё раз.",
-  "auth.consent.pre": "Я принимаю",
-  "auth.consent.mid": "и даю согласие на обработку персональных данных согласно",
-  "legal.terms": "Условия",
-  "legal.privacy": "Конфиденциальность",
-  "legal.privacyPolicy": "Политике конфиденциальности",
   // Settings: status & search
   "set.saving": "Сохранение…",
   "set.saved": "Сохранено",
@@ -1762,7 +1653,7 @@ const ru: Messages = {
   "set.data.clear": "Очистить все данные",
   "set.data.clearConfirm": "Очистить все данные?",
   "set.data.clearConfirmDesc":
-    "Операции, счета, цели, бюджеты, плановые платежи, портфель и настройки будут удалены. Если устройства связаны через службу, удаление доедет и до них.",
+    "Операции, счета, свои категории, цели, лимиты, плановые платежи, портфель и настройки будут удалены. Стандартные категории останутся — с вашими названиями и цветами. Если устройства связаны через службу, удаление доедет и до них.",
   "set.data.clearWarning":
     "Отменить нельзя. Сначала сохраните резервную копию — она в начале этого раздела.",
   "set.data.clearing": "Очистка...",
@@ -1937,20 +1828,6 @@ const ru: Messages = {
   "prof.renameFail": "Не удалось переименовать",
   "prof.deleteFail": "Не удалось удалить профиль",
   // Local-mode panel (desktop)
-  "lmp.title": "Локальный режим desktop/mobile",
-  "lmp.snapshotTitle": "Снимок данных для local mode",
-  "lmp.snapshotDesc":
-    "Сохраняет текущие данные API в IndexedDB через storage adapter. Это база для Tauri local mode без прямого доступа UI к Node.js или файловой системе.",
-  "lmp.runtime": "Платформа: {platform}; режим данных desktop: {dataMode}; API: {apiMode}.",
-  "lmp.lastSnapshot": "Последний снимок",
-  "lmp.never": "Пока не создан",
-  "lmp.sections": "Разделов: {n}",
-  "lmp.save": "Сохранить снимок",
-  "lmp.clear": "Очистить",
-  "lmp.saved": "Локальный снимок данных сохранен",
-  "lmp.saveFail": "Не удалось сохранить локальный снимок",
-  "lmp.cleared": "Локальное хранилище очищено",
-  "lmp.clearFail": "Не удалось очистить локальные данные",
   // --- Свой сервер ---
   "server.title": "Подключение",
   "server.lead":
@@ -2026,7 +1903,6 @@ const ru: Messages = {
   "dev.pairAgain": "Показать новый код",
   "dev.copy": "Скопировать",
   "dev.copied": "Код скопирован.",
-  "dev.notLinked": "Это устройство не подключено к службе — связывать нечего.",
   // --- Люди на этом устройстве ---
   "people.title": "Люди на этом устройстве",
   "people.lead":
@@ -2052,7 +1928,6 @@ const ru: Messages = {
   "sync.status.sending": "Отправляем…",
   "sync.status.offline": "Нет связи — накопленное отправится, когда появится",
   "sync.status.error": "Сервер не принимает. Данные на устройстве целы.",
-  "sync.conflicts.badge": "Спорных: {count}",
   "sync.conflicts.title": "Правили в двух местах",
   "sync.conflicts.lead":
     "Эти записи меняли и здесь, и на другом устройстве. Выберите, какую оставить — пока выбор не сделан, в данных лежит отмеченная как «сейчас».",
@@ -2062,9 +1937,6 @@ const ru: Messages = {
   "sync.conflicts.deleted": "Удалено",
   "sync.conflicts.current": "сейчас в данных",
   "sync.conflicts.keep": "Оставить эту",
-  "sync.conflicts.noticedAt": "Замечено {when}",
-  "sync.conflicts.resolved": "Выбор сохранён.",
-  "sync.conflicts.failed": "Не удалось сохранить выбор",
   "sync.collection.accounts": "Счёт",
   "sync.collection.categories": "Статья",
   "sync.collection.transactions": "Операция",
@@ -2075,9 +1947,130 @@ const ru: Messages = {
   "sync.collection.planNotes": "Заметка к месяцу",
   "sync.collection.other": "Запись",
   // Demo-data source banner (web)
-  "src.demoTitle": "Показаны встроенные демо-данные",
-  "src.demoBodyBefore": "Подключите PostgreSQL через ",
-  "src.demoBodyAfter": ", выполните миграции и seed, чтобы включить полноценное сохранение данных."
+  // Вопросики на экранах: что это за экран и что значит число.
+  "page.home.help":
+    "Главная — сводка за текущий месяц: сколько пришло, сколько ушло, что на счетах и что ждёт впереди. Любую плитку можно открыть — попадёте туда, откуда взята цифра. Набор плиток меняется кнопкой «Настроить».",
+  "page.transactions.help":
+    "Здесь все ваши доходы, расходы и переводы между счетами. Добавить — круглая кнопка «+». Нажмите на операцию, чтобы изменить её. Фильтры сверху сужают список по датам, счетам и категориям, а удачный набор фильтров можно сохранить.",
+  "page.accounts.help":
+    "Счёт — любое место, где лежат деньги: кошелёк, карта, вклад, брокерский счёт. Остаток счёта меняется сам, когда вы записываете операции. Вклады и брокерские счета считаются сбережениями, остальные — основными деньгами на жизнь.",
+  "page.debts.help":
+    "Кредиты, ипотека, кредитные карты и долги знакомым. Укажите остаток, ставку и платёж — приложение покажет, сколько уже погашено, когда следующий платёж и во что обходятся проценты. Платежи по долгам попадают в прогноз и календарь.",
+  "page.categories.help":
+    "Категории отвечают на вопрос «на что ушли деньги». Стандартные (с замочком) удалить нельзя, но можно переименовать и перекрасить. Свои можно удалить, если в них нет операций. «Обязательная» отмечает траты, без которых не обойтись, — это важно для подушки безопасности.",
+  "page.budgets.help":
+    "Лимит — сколько вы разрешаете себе потратить на категорию за месяц. Полоса показывает, сколько уже ушло. Когда трата выходит за лимит, приложение предупредит. Лимит — это и план расходов в «План/факте»: заполнили здесь — появилось там, и наоборот. «Предложить лимиты» заполнит пустые по вашим средним тратам за 3 месяца.",
+  "page.goals.help":
+    "Цель — то, на что вы копите: отпуск, машина, подушка. Укажите сумму и срок — приложение посчитает, сколько откладывать в месяц. Пополнение цели переводит деньги со счёта, а не создаёт расход.",
+  "page.recurring.help":
+    "Плановые — то, что повторяется: зарплата, аренда, коммуналка. Заведите один раз, и платёж появится в прогнозе и календаре. Записать его в операции можно кнопкой, а можно включить автоматическую запись в настройках («Финансы»).",
+  "page.subscriptions.help":
+    "Подписки — регулярные платежи за сервисы: кино, музыка, облако. Видно, сколько они стоят в месяц и в год. Приложение само ищет в операциях похожие на подписки — их можно добавить одним нажатием.",
+  "page.forecast.help":
+    "Прогноз показывает, сколько денег будет на счетах в ближайшие 90 дней, если всё пойдёт по плану: плановые доходы и расходы, платежи по долгам и проценты по вкладам. Разовые траты сюда не попадают — прогноз настолько точен, насколько полны ваши «Плановые».",
+  "page.analytics.help":
+    "Аналитика — ваши деньги за последние полгода: средние доходы и расходы, какая доля дохода остаётся и на что уходит больше всего. Цифры считаются по записанным операциям, ничего вводить не нужно.",
+  "page.investments.help":
+    "Портфель — ваши акции, облигации и фонды. Добавьте бумагу, количество и цену покупки — приложение покажет текущую стоимость, прибыль или убыток и среднюю цену покупки. Цены обновляются с Московской биржи, если есть связь.",
+  "page.plan.help":
+    "Таблица «как в Excel»: в верхней части вы пишете план на месяц по каждой категории, ниже — факт (считается по операциям сам) и разница. План расходов — это ваши лимиты: вписали здесь — появилось в «Лимитах», и наоборот. Итоги разделены на основные деньги и сбережения. Добавить месяц — кнопка «Добавить месяц».",
+  "page.reports.help":
+    "Отчёт собирает главное на одной странице: доходы, расходы, структуру трат и динамику по месяцам. Его можно распечатать или сохранить в PDF — например, чтобы обсудить бюджет с семьёй.",
+  "tip.goal.tile.left":
+    "Сколько ещё не хватает до всех целей вместе: сумма целей минус то, что уже накоплено.",
+  "tip.goal.tile.monthly":
+    "Сколько нужно откладывать каждый месяц, чтобы успеть к срокам всех целей. Считается как «осталось накопить» ÷ «осталось месяцев» по каждой цели.",
+  "tip.tx.tile.net":
+    "Доходы минус расходы за выбранный период. Плюс — вы потратили меньше, чем заработали; минус — тратили из запасов.",
+  "tip.fc.availableNow":
+    "Сколько сейчас на наличных, картах и накопительных счетах. Брокерские счета и вложения сюда не входят: их не потратишь завтра.",
+  "tip.fc.flow30":
+    "Плановые доходы минус плановые расходы на ближайшие 30 дней — по вашим «Плановым», платежам по долгам и процентам по вкладам.",
+  "tip.fc.forecast90":
+    "Сколько останется на счетах через 90 дней, если все плановые платежи пройдут в срок. Разовые покупки прогноз не знает.",
+  "tip.fc.tile.risks":
+    "Главное предупреждение прогноза: например, что остаток уйдёт в минус или взносов на цели больше, чем остаётся денег. Все предупреждения — ниже на странице.",
+  "tip.bud.tile.limit":
+    "Сумма всех лимитов этого месяца — сколько вы разрешили себе потратить по категориям с лимитом.",
+  "tip.bud.tile.left":
+    "Сколько ещё можно потратить до конца месяца, не выходя за лимиты: лимиты минус уже потраченное.",
+  "tip.bud.tile.perDay":
+    "Остаток по лимитам, разделённый на оставшиеся дни месяца. Тратите в день не больше — укладываетесь.",
+  "tip.debt.tile.monthly":
+    "Сумма минимальных платежей по всем долгам в месяц. Платить больше можно — долг уйдёт быстрее и проценты будут меньше.",
+  "tip.debt.tile.rate":
+    "Средняя ставка по долгам с учётом размера каждого: крупный долг весит больше мелкого. Чем она выше, тем дороже вам обходятся долги.",
+  "tip.debt.tile.repaid": "Какая часть от первоначальных сумм долгов уже выплачена.",
+  "tip.sub.tile.detected":
+    "Операции из истории, которые повторяются с той же суммой примерно раз в месяц — похоже на подписку. Проверьте и добавьте в список, если это она.",
+  "tip.inv.pnlLabel":
+    "Прибыль или убыток: текущая стоимость бумаг минус то, сколько вы за них заплатили. Пока вы не продали, это прибыль «на бумаге».",
+  "tip.inv.invested":
+    "Сколько денег вы вложили в бумаги, которые у вас сейчас есть: количество × средняя цена покупки.",
+  "tip.inv.returnLabel":
+    "Прибыль или убыток в процентах от вложенного. +10% значит, что каждые 100 ₽ превратились в 110 ₽.",
+  "tip.inv.tile.today": "Насколько изменилась стоимость портфеля за последний торговый день.",
+  "tip.an.avgSavings":
+    "Норма сбережений — какая доля дохода у вас остаётся после расходов, в среднем за месяц. 10–20% — хорошо, больше — отлично, минус — тратите больше, чем получаете.",
+  "tip.an.bestMonth": "Месяц, в котором у вас осталось больше всего денег (доходы минус расходы).",
+  "tip.bud.title":
+    "Задайте лимит у категории — и полоса покажет, сколько уже потрачено. «Переносить остаток» добавляет неизрасходованное к лимиту следующего месяца: не потратили 2 000 ₽ на кафе в мае — в июне на кафе будет лимит + 2 000 ₽.",
+  "tip.rec.title":
+    "Шаблон повторяющегося платежа: сумма, счёт, категория и как часто. Он не списывает деньги сам, а напоминает и попадает в прогноз. Записать платёж — кнопкой у шаблона.",
+  "tip.rec.load.title":
+    "Сколько в сумме за месяц приходится на все плановые доходы и расходы. Если расходы близки к доходам — запас на непредвиденное маленький.",
+  "tip.fc.balanceForecast":
+    "Линия — остаток на наличных, картах и накопительных счетах день за днём на 90 дней вперёд. Ступеньки — это плановые платежи и поступления.",
+  "tip.fc.warnings":
+    "Приложение само проверяет прогноз: не уйдёт ли остаток в минус, хватит ли денег на взносы в цели и не тратите ли вы по плану больше, чем получаете.",
+  "tip.cal.title":
+    "Плановые доходы и расходы по дням месяца. Нажмите на день, чтобы увидеть, что в него запланировано.",
+  "tip.an.monthTrend":
+    "Как идёт текущий месяц: какая доля дохода остаётся и насколько расходы выросли или упали по сравнению с прошлым месяцем.",
+  "tip.an.insights":
+    "Наблюдения, которые приложение делает само по вашим операциям: где выросли траты, что изменилось, на что стоит взглянуть.",
+  "tip.dash.netWorthTrend":
+    "Чистый капитал — всё, что у вас есть (счета и вложения), минус все долги. График показывает, как он меняется от месяца к месяцу.",
+  "tip.inv.suggestTitle":
+    "Подсказка, какие бумаги могут разнообразить ваш портфель с учётом суммы и риска. Это не инвестиционная рекомендация — решение за вами.",
+  "tip.inv.holdingsTitle":
+    "Бумаги, которые у вас есть. Средняя цена — сколько в среднем вы заплатили за одну бумагу по всем покупкам. Нажмите на бумагу, чтобы увидеть сделки и дивиденды.",
+  "tip.acc.title":
+    "Все ваши счета и остатки на них. Счёт можно архивировать — он пропадёт из списков, но его операции останутся в истории.",
+  // Житейские настройки устройства (lib/preferences.ts).
+  "set.group.everyday": "Каждый день",
+  "prefs.hideAmounts": "Скрыть суммы",
+  "prefs.showAmounts": "Показать суммы",
+  "prefs.hide.title": "Скрывать суммы",
+  "prefs.hide.desc": "Вместо цифр — точки. Удобно в метро и в очереди.",
+  "prefs.hide.help":
+    "Все суммы в приложении показываются точками: «•••• ₽». Вводить и менять операции можно как обычно. Быстрее всего включать и выключать глазом в верхней строке — он рядом с поиском.",
+  "prefs.kopecks.title": "Показывать копейки",
+  "prefs.kopecks.desc": "149,90 ₽ вместо 150 ₽ — там, где копейки есть.",
+  "prefs.kopecks.help":
+    "Обычно суммы округляются до рубля — так проще читать. Включите, если сверяете траты с чеками или выпиской банка до копейки.",
+  "prefs.text.title": "Размер текста",
+  "prefs.text.help":
+    "Крупный текст увеличивает всё приложение примерно на восьмую часть: подписи, суммы и кнопки. Помогает, если мелкий шрифт читать трудно.",
+  "prefs.text.normal": "Обычный",
+  "prefs.text.large": "Крупный",
+  "prefs.start.title": "Открывать при запуске",
+  "prefs.start.help":
+    "Какой экран показать, когда вы открываете приложение. Если чаще всего вы записываете траты, выберите «Операции»; если следите за лимитами — «Лимиты».",
+  "prefs.start.home": "Главная",
+  "prefs.start.transactions": "Операции",
+  "prefs.start.budgets": "Лимиты",
+  "prefs.start.plan": "План/факт",
+  "prefs.start.investments": "Инвестиции",
+  "prefs.type.title": "Новая операция — это",
+  "prefs.type.help":
+    "Чем окно «Новая операция» открывается по умолчанию. Почти у всех это расход; переключить на доход или перевод можно прямо в окне.",
+  "prefs.type.expense": "Расход",
+  "prefs.type.income": "Доход",
+  "prefs.account.title": "Счёт для новых операций",
+  "prefs.account.help":
+    "Какой счёт подставлять в новую операцию. «Последний использованный» — тот, с которым вы записали прошлую операцию. Выберите конкретный, если почти всегда платите одной картой.",
+  "prefs.account.last": "Последний использованный"
 };
 
 const en: Messages = {
@@ -2093,7 +2086,6 @@ const en: Messages = {
   // Navigation sections
   "section.accounting": "Accounting",
   "section.planning": "Planning",
-  "section.market": "Market",
   "section.other": "Other",
   // Navigation items
   "nav.home": "Home",
@@ -2112,8 +2104,6 @@ const en: Messages = {
   "nav.planFact": "Plan vs actual",
   "nav.import": "Data",
   "nav.settings": "Settings",
-  "nav.market": "Market",
-  "nav.more": "More",
   // Error boundaries
   "error.title": "Something went wrong",
   "error.description": "An error occurred while rendering this page.",
@@ -2129,11 +2119,6 @@ const en: Messages = {
   "cmd.placeholder": "Search sections, accounts, categories, transactions…",
   "cmd.nothingFound": "Nothing found",
   "cmd.footer": "↑↓ select · Enter open · Esc close",
-  "cmd.group.navigation": "Navigation",
-  "cmd.group.actions": "Actions",
-  "cmd.group.accounts": "Accounts",
-  "cmd.group.categories": "Categories",
-  "cmd.group.transactions": "Transactions",
   "cmd.addTransaction": "Add transaction",
   "cmd.recurring": "Scheduled payments",
   "cmd.importExport": "Import & export",
@@ -2214,7 +2199,7 @@ const en: Messages = {
   "plan.removeMonth": "Remove month",
   "plan.remove.title": "Remove this month from the plan?",
   "plan.remove.desc":
-    "The plan and comments for {month} will be deleted. The month's operations stay where they are.",
+    "The plan, limits and comments for {month} will be deleted. A limit that carried on past it stays with the next month. The month's operations stay where they are.",
   "plan.removed": "Month removed from the plan",
   "plan.removeKeptFacts": "The plan is gone, but the month stays: it has operations in it.",
   "plan.units": "All amounts in {currency}",
@@ -2239,9 +2224,6 @@ const en: Messages = {
   "plan.saveError": "Could not save",
   "page.reports.title": "Reports",
   "page.reports.desc": "A consolidated financial report — print it or save as PDF.",
-  "page.import.title": "Import & export",
-  "page.import.desc":
-    "Upload CSV with preview and column mapping, and export transactions to CSV/JSON.",
   "page.settings.title": "Settings",
   "page.settings.desc": "Currency, appearance, sync, password and data.",
   // Generic loading fallbacks
@@ -2330,7 +2312,6 @@ const en: Messages = {
   "debt.tile.rate": "Rate",
   "debt.tile.rateCaption": "Weighted by balance",
   "debt.tile.due": "Next payment",
-  "debt.tile.dueValue": "day {day}",
   "debt.tile.dueCaption": "As scheduled",
   "debt.tile.dueNow": "Due now",
   "debt.tile.dueNowCaption": "The day has passed",
@@ -2343,7 +2324,6 @@ const en: Messages = {
   "accountType.SAVINGS": "Savings account",
   "accountType.BROKERAGE": "Brokerage account",
   // Accounts manager
-  "acc.totalBalance": "Total balance",
   "acc.title": "Accounts",
   "acc.addButton": "Account",
   "acc.new": "New account",
@@ -2372,11 +2352,14 @@ const en: Messages = {
   "cat.new": "New category — {title}",
   "cat.empty.title": "No categories",
   "cat.empty.desc": "Add your first category.",
-  "cat.tags": "Tags",
   "cat.essential": "Essential",
   "cat.subscription": "Subscription",
   "cat.deleteAria": "Delete category",
   "cat.cantDelete": "Can't delete: {count} transactions",
+  "cat.standard": "Standard category",
+  "cat.standardLocked": "A standard category can't be deleted — only edited",
+  "cat.hint":
+    "A category answers “what was the money spent on” or “where did it come from”. Categories with a lock are standard: you can rename, recolor and re-icon them, but not delete them — and “Clear all data” keeps them. Your own categories can be deleted when they have no transactions.",
   "cat.count": "{count} txns",
   "cat.icon": "Icon",
   "cat.icons.finance": "Finance",
@@ -2496,9 +2479,6 @@ const en: Messages = {
   "goal.plannedLine": "Planned: {amount}/mo",
   // Transactions manager
   "tx.filters": "Filters",
-  "tx.filters.title": "Transaction filters",
-  "tx.filters.desc": "Changes apply immediately.",
-  "tx.filters.done": "Done",
   "tx.filters.clearAll": "Clear all",
   "tx.filters.clearOne": "Remove filter",
   "tx.period": "Period",
@@ -2518,23 +2498,11 @@ const en: Messages = {
   "tx.chip.tag": "Tag: {value}",
   "tx.shown": "Shown: {count}",
   "tx.transfer": "Transfer",
-  "tx.split": "Split",
   "tx.tag": "Tag",
   "tx.tagPlaceholder": "e.g. vacation",
   "tx.dialog.tags": "Tags (comma-separated)",
   "tx.dialog.tagsPlaceholder": "vacation, work",
-  "tx.split.title": "Split transaction",
-  "tx.split.desc":
-    "Spread one payment across several categories. Each row becomes its own transaction.",
-  "tx.split.descPlaceholder": "e.g. supermarket purchase",
-  "tx.split.addRow": "Add row",
-  "tx.split.total": "Total",
-  "tx.split.submit": "Create transactions",
-  "tx.split.created": "Transactions created: {count}",
   "tx.split.badge": "split",
-  "tx.add": "Add transaction",
-  "tx.new": "New transaction",
-  "tx.new.desc": "Income or expense linked to an account and category.",
   "tx.edit": "Edit transaction",
   "tx.edit.desc": "The change will recalculate the account balance.",
   "tx.search": "Search",
@@ -2552,7 +2520,6 @@ const en: Messages = {
   "tx.account": "Account",
   "tx.minAmount": "Amount from",
   "tx.maxAmount": "Amount to",
-  "tx.clearCategories": "Clear categories",
   "tx.checkAll": "Check all",
   "tx.uncheckAll": "Uncheck all",
   "tx.saved.title": "Saved filters:",
@@ -2590,10 +2557,6 @@ const en: Messages = {
   "tx.future.confirm.desc":
     "{date} is in the future. The amount leaves the balance and the net worth at once, as if already spent. Save with this date?",
   "tx.future.confirm.ok": "Yes, the date is right",
-  "tx.apply": "Apply",
-  "tx.reset": "Reset",
-  "tx.sumIncome": "Income in selection",
-  "tx.sumExpense": "Expenses in selection",
   "tx.sumNet": "Net flow",
   "tx.title": "Transactions",
   "tx.empty.title": "No transactions found",
@@ -2611,14 +2574,8 @@ const en: Messages = {
   "tx.toast.budgetWarning": "Limit “{category}” exceeded: spent {spent} of {limit}",
   "tx.toast.transferCreated": "Transfer between accounts created",
   "tx.toast.transferError": "Failed to create transfer",
-  "tx.transfer.title": "Transfer between accounts",
-  "tx.transfer.desc":
-    "Creates two linked transactions: an expense from the source account and income to the destination account.",
   "tx.transfer.from": "Debit from account",
   "tx.transfer.to": "Credit to account",
-  "tx.transfer.descPlaceholder": "E.g. transfer to savings",
-  "tx.transfer.creating": "Creating...",
-  "tx.transfer.create": "Create transfer",
   "tx.dialog.cancel": "Cancel",
   "tx.dialog.newCategory": "+ New",
   "tx.dialog.newAccount": "+ New",
@@ -2653,7 +2610,6 @@ const en: Messages = {
   "debt.payoff.notCovering": "Payment doesn't cover interest",
   "debt.payoff.months": "≈ {months} mo.{interest}",
   "debt.payoff.overpay": ", overpayment {amount}",
-  "debt.total": "Total liabilities:",
   "debt.add": "Add debt",
   "debt.new": "New liability",
   "debt.edit": "Edit liability",
@@ -2850,10 +2806,6 @@ const en: Messages = {
     "The company's industry. By industry you can see whether all your money sits in one basket.",
   "help.tx.tags":
     "Labels on top of categories: “holiday”, “repairs”, “gifts”. One transaction can have several, and later you can find everything with a label in the transactions filter.",
-  "hint.dayChange": "How much your portfolio gained or lost during today's trading session.",
-  "hint.pnl":
-    "The gap between your securities' current value and what you paid for them — an unrealized (paper) gain or loss until you sell.",
-  "hint.return": "Your gain or loss as a percentage of the amount you invested.",
   "hint.allocation":
     "How your money is split across securities. The more diversified, the less the portfolio depends on any single holding.",
   "ks.footer": "Keyboard shortcuts don't fire while the focus is in an input field.",
@@ -2896,8 +2848,6 @@ const en: Messages = {
   "ob.step0.title": "Welcome to Financial Assistant",
   "ob.step0.descDesktop":
     "All data is stored locally on your device — no cloud. Want to explore the app with a ready-made example or start with a clean slate? “Load example” can be cleared anytime in Settings.",
-  "ob.step0.descWeb":
-    "Your data is tied to your account and protected — available after signing in from any device. Want to explore the app with a ready-made example or start with a clean slate? “Load example” can be cleared anytime in Settings.",
   "ob.step1.title": "1. Add accounts",
   "ob.step1.desc":
     "On the Accounts tab create your accounts (cash, card, savings, brokerage) and set the current balance. Expenses are deducted from these accounts and income is credited to them.",
@@ -2968,13 +2918,11 @@ const en: Messages = {
   "an.expense": "Expenses",
   "an.savings": "Savings",
   "an.share": "Share",
-  "an.topCategories": "Top expense categories",
   "an.includeTransfers": "Count transfers between accounts",
   "an.structure": "Spending structure",
   "an.structureIncome": "Income structure",
   "an.noIncome6m": "No income in the last 6 months",
   "an.noData6m": "No data for the last 6 months",
-  "an.noData": "No data",
   // Import / export
   "imp.step.upload": "Upload",
   "imp.step.mapping": "Columns",
@@ -3061,13 +3009,8 @@ const en: Messages = {
   "ef.reached": "Goal reached: the reserve covers {months} months of expenses.",
   "ef.covers": "Covers {months} of {target} months of expenses ({pct}%).",
   "dfs.forecast30": "30-day forecast",
-  "dfs.expectedBalance": "Expected available balance",
   "dfs.plannedFlow": "Planned flow",
-  "dfs.incomeMinusExpense": "Income minus expenses from templates",
-  "dfs.risks": "Forecast risks",
   "dfs.noWarnings": "No warnings",
-  "dfs.stable": "Scheduled payments look stable.",
-  "dfs.open": "Open forecast",
   "dfs.upcoming": "Upcoming payments",
   "dfs.noUpcoming": "No scheduled payments yet.",
   "dc.free": "Free balance: {label}",
@@ -3116,7 +3059,6 @@ const en: Messages = {
   "dash.netWorth": "Net worth",
   "dash.netWorthDesc": "Accounts, investments and goal savings.",
   "dash.health": "Financial health",
-  "dash.health.short": "Health",
   "dash.health.noData": "Nothing to assess yet",
   "dash.health.good": "Stable",
   "dash.health.warning": "Needs attention",
@@ -3138,7 +3080,6 @@ const en: Messages = {
   "rep.printTitle": "Financial report",
   "rep.cashflowChart": "Income and spending by month",
   "rep.period": "Period: {from} — {to}",
-  "rep.allTime": "All time",
   "rep.netWorth": "Net worth",
   "rep.avgIncome": "Average income / mo",
   "rep.avgExpense": "Average expense / mo",
@@ -3166,8 +3107,6 @@ const en: Messages = {
   "inv.educationTips": "Educational tips",
   "inv.tab.overview": "Overview",
   "inv.tab.market": "Market",
-  "inv.tab.portfolio": "Portfolio",
-  "inv.tab.watchlist": "Watchlist",
   "inv.tab.analytics": "Analytics",
   "alerts.title": "Fundamental flags (smart-lab)",
   "alerts.hint":
@@ -3202,8 +3141,6 @@ const en: Messages = {
   "alerts.metric.net_income": "Net income",
   "alerts.metric.div_yield": "Dividend yield, %",
   "alerts.metric.market_cap": "Market cap",
-  "inv.tab.suggest": "Picker",
-  "inv.summary.dayChange": "Today's change",
   "inv.expandChart": "Click to open the chart",
   "inv.valueChartTitle": "Portfolio value over time",
   "inv.valueChartHint":
@@ -3236,12 +3173,9 @@ const en: Messages = {
   "qa.parsed.willSave": "Will be saved as: {text}",
   "qa.parsed.willSaveEmpty": "The description will stay empty",
   // Misc chrome
-  "menu.logout": "Sign out",
   "layout.skipLink": "Skip to content",
   "cmd.appName": "Financial Assistant",
   "cmd.title": "Command palette",
-  "auto.notifTitle": "Payments due today",
-  "auto.notifBody": "{count} to pay, totaling {amount}",
   // ── Generated content (services / data layer) ──────────────────────
   // Dashboard metrics
   "svc.metric.totalBalance": "Total balance",
@@ -3425,34 +3359,19 @@ const en: Messages = {
   "inv.watchlistEmpty.title": "Watchlist is empty",
   "inv.watchlistEmpty.desc":
     "Add securities of interest to the watchlist to track price and trend. This is not investment advice.",
-  "inv.col.name": "Name",
   "inv.col.sector": "Sector",
   "inv.sectorPlaceholder": "Pick an industry",
-  "inv.col.price": "Price",
   "inv.col.day": "Day",
   "inv.col.30d": "30 days",
-  "inv.col.risk": "Risk",
-  "inv.col.comment": "Comment",
-  "inv.col.ticker": "Ticker",
   "inv.col.qty": "Qty",
   "inv.card.average": "{qty} pcs · average purchase price {avg}",
   "inv.col.avg": "Average",
   "inv.col.current": "Current",
-  "inv.col.value": "Value",
   "inv.col.pnl": "P/L",
-  "inv.col.return": "Return",
   "inv.col.share": "Share",
-  "inv.openChart": "Open chart",
-  "inv.removeWatchlist": "Remove from watchlist",
-  "inv.portfolioTitle": "Your portfolio",
   "inv.addPosition": "Add position",
   "inv.addPosition.desc":
     "Find a security, enter the quantity and average purchase price. This is a portfolio record, not investment advice.",
-  "inv.portfolioEmpty.title": "Portfolio is empty",
-  "inv.portfolioEmpty.desc":
-    "Pick securities by budget and risk in the block above or add a position manually — value and P/L update automatically.",
-  "inv.editPosition": "Edit position",
-  "inv.removePosition": "Remove position",
   "inv.tax.title": "Tax estimate (if sold now)",
   "inv.tax.gain": "Gains on positions",
   "inv.tax.loss": "Losses on positions",
@@ -3548,11 +3467,9 @@ const en: Messages = {
   "inv.lots.hint": "Average = total spent ÷ total quantity.",
   "inv.lots.summary": "Total {n} · average {avg} · invested {total}",
   "inv.invested": "Invested",
-  "inv.currentValue": "Current value",
   "inv.pnlLabel": "Profit/loss",
   "inv.returnLabel": "Return",
   "inv.hero.value": "Portfolio value",
-  "inv.hero.today": "today",
   "inv.hero.allocationTitle": "Where your money is",
   "inv.hero.allocationOther": "Other",
   "inv.holdingsTitle": "Your securities",
@@ -3584,40 +3501,7 @@ const en: Messages = {
   "inv.toast.marketRefreshed": "Market data updated: {n} securities, source {source}",
   "inv.toast.marketRefreshError": "Failed to refresh market data",
   // Auth marketing panel
-  "auth.tagline": "Personal finance — on desktop and on the web",
-  "auth.heading": "Keep your personal finances under control — without spreadsheets and chaos.",
-  "auth.feature.accounts": "Accounts, transactions, transfers and bank statement imports",
-  "auth.feature.budgets": "Budgets, goals, debts and scheduled payments",
-  "auth.feature.forecast": "Cash-flow forecast, net worth and analytics",
-  "auth.feature.privacy": "Data is isolated per account; on desktop — fully offline",
-  "auth.disclaimer":
-    "Free and ad-free. The investments section is educational and is not individual investment advice.",
-  "auth.download.title": "Download the Windows app (.exe)",
-  "auth.download.hint": "Or use it right here in your browser — no install needed",
   // Auth forms
-  "auth.login.title": "Sign in",
-  "auth.register.title": "Sign up",
-  "auth.field.email": "Email",
-  "auth.field.password": "Password",
-  "auth.field.totp": "2FA code (if enabled)",
-  "auth.field.passwordMin": "Password (at least 8 characters)",
-  "auth.field.name": "Name (optional)",
-  "auth.submit.login": "Sign in",
-  "auth.submit.loginLoading": "Signing in…",
-  "auth.submit.register": "Create account",
-  "auth.submit.registerLoading": "Creating…",
-  "auth.noAccount": "No account?",
-  "auth.haveAccount": "Already have an account?",
-  "auth.toRegister": "Sign up",
-  "auth.toLogin": "Sign in",
-  "auth.invalidCredentials": "Invalid email or password.",
-  "auth.registerFailed": "Registration failed.",
-  "auth.networkError": "Network unavailable. Please try again.",
-  "auth.consent.pre": "I accept the",
-  "auth.consent.mid": "and consent to the processing of personal data in accordance with the",
-  "legal.terms": "Terms",
-  "legal.privacy": "Privacy",
-  "legal.privacyPolicy": "Privacy Policy",
   // Settings: status & search
   "set.saving": "Saving…",
   "set.saved": "Saved",
@@ -3817,7 +3701,7 @@ const en: Messages = {
   "set.data.clear": "Clear all data",
   "set.data.clearConfirm": "Clear all data?",
   "set.data.clearConfirmDesc":
-    "Transactions, accounts, goals, budgets, scheduled payments, portfolio and settings will be deleted. If your devices are linked through the server, the deletion reaches them too.",
+    "Transactions, accounts, your own categories, goals, limits, scheduled payments, portfolio and settings will be deleted. The standard categories stay — with your names and colors. If your devices are linked through the server, the deletion reaches them too.",
   "set.data.clearWarning":
     "This cannot be undone. Save a backup first — it is at the top of this section.",
   "set.data.clearing": "Clearing...",
@@ -3992,20 +3876,6 @@ const en: Messages = {
   "prof.renameFail": "Could not rename",
   "prof.deleteFail": "Could not delete profile",
   // Local-mode panel (desktop)
-  "lmp.title": "Local desktop/mobile mode",
-  "lmp.snapshotTitle": "Data snapshot for local mode",
-  "lmp.snapshotDesc":
-    "Saves the current API data to IndexedDB via the storage adapter. This is the base for Tauri local mode without direct UI access to Node.js or the file system.",
-  "lmp.runtime": "Platform: {platform}; desktop data mode: {dataMode}; API: {apiMode}.",
-  "lmp.lastSnapshot": "Last snapshot",
-  "lmp.never": "Not created yet",
-  "lmp.sections": "Sections: {n}",
-  "lmp.save": "Save snapshot",
-  "lmp.clear": "Clear",
-  "lmp.saved": "Local data snapshot saved",
-  "lmp.saveFail": "Could not save the local snapshot",
-  "lmp.cleared": "Local storage cleared",
-  "lmp.clearFail": "Could not clear local data",
   // --- Your own server ---
   "server.title": "Connection",
   "server.lead":
@@ -4078,7 +3948,6 @@ const en: Messages = {
   "dev.pairAgain": "Show a new code",
   "dev.copy": "Copy",
   "dev.copied": "Code copied.",
-  "dev.notLinked": "This device is not connected to a service — there is nothing to link.",
   "people.title": "People on this device",
   "people.lead":
     "Each has their own accounts and entries, their own password and their own link to the service. You do not see one another — exactly as far as the data is locked.",
@@ -4103,7 +3972,6 @@ const en: Messages = {
   "sync.status.sending": "Sending…",
   "sync.status.offline": "No connection — queued changes will go out when it returns",
   "sync.status.error": "The server is refusing. Your data on this device is intact.",
-  "sync.conflicts.badge": "Disputed: {count}",
   "sync.conflicts.title": "Edited in two places",
   "sync.conflicts.lead":
     "These records were changed here and on another device. Choose which one to keep — until you do, the one marked \u00abnow\u00bb is what your data holds.",
@@ -4113,9 +3981,6 @@ const en: Messages = {
   "sync.conflicts.deleted": "Deleted",
   "sync.conflicts.current": "in your data now",
   "sync.conflicts.keep": "Keep this one",
-  "sync.conflicts.noticedAt": "Noticed {when}",
-  "sync.conflicts.resolved": "Your choice is saved.",
-  "sync.conflicts.failed": "Could not save your choice",
   "sync.collection.accounts": "Account",
   "sync.collection.categories": "Category",
   "sync.collection.transactions": "Transaction",
@@ -4126,9 +3991,130 @@ const en: Messages = {
   "sync.collection.planNotes": "Month note",
   "sync.collection.other": "Record",
   // Demo-data source banner (web)
-  "src.demoTitle": "Showing built-in demo data",
-  "src.demoBodyBefore": "Connect PostgreSQL via ",
-  "src.demoBodyAfter": ", run migrations and seed to enable full data persistence."
+  // Screen hints: what the screen is and what a figure means.
+  "page.home.help":
+    "Home is a summary of the current month: what came in, what went out, what's in your accounts and what's coming up. Tap any tile to open where its figure comes from. Choose which tiles you see with “Customize”.",
+  "page.transactions.help":
+    "All your income, expenses and transfers between accounts. Add one with the round “+” button. Tap a transaction to edit it. Filters at the top narrow the list by date, account and category, and a useful set of filters can be saved.",
+  "page.accounts.help":
+    "An account is any place that holds money: a wallet, a card, a deposit, a brokerage account. Balances update on their own as you record transactions. Deposits and brokerage accounts count as savings, the rest as everyday money.",
+  "page.debts.help":
+    "Loans, mortgages, credit cards and money owed to friends. Enter the balance, rate and payment — the app shows how much is repaid, when the next payment is due and what the interest costs you. Debt payments appear in the forecast and calendar.",
+  "page.categories.help":
+    "Categories answer “what was the money spent on”. Standard ones (with a lock) can't be deleted but can be renamed and recolored. Your own can be deleted when they have no transactions. “Essential” marks spending you can't skip — it matters for your safety cushion.",
+  "page.budgets.help":
+    "A limit is how much you allow yourself to spend on a category in a month. The bar shows how much is already gone. When spending goes over the limit, the app warns you. A limit is also the spending plan in Plan vs actual: fill it here and it appears there, and the other way round. “Suggest limits” fills the empty ones from your 3-month average.",
+  "page.goals.help":
+    "A goal is something you save for: a holiday, a car, a cushion. Set the amount and the date — the app works out how much to put aside each month. Adding to a goal moves money from an account rather than recording an expense.",
+  "page.recurring.help":
+    "Scheduled payments are the ones that repeat: salary, rent, utilities. Add one once and it shows up in the forecast and calendar. Record it as a transaction with a button, or turn on automatic recording in Settings → Finance.",
+  "page.subscriptions.help":
+    "Subscriptions are regular payments for services: films, music, cloud storage. See what they cost per month and per year. The app looks through your transactions for ones that look like subscriptions — add them with one tap.",
+  "page.forecast.help":
+    "The forecast shows how much money your accounts will hold over the next 90 days if everything goes to plan: scheduled income and expenses, debt payments and deposit interest. One-off purchases aren't included — the forecast is as accurate as your scheduled payments are complete.",
+  "page.analytics.help":
+    "Analytics covers the last six months: average income and spending, what share of income you keep and where most of it goes. It is calculated from your transactions — nothing to enter.",
+  "page.investments.help":
+    "Your portfolio of shares, bonds and funds. Add a security, the quantity and the purchase price — the app shows the current value, profit or loss and the average purchase price. Prices update from the Moscow Exchange when online.",
+  "page.plan.help":
+    "A spreadsheet-style table: at the top you write the month's plan for each category, below it the actual figures (calculated from transactions) and the difference. The spending plan is your limits: write it here and it appears in Limits, and the other way round. Totals are split between everyday money and savings. Add a month with “Add month”.",
+  "page.reports.help":
+    "The report puts the essentials on one page: income, spending, where the money goes and month-by-month trends. Print it or save it as a PDF — for example, to talk the budget over with your family.",
+  "tip.goal.tile.left":
+    "How much is still missing across all goals: the goal amounts minus what is already saved.",
+  "tip.goal.tile.monthly":
+    "How much to put aside each month to reach every goal on time. For each goal: amount left ÷ months left.",
+  "tip.tx.tile.net":
+    "Income minus expenses for the chosen period. A plus means you spent less than you earned; a minus means you spent from reserves.",
+  "tip.fc.availableNow":
+    "What you have now in cash, on cards and in savings accounts. Brokerage accounts and investments aren't included: you can't spend them tomorrow.",
+  "tip.fc.flow30":
+    "Scheduled income minus scheduled expenses over the next 30 days — from your scheduled payments, debt payments and deposit interest.",
+  "tip.fc.forecast90":
+    "What your accounts will hold in 90 days if every scheduled payment happens on time. The forecast doesn't know about one-off purchases.",
+  "tip.fc.tile.risks":
+    "The forecast's main warning: for example, that the balance will go negative or that goal contributions exceed what's left. All warnings are further down the page.",
+  "tip.bud.tile.limit":
+    "The sum of this month's limits — how much you've allowed yourself to spend in categories that have a limit.",
+  "tip.bud.tile.left":
+    "How much you can still spend this month without going over: limits minus what's already spent.",
+  "tip.bud.tile.perDay":
+    "What's left of the limits divided by the days left in the month. Spend no more than this per day and you'll stay within them.",
+  "tip.debt.tile.monthly":
+    "The total of minimum payments on all debts per month. Paying more clears the debt sooner and costs less interest.",
+  "tip.debt.tile.rate":
+    "The average rate across your debts, weighted by size: a big debt counts for more than a small one. The higher it is, the more your debts cost you.",
+  "tip.debt.tile.repaid": "What share of the original debt amounts has already been paid off.",
+  "tip.sub.tile.detected":
+    "Transactions in your history that repeat with the same amount about once a month — they look like subscriptions. Check them and add the ones that are.",
+  "tip.inv.pnlLabel":
+    "Profit or loss: the current value of your securities minus what you paid for them. Until you sell, it's profit “on paper”.",
+  "tip.inv.invested":
+    "How much money went into the securities you hold now: quantity × average purchase price.",
+  "tip.inv.returnLabel":
+    "Profit or loss as a percentage of what you invested. +10% means every 100 became 110.",
+  "tip.inv.tile.today": "How much the portfolio's value changed over the last trading day.",
+  "tip.an.avgSavings":
+    "Savings rate — what share of your income is left after spending, on average per month. 10–20% is good, more is great, below zero means you spend more than you earn.",
+  "tip.an.bestMonth": "The month in which you kept the most money (income minus expenses).",
+  "tip.bud.title":
+    "Give a category a limit and the bar shows how much is spent. “Roll over remainder” adds what you didn't spend to next month's limit: spend 2,000 less on cafés in May and June's café limit grows by 2,000.",
+  "tip.rec.title":
+    "A template for a repeating payment: amount, account, category and how often. It doesn't take money by itself — it reminds you and feeds the forecast. Record the payment with the button next to it.",
+  "tip.rec.load.title":
+    "The monthly total of all scheduled income and expenses. If expenses come close to income, there's little room for the unexpected.",
+  "tip.fc.balanceForecast":
+    "The line is the balance of cash, cards and savings accounts day by day for 90 days ahead. The steps are scheduled payments and income.",
+  "tip.fc.warnings":
+    "The app checks the forecast for you: whether the balance goes negative, whether there's enough for goal contributions and whether planned spending exceeds income.",
+  "tip.cal.title":
+    "Scheduled income and expenses by day of the month. Tap a day to see what's planned for it.",
+  "tip.an.monthTrend":
+    "How the current month is going: what share of income is left and how spending changed compared with last month.",
+  "tip.an.insights":
+    "Observations the app makes from your transactions: where spending grew, what changed, what's worth a look.",
+  "tip.dash.netWorthTrend":
+    "Net worth is everything you have (accounts and investments) minus all debts. The chart shows how it changes month by month.",
+  "tip.inv.suggestTitle":
+    "A hint at which securities could diversify your portfolio given the amount and risk. It isn't investment advice — the decision is yours.",
+  "tip.inv.holdingsTitle":
+    "The securities you hold. The average price is what you paid per security on average across all purchases. Tap a security to see its trades and dividends.",
+  "tip.acc.title":
+    "All your accounts and their balances. An account can be archived — it leaves the lists, but its transactions stay in the history.",
+  // Everyday device settings (lib/preferences.ts).
+  "set.group.everyday": "Everyday",
+  "prefs.hideAmounts": "Hide amounts",
+  "prefs.showAmounts": "Show amounts",
+  "prefs.hide.title": "Hide amounts",
+  "prefs.hide.desc": "Dots instead of figures. Handy on the metro or in a queue.",
+  "prefs.hide.help":
+    "Every amount in the app is shown as dots: “•••• ₽”. You can still add and edit transactions as usual. The quickest switch is the eye in the top bar, next to search.",
+  "prefs.kopecks.title": "Show kopecks",
+  "prefs.kopecks.desc": "149.90 instead of 150 — where there are kopecks.",
+  "prefs.kopecks.help":
+    "Amounts are usually rounded to whole rubles to keep them easy to read. Turn this on if you check spending against receipts or bank statements to the kopeck.",
+  "prefs.text.title": "Text size",
+  "prefs.text.help":
+    "Large text makes the whole app about an eighth bigger: labels, amounts and buttons. It helps if small print is hard to read.",
+  "prefs.text.normal": "Normal",
+  "prefs.text.large": "Large",
+  "prefs.start.title": "Open on",
+  "prefs.start.help":
+    "Which screen to show when you open the app. If you mostly record spending, choose Transactions; if you watch your limits, choose Limits.",
+  "prefs.start.home": "Home",
+  "prefs.start.transactions": "Transactions",
+  "prefs.start.budgets": "Limits",
+  "prefs.start.plan": "Plan vs actual",
+  "prefs.start.investments": "Investments",
+  "prefs.type.title": "A new transaction is",
+  "prefs.type.help":
+    "What the New transaction window opens with. For almost everyone it's an expense; you can switch to income or a transfer right in the window.",
+  "prefs.type.expense": "Expense",
+  "prefs.type.income": "Income",
+  "prefs.account.title": "Account for new transactions",
+  "prefs.account.help":
+    "Which account to fill in for a new transaction. “Last used” is the one you recorded the previous transaction with. Pick a specific one if you almost always pay with the same card.",
+  "prefs.account.last": "Last used"
 };
 
 export const CATALOGS: Record<Locale, Messages> = { ru, en };

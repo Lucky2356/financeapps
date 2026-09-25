@@ -44,6 +44,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { InfoHint } from "@/components/info-hint";
 
 export function AccountManager({ data }: { data: AccountsPageData }) {
   const router = useRouter();
@@ -132,7 +133,10 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
           number, no repetition. */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>{t("acc.title")}</CardTitle>
+          <CardTitle className="flex items-center gap-1.5">
+            {t("acc.title")}
+            <InfoHint text="tip.acc.title" />
+          </CardTitle>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>

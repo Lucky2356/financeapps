@@ -255,6 +255,44 @@ const defaultCategories: CategoryOption[] = [
   }
 ];
 
+/**
+ * Стандартные категории — те, с которыми приложение ставится. Их нельзя
+ * удалить, и «Очистить все данные» их не трогает: без них первую же операцию
+ * некуда отнести. Переименовать, перекрасить, сменить значок — можно, и эти
+ * правки очистку переживают: имя, которое человек выбрал сам, — это его
+ * настройка, а не его данные.
+ */
+export const STANDARD_CATEGORY_IDS: ReadonlySet<string> = new Set(
+  defaultCategories.map((category) => category.id)
+);
+
+/**
+ * Стандартные категории из того, что лежит сейчас, — с правками человека.
+ * Пропавшая (удалённая в прежних версиях, когда это ещё было можно) или
+ * испорченная возвращается такой, какой ставилась.
+ */
+function standardCategoriesFrom(existing: unknown): CategoryOption[] {
+  const held = new Map<string, CategoryOption>();
+  const list = (existing as { categories?: unknown } | null)?.categories;
+  if (Array.isArray(list)) {
+    for (const entry of list) {
+      if (!entry || typeof entry !== "object") continue;
+      const row = entry as Partial<CategoryOption>;
+      if (
+        typeof row.id === "string" &&
+        STANDARD_CATEGORY_IDS.has(row.id) &&
+        typeof row.label === "string" &&
+        row.label.trim() !== "" &&
+        (row.kind === "INCOME" || row.kind === "EXPENSE") &&
+        typeof row.color === "string"
+      ) {
+        held.set(row.id, { ...(row as CategoryOption) });
+      }
+    }
+  }
+  return defaultCategories.map((category) => held.get(category.id) ?? { ...category });
+}
+
 function recomputeGoal(
   goal: Omit<GoalsPageData["goals"][number], "progress" | "monthlyContribution">
 ): GoalsPageData["goals"][number] {
@@ -278,6 +316,65 @@ function recomputeLiability(liability: Omit<LiabilityRow, "progress">): Liabilit
   const progress =
     liability.originalAmount > 0 ? clamp(percent(repaid, liability.originalAmount), 0, 100) : 0;
   return { ...liability, progress };
+}
+
+/**
+ * Шаблон плановой операции с именами, какие они сейчас.
+ *
+ * Шаблон хранит у себя копию названия категории и счёта. Переименование
+ * исправляло операции, но не шаблоны, — и «Плановые», прогноз и календарь
+ * показывали старое имя и старый цвет, а описание новой проведённой операции
+ * получало название, которого у категории давно нет. Имя берётся по номеру из
+ * живых списков; нет такой категории или счёта — остаётся то, что помнил шаблон.
+ */
+/**
+ * Сколько человек собирается потратить на категорию за месяц — одно число и
+ * для «Лимитов», и для строки плана в «План/факте».
+ *
+ * Прежде это были два разных числа в двух местах: лимит, который действует,
+ * пока его не поменяли, и план, вписанный в клетку месяца. Их приходилось
+ * вводить дважды, и они расходились. Теперь число одно, и держат его лимиты;
+ * запись с любого экрана пишет туда же (см. upsertBudget и savePlan).
+ *
+ * План, вписанный в клетку прежними версиями, ещё может лежать рядом — и
+ * приехать с устройства, где стоит старая версия. Он тоже слово человека про
+ * этот месяц, поэтому из двух слов про один и тот же месяц берётся более
+ * позднее. Лимит, унаследованный от прошлого месяца, клетке этого месяца
+ * уступает: она сказана именно про него.
+ */
+export function spendingPlan(
+  state: Pick<LocalState, "plans" | "budgets">,
+  categoryId: string,
+  month: string
+): number | undefined {
+  const cell = state.plans.find(
+    (entry) => entry.month === month && entry.categoryId === categoryId
+  );
+  const own = state.budgets.find(
+    (budget) => budget.categoryId === categoryId && budget.month === month
+  );
+  if (cell && (!own || (cell.updatedAt ?? "") > (own.updatedAt ?? ""))) return cell.amount;
+  return budgetInForce(state.budgets, categoryId, month)?.limitAmount;
+}
+
+type NamedTemplate = {
+  account: { id: string; label: string };
+  category: { id: string; label: string; color: string; icon?: string };
+};
+
+function withCurrentNames<T extends NamedTemplate>(
+  state: Pick<LocalState, "accounts" | "categories">,
+  item: T
+): T {
+  const category = state.categories.find((entry) => entry.id === item.category.id);
+  const account = state.accounts.find((entry) => entry.id === item.account.id);
+  return {
+    ...item,
+    category: category
+      ? { ...item.category, label: category.label, color: category.color, icon: category.icon }
+      : item.category,
+    account: account ? { ...item.account, label: account.name } : item.account
+  };
 }
 
 function emptyInvestmentData(): InvestmentData {
@@ -339,9 +436,10 @@ function createInitialState(): LocalState {
   };
 }
 
-// A truly empty state — used when the user explicitly wipes all data.
-// Unlike createInitialState() this seeds nothing: no accounts, categories or watchlist.
-function createBlankState(): LocalState {
+// An empty state — used when the user explicitly wipes all data. Nothing of
+// theirs is seeded: no accounts, operations or watchlist. The one exception is
+// the standard categories, passed in as they stood, edits included.
+function createBlankState(categories: CategoryOption[]): LocalState {
   return {
     schemaVersion: LATEST_LOCAL_STATE_VERSION,
     currency,
@@ -369,7 +467,7 @@ function createBlankState(): LocalState {
     expectedDividends: [],
     targetAllocations: [],
     marketAlerts: [],
-    categories: [],
+    categories,
     plans: [],
     planNotes: [],
     transactions: [],
@@ -686,6 +784,11 @@ export class LocalApiClient implements ApiClient {
         (item) => item.id !== itemId
       );
     } else if (pathname === "/categories" && itemId) {
+      if (STANDARD_CATEGORY_IDS.has(itemId)) {
+        throw new Error(
+          "Стандартную категорию удалить нельзя — её можно переименовать, перекрасить или сменить значок."
+        );
+      }
       const txCount = state.transactions.filter((t) => t.category.id === itemId).length;
       if (txCount > 0) {
         throw new Error(`Нельзя удалить категорию: к ней привязано ${txCount} операций.`);
@@ -898,6 +1001,9 @@ export class LocalApiClient implements ApiClient {
         ? { ...transaction, account: { id: account.id, label: account.name } }
         : transaction
     );
+    state.recurringTransactions = state.recurringTransactions.map((item) =>
+      item.account.id === account.id ? withCurrentNames(state, item) : item
+    );
     return account;
   }
 
@@ -967,9 +1073,11 @@ export class LocalApiClient implements ApiClient {
     tx: TransactionRow
   ): { category: string; spent: number; limit: number } | null {
     if (tx.type !== "EXPENSE") return null;
-    const budget = state.budgets.find((item) => item.categoryId === tx.category.id);
-    if (!budget || budget.limitAmount <= 0) return null;
+    // Лимит того месяца, в котором операция, — а не первая попавшаяся запись
+    // категории: с тех пор как у лимитов есть месяц, их у категории несколько.
     const month = tx.date.slice(0, 7);
+    const limit = spendingPlan(state, tx.category.id, month) ?? 0;
+    if (limit <= 0) return null;
     const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
     const spent = toBaseRows(state.transactions, context)
       .filter(
@@ -979,8 +1087,8 @@ export class LocalApiClient implements ApiClient {
           item.date.startsWith(month)
       )
       .reduce((sum, item) => sum + item.amount, 0);
-    if (spent > budget.limitAmount) {
-      return { category: tx.category.label, spent: roundMoney(spent), limit: budget.limitAmount };
+    if (spent > limit) {
+      return { category: tx.category.label, spent: roundMoney(spent), limit };
     }
     return null;
   }
@@ -1087,6 +1195,11 @@ export class LocalApiClient implements ApiClient {
     const otherMonths = (item: BudgetsPageData["budgets"][number]) =>
       item.categoryId !== category.id || (item.month ?? "") !== month;
     const inForce = budgetInForce(state.budgets, category.id, month);
+    // Клетка плана за этот месяц — то же число. Прежняя, вписанная отдельно,
+    // уступает только что сказанному, иначе она спорила бы с ним (spendingPlan).
+    state.plans = state.plans.filter(
+      (entry) => !(entry.categoryId === category.id && entry.month === month)
+    );
 
     // A zero limit means "no limit this month". Simply dropping the record would
     // let an earlier month's limit take its place, so the zero is written down.
@@ -1386,7 +1499,7 @@ export class LocalApiClient implements ApiClient {
           accountId: recurring.account.id,
           categoryId: recurring.category.id,
           date: dueDate.toISOString(),
-          description: recurring.description ?? recurring.category.label
+          description: recurring.description ?? withCurrentNames(state, recurring).category.label
         },
         "POST"
       );
@@ -1428,7 +1541,8 @@ export class LocalApiClient implements ApiClient {
               accountId: recurring.account.id,
               categoryId: recurring.category.id,
               date: dueDate.toISOString(),
-              description: recurring.description ?? recurring.category.label
+              description:
+                recurring.description ?? withCurrentNames(state, recurring).category.label
             },
             "POST"
           );
@@ -2243,7 +2357,7 @@ export class LocalApiClient implements ApiClient {
         return this.buildBudgetRow(
           state,
           category,
-          inForce?.limitAmount ?? 0,
+          spendingPlan(state, category.id, month) ?? 0,
           month,
           inForce?.rollover ?? false
         );
@@ -2326,7 +2440,8 @@ export class LocalApiClient implements ApiClient {
     const service = new RecurringTransactionService();
     const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
     const rows = service.sortUpcoming(
-      state.recurringTransactions.map((item) => {
+      state.recurringTransactions.map((stored) => {
+        const item = withCurrentNames(state, stored);
         const status = service.getStatus({
           nextDate: new Date(item.nextDate),
           frequency: item.frequency,
@@ -2363,10 +2478,9 @@ export class LocalApiClient implements ApiClient {
       recurringTransactions: rows,
       accounts: this.accounts(state).accounts,
       categories: [...state.categories],
-      budgetHints: state.budgets.map((budget) => ({
-        categoryId: budget.categoryId,
-        amount: budget.limitAmount
-      })),
+      budgetHints: this.budgetRows(state)
+        .filter((budget) => budget.limitAmount > 0)
+        .map((budget) => ({ categoryId: budget.categoryId, amount: budget.limitAmount })),
       debtPayments,
       interestAccruals,
       currency: state.currency,
@@ -2796,6 +2910,7 @@ export class LocalApiClient implements ApiClient {
       icon: cat.icon,
       isEssential: cat.isEssential ?? false,
       isSubscription: cat.isSubscription ?? false,
+      isStandard: STANDARD_CATEGORY_IDS.has(cat.id),
       transactionCount: state.transactions.filter((t) => t.category.id === cat.id).length
     }));
     return { source: "database", categories };
@@ -2850,24 +2965,47 @@ export class LocalApiClient implements ApiClient {
       return !!habit && habit.savings > habit.main;
     };
 
+    // План расходов — те же числа, что в «Лимитах» (spendingPlan): их
+    // проставим ниже, когда станет известен список месяцев. Отсюда — доходы и
+    // служебные строки, а расходные клетки дают только свои месяцы.
+    const expenseIds = new Set(
+      state.categories.filter((category) => category.kind === "EXPENSE").map((c) => c.id)
+    );
     const plan = new Map<string, Map<string, number>>();
     for (const entry of state.plans) {
       const byCategory = plan.get(entry.month) ?? new Map<string, number>();
-      byCategory.set(entry.categoryId, entry.amount);
+      if (!expenseIds.has(entry.categoryId)) byCategory.set(entry.categoryId, entry.amount);
       plan.set(entry.month, byCategory);
     }
 
     const current = monthKeyOf(new Date());
     const keys = new Set(
-      [current, ...plan.keys(), ...fact.keys(), ...(state.planMonths ?? [])].filter((key) =>
-        MONTH_KEY.test(key)
-      )
+      [
+        current,
+        ...plan.keys(),
+        ...fact.keys(),
+        ...(state.planMonths ?? []),
+        // Месяц, в котором задан лимит, — это месяц с планом: число одно.
+        ...state.budgets.flatMap((budget) =>
+          budget.month && budget.limitAmount > 0 && expenseIds.has(budget.categoryId)
+            ? [budget.month]
+            : []
+        )
+      ].filter((key) => MONTH_KEY.test(key))
     );
     // A month still to come has no operations of its own; it is here only
     // because the owner asked for a row to plan that far ahead.
     for (let step = 1; step <= Math.min(Math.max(Math.trunc(ahead) || 0, 0), 24); step += 1)
       keys.add(shiftMonth(current, step));
     const monthKeys = [...keys].sort((left, right) => right.localeCompare(left));
+    for (const month of monthKeys) {
+      const byCategory = plan.get(month) ?? new Map<string, number>();
+      for (const categoryId of expenseIds) {
+        const amount = spendingPlan(state, categoryId, month);
+        if (amount && amount > 0) byCategory.set(categoryId, amount);
+      }
+      if (byCategory.size > 0) plan.set(month, byCategory);
+    }
 
     // One column order for every band and every month, or the eye loses the
     // column it was following: income first, then spending, each sorted by how
@@ -3133,6 +3271,25 @@ export class LocalApiClient implements ApiClient {
       state.planMonths = (state.planMonths ?? []).filter((entry) => entry !== month);
       state.plans = state.plans.filter((entry) => entry.month !== month);
       state.planNotes = state.planNotes.filter((entry) => entry.month !== month);
+      // План расходов этого месяца — это его лимиты. Уходят и они, но лимит,
+      // который отсюда действовал дальше, остаётся следующему месяцу: удалить
+      // строку июля не значит снять лимит, по которому живёт сентябрь.
+      const next = shiftMonth(month, 1);
+      for (const own of state.budgets.filter((budget) => budget.month === month)) {
+        const category = state.categories.find((item) => item.id === own.categoryId);
+        const rest = state.budgets.filter((budget) => budget !== own);
+        const nextOwn = rest.some(
+          (budget) => budget.categoryId === own.categoryId && budget.month === next
+        );
+        const nextAfter = budgetInForce(rest, own.categoryId, next)?.limitAmount ?? 0;
+        state.budgets =
+          category && !nextOwn && nextAfter !== own.limitAmount
+            ? [
+                this.buildBudgetRow(state, category, own.limitAmount, next, own.rollover ?? false),
+                ...rest
+              ]
+            : rest;
+      }
       const hasFacts = state.transactions.some((row) => row.date.slice(0, 7) === month);
       return { month, hasFacts };
     }
@@ -3164,6 +3321,15 @@ export class LocalApiClient implements ApiClient {
 
     const amount = Number(input.amount);
     if (!Number.isFinite(amount) || amount < 0) throw new Error("Введите сумму от нуля.");
+
+    // План расхода и лимит — одно число (spendingPlan): клетка расходной
+    // категории пишется туда же, куда и лимит, и появляется в «Лимитах» сама.
+    if (
+      state.categories.some((category) => category.id === categoryId && category.kind === "EXPENSE")
+    ) {
+      this.upsertBudget(state, { categoryId, month, limitAmount: String(roundMoney(amount)) });
+      return { month, categoryId, amount: roundMoney(amount) };
+    }
 
     const rest = state.plans.filter(
       (entry) => !(entry.month === month && entry.categoryId === categoryId)
@@ -3331,6 +3497,10 @@ export class LocalApiClient implements ApiClient {
           ? { ...t, category: { ...t.category, label: name, color, icon } }
           : t
       );
+      // И в шаблонах плановых — иначе они так и показывали бы прежнее имя.
+      state.recurringTransactions = state.recurringTransactions.map((item) =>
+        item.category.id === input.id ? withCurrentNames(state, item) : item
+      );
       return updated;
     }
 
@@ -3398,8 +3568,7 @@ export class LocalApiClient implements ApiClient {
     const softExpense = expenseRows
       .filter((row) => {
         const category = state.categories.find((item) => item.id === row.category.id);
-        // Discretionary = subscriptions + entertainment + restaurants (same
-        // definition as the web/Prisma path, for parity).
+        // Discretionary = subscriptions + entertainment + restaurants.
         return (
           category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.label ?? "")
         );
@@ -3758,11 +3927,11 @@ export class LocalApiClient implements ApiClient {
    */
   private async clearEverything(): Promise<void> {
     const list = await this.profileList();
-    for (const profile of list.profiles) {
-      await this.storage.setItem(profileStateKey(profile.id), createBlankState());
-    }
-    if (!list.profiles.some((profile) => profile.id === DEFAULT_PROFILE.id)) {
-      await this.storage.setItem(profileStateKey(DEFAULT_PROFILE.id), createBlankState());
+    const ids = new Set([...list.profiles.map((profile) => profile.id), DEFAULT_PROFILE.id]);
+    for (const id of ids) {
+      const key = profileStateKey(id);
+      const existing = await this.storage.getItem<unknown>(key);
+      await this.storage.setItem(key, createBlankState(standardCategoriesFrom(existing)));
     }
     await this.storage.setItem(PROFILE_LIST_KEY, {
       profiles: [DEFAULT_PROFILE],

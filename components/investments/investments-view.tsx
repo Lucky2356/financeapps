@@ -64,6 +64,7 @@ import {
   type InvestmentSuggestion
 } from "@/services/InvestmentSuggestionService";
 import type { InvestmentData } from "@/types/finance";
+import { InfoHint } from "@/components/info-hint";
 
 const REFRESH_INTERVAL_MS = 45_000;
 const RISK_CODES = [
@@ -348,7 +349,10 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
             <Card>
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>{t("inv.holdingsTitle")}</CardTitle>
+                <CardTitle className="flex items-center gap-1.5">
+                  {t("inv.holdingsTitle")}
+                  <InfoHint text="tip.inv.holdingsTitle" />
+                </CardTitle>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" onClick={() => refreshMarketPrices()}>
                     <RefreshCw className="size-4" />
@@ -445,7 +449,10 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
           {/* Picker (suggestions) — a helper to build a diversified portfolio. */}
           <Card>
             <CardHeader>
-              <CardTitle>{t("inv.suggestTitle")}</CardTitle>
+              <CardTitle className="flex items-center gap-1.5">
+                {t("inv.suggestTitle")}
+                <InfoHint text="tip.inv.suggestTitle" />
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">{t("inv.suggestIntro")}</p>

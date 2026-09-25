@@ -40,7 +40,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
-import { LAST_ACCOUNT_KEY, readMine, writeMine } from "@/lib/storage/mine";
+import { DEFAULT_ACCOUNT_KEY, LAST_ACCOUNT_KEY, readMine, writeMine } from "@/lib/storage/mine";
 
 type AccountOption = ImportPageData["accounts"][number];
 type CategoryOption = ImportPageData["categories"][number];
@@ -126,12 +126,9 @@ export function QuickAddFab({
     // empty — the form then refused to save with only a toast to explain
     // itself. Falling back to the first account is what the operations screen's
     // own form used to do.
-    let last: string | null = null;
-    try {
-      last = readMine(LAST_ACCOUNT_KEY);
-    } catch {
-      /* storage unavailable */
-    }
+    // Счёт из настроек, если человек его выбрал, иначе — последний.
+    const chosen = readMine(DEFAULT_ACCOUNT_KEY);
+    const last = readMine(LAST_ACCOUNT_KEY);
     // Read the accounts here rather than waiting for the shared state to
     // update: the default has to be decided before the dialog is on screen.
     const fresh = await apiClient.get<ImportPageData>("/import").catch(() => null);
@@ -139,7 +136,9 @@ export function QuickAddFab({
     const available = (fresh ?? refs).accounts.filter(
       (account) => !(account as AccountOption & { isArchived?: boolean }).isArchived
     );
-    const known = last && available.some((account) => account.id === last) ? last : null;
+    const usable = (id: string | null) =>
+      id && available.some((account) => account.id === id) ? id : null;
+    const known = usable(chosen) ?? usable(last);
     const preselectedAccount = known ?? available[0]?.id ?? "";
     setAccountId(preselectedAccount);
     // Honour the default transaction type from settings.

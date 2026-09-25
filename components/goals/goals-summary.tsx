@@ -44,12 +44,14 @@ export function GoalsSummary({ data }: { data: GoalsPageData }) {
         />
         <StatTile
           label={t("goal.tile.left")}
+          hint="tip.goal.tile.left"
           value={formatCurrency(left, currency)}
           caption={t("goal.tile.leftCaption")}
           icon={Flag}
         />
         <StatTile
           label={t("goal.tile.monthly")}
+          hint="tip.goal.tile.monthly"
           value={formatCurrency(monthly, currency)}
           caption={t("goal.tile.monthlyCaption")}
           icon={PiggyBank}

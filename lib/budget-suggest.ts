@@ -1,7 +1,6 @@
 // Suggests a monthly budget limit for a category from the user's own history:
 // the average monthly spend over the trailing `months` window, rounded up to a
-// tidy step. Shared by the web (Prisma) and desktop (LocalApiClient) paths so
-// the suggestion is identical in both.
+// tidy step.
 
 export type BudgetHistoryTx = {
   date: string | Date;

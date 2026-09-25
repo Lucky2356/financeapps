@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { activeNavHref, findHub, MAIN_NAV, MOBILE_PRIMARY } from "@/lib/navigation";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
+import { AmountsToggle } from "@/components/amounts-toggle";
 
 const primaryItems = MOBILE_PRIMARY;
 
@@ -34,6 +35,7 @@ export function MobileTopBar() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="min-w-0 truncate text-lg font-semibold">{screenTitle}</h1>
         <div className="flex shrink-0 gap-2">
+          <AmountsToggle className="border border-border" />
           <button
             type="button"
             aria-label={t("shell.search")}

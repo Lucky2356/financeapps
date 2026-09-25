@@ -1,7 +1,7 @@
 // Persisted daily net-worth snapshots (plan B7). Unlike the flow-reconstructed
 // trend, a snapshot captures the ACTUAL net worth on a day — including portfolio
 // market value at that time — so the history is accurate going forward instead
-// of approximated from cash flows. Shared by desktop (LocalState) and web (Prisma).
+// of approximated from cash flows.
 
 export type NetWorthSnapshot = { date: string; value: number }; // date = YYYY-MM-DD (local)
 

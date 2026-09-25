@@ -9,7 +9,6 @@ coverage
 *.tsbuildinfo
 *-qa.png
 dev-server.*.log
-prisma/migrations/dev.db
 src-tauri/target
 playwright-report
 test-results

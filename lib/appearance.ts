@@ -7,4 +7,6 @@
 // re-derive that whole set per choice. The colour now lives only in
 // app/globals.css.
 
-export const DENSITY_FOUC_SCRIPT = `(function(){try{var d=localStorage.getItem("ui-density");if(d==="compact")document.documentElement.setAttribute("data-density","compact");}catch(e){}})();`;
+// Крупный текст ставится тем же приёмом и в тот же миг: иначе страница
+// мелькнула бы обычным шрифтом и тут же перескочила бы на крупный.
+export const DENSITY_FOUC_SCRIPT = `(function(){try{var h=document.documentElement;var d=localStorage.getItem("ui-density");if(d==="compact")h.setAttribute("data-density","compact");if(localStorage.getItem("text-size")==="large")h.setAttribute("data-text","large");}catch(e){}})();`;

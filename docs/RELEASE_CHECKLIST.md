@@ -128,7 +128,22 @@ PC and phone the same update forever, since installing it changes nothing.
 - For release automation, run the `Windows Desktop Release` workflow manually or push a `v*` tag —
   it publishes the GitHub Release with the signed installer and `latest.json`. The release is
   published as a **prerelease**; making it public is a separate step — see «Раскатка» above.
-- After installing the NSIS package, follow the smoke test in `docs/DESKTOP_LOCAL_MODE.md`.
+- After installing the NSIS package, run the checks below.
+
+### Проверка после установки
+
+1. Открыть приложение, пройти первый запуск (пароль можно пропустить).
+2. Завести счёт с начальным остатком.
+3. Записать расход и доход; сделать перевод между двумя счетами — оба остатка
+   должны измениться.
+4. Найти операцию поиском по описанию, счёту или категории.
+5. Задать лимит категории и цель; пополнить цель.
+6. Завести плановый платёж и провести его, когда наступит срок.
+7. Сохранить резервную копию; импортировать небольшой CSV дважды — повторы
+   пропускаются; «Отменить последний импорт» убирает строки и возвращает остатки.
+8. Открыть «Инвестиции», обновить котировки, добавить и убрать бумагу.
+9. «Очистить все данные» — остаются только стандартные категории.
+10. Закрыть и открыть приложение — данные на месте.
 
 ## Android
 

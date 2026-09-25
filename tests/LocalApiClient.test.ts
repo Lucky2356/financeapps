@@ -807,8 +807,50 @@ describe("LocalApiClient", () => {
     const investments = await client.get<InvestmentData>("/investments");
 
     expect(accounts.accounts).toHaveLength(0);
-    expect(categories.categories).toHaveLength(0);
+    // Стандартные категории очистку переживают: без них первую же операцию
+    // некуда было бы отнести.
+    expect(categories.categories.every((category) => category.isStandard)).toBe(true);
+    expect(categories.categories.length).toBeGreaterThan(0);
     expect(investments.watchlist).toHaveLength(0);
+  });
+
+  it("keeps the standard categories with their edits on clear and drops the rest", async () => {
+    const client = createClient();
+    await client.put("/categories", {
+      id: "cat-food",
+      name: "Еда",
+      kind: "EXPENSE",
+      color: "#123456",
+      icon: "Apple"
+    });
+    await client.post("/categories", { name: "Хобби", kind: "EXPENSE", color: "#654321" });
+    // Удалённая прежней версией стандартная — очистка её возвращает.
+    const stored = await client.get<CategoriesPageData>("/categories");
+    const standardCount = stored.categories.filter((category) => category.isStandard).length;
+    expect(stored.categories.some((category) => category.name === "Хобби")).toBe(true);
+
+    await client.delete("/storage/clear");
+
+    const after = await client.get<CategoriesPageData>("/categories");
+    expect(after.categories).toHaveLength(standardCount);
+    expect(after.categories.some((category) => category.name === "Хобби")).toBe(false);
+    const food = after.categories.find((category) => category.id === "cat-food");
+    expect(food).toMatchObject({ name: "Еда", color: "#123456", icon: "Apple", isStandard: true });
+  });
+
+  it("refuses to delete a standard category but deletes one of your own", async () => {
+    const client = createClient();
+    await expect(client.delete("/categories?id=cat-food")).rejects.toThrow(/Стандартную/);
+
+    const own = await client.post<{ id: string }>("/categories", {
+      name: "Хобби",
+      kind: "EXPENSE",
+      color: "#654321"
+    });
+    await client.delete(`/categories?id=${own.id}`);
+    const page = await client.get<CategoriesPageData>("/categories");
+    expect(page.categories.some((category) => category.id === own.id)).toBe(false);
+    expect(page.categories.some((category) => category.id === "cat-food")).toBe(true);
   });
 
   it("does not post an operation when a recurring template is created", async () => {
@@ -833,6 +875,47 @@ describe("LocalApiClient", () => {
     // …and the template keeps the date the user entered, waiting to be posted.
     expect(recurring.recurringTransactions[0].isDue).toBe(true);
     expect(recurring.recurringTransactions[0].amount).toBe(5000);
+  });
+
+  it("shows a template under the category's and account's current names after a rename", async () => {
+    const client = createClient();
+    const account = await seedAccount(client, { name: "Карта" });
+    const template = await client.post<
+      RecurringTransactionsPageData["recurringTransactions"][number]
+    >("/recurring", {
+      amount: "5000",
+      type: "EXPENSE",
+      accountId: account.id,
+      categoryId: "cat-food",
+      frequency: "MONTHLY",
+      nextDate: todayInput(),
+      isActive: "true"
+    });
+
+    await client.put("/categories", {
+      id: "cat-food",
+      name: "Еда",
+      kind: "EXPENSE",
+      color: "#123456"
+    });
+    await client.put("/accounts", {
+      id: account.id,
+      name: "Зарплатная",
+      type: "DEBIT_CARD",
+      balance: "0"
+    });
+
+    const page = await client.get<RecurringTransactionsPageData>("/recurring");
+    expect(page.recurringTransactions[0].category).toMatchObject({
+      label: "Еда",
+      color: "#123456"
+    });
+    expect(page.recurringTransactions[0].account.label).toBe("Зарплатная");
+
+    // Проведённая по шаблону операция без описания получает НЫНЕШНЕЕ имя.
+    await client.post("/recurring/materialize", { id: template.id });
+    const ledger = await client.get<TransactionsPageData>("/transactions");
+    expect(ledger.transactions[0].description).toBe("Еда");
   });
 
   it("keeps already posted operations untouched when a template is edited or deleted", async () => {

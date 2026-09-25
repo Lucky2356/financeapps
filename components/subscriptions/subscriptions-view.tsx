@@ -161,6 +161,7 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
             />
             <StatTile
               label={t("sub.tile.detected")}
+              hint="tip.sub.tile.detected"
               value={String(detected.length)}
               caption={t("sub.tile.detectedCaption")}
               icon={Sparkles}

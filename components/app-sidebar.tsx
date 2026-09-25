@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { AmountsToggle } from "@/components/amounts-toggle";
 import { NotificationBell } from "@/components/notification-bell";
 import { SyncStatusIndicator } from "@/components/sync/sync-status";
 import { ProfileSwitcher } from "@/components/profile-switcher";
@@ -138,6 +139,7 @@ export function AppSidebar() {
           )}
           <div className={cn("flex items-center", collapsed ? "flex-col gap-1" : "gap-0.5")}>
             <SyncStatusIndicator />
+            <AmountsToggle className="size-10" />
             <NotificationBell />
             <ThemeToggle />
           </div>

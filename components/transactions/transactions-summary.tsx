@@ -63,6 +63,7 @@ export function TransactionsSummary() {
         />
         <StatTile
           label={t("tx.tile.net")}
+          hint="tip.tx.tile.net"
           value={formatCurrency(income - expense, currency)}
           caption={t("tx.tile.netCaption")}
           icon={Scale}

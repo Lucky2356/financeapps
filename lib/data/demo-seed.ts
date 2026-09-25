@@ -12,8 +12,8 @@ import type {
 } from "@/types/finance";
 
 // Demo / fallback seed data for the app, extracted from lib/data.ts. Pure and
-// dependency-light: used to render a realistic sample dashboard when there is no
-// database (desktop demo mode, web fallback). No Prisma imports here.
+// dependency-light: used to render a realistic sample dashboard before the
+// device's own data has loaded.
 
 export type CategoryOption = Option & {
   kind: "INCOME" | "EXPENSE";

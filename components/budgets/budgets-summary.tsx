@@ -44,12 +44,14 @@ export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
           label={t("bud.tile.limit")}
+          hint="tip.bud.tile.limit"
           value={formatCurrency(limit, currency)}
           caption={t("bud.tile.limitCaption", { count: withLimit.length })}
           icon={Gauge}
         />
         <StatTile
           label={t("bud.tile.left")}
+          hint="tip.bud.tile.left"
           value={formatCurrency(left, currency)}
           caption={t("bud.tile.leftCaption")}
           icon={Wallet}
@@ -57,6 +59,7 @@ export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
         />
         <StatTile
           label={t("bud.tile.perDay")}
+          hint="tip.bud.tile.perDay"
           value={formatCurrency(Math.round(perDay), currency)}
           caption={t("bud.tile.perDayCaption", { days: daysLeftInMonth() })}
           icon={CalendarDays}

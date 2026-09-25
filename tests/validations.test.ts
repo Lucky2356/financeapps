@@ -183,10 +183,9 @@ describe("recurringTransactionSchema", () => {
     expect(recurringTransactionSchema.parse({ ...base, isActive: "true" }).isActive).toBe(true);
   });
 
-  // An omitted isActive defaults to true, matching the Prisma column default
-  // (@default(true)) and the backup schema. The form never omits the field (a
-  // hidden "false" input always accompanies the checkbox), so only programmatic
-  // callers hit this path.
+  // An omitted isActive defaults to true, matching the backup schema. The form
+  // never omits the field (a hidden "false" input always accompanies the
+  // checkbox), so only programmatic callers hit this path.
   it("defaults an omitted isActive to true", () => {
     expect(recurringTransactionSchema.parse(base).isActive).toBe(true);
   });

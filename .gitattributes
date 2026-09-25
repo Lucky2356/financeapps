@@ -9,7 +9,6 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.md text eol=lf
-*.prisma text eol=lf
 *.rs text eol=lf
 *.toml text eol=lf
 *.sh text eol=lf

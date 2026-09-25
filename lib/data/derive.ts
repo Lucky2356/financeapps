@@ -12,8 +12,8 @@ import type {
 import { ASSET_KIND_COLORS } from "@/lib/charts/palette";
 import { countableAmount } from "@/lib/transactions/base-amount";
 
-// Pure, platform-agnostic derivations shared by the server data layer (plan A2).
-// They operate purely on domain arrays — no Prisma, demo data, or request state.
+// Pure, platform-agnostic derivations. They operate purely on domain arrays —
+// no storage, demo data, or request state.
 
 export function currentMonthRange() {
   const now = new Date();

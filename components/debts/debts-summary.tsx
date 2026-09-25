@@ -46,12 +46,14 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
           label={t("debt.tile.monthly")}
+          hint="tip.debt.tile.monthly"
           value={formatCurrency(monthly, currency)}
           caption={t("debt.tile.monthlyCaption")}
           icon={Wallet}
         />
         <StatTile
           label={t("debt.tile.rate")}
+          hint="tip.debt.tile.rate"
           value={`${rate.toFixed(1)}%`}
           caption={t("debt.tile.rateCaption")}
           icon={Percent}
@@ -66,6 +68,7 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
         />
         <StatTile
           label={t("debt.tile.repaid")}
+          hint="tip.debt.tile.repaid"
           value={formatCurrency(repaid, currency)}
           caption={t("debt.tile.repaidCaption")}
           icon={Landmark}

@@ -13,7 +13,6 @@ src-tauri/gen/
 
 # Generated / lock files
 package-lock.json
-prisma/migrations/
 
 # Misc
 *.md
