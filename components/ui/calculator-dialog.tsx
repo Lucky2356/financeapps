@@ -65,11 +65,14 @@ const NUMBER_KEY = /^[0-9,.]$/;
 
 export function CalculatorDialog({
   initialValue,
-  onApply
+  onApply,
+  onClose
 }: {
   /** Current field value, so the user can carry on from it (e.g. add "×3"). */
   initialValue: string;
   onApply: (value: number) => void;
+  /** Закрыть калькулятор, оставив поле как было. */
+  onClose?: () => void;
 }) {
   const { t } = useI18n();
   const [expression, setExpression] = useState(initialValue);
@@ -92,7 +95,20 @@ export function CalculatorDialog({
   }
 
   return (
-    <DialogContent className="sm:max-w-sm">
+    <DialogContent
+      className="sm:max-w-sm"
+      // Escape закрывает калькулятор своими силами, а не только через слои
+      // Radix: только что открытый диалог встаёт верхним слоем в эффекте, и
+      // клавиша, нажатая раньше, не доставалась никому (форма под ним её
+      // пропускает — см. components/ui/dialog.tsx). Здесь она ловится на самом
+      // калькуляторе, куда бы ни ушли эффекты.
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && onClose) {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
       <DialogHeader>
         <DialogTitle>{t("calc.title")}</DialogTitle>
         <DialogDescription>{t("calc.desc")}</DialogDescription>

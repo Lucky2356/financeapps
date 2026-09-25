@@ -30,7 +30,9 @@ test("«Данные» открывает вкладку настроек со �
 
 test("старая ссылка /import ведёт на ту же вкладку", async ({ page }) => {
   await seedExampleData(page);
-  await page.goto("/import");
+  // Через openSettled, а не page.goto: пример заканчивается перезагрузкой
+  // самого приложения, и голый переход, начатый сразу после, она перебивала.
+  await openSettled(page, "/import");
   await expect(page).toHaveURL(/\/settings\?section=data/, { timeout: 20_000 });
 });
 

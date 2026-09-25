@@ -92,6 +92,7 @@ export function AmountInput({
               commit(String(result));
               setCalculatorOpen(false);
             }}
+            onClose={() => setCalculatorOpen(false)}
           />
         ) : null}
       </Dialog>

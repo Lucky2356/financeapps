@@ -7,11 +7,21 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # Пара к крейтам Tauri — см. раздел cargo ниже.
+    ignore:
+      - dependency-name: "@tauri-apps/*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+    # Группами — только минорные и патч-обновления. Большие версии приходят
+    # каждая своим PR: в общей группе Tailwind 3→4 и TypeScript 5→7 висели
+    # рядом с безобидными заплатками, и из-за двух переписываний не вливалось
+    # ни одно из девятнадцати обновлений.
     groups:
       production-deps:
         dependency-type: "production"
+        update-types: ["minor", "patch"]
       dev-deps:
         dependency-type: "development"
+        update-types: ["minor", "patch"]
 
   # Keep GitHub Actions (CI/release workflows) up to date.
   - package-ecosystem: "github-actions"
@@ -21,8 +31,19 @@ updates:
     open-pull-requests-limit: 3
 
   # Rust crates for the Tauri desktop shell.
+  #
+  # Tauri и его плагины поднимаются ПАРОЙ: сборка отказывается собираться,
+  # если у пакета npm и крейта расходится минорная версия. Поодиночке
+  # Dependabot это сломал бы — поэтому минорные и большие версии Tauri здесь
+  # и в npm не предлагаются, их поднимают руками в одном PR (CONTRIBUTING.md).
+  # Заплатки безопасны и идут как обычно.
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "tauri"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "tauri-plugin-*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
