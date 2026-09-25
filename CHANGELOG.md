@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.47.1] — 2026-09-25
+
+🧮 Escape в калькуляторе больше не закрывает форму операции, и зависимости обновлены.
+
 ### Изменено
 - Обновлены зависимости: Next 16.3, React 19.3, Radix, плагины Tauri (вместе с
   их Rust-частью — иначе установщик не собрался бы), SDK Anthropic и OpenAI,
