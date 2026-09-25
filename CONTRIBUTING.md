@@ -36,6 +36,19 @@ npm run build:static   # статический экспорт — общий б
 > Pre-commit хук (Husky + lint-staged) автоматически прогонит ESLint/Prettier и
 > связанные тесты. Не отключайте хуки (`--no-verify`) без необходимости.
 
+## Обновление Tauri и его плагинов
+
+Пакет npm (`@tauri-apps/*`) и крейт (`tauri`, `tauri-plugin-*`) поднимаются
+**вместе, в одном PR**: сборка установщика отказывается собираться, если у них
+расходится минорная версия. Проверки PR этого не ловят — ловит только выпуск.
+
+```bash
+npm install @tauri-apps/plugin-http@^2.6.1
+cd src-tauri && cargo update -p tauri-plugin-http --precise 2.6.1
+```
+
+Dependabot поэтому предлагает для Tauri только заплатки.
+
 ## Правила кода
 
 - **TypeScript строгий** — без `as any` и подавления ошибок. Валидация ввода через **Zod**.
