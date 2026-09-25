@@ -30,8 +30,17 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+>(({ className, children, onEscapeKeyDown, ...props }, ref) => {
   const { t } = useI18n();
+  const node = React.useRef<HTMLDivElement | null>(null);
+  const setNode = React.useCallback(
+    (element: HTMLDivElement | null) => {
+      node.current = element;
+      if (typeof ref === "function") ref(element);
+      else if (ref) ref.current = element;
+    },
+    [ref]
+  );
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -51,7 +60,7 @@ const DialogContent = React.forwardRef<
           Стережёт e2e/quick-add-touch.spec.ts. */}
       <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:items-center sm:pt-4">
         <DialogPrimitive.Content
-          ref={ref}
+          ref={setNode}
           className={cn(
             // A dialog taller than the screen used to overflow in BOTH
             // directions, putting its heading and its save button out of reach
@@ -66,6 +75,22 @@ const DialogContent = React.forwardRef<
             className
           )}
           {...props}
+          // Escape закрывает только тот диалог, в котором его нажали.
+          //
+          // Калькулятор открывается диалогом ПОВЕРХ формы операции. Radix
+          // решает, кому закрываться, по тому, какой слой верхний, — а слои
+          // регистрируются и снимаются в эффектах. На медленной машине Escape
+          // успевал проскочить между ними: закрывался калькулятор, а следом —
+          // и форма под ним, с уже набранной суммой. Элемент, на котором нажали
+          // клавишу, от этих эффектов не зависит: он внутри одного диалога, и
+          // остальные клавишу пропускают. Стережёт e2e/calculator.spec.ts.
+          onEscapeKeyDown={(event) => {
+            onEscapeKeyDown?.(event);
+            if (event.defaultPrevented) return;
+            const target = event.target;
+            const owner = target instanceof Element ? target.closest('[role="dialog"]') : null;
+            if (owner && owner !== node.current) event.preventDefault();
+          }}
         >
           {children}
           {/* Крестик рисуется маленьким, а нажимается большим: отрицательный
