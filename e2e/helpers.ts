@@ -65,7 +65,11 @@ export async function loadExample(page: Page) {
       () =>
         page
           .evaluate(() => (window as unknown as Record<string, unknown>).__seedMark ?? null)
-          .catch(() => null),
+          // Отказ evaluate — это не «перезагрузка прошла», а «она идёт»: старый
+          // документ уже разрушен, новый ещё не встал. Считай мы отказ за null,
+          // помощник возвращался посреди перезагрузки, и следующий goto
+          // обрывался ею («interrupted by another navigation»).
+          .catch(() => "перезагрузка идёт"),
       { timeout: 30_000 }
     )
     .toBeNull();

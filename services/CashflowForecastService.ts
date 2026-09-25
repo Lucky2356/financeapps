@@ -4,7 +4,8 @@ import { enUS, ru } from "date-fns/locale";
 
 import { upcomingInterest } from "@/lib/accounts/interest";
 import { isSettledDebt } from "@/lib/debts/settled";
-import { RecurringTransactionService } from "@/services/RecurringTransactionService";
+import { storedTransactionDate } from "@/lib/transactions/date";
+import { anchorDayOf, RecurringTransactionService } from "@/services/RecurringTransactionService";
 import type {
   AccountRow,
   ForecastData,
@@ -108,22 +109,26 @@ export class CashflowForecastService {
     for (const item of recurringTransactions) {
       if (!item.isActive) continue;
 
+      const anchorDay = anchorDayOf(item);
       let cursor = startOfDay(new Date(item.nextDate));
       while (isBefore(cursor, today)) {
-        cursor = this.recurring.getNextDate(cursor, item.frequency);
+        cursor = this.recurring.getNextDate(cursor, item.frequency, anchorDay);
       }
 
       while (!isAfter(cursor, horizon)) {
         events.push({
           id: `${item.id}-${format(cursor, "yyyy-MM-dd")}`,
-          date: cursor.toISOString(),
+          // День как UTC-полночь — как у операций и процентов. Местная полночь
+          // к востоку от Гринвича сериализуется во вчерашний день, и календарь,
+          // читающий день из строки, клал зарплату на 5-е в клетку 4-го.
+          date: storedTransactionDate(cursor),
           title: item.description || item.category.label,
           amount: item.amount,
           type: item.type,
           category: item.category.label,
           account: item.account.label
         });
-        cursor = this.recurring.getNextDate(cursor, item.frequency);
+        cursor = this.recurring.getNextDate(cursor, item.frequency, anchorDay);
       }
     }
 
@@ -189,7 +194,7 @@ export class CashflowForecastService {
 
         events.push({
           id: `debt-${liability.id}-${format(date, "yyyy-MM-dd")}`,
-          date: date.toISOString(),
+          date: storedTransactionDate(date),
           title: `${title}: ${liability.name}`,
           amount,
           type: "EXPENSE" as TransactionType,

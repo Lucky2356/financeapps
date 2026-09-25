@@ -211,6 +211,12 @@ export type RecurringTransactionRow = {
   type: TransactionType;
   frequency: RecurrenceFrequency;
   nextDate: string;
+  /**
+   * Число месяца, на которое платёж назначен. Хранится отдельно от `nextDate`:
+   * после февраля следующая дата 31-го числа — 28-е, и по ней одной уже не
+   * узнать, что платёж был на 31-е.
+   */
+  dayOfMonth?: number;
   description: string | null;
   isActive: boolean;
   daysUntilNext: number;

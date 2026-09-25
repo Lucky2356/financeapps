@@ -31,7 +31,7 @@ import {
 import { localStateSchema } from "@/lib/api/local/schemas";
 import { PRE_UPGRADE_SUFFIX, RESCUE_SUFFIX } from "@/lib/storage/SyncingStorageAdapter";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
-import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
+import { futureDated, storedTransactionDate, todayDay } from "@/lib/transactions/date";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
@@ -74,7 +74,11 @@ import { salvageLocalState } from "@/lib/api/local/schemas";
 import { countableRows, isTransfer, TRANSFER_CATEGORY_LABEL } from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
-import { RecurringTransactionService } from "@/services/RecurringTransactionService";
+import {
+  anchorDayOf,
+  dayOfMonthFrom,
+  RecurringTransactionService
+} from "@/services/RecurringTransactionService";
 import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
@@ -1312,7 +1316,7 @@ export class LocalApiClient implements ApiClient {
           return previous?.settledAt ? { settledAt: previous.settledAt } : {};
         }
         if (input.settled !== "true") return {};
-        return { settledAt: previous?.settledAt ?? new Date().toISOString().slice(0, 10) };
+        return { settledAt: previous?.settledAt ?? todayDay() };
       })()
     };
     state.liabilities =
@@ -1433,17 +1437,34 @@ export class LocalApiClient implements ApiClient {
     const accountRef = { id: account.id, label: account.name };
     const categoryRef = { id: category.id, label: category.label, color: category.color };
     const nextDateInput = new Date(input.nextDate);
+    // Дату в форме не трогали — число остаётся прежним. Иначе правка одной
+    // суммы у платежа на 31-е, стоящего сейчас на 28 февраля, перевела бы его
+    // на 28-е навсегда.
+    const previous =
+      method === "PUT"
+        ? state.recurringTransactions.find((item) => item.id === input.id)
+        : undefined;
+    const dayOfMonth =
+      previous && todayDay(new Date(previous.nextDate)) === String(input.nextDate).trim()
+        ? anchorDayOf(previous)
+        : dayOfMonthFrom(input.nextDate);
 
     if (method === "PUT" && input.id) {
       // A template is a plan, not a record: editing it never rewrites operations
       // that were already posted — those are facts about money that moved.
-      const status = service.getStatus({ nextDate: nextDateInput, frequency, isActive });
+      const status = service.getStatus({
+        nextDate: nextDateInput,
+        frequency,
+        isActive,
+        anchorDay: dayOfMonth
+      });
       const row: LocalState["recurringTransactions"][number] = {
         id: input.id,
         amount,
         type,
         frequency,
         nextDate: nextDateInput.toISOString(),
+        dayOfMonth,
         description,
         isActive,
         daysUntilNext: status.daysUntilNext,
@@ -1461,13 +1482,19 @@ export class LocalApiClient implements ApiClient {
     // the operation appears in "Учёт" when the due date arrives (auto-posting or
     // the confirm button), never at the moment the plan is written down.
     const newId = id("recurring");
-    const status = service.getStatus({ nextDate: nextDateInput, frequency, isActive });
+    const status = service.getStatus({
+      nextDate: nextDateInput,
+      frequency,
+      isActive,
+      anchorDay: dayOfMonth
+    });
     const row: LocalState["recurringTransactions"][number] = {
       id: newId,
       amount,
       type,
       frequency,
       nextDate: nextDateInput.toISOString(),
+      dayOfMonth,
       description,
       isActive,
       daysUntilNext: status.daysUntilNext,
@@ -1485,10 +1512,12 @@ export class LocalApiClient implements ApiClient {
     if (!recurring) throw new Error("Recurring transaction not found.");
 
     const service = new RecurringTransactionService();
+    const anchorDay = anchorDayOf(recurring);
     const status = service.getStatus({
       nextDate: new Date(recurring.nextDate),
       frequency: recurring.frequency,
-      isActive: recurring.isActive
+      isActive: recurring.isActive,
+      anchorDay
     });
     for (const dueDate of status.dueDates) {
       this.upsertTransaction(
@@ -1506,7 +1535,12 @@ export class LocalApiClient implements ApiClient {
     }
     state.recurringTransactions = state.recurringTransactions.map((item) =>
       item.id === recurring.id
-        ? { ...item, nextDate: status.nextDateAfterRun.toISOString(), isDue: false }
+        ? {
+            ...item,
+            nextDate: status.nextDateAfterRun.toISOString(),
+            dayOfMonth: anchorDay,
+            isDue: false
+          }
         : item
     );
     return { created: status.dueDates.length, nextDate: status.nextDateAfterRun.toISOString() };
@@ -1520,10 +1554,12 @@ export class LocalApiClient implements ApiClient {
     let created = 0;
     for (const recurring of state.recurringTransactions) {
       if (!recurring.isActive) continue;
+      const anchorDay = anchorDayOf(recurring);
       const status = service.getStatus({
         nextDate: new Date(recurring.nextDate),
         frequency: recurring.frequency,
-        isActive: recurring.isActive
+        isActive: recurring.isActive,
+        anchorDay
       });
       if (status.dueDates.length === 0) continue;
       // A template whose account was archived or whose category was deleted
@@ -1556,7 +1592,12 @@ export class LocalApiClient implements ApiClient {
       if (failed) continue;
       state.recurringTransactions = state.recurringTransactions.map((item) =>
         item.id === recurring.id
-          ? { ...item, nextDate: status.nextDateAfterRun.toISOString(), isDue: false }
+          ? {
+              ...item,
+              nextDate: status.nextDateAfterRun.toISOString(),
+              dayOfMonth: anchorDay,
+              isDue: false
+            }
           : item
       );
     }
@@ -1677,7 +1718,10 @@ export class LocalApiClient implements ApiClient {
           transaction.category.id === category.id &&
           transaction.type === type &&
           transaction.amount === Math.abs(rawAmount) &&
-          transaction.date.slice(0, 10) === date.toISOString().slice(0, 10) &&
+          // День строки файла — тот, что будет записан, а не UTC-день местной
+          // полуночи: к востоку от Гринвича это вчера, и повторный импорт
+          // того же файла не узнавал ни одной строки и задваивал всё.
+          transaction.date.slice(0, 10) === storedTransactionDate(date).slice(0, 10) &&
           (transaction.description ?? "") === description
         );
       });
@@ -2445,7 +2489,8 @@ export class LocalApiClient implements ApiClient {
         const status = service.getStatus({
           nextDate: new Date(item.nextDate),
           frequency: item.frequency,
-          isActive: item.isActive
+          isActive: item.isActive,
+          anchorDay: anchorDayOf(item)
         });
         const base = baseAmountOf(item, context);
         return {

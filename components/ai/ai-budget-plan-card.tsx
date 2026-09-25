@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { todayDay } from "@/lib/transactions/date";
 
 // AI budget planner: proposes monthly limits per expense category from the recent
 // average spend, previews them, and applies them to the current month's budgets.
@@ -75,7 +76,7 @@ export function AiBudgetPlanCard() {
 
   async function applyAll() {
     if (!suggestions || suggestions.length === 0) return;
-    const month = new Date().toISOString().slice(0, 7); // YYYY-MM (current)
+    const month = todayDay().slice(0, 7); // YYYY-MM, местный месяц
     setApplying(true);
     let applied = 0;
     for (const s of suggestions) {

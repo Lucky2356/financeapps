@@ -45,6 +45,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { InfoHint } from "@/components/info-hint";
+import { todayDay } from "@/lib/transactions/date";
 
 export function AccountManager({ data }: { data: AccountsPageData }) {
   const router = useRouter();
@@ -115,7 +116,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
           amount: String(Math.abs(account.balance)),
           fromAccountId: account.balance > 0 ? account.id : toId,
           toAccountId: account.balance > 0 ? toId : account.id,
-          date: new Date().toISOString().slice(0, 10),
+          date: todayDay(),
           description: t("acc.archive.transferNote", { name: account.name })
         });
       } catch (error) {

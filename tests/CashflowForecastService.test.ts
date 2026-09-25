@@ -99,4 +99,54 @@ describe("CashflowForecastService", () => {
     expect(forecast.plannedExpense30d).toBe(70000);
     expect(forecast.warnings.some((warning) => warning.id === "negative-balance")).toBe(true);
   });
+
+  it("dates every planned payment on its own day east of Greenwich", () => {
+    // Календарь раскладывает события по дню из строки даты. Платежи и долги
+    // писались местной полуночью через toISOString(), и в Москве это 21:00
+    // накануне: зарплата на 5-е лежала в клетке 4-го.
+    const zone = process.env.TZ;
+    process.env.TZ = "Europe/Moscow";
+    try {
+      const forecast = new CashflowForecastService().build({
+        source: "database",
+        currency: "RUB",
+        today: new Date(2026, 8, 26),
+        accounts: [],
+        goals: [],
+        recurringTransactions: [
+          {
+            id: "salary",
+            amount: 100_000,
+            type: "INCOME",
+            frequency: "MONTHLY",
+            nextDate: "2026-10-05T00:00:00.000Z",
+            description: "Зарплата",
+            isActive: true,
+            daysUntilNext: 9,
+            isDue: false,
+            account: { id: "card", label: "Карта" },
+            category: { id: "cat-salary", label: "Зарплата", color: "#16a34a" }
+          }
+        ],
+        liabilities: [
+          {
+            id: "loan",
+            name: "Кредит",
+            kind: "LOAN",
+            balance: 50_000,
+            minPayment: 10_000,
+            autoPay: true,
+            dueDay: 10
+          } as never
+        ]
+      });
+
+      const days = forecast.events.map((event) => `${event.title}: ${event.date.slice(0, 10)}`);
+      expect(days).toContain("Зарплата: 2026-10-05");
+      expect(days.filter((entry) => entry.includes("Кредит"))[0]).toContain("2026-10-10");
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
 });
