@@ -84,12 +84,15 @@ export function CashflowCalendar({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+      {/* Заголовок с вопросиком и переключатель месяцев в одну строку на
+          узком телефоне не помещаются: без переноса последняя кнопка сжималась
+          и выезжала за край. Переключатель уходит на вторую строку целиком. */}
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
         <CardTitle className="flex items-center gap-1.5">
           {t("cal.title")}
           <InfoHint text="tip.cal.title" />
         </CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
