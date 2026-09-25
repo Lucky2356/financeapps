@@ -147,7 +147,7 @@ const ru: Messages = {
   "plan.removeMonth": "Удалить месяц",
   "plan.remove.title": "Удалить месяц из плана?",
   "plan.remove.desc":
-    "План и комментарии за {month} будут удалены. Операции этого месяца останутся на месте.",
+    "План, лимиты и комментарии за {month} будут удалены. Лимит, который действовал и дальше, останется следующему месяцу. Операции этого месяца останутся на месте.",
   "plan.removed": "Месяц удалён из плана",
   "plan.removeKeptFacts": "План удалён, но месяц остался: в нём есть операции.",
   "plan.units": "Все суммы в {currency}",
@@ -1959,7 +1959,7 @@ const ru: Messages = {
   "page.categories.help":
     "Категории отвечают на вопрос «на что ушли деньги». Стандартные (с замочком) удалить нельзя, но можно переименовать и перекрасить. Свои можно удалить, если в них нет операций. «Обязательная» отмечает траты, без которых не обойтись, — это важно для подушки безопасности.",
   "page.budgets.help":
-    "Лимит — сколько вы разрешаете себе потратить на категорию за месяц. Полоса показывает, сколько уже ушло. Когда трата выходит за лимит, приложение предупредит. «Предложить лимиты» заполнит пустые по вашим средним тратам за 3 месяца.",
+    "Лимит — сколько вы разрешаете себе потратить на категорию за месяц. Полоса показывает, сколько уже ушло. Когда трата выходит за лимит, приложение предупредит. Лимит — это и план расходов в «План/факте»: заполнили здесь — появилось там, и наоборот. «Предложить лимиты» заполнит пустые по вашим средним тратам за 3 месяца.",
   "page.goals.help":
     "Цель — то, на что вы копите: отпуск, машина, подушка. Укажите сумму и срок — приложение посчитает, сколько откладывать в месяц. Пополнение цели переводит деньги со счёта, а не создаёт расход.",
   "page.recurring.help":
@@ -1973,7 +1973,7 @@ const ru: Messages = {
   "page.investments.help":
     "Портфель — ваши акции, облигации и фонды. Добавьте бумагу, количество и цену покупки — приложение покажет текущую стоимость, прибыль или убыток и среднюю цену покупки. Цены обновляются с Московской биржи, если есть связь.",
   "page.plan.help":
-    "Таблица «как в Excel»: в верхней части вы пишете план на месяц по каждой категории, ниже — факт (считается по операциям сам) и разница. Итоги разделены на основные деньги и сбережения. Добавить месяц — кнопка «Добавить месяц».",
+    "Таблица «как в Excel»: в верхней части вы пишете план на месяц по каждой категории, ниже — факт (считается по операциям сам) и разница. План расходов — это ваши лимиты: вписали здесь — появилось в «Лимитах», и наоборот. Итоги разделены на основные деньги и сбережения. Добавить месяц — кнопка «Добавить месяц».",
   "page.reports.help":
     "Отчёт собирает главное на одной странице: доходы, расходы, структуру трат и динамику по месяцам. Его можно распечатать или сохранить в PDF — например, чтобы обсудить бюджет с семьёй.",
   "tip.goal.tile.left":
@@ -2199,7 +2199,7 @@ const en: Messages = {
   "plan.removeMonth": "Remove month",
   "plan.remove.title": "Remove this month from the plan?",
   "plan.remove.desc":
-    "The plan and comments for {month} will be deleted. The month's operations stay where they are.",
+    "The plan, limits and comments for {month} will be deleted. A limit that carried on past it stays with the next month. The month's operations stay where they are.",
   "plan.removed": "Month removed from the plan",
   "plan.removeKeptFacts": "The plan is gone, but the month stays: it has operations in it.",
   "plan.units": "All amounts in {currency}",
@@ -4003,7 +4003,7 @@ const en: Messages = {
   "page.categories.help":
     "Categories answer “what was the money spent on”. Standard ones (with a lock) can't be deleted but can be renamed and recolored. Your own can be deleted when they have no transactions. “Essential” marks spending you can't skip — it matters for your safety cushion.",
   "page.budgets.help":
-    "A limit is how much you allow yourself to spend on a category in a month. The bar shows how much is already gone. When spending goes over the limit, the app warns you. “Suggest limits” fills the empty ones from your 3-month average.",
+    "A limit is how much you allow yourself to spend on a category in a month. The bar shows how much is already gone. When spending goes over the limit, the app warns you. A limit is also the spending plan in Plan vs actual: fill it here and it appears there, and the other way round. “Suggest limits” fills the empty ones from your 3-month average.",
   "page.goals.help":
     "A goal is something you save for: a holiday, a car, a cushion. Set the amount and the date — the app works out how much to put aside each month. Adding to a goal moves money from an account rather than recording an expense.",
   "page.recurring.help":
@@ -4017,7 +4017,7 @@ const en: Messages = {
   "page.investments.help":
     "Your portfolio of shares, bonds and funds. Add a security, the quantity and the purchase price — the app shows the current value, profit or loss and the average purchase price. Prices update from the Moscow Exchange when online.",
   "page.plan.help":
-    "A spreadsheet-style table: at the top you write the month's plan for each category, below it the actual figures (calculated from transactions) and the difference. Totals are split between everyday money and savings. Add a month with “Add month”.",
+    "A spreadsheet-style table: at the top you write the month's plan for each category, below it the actual figures (calculated from transactions) and the difference. The spending plan is your limits: write it here and it appears in Limits, and the other way round. Totals are split between everyday money and savings. Add a month with “Add month”.",
   "page.reports.help":
     "The report puts the essentials on one page: income, spending, where the money goes and month-by-month trends. Print it or save it as a PDF — for example, to talk the budget over with your family.",
   "tip.goal.tile.left":

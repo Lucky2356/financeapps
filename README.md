@@ -7,7 +7,7 @@
 [![CI](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml/badge.svg)](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml)
 [![Release](https://github.com/Lucky2356/financeapps/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/Lucky2356/financeapps/actions/workflows/desktop-release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-1073%20unit%20%2B%2075%20server%20%2B%20187%20e2e-success)
+![Tests](https://img.shields.io/badge/tests-1080%20unit%20%2B%2075%20server%20%2B%20187%20e2e-success)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org/)
@@ -217,7 +217,7 @@ Android проверяет наличие новой версии и предл�
 |---|---|---|
 | Типы | `npm run typecheck` | `tsc --noEmit`, строгий режим |
 | Стиль | `npm run lint` | ESLint с `--max-warnings=0` |
-| Модульные | `npm run test` | **1073** теста в 148 файлах (Vitest + Testing Library): деньги, миграции, шифрование, слияние, фильтры, сервисы, компоненты |
+| Модульные | `npm run test` | **1080** проверок в 149 файлах (Vitest + Testing Library): деньги, миграции, шифрование, слияние, фильтры, сервисы, компоненты |
 | Служба | `npm run test:server` | **75** проверок службы синхронизации, в том числе безопасности |
 | Сборка | `npm run build:static` | статический экспорт — общий бандл обеих оболочек |
 | E2E | `npm run test:e2e` | **187** проверок в 29 сценариях (Playwright) против **собранного статического приложения**, а не дев-сервера |
