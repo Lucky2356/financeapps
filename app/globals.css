@@ -117,6 +117,13 @@
     --density-row-y: 0.3rem;
   }
 
+  /* Крупный текст: всё, что задано в rem, — а это почти весь текст и отступы, —
+     вырастает на восьмую часть. Весь экран разом, а не только абзацы: кнопка
+     с крупной подписью и прежним размером выглядела бы сломанной. */
+  :root[data-text="large"] {
+    font-size: 112.5%;
+  }
+
   /* The hub tab strip: snap-scrolled sideways with no visible scrollbar, per
      the design. Tailwind has no utility for the vendor scrollbar pseudo-element. */
   .fa-hubstrip {

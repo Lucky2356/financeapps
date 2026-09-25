@@ -28,7 +28,8 @@ import {
   SAVINGS_BALANCE_ID,
   SAVINGS_TRANSFER_ID
 } from "@/lib/api/LocalApiClient";
-import { formatCurrency } from "@/lib/format";
+import { currencySign } from "@/lib/format";
+import { areAmountsHidden } from "@/lib/preferences";
 import { periodRange } from "@/lib/transactions/filter-chips";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
@@ -145,13 +146,15 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
   };
 
   const money = (value: number) =>
-    new Intl.NumberFormat(locale === "en" ? "en-US" : "ru-RU", {
-      maximumFractionDigits: 0
-    }).format(value);
+    areAmountsHidden()
+      ? "••••"
+      : new Intl.NumberFormat(locale === "en" ? "en-US" : "ru-RU", {
+          maximumFractionDigits: 0
+        }).format(value);
 
   // The grid carries bare numbers — a currency sign in each of a few hundred
   // cells is noise — so the unit is stated once, above the table.
-  const unit = formatCurrency(0, data.currency).replace(/[\d\s.,]/g, "");
+  const unit = currencySign(data.currency);
 
   if (data.columns.length === 0) {
     return (

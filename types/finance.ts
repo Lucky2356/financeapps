@@ -29,6 +29,8 @@ export type CategoryRow = {
   icon?: string;
   isEssential: boolean;
   isSubscription: boolean;
+  /** Одна из тех, с которыми приложение ставится: удалить нельзя, изменить можно. */
+  isStandard: boolean;
   transactionCount: number;
 };
 

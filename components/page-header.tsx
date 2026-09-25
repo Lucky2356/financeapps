@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { InfoHint } from "@/components/info-hint";
 import { useI18n } from "@/lib/i18n/context";
 
 // Page headers are translated on the client so the same component works in both
@@ -9,15 +10,21 @@ import { useI18n } from "@/lib/i18n/context";
 // chosen locale at runtime instead of being baked at build time. Callers pass
 // catalog keys; a literal `title`/`description` is still accepted as a fallback
 // for any not-yet-keyed surface.
+//
+// Рядом с заголовком — вопросик «что это за экран и как им пользоваться».
+// Текст берётся из `page.<экран>.help` сам: заводить его на каждой странице
+// значило бы однажды забыть на новой. Нет такого ключа — нет и вопросика.
 export function PageHeader({
   titleKey,
   descriptionKey,
+  helpKey,
   title,
   description,
   actions
 }: {
   titleKey?: string;
   descriptionKey?: string;
+  helpKey?: string;
   title?: string;
   description?: string;
   actions?: ReactNode;
@@ -25,11 +32,16 @@ export function PageHeader({
   const { t } = useI18n();
   const resolvedTitle = titleKey ? t(titleKey) : (title ?? "");
   const resolvedDescription = descriptionKey ? t(descriptionKey) : description;
+  const help = helpKey ?? titleKey?.replace(/\.title$/, ".help");
+  const helpText = help && help !== titleKey && t(help) !== help ? t(help) : null;
 
   return (
     <div className="no-print mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{resolvedTitle}</h1>
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+          {resolvedTitle}
+          {helpText ? <InfoHint text={helpText} /> : null}
+        </h1>
         {resolvedDescription ? (
           <p className="mt-1 max-w-3xl text-[13px] text-muted-foreground">
             <span className="mr-1.5 inline-block size-1.5 translate-y-[-1px] rounded-full bg-primary/60 align-middle" />

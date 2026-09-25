@@ -40,29 +40,13 @@ src-tauri/target/release/financial-assistant.exe
 src-tauri/target/release/bundle/nsis/
 ```
 
-## Data Modes
+## Where The Data Lives
 
-- `cloud`: desktop app connects to the deployed API and PostgreSQL.
-- `local`: local-first desktop mode backed by IndexedDB through `LocalApiClient` for core workflows.
+There is one mode: the static bundle keeps everything in the WebView's IndexedDB
+through `LocalApiClient`. `npm run build:static` sets `NEXT_OUTPUT=export` for the
+Tauri shell and `NEXT_PUBLIC_MARKET_DATA=moex` for live quotes. Linking devices
+goes through the sync service in `server/` (see `server/README.md`), not through a
+separate build.
 
-Recommended cloud desktop environment:
-
-```env
-NEXT_PUBLIC_APP_PLATFORM=desktop
-NEXT_PUBLIC_APP_ENV=production
-NEXT_PUBLIC_API_MODE=cloud
-NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com/api
-NEXT_PUBLIC_DESKTOP_DATA_MODE=cloud
-NEXT_OUTPUT=export
-```
-
-The default `npm run build:static` command now builds the Windows shell in local mode:
-
-```env
-NEXT_PUBLIC_APP_PLATFORM=desktop
-NEXT_PUBLIC_API_MODE=local
-NEXT_PUBLIC_DESKTOP_DATA_MODE=local
-NEXT_OUTPUT=export
-```
-
-See `docs/DESKTOP_LOCAL_MODE.md` for the local-first smoke test.
+After installing, follow the smoke test in `docs/RELEASE_CHECKLIST.md` («Проверка
+после установки»).

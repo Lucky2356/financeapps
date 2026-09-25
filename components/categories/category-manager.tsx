@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, Plus, Tag, Trash2 } from "lucide-react";
+import { Edit2, Lock, Plus, Tag, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -17,6 +17,7 @@ import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { CategoryDialog } from "@/components/categories/category-dialog";
 import { CategoryIcon } from "@/components/category-icon";
 import { EmptyState } from "@/components/empty-state";
+import { InfoHint } from "@/components/info-hint";
 import {
   Table,
   TableBody,
@@ -161,7 +162,10 @@ function CategoryColumn({
   return (
     <Card data-testid={`category-column-${kind}`}>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className={headerClass}>{title}</CardTitle>
+        <CardTitle className={`flex items-center gap-1.5 ${headerClass}`}>
+          {title}
+          <InfoHint text={t("cat.hint")} />
+        </CardTitle>
         <Dialog open={addOpen} onOpenChange={onAddOpenChange}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -235,7 +239,7 @@ function CategoryTableRow({
   onDelete: (id: string) => void;
 }) {
   const { t } = useI18n();
-  const canDelete = category.transactionCount === 0;
+  const canDelete = !category.isStandard && category.transactionCount === 0;
 
   return (
     <TableRow>
@@ -253,6 +257,7 @@ function CategoryTableRow({
           <span className="min-w-0 truncate font-medium" title={category.name}>
             {category.name}
           </span>
+          {category.isStandard ? <StandardMark /> : null}
         </div>
         {category.isEssential || category.isSubscription ? (
           <div className="mt-1 flex flex-wrap gap-1">
@@ -292,7 +297,9 @@ function CategoryTableRow({
             title={
               canDelete
                 ? t("common.delete")
-                : t("cat.cantDelete", { count: category.transactionCount })
+                : category.isStandard
+                  ? t("cat.standardLocked")
+                  : t("cat.cantDelete", { count: category.transactionCount })
             }
             aria-label={t("cat.deleteAria")}
             onClick={() => canDelete && onDelete(category.id)}
@@ -315,7 +322,7 @@ function CategoryCard({
   onDelete: (id: string) => void;
 }) {
   const { t } = useI18n();
-  const canDelete = category.transactionCount === 0;
+  const canDelete = !category.isStandard && category.transactionCount === 0;
 
   return (
     <div className="rounded-lg border p-4">
@@ -328,6 +335,7 @@ function CategoryCard({
             <CategoryIcon name={category.icon} className="size-3.5" />
           </span>
           <p className="font-semibold">{category.name}</p>
+          {category.isStandard ? <StandardMark /> : null}
         </div>
         <span className="text-sm text-muted-foreground">
           {t("cat.count", { count: category.transactionCount })}
@@ -359,7 +367,9 @@ function CategoryCard({
           title={
             canDelete
               ? t("common.delete")
-              : t("cat.cantDelete", { count: category.transactionCount })
+              : category.isStandard
+                ? t("cat.standardLocked")
+                : t("cat.cantDelete", { count: category.transactionCount })
           }
           onClick={() => canDelete && onDelete(category.id)}
         >
@@ -368,5 +378,20 @@ function CategoryCard({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Замочек у стандартной категории: её можно менять, но не удалить. */
+function StandardMark() {
+  const { t } = useI18n();
+  return (
+    <span
+      className="inline-flex shrink-0 text-muted-foreground"
+      title={t("cat.standardLocked")}
+      data-testid="category-standard"
+    >
+      <Lock className="size-3.5" aria-hidden />
+      <span className="sr-only">{t("cat.standard")}</span>
+    </span>
   );
 }

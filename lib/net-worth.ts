@@ -1,5 +1,4 @@
-// Shared net-worth helpers used by BOTH the desktop LocalApiClient and the
-// web Prisma path, so the dashboard behaves identically in either mode.
+// Net-worth helpers for LocalApiClient.
 //
 // The trend prefers persisted daily snapshots (plan B7) — real net worth on a
 // given day, incl. portfolio market value — and falls back to flow-reconstruction

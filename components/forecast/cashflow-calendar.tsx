@@ -20,6 +20,7 @@ import { budgetResetMarker, type CalendarMarker } from "@/lib/calendar/markers";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
+import { InfoHint } from "@/components/info-hint";
 
 type DayBucket = { income: number; expense: number; events: ForecastEvent[] };
 
@@ -84,7 +85,10 @@ export function CashflowCalendar({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle>{t("cal.title")}</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          {t("cal.title")}
+          <InfoHint text="tip.cal.title" />
+        </CardTitle>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"

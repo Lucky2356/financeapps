@@ -14,6 +14,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { ForecastData, ForecastWarning } from "@/types/finance";
+import { InfoHint } from "@/components/info-hint";
 
 export function ForecastView({ data }: { data: ForecastData }) {
   const { t } = useI18n();
@@ -35,6 +36,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
           label={t("fc.availableNow")}
+          hint="tip.fc.availableNow"
           value={formatCurrency(data.startingBalance, data.currency)}
           caption={t("fc.tile.nowCaption")}
           icon={WalletCards}
@@ -42,6 +44,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
         />
         <StatTile
           label={t("fc.flow30")}
+          hint="tip.fc.flow30"
           value={formatCurrency(data.plannedIncome30d - data.plannedExpense30d, data.currency)}
           caption={t("fc.tile.flowCaption")}
           icon={CalendarClock}
@@ -49,6 +52,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
         />
         <StatTile
           label={t("fc.forecast90")}
+          hint="tip.fc.forecast90"
           value={formatCurrency(data.forecast90dBalance, data.currency)}
           caption={t("fc.tile.horizonCaption")}
           icon={data.forecast90dBalance >= data.startingBalance ? TrendingUp : TrendingDown}
@@ -56,6 +60,7 @@ export function ForecastView({ data }: { data: ForecastData }) {
         />
         <StatTile
           label={t("fc.tile.risks")}
+          hint="tip.fc.tile.risks"
           value={String(data.warnings.length)}
           caption={data.warnings[0]?.title ?? t("dfs.noWarnings")}
           icon={AlertTriangle}
@@ -68,7 +73,10 @@ export function ForecastView({ data }: { data: ForecastData }) {
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>{t("fc.balanceForecast")}</CardTitle>
+            <CardTitle className="flex items-center gap-1.5">
+              {t("fc.balanceForecast")}
+              <InfoHint text="tip.fc.balanceForecast" />
+            </CardTitle>
             <Button asChild variant="outline" size="sm">
               <Link href="/recurring">
                 <CalendarClock className="size-4" />
@@ -83,7 +91,10 @@ export function ForecastView({ data }: { data: ForecastData }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>{t("fc.warnings")}</CardTitle>
+            <CardTitle className="flex items-center gap-1.5">
+              {t("fc.warnings")}
+              <InfoHint text="tip.fc.warnings" />
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {data.warnings.map((warning) => (

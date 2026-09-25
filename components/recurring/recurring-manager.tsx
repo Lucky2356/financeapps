@@ -56,6 +56,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { InfoHint } from "@/components/info-hint";
 
 const FREQUENCY_VALUES = ["WEEKLY", "MONTHLY", "YEARLY"] as const;
 
@@ -167,7 +168,10 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
 
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>{t("rec.title")}</CardTitle>
+          <CardTitle className="flex items-center gap-1.5">
+            {t("rec.title")}
+            <InfoHint text="tip.rec.title" />
+          </CardTitle>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -476,7 +480,10 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
 
       <Card>
         <CardHeader>
-          <CardTitle>{t("rec.load.title")}</CardTitle>
+          <CardTitle className="flex items-center gap-1.5">
+            {t("rec.load.title")}
+            <InfoHint text="tip.rec.load.title" />
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
           <div className="rounded-lg border bg-muted/20 p-4">

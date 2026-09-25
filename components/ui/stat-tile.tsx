@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { InfoHint } from "@/components/info-hint";
 import { cn } from "@/lib/utils";
 
 export type StatTone = "default" | "success" | "warning" | "danger";
@@ -22,7 +23,8 @@ export function StatTile({
   icon: Icon,
   tone = "default",
   visual,
-  href
+  href,
+  hint
 }: {
   label: string;
   value: string;
@@ -33,6 +35,12 @@ export function StatTile({
   visual?: ReactNode;
   /** Where the figure comes from. Given one, the whole tile is a link. */
   href?: string;
+  /**
+   * Ключ каталога: что это за число и откуда оно. Вопросик встаёт рядом с
+   * подписью. У плитки-ссылки его нет: кнопка внутри ссылки — это нажатие,
+   * которое уводит со страницы вместо того, чтобы объяснить.
+   */
+  hint?: string;
 }) {
   const body = (
     <>
@@ -49,6 +57,7 @@ export function StatTile({
             третья разрешена тем, кому не хватило. */}
         <p className="line-clamp-3 min-h-[2.6em] min-w-0 text-[13px] leading-[1.3] text-muted-foreground">
           {label}
+          {hint && !href ? <InfoHint text={hint} className="ml-1" /> : null}
         </p>
         {visual ??
           (Icon ? (

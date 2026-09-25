@@ -39,6 +39,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { InfoHint } from "@/components/info-hint";
 
 function buildMonthOptions(locale: Locale) {
   const options: Array<{ value: string; label: string }> = [];
@@ -198,7 +199,10 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle>{t("bud.title")}</CardTitle>
+        <CardTitle className="flex items-center gap-1.5">
+          {t("bud.title")}
+          <InfoHint text="tip.bud.title" />
+        </CardTitle>
         {/* Four controls in a row do not fit a phone — let them wrap instead of
             stretching the card past the screen. */}
         <div className="flex flex-wrap items-center gap-2">

@@ -101,6 +101,11 @@ export function removeMine(key: string): void {
  */
 export const SAVED_FILTERS_KEY = "tx-saved-filters";
 export const LAST_ACCOUNT_KEY = "quick-add-last-account";
+/**
+ * Счёт, который быстрый ввод подставляет всегда, — настройка, а не данные.
+ * Пусто — подставлять последний использованный, как прежде.
+ */
+export const DEFAULT_ACCOUNT_KEY = "quick-add-default-account";
 export const NOTIFY_KEY = "notif-fired";
 
 /**

@@ -52,6 +52,7 @@ export function PortfolioHero({
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
           label={t("inv.pnlLabel")}
+          hint="tip.inv.pnlLabel"
           value={`${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, currency)}`}
           caption={t("inv.tile.pnlCaption")}
           icon={TrendingUp}
@@ -59,12 +60,14 @@ export function PortfolioHero({
         />
         <StatTile
           label={t("inv.invested")}
+          hint="tip.inv.invested"
           value={formatCurrency(cost, currency)}
           caption={t("inv.tile.investedCaption")}
           icon={Coins}
         />
         <StatTile
           label={t("inv.returnLabel")}
+          hint="tip.inv.returnLabel"
           value={`${pnl >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`}
           caption={t("inv.tile.returnCaption")}
           icon={Percent}
@@ -72,6 +75,7 @@ export function PortfolioHero({
         />
         <StatTile
           label={t("inv.tile.today")}
+          hint="tip.inv.tile.today"
           value={dayBase > 0 ? `${dayAbs >= 0 ? "+" : ""}${formatCurrency(dayAbs, currency)}` : "—"}
           caption={
             dayBase > 0 ? `${dayPct >= 0 ? "+" : ""}${dayPct.toFixed(2)}%` : t("inv.tile.todayNone")

@@ -1,6 +1,6 @@
 {
   "name": "financial-assistant-mvp",
-  "version": "1.46.0",
+  "version": "1.47.0",
   "private": true,
   "engines": {
     "node": ">=24 <25",
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "cross-env NEXT_PUBLIC_MARKET_DATA=moex next dev",
     "build": "next build",
-    "build:static": "cross-env NEXT_PUBLIC_APP_PLATFORM=desktop NEXT_PUBLIC_DESKTOP_DATA_MODE=local NEXT_PUBLIC_API_MODE=local NEXT_PUBLIC_MARKET_DATA=moex NEXT_OUTPUT=export next build",
+    "build:static": "cross-env NEXT_PUBLIC_MARKET_DATA=moex NEXT_OUTPUT=export next build",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -94,7 +94,6 @@
     "lint-staged": "^17.0.7",
     "postcss": "^8.5.15",
     "prettier": "^3.8.4",
-    "serve": "^14.2.6",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.6.3",
     "vitest": "^4.1.7"

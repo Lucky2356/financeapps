@@ -44,6 +44,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { useDataVersion } from "@/hooks/use-data-version";
+import { InfoHint } from "@/components/info-hint";
 
 export function AnalyticsView({
   data,
@@ -100,17 +101,26 @@ export function AnalyticsView({
         />
         <StatTile
           label={t("an.avgSavings")}
+          hint="tip.an.avgSavings"
           value={`${data.avgSavingsRate.toFixed(1)}%`}
           icon={PiggyBank}
           tone={data.avgSavingsRate >= 0 ? "success" : "danger"}
         />
-        <StatTile label={t("an.bestMonth")} value={data.bestMonth} icon={Trophy} />
+        <StatTile
+          label={t("an.bestMonth")}
+          hint="tip.an.bestMonth"
+          value={data.bestMonth}
+          icon={Trophy}
+        />
       </StatGrid>
 
       <div className="grid items-start gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
           <CardHeader>
-            <CardTitle>{t("an.monthTrend")}</CardTitle>
+            <CardTitle className="flex items-center gap-1.5">
+              {t("an.monthTrend")}
+              <InfoHint text="tip.an.monthTrend" />
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3 rounded-lg border bg-muted/20 p-4">
@@ -138,7 +148,10 @@ export function AnalyticsView({
 
         <Card>
           <CardHeader>
-            <CardTitle>{t("an.insights")}</CardTitle>
+            <CardTitle className="flex items-center gap-1.5">
+              {t("an.insights")}
+              <InfoHint text="tip.an.insights" />
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             {data.insights.map((insight) => {

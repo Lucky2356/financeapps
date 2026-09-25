@@ -37,6 +37,7 @@ import { formatCurrency } from "@/lib/format";
 import { periodRange } from "@/lib/transactions/filter-chips";
 import { useI18n } from "@/lib/i18n/context";
 import type { DashboardData, ForecastData } from "@/types/finance";
+import { InfoHint } from "@/components/info-hint";
 
 const LAYOUT_KEY = "dashboard-layout";
 
@@ -98,7 +99,10 @@ export function DashboardClient({
         data.netWorthTrend.length >= 2 ? (
           <Card>
             <CardHeader>
-              <CardTitle>{t("dash.netWorthTrend")}</CardTitle>
+              <CardTitle className="flex items-center gap-1.5">
+                {t("dash.netWorthTrend")}
+                <InfoHint text="tip.dash.netWorthTrend" />
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <NetWorthChart data={data.netWorthTrend} />
