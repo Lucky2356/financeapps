@@ -27,6 +27,16 @@ import {
 } from "@/lib/sync/protocol";
 import { shellFetch } from "@/lib/sync/shell-fetch";
 
+/**
+ * Служба больше не узнаёт билет этого устройства. Своими словами, а не «Нужен
+ * вход.»: человеку, у которого на экране «Синхронизация включена», голое
+ * «нужен вход» не говорит ни что случилось, ни что нажать.
+ */
+export const LOST_LINK =
+  "Сервер больше не узнаёт это устройство: его отключили на другом устройстве или " +
+  "данные на сервере стёрты. Записи здесь целы — нажмите «Подключить заново» в разделе " +
+  "«Синхронизация».";
+
 /** Сервер ответил отказом, который повторять бесполезно. */
 export class ServerRefused extends Error {
   readonly status: number;
@@ -71,7 +81,7 @@ async function ask(
   init: { method?: string; body?: unknown } = {}
 ): Promise<{ status: number; data: Json }> {
   if (!usable(credentials.token)) {
-    throw new ServerRefused(401, "Вход устарел — подключитесь к службе заново.");
+    throw new ServerRefused(401, LOST_LINK);
   }
 
   let response: Response;

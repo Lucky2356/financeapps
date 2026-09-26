@@ -345,6 +345,50 @@ function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, close: ()
   }, [open, close, ref]);
 }
 
+/**
+ * Поставить панель так, чтобы она целиком помещалась на экране.
+ *
+ * Панель висела на правом краю своей кнопки и раскрывалась влево. На телефоне
+ * ряд фильтров переносится, кнопка оказывается у ЛЕВОГО края экрана — и панель
+ * уезжала за него: половины не видно, и нажать нечего. Теперь при открытии
+ * меряем, где кнопка, и сдвигаем панель в пределы экрана по ширине, а по
+ * высоте ограничиваем местом до нижней панели навигации — дальше она
+ * прокручивается сама.
+ *
+ * Стиль пишется прямо в узел из ref-функции, а не через состояние: она
+ * срабатывает, как только панель появилась, ДО отрисовки, — иначе панель на
+ * кадр мелькнула бы за краем.
+ */
+function usePlacement(anchor: RefObject<HTMLElement | null>) {
+  return useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return;
+      const place = () => {
+        const box = anchor.current?.getBoundingClientRect();
+        if (!box) return;
+        const gap = 8;
+        const screen = document.documentElement.clientWidth;
+        const width = Math.min(node.offsetWidth, screen - gap * 2);
+        // По умолчанию — правым краем к правому краю кнопки, как было на ПК.
+        let left = box.width - width;
+        left = Math.min(left, screen - gap - width - box.left);
+        left = Math.max(left, gap - box.left);
+        node.style.left = `${left}px`;
+        node.style.right = "auto";
+        // Нижняя панель навигации на телефоне — около 5.5rem; на ПК её нет.
+        const below = screen < 768 ? 96 : gap * 2;
+        const room = window.innerHeight - box.bottom - below;
+        node.style.maxHeight = `${Math.max(220, room)}px`;
+        node.style.overflowY = "auto";
+      };
+      place();
+      window.addEventListener("resize", place);
+      return () => window.removeEventListener("resize", place);
+    },
+    [anchor]
+  );
+}
+
 const TRIGGER =
   "flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm transition-colors hover:border-ring/40 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
@@ -369,6 +413,7 @@ function MoreFilters({
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
+  const panel = usePlacement(ref);
 
   const params = new URLSearchParams(paramsString);
   const [minAmount, setMinAmount] = useDebouncedParam(
@@ -410,7 +455,11 @@ function MoreFilters({
         ) : null}
       </button>
       {open ? (
-        <div className="absolute right-0 z-50 mt-1 w-[19rem] max-w-[calc(100vw-2rem)] space-y-3 rounded-md border bg-popover p-3 text-popover-foreground shadow-lg">
+        <div
+          ref={panel}
+          data-testid="more-filters-panel"
+          className="absolute right-0 z-50 mt-1 w-[19rem] max-w-[calc(100vw-1rem)] space-y-3 rounded-md border bg-popover p-3 text-popover-foreground shadow-lg"
+        >
           {/* The dates themselves are on the bar; these only fill them in. */}
           <div className="space-y-1.5">
             <Label className="text-xs">{t("tx.period")}</Label>
@@ -561,6 +610,7 @@ function CategoryFilter({
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
+  const panel = usePlacement(ref);
 
   function toggle(categoryId: string) {
     onChange(
@@ -605,8 +655,9 @@ function CategoryFilter({
       </button>
       {open ? (
         <div
+          ref={panel}
           data-testid="category-filter-menu"
-          className="absolute z-50 mt-1 max-h-72 w-64 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+          className="absolute left-0 z-50 mt-1 max-h-72 w-64 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
         >
           {categories.length === 0 ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">{t("tx.allCategories")}</p>
