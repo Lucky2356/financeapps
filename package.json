@@ -42,7 +42,7 @@
     ]
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.127.0",
+    "@anthropic-ai/sdk": "^0.128.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-label": "^2.1.15",
     "@radix-ui/react-progress": "^1.1.16",
@@ -60,9 +60,9 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.47.0",
-    "next": "^16.3.5",
+    "next": "^16.3.6",
     "next-themes": "^0.4.3",
-    "openai": "^7.21.0",
+    "openai": "^7.23.0",
     "papaparse": "^5.7.0",
     "qrcode-generator": "^2.0.4",
     "react": "^19.3.0",
