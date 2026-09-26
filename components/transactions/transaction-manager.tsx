@@ -39,6 +39,11 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { countableAmount } from "@/lib/transactions/base-amount";
+import {
+  keepChoice,
+  NewAccountDialog,
+  NewCategoryDialog
+} from "@/components/transactions/quick-create";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -765,13 +770,6 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   );
 }
 
-const ACCOUNT_TYPE_OPTIONS = [
-  { value: "DEBIT_CARD", labelKey: "tx.acctType.DEBIT_CARD" },
-  { value: "CASH", labelKey: "tx.acctType.CASH" },
-  { value: "SAVINGS", labelKey: "tx.acctType.SAVINGS" },
-  { value: "BROKERAGE", labelKey: "tx.acctType.BROKERAGE" }
-];
-
 function TransactionDialog({
   title,
   description,
@@ -808,58 +806,10 @@ function TransactionDialog({
   const [manualCategory, setManualCategory] = useState(false);
   const [autoSuggested, setAutoSuggested] = useState(false);
 
-  // Inline creation of a new category / account without leaving the form.
+  // «+ Новая» / «+ Новый» open their own small dialogs over this form
+  // (components/transactions/quick-create.tsx).
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [showNewAccount, setShowNewAccount] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newAccountName, setNewAccountName] = useState("");
-  const [newAccountType, setNewAccountType] = useState("DEBIT_CARD");
-  const [creating, setCreating] = useState(false);
-
-  async function createCategory() {
-    if (!newCategoryName.trim()) return;
-    setCreating(true);
-    try {
-      const created = await apiClient.post<{ id: string }>("/categories", {
-        name: newCategoryName.trim(),
-        kind: selectedType,
-        color: selectedType === "INCOME" ? "#16a34a" : "#64748b",
-        isEssential: false,
-        isSubscription: false
-      });
-      await onRefsReload?.();
-      setCategoryId(created.id);
-      setManualCategory(true);
-      setNewCategoryName("");
-      setShowNewCategory(false);
-      toast.success(t("tx.toast.categoryCreated"));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("tx.toast.categoryCreateError"));
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function createAccount() {
-    if (!newAccountName.trim()) return;
-    setCreating(true);
-    try {
-      const created = await apiClient.post<{ id: string }>("/accounts", {
-        name: newAccountName.trim(),
-        type: newAccountType,
-        balance: "0"
-      });
-      await onRefsReload?.();
-      setAccountId(created.id);
-      setNewAccountName("");
-      setShowNewAccount(false);
-      toast.success(t("tx.toast.accountCreated"));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("tx.toast.accountCreateError"));
-    } finally {
-      setCreating(false);
-    }
-  }
 
   function changeType(value: "INCOME" | "EXPENSE") {
     const nextCategories = data.categories.filter((category) => category.kind === value);
@@ -946,53 +896,31 @@ function TransactionDialog({
               <button
                 type="button"
                 className="text-xs text-primary hover:underline"
-                onClick={() => setShowNewCategory((v) => !v)}
+                onClick={() => setShowNewCategory(true)}
               >
-                {showNewCategory ? t("tx.dialog.cancel") : t("tx.dialog.newCategory")}
+                {t("tx.dialog.newCategory")}
               </button>
             </div>
-            {showNewCategory ? (
-              <div className="flex gap-2">
-                <Input
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder={
-                    selectedType === "INCOME"
-                      ? t("tx.dialog.catPlaceholderIncome")
-                      : t("tx.dialog.catPlaceholderExpense")
-                  }
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void createCategory()}
-                  disabled={creating}
-                >
-                  {t("tx.dialog.create")}
-                </Button>
-              </div>
-            ) : (
-              <>
-                <Select
-                  value={effectiveCategoryId || undefined}
-                  onValueChange={(value) => pickCategory(value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("tx.dialog.createCategoryFirst")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {matchingCategories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {autoSuggested ? (
-                  <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
-                ) : null}
-              </>
-            )}
+            <>
+              <Select
+                value={effectiveCategoryId || undefined}
+                onValueChange={keepChoice(pickCategory)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("tx.dialog.createCategoryFirst")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {matchingCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {autoSuggested ? (
+                <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
+              ) : null}
+            </>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -1000,53 +928,23 @@ function TransactionDialog({
               <button
                 type="button"
                 className="text-xs text-primary hover:underline"
-                onClick={() => setShowNewAccount((v) => !v)}
+                onClick={() => setShowNewAccount(true)}
               >
-                {showNewAccount ? t("tx.dialog.cancel") : t("tx.dialog.newAccount")}
+                {t("tx.dialog.newAccount")}
               </button>
             </div>
-            {showNewAccount ? (
-              <div className="flex gap-2">
-                <Input
-                  value={newAccountName}
-                  onChange={(e) => setNewAccountName(e.target.value)}
-                  placeholder={t("tx.dialog.accountPlaceholder")}
-                />
-                <Select value={newAccountType} onValueChange={setNewAccountType}>
-                  <SelectTrigger className="w-40 shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACCOUNT_TYPE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {t(opt.labelKey)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void createAccount()}
-                  disabled={creating}
-                >
-                  {t("tx.dialog.create")}
-                </Button>
-              </div>
-            ) : (
-              <Select value={accountId || undefined} onValueChange={setAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t("tx.dialog.createAccountFirst")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {data.accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={accountId || undefined} onValueChange={keepChoice(setAccountId)}>
+              <SelectTrigger>
+                <SelectValue placeholder={t("tx.dialog.createAccountFirst")} />
+              </SelectTrigger>
+              <SelectContent>
+                {data.accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>{t("common.date")}</Label>
@@ -1084,6 +982,25 @@ function TransactionDialog({
           </Button>
         </DialogFooter>
       </form>
+      <NewCategoryDialog
+        open={showNewCategory}
+        onOpenChange={setShowNewCategory}
+        kind={selectedType}
+        onCreated={async (id) => {
+          await onRefsReload?.();
+          setCategoryId(id);
+          setManualCategory(true);
+          setAutoSuggested(false);
+        }}
+      />
+      <NewAccountDialog
+        open={showNewAccount}
+        onOpenChange={setShowNewAccount}
+        onCreated={async (id) => {
+          await onRefsReload?.();
+          setAccountId(id);
+        }}
+      />
     </DialogContent>
   );
 }

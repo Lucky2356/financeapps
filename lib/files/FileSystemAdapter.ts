@@ -6,5 +6,6 @@ export type FilePickResult = {
 
 export interface FileSystemAdapter {
   pickTextFile(accept?: string): Promise<FilePickResult | null>;
-  saveTextFile(filename: string, content: string, mimeType?: string): Promise<void>;
+  /** true — файл сохранён; false — человек закрыл окно сохранения. */
+  saveTextFile(filename: string, content: string, mimeType?: string): Promise<boolean>;
 }

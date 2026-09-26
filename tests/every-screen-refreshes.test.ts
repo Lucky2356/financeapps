@@ -48,6 +48,7 @@ const ON_DEMAND: Record<string, string> = {
   "components/dashboard/distribute-cashflow.tsx": "читает при открытии окна (зависимость open)",
   "components/drilldown/amount-drilldown.tsx": "читает при раскрытии суммы",
   "components/investments/inline-stock-chart.tsx": "котировки с биржи, а не книга",
+  "components/sync/replace-local.tsx": "снимает копию по нажатию «Сохранить копию и заменить»",
   "components/investments/security-search.tsx": "поиск бумаги по набранному"
 };
 

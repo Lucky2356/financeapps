@@ -52,7 +52,7 @@ export class TauriFileSystemAdapter implements FileSystemAdapter {
 
   // The MIME type of the interface is unused here: the native sheet derives the
   // type from the extension of the suggested name.
-  async saveTextFile(filename: string, content: string): Promise<void> {
+  async saveTextFile(filename: string, content: string): Promise<boolean> {
     const dialog = await import("@tauri-apps/plugin-dialog").catch(() => null);
     const fs = await import("@tauri-apps/plugin-fs").catch(() => null);
 
@@ -71,8 +71,8 @@ export class TauriFileSystemAdapter implements FileSystemAdapter {
         ? { filters: [{ name: extension.toUpperCase(), extensions: [extension] }] }
         : {})
     });
-    if (target) {
-      await fs.writeTextFile(target, content);
-    }
+    if (!target) return false;
+    await fs.writeTextFile(target, content);
+    return true;
   }
 }

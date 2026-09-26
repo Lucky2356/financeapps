@@ -37,6 +37,11 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import {
+  keepChoice,
+  NewAccountDialog,
+  NewCategoryDialog
+} from "@/components/transactions/quick-create";
 import { Input } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
@@ -58,13 +63,6 @@ function lastOfType(ledger: TransactionsPageData | null, type: QuickAddType) {
   );
 }
 
-const ACCOUNT_TYPES = [
-  { value: "DEBIT_CARD", labelKey: "tx.acctType.DEBIT_CARD" },
-  { value: "CASH", labelKey: "tx.acctType.CASH" },
-  { value: "SAVINGS", labelKey: "tx.acctType.SAVINGS" },
-  { value: "BROKERAGE", labelKey: "tx.acctType.BROKERAGE" }
-];
-
 export function QuickAddFab({
   accounts,
   categories
@@ -85,9 +83,6 @@ export function QuickAddFab({
   const [toAccountId, setToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   // Inline creation state
-  const [newAccountName, setNewAccountName] = useState("");
-  const [newAccountType, setNewAccountType] = useState("DEBIT_CARD");
-  const [newCategoryName, setNewCategoryName] = useState("");
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [showNewCategory, setShowNewCategory] = useState(false);
   // This is now the only way an operation is created, so it carries what the
@@ -202,44 +197,6 @@ export function QuickAddFab({
     (a) => !(a as AccountOption & { isArchived?: boolean }).isArchived
   );
   const filteredCategories = refs.categories.filter((c) => c.kind === type);
-
-  async function createAccount() {
-    if (!newAccountName.trim()) return;
-    try {
-      const created = await apiClient.post<{ id: string }>("/accounts", {
-        name: newAccountName.trim(),
-        type: newAccountType,
-        balance: "0"
-      });
-      await reloadRefs();
-      setAccountId(created.id);
-      setNewAccountName("");
-      setShowNewAccount(false);
-      toast.success(t("tx.toast.accountCreated"));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("tx.toast.accountCreateError"));
-    }
-  }
-
-  async function createCategory() {
-    if (!newCategoryName.trim()) return;
-    try {
-      const created = await apiClient.post<{ id: string }>("/categories", {
-        name: newCategoryName.trim(),
-        kind: type,
-        color: type === "INCOME" ? "#16a34a" : "#64748b",
-        isEssential: false,
-        isSubscription: false
-      });
-      await reloadRefs();
-      setCategoryId(created.id);
-      setNewCategoryName("");
-      setShowNewCategory(false);
-      toast.success(t("tx.toast.categoryCreated"));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("tx.toast.categoryCreateError"));
-    }
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -491,56 +448,38 @@ export function QuickAddFab({
                 />
               </div>
 
-              {/* Category with inline creation — a transfer has none: the money
-                does not leave the household, it changes pocket. */}
+              {/* Category — a transfer has none: the money does not leave the
+                household, it changes pocket. «+ Новая» opens its own small
+                dialog (NewCategoryDialog) over this one. */}
               <div className={type === "TRANSFER" ? "hidden" : "space-y-2"}>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="fab-category">{t("common.category")}</Label>
                   <button
                     type="button"
                     className="text-xs text-primary hover:underline"
-                    onClick={() => setShowNewCategory((v) => !v)}
+                    onClick={() => setShowNewCategory(true)}
                   >
-                    {showNewCategory ? t("tx.dialog.cancel") : t("tx.dialog.newCategory")}
+                    {t("tx.dialog.newCategory")}
                   </button>
                 </div>
-                {showNewCategory ? (
-                  <div className="flex gap-2">
-                    <Input
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder={
-                        type === "INCOME"
-                          ? t("tx.dialog.catPlaceholderIncome")
-                          : t("tx.dialog.catPlaceholderExpense")
-                      }
-                    />
-                    <Button type="button" variant="outline" onClick={() => void createCategory()}>
-                      {t("tx.dialog.create")}
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Select value={categoryId || undefined} onValueChange={pickCategory}>
-                      <SelectTrigger id="fab-category">
-                        <SelectValue placeholder={t("ai.selectCategory")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {filteredCategories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            <CategoryOptionLabel label={c.label} color={c.color} icon={c.icon} />
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {autoSuggested ? (
-                      <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
-                    ) : null}
-                  </>
-                )}
+                <Select value={categoryId || undefined} onValueChange={keepChoice(pickCategory)}>
+                  <SelectTrigger id="fab-category">
+                    <SelectValue placeholder={t("ai.selectCategory")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <CategoryOptionLabel label={c.label} color={c.color} icon={c.icon} />
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {autoSuggested ? (
+                  <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
+                ) : null}
               </div>
 
-              {/* Account with inline creation */}
+              {/* Account — «+ Новый» opens NewAccountDialog over this one. */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="fab-account">
@@ -549,54 +488,32 @@ export function QuickAddFab({
                   <button
                     type="button"
                     className="text-xs text-primary hover:underline"
-                    onClick={() => setShowNewAccount((v) => !v)}
+                    onClick={() => setShowNewAccount(true)}
                   >
-                    {showNewAccount ? t("tx.dialog.cancel") : t("tx.dialog.newAccount")}
+                    {t("tx.dialog.newAccount")}
                   </button>
                 </div>
-                {showNewAccount ? (
-                  <div className="flex gap-2">
-                    <Input
-                      value={newAccountName}
-                      onChange={(e) => setNewAccountName(e.target.value)}
-                      placeholder={t("tx.dialog.accountPlaceholder")}
-                    />
-                    <Select value={newAccountType} onValueChange={setNewAccountType}>
-                      <SelectTrigger className="w-40 shrink-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ACCOUNT_TYPES.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {t(opt.labelKey)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button type="button" variant="outline" onClick={() => void createAccount()}>
-                      {t("tx.dialog.create")}
-                    </Button>
-                  </div>
-                ) : (
-                  <Select value={accountId || undefined} onValueChange={setAccountId}>
-                    <SelectTrigger id="fab-account">
-                      <SelectValue placeholder={t("ai.selectAccount")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeAccounts.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                <Select value={accountId || undefined} onValueChange={keepChoice(setAccountId)}>
+                  <SelectTrigger id="fab-account">
+                    <SelectValue placeholder={t("ai.selectAccount")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {type === "TRANSFER" ? (
                 <div className="space-y-2">
                   <Label htmlFor="fab-to-account">{t("tx.transfer.to")}</Label>
-                  <Select value={toAccountId || undefined} onValueChange={setToAccountId}>
+                  <Select
+                    value={toAccountId || undefined}
+                    onValueChange={keepChoice(setToAccountId)}
+                  >
                     <SelectTrigger id="fab-to-account">
                       <SelectValue placeholder={t("ai.selectAccount")} />
                     </SelectTrigger>
@@ -675,6 +592,26 @@ export function QuickAddFab({
           </div>
         </DialogContent>
       </Dialog>
+
+      <NewAccountDialog
+        open={showNewAccount}
+        onOpenChange={setShowNewAccount}
+        onCreated={async (id) => {
+          await reloadRefs();
+          setAccountId(id);
+        }}
+      />
+      <NewCategoryDialog
+        open={showNewCategory}
+        onOpenChange={setShowNewCategory}
+        kind={type === "INCOME" ? "INCOME" : "EXPENSE"}
+        onCreated={async (id) => {
+          await reloadRefs();
+          setCategoryId(id);
+          setManualCategory(true);
+          setAutoSuggested(false);
+        }}
+      />
     </>
   );
 }
