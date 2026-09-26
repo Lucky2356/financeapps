@@ -85,7 +85,10 @@ async function runAutomation() {
             duration: 15_000,
             action: {
               label: translate(locale, "set.update.confirmLabel"),
-              onClick: () => void startAndroidUpdate(update)
+              onClick: () => {
+                const downloading = toast.loading(translate(locale, "set.update.downloading"));
+                void startAndroidUpdate(update).finally(() => toast.dismiss(downloading));
+              }
             }
           });
         }

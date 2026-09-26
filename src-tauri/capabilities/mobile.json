@@ -16,6 +16,7 @@
     "barcode-scanner:allow-cancel",
     "barcode-scanner:allow-check-permissions",
     "barcode-scanner:allow-request-permissions",
+    "installer:default",
     {
       "identifier": "opener:allow-open-url",
       "allow": [

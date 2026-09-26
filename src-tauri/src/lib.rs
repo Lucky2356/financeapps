@@ -29,7 +29,9 @@ pub fn run() {
   // into the Windows build. A computer reading a QR off its own screen is not
   // a case that exists: the picture is SHOWN there, not read.
   #[cfg(mobile)]
-  let builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+  let builder = builder
+    .plugin(tauri_plugin_barcode_scanner::init())
+    .plugin(installer());
 
   builder
     .setup(|_app| {
@@ -38,4 +40,18 @@ pub fn run() {
     })
     .run(tauri::generate_context!())
     .expect("error while running Financial Assistant");
+}
+
+/// Обновление на телефоне без браузера: скачать APK и открыть установку.
+/// Вся работа — на стороне Android (InstallerPlugin.kt); здесь только
+/// регистрация, чтобы вызов из страницы нашёл, куда идти.
+#[cfg(mobile)]
+fn installer<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+  tauri::plugin::Builder::new("installer")
+    .setup(|_app, _api| {
+      #[cfg(target_os = "android")]
+      _api.register_android_plugin("ru.lucky2356.financeapps", "InstallerPlugin")?;
+      Ok(())
+    })
+    .build()
 }

@@ -16,6 +16,8 @@ const { calls } = vi.hoisted(() => ({
 
 vi.mock("@/lib/vault/runtime", () => ({
   accountService: { adopt: async () => undefined },
+  enableSync: async () => undefined,
+  joinWithLink: async () => undefined,
   flushSync: async () => undefined,
   refuseSharedServerAccount: async () => undefined,
   rememberMyServer: async () => undefined,
@@ -58,7 +60,10 @@ async function openJoin() {
       <FirstRun onDone={() => undefined} />
     </I18nProvider>
   );
-  await user.click(await screen.findByText("Данные уже есть на другом устройстве"));
+  // С 2.0 путь по картинке — основной; код, имя и своя служба — за
+  // «Другими способами».
+  await user.click(await screen.findByText("Синхронизировать устройства"));
+  await user.click(await screen.findByText(/Другие способы/));
   return user;
 }
 
@@ -112,7 +117,25 @@ describe("забрать данные с другого устройства", (
   it("со связки можно вернуться назад, к выбору", async () => {
     const user = await openJoin();
     await user.click(screen.getByRole("button", { name: "Назад" }));
-    expect(await screen.findByText("Данные уже есть на другом устройстве")).toBeInTheDocument();
+    expect(await screen.findByText("Синхронизировать устройства")).toBeInTheDocument();
+  });
+});
+
+describe("связка по картинке на первом запуске", () => {
+  it("предлагает первое устройство или подключение по QR — без имени и пароля", async () => {
+    const user = userEvent.setup();
+    render(
+      <I18nProvider>
+        <FirstRun onDone={() => undefined} />
+      </I18nProvider>
+    );
+    await user.click(await screen.findByText("Синхронизировать устройства"));
+    expect(screen.getByText("Это моё первое устройство")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Подключиться к другому устройству"));
+    expect(screen.getByLabelText("Ссылка подключения")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Пароль/)).toBeNull();
+    expect(screen.queryByLabelText("Имя входа")).toBeNull();
   });
 });
 
@@ -135,7 +158,7 @@ describe("выход к выбору человека", () => {
         <FirstRun onDone={() => undefined} />
       </I18nProvider>
     );
-    await screen.findByText("Данные уже есть на другом устройстве");
+    await screen.findByText("Синхронизировать устройства");
     expect(screen.queryByRole("button", { name: "Выбрать другого человека" })).toBeNull();
   });
 });

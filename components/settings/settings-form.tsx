@@ -30,9 +30,8 @@ import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AutoBackupPanel, CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
-import { DevicesPanel } from "@/components/settings/devices-panel";
 import { PeoplePanel } from "@/components/settings/people-panel";
-import { ServerPanel } from "@/components/settings/server-panel";
+import { SyncPanel } from "@/components/sync/sync-panel";
 import { VaultPanel } from "@/components/settings/vault-panel";
 import { ImportExportPanel } from "@/components/import/import-export-panel";
 import { InfoHint } from "@/components/info-hint";
@@ -304,7 +303,14 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           confirmLabel: t("set.update.confirmLabel")
         });
         if (!confirmed) return;
-        await startAndroidUpdate(update);
+        // 40 МБ по мобильной сети — это не мгновенно: без знака человек решит,
+        // что кнопка не сработала, и нажмёт ещё раз.
+        const downloading = toast.loading(t("set.update.downloading"));
+        try {
+          await startAndroidUpdate(update);
+        } finally {
+          toast.dismiss(downloading);
+        }
       } catch (error) {
         // Same reasoning as the desktop branch below: a phone has no devtools,
         // so a bare "недоступно" leaves the owner (and me) with nothing to go
@@ -710,8 +716,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         "синхронизация sync устройства devices телефон phone компьютер служба server сервер код связки pairing qr облако cloud папка folder dropbox drive",
       node: (
         <>
-          <ServerPanel />
-          <DevicesPanel />
+          <SyncPanel />
           {/* Старый способ — ручной перенос через облачную папку. Не удалён:
               им могли пользоваться. Но и на виду ему не место — рядом со
               службой он выглядел вторым равноправным путём и сбивал с толку. */}

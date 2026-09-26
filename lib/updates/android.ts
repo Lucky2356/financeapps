@@ -74,10 +74,21 @@ export async function checkAndroidUpdate(): Promise<AvailableUpdate | null> {
   }
 }
 
-/** Opens the APK link; Android downloads it and offers to install. */
+/**
+ * Скачать APK и открыть экран установки — не выходя из приложения.
+ *
+ * Работу делает свой плагин на стороне Android (InstallerPlugin.kt). Если его
+ * нет — сборка старше 2.0 или вызов отказал, — остаётся прежний путь: открыть
+ * ссылку, и Android скачает файл сам.
+ */
 export async function startAndroidUpdate(update: AvailableUpdate): Promise<void> {
-  const { openUrl } = await import("@tauri-apps/plugin-opener");
-  await openUrl(update.url);
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("plugin:installer|install", { url: update.url });
+  } catch {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(update.url);
+  }
 }
 
 // Scheduling is the same decision on both platforms, so it lives in one place;

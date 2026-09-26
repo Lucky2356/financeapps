@@ -86,9 +86,7 @@ test("первый запуск спрашивает, откуда взять д
   // человек узнавал случайно.
   await expect(page.getByRole("button", { name: "Начать с нуля" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Восстановить из файла" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Данные уже есть на другом устройстве" })
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Синхронизировать устройства/ })).toBeVisible();
   // Ни боковой панели, ни кнопки добавления: под замком нажимать нечего.
   await expect(page.getByRole("button", { name: "Быстрое добавление операции" })).toHaveCount(0);
 });

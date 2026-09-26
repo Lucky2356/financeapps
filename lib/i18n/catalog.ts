@@ -1702,8 +1702,18 @@ const ru: Messages = {
   "vault.source.freshHint": "Пустые счета и операции — заполните их сами.",
   "vault.source.file": "Восстановить из файла",
   "vault.source.fileHint": "Файл резервной копии, выгруженный из этого приложения.",
-  "vault.source.device": "Данные уже есть на другом устройстве",
-  "vault.source.deviceHint": "Заберём их со службы, к которой подключено то устройство.",
+  "vault.source.device": "Синхронизировать устройства",
+  "vault.source.deviceHint":
+    "Одни данные на компьютере и телефоне — подключим по QR-коду, без паролей.",
+  "vault.sync.title": "Синхронизация устройств",
+  "vault.sync.lead": "Где сейчас ваши данные?",
+  "vault.sync.first": "Это моё первое устройство",
+  "vault.sync.firstHint": "Начнём здесь и сразу покажем QR-код для второго устройства.",
+  "vault.sync.withoutSync": "Начать без синхронизации, включить потом",
+  "vault.sync.otherWays": "Другие способы: своя служба, имя и пароль",
+  "vault.sync.firstTitle": "Подключите второе устройство",
+  "vault.sync.firstLead":
+    "Синхронизация включена. Отсканируйте этот код на втором устройстве — или нажмите «Закрыть» и сделайте это позже в настройках.",
   "vault.restore.title": "Выберите файл резервной копии",
   "vault.restore.lead":
     "Тот самый файл, который выгружали из приложения: «Импорт» → «Резервная копия». Всё, что в нём есть, ляжет на это устройство.",
@@ -1801,7 +1811,7 @@ const ru: Messages = {
   "calc.error.syntax": "Не получается посчитать — проверьте выражение.",
   "calc.error.divideByZero": "На ноль делить нельзя.",
   "set.update.androidConfirm":
-    "Откроется загрузка APK. После скачивания нажмите на файл — установку подтвердит системный установщик Android. Данные и настройки сохранятся.",
+    "Приложение скачает обновление само и откроет установку — останется нажать «Установить». Данные и настройки сохранятся.",
   "set.update.confirmLabel": "Обновить",
   "set.update.downloading": "Загрузка обновления…",
   "set.update.unavailable": "Автообновление недоступно — открываю страницу релизов.",
@@ -2042,6 +2052,55 @@ const ru: Messages = {
   "set.group.everyday": "Каждый день",
   "prefs.hideAmounts": "Скрыть суммы",
   "prefs.showAmounts": "Показать суммы",
+  "sync2.title": "Синхронизация устройств",
+  "sync2.lead": "Всё шифруется прямо на устройстве — сервер видит только нечитаемые байты.",
+  "sync2.safety":
+    "Паролей и кодов из слов не нужно: второе устройство подключается по QR-коду с экрана первого. Код живёт 5 минут и срабатывает один раз.",
+  "sync2.advanced": "Дополнительно: своя служба или вход по имени и паролю",
+  "sync2.done": "Готово",
+  "sync2.cancel": "Закрыть",
+  "sync2.on.button": "Включить синхронизацию",
+  "sync2.on.hint": "На этом устройстве данные уже есть. Потом покажем QR-код для второго.",
+  "sync2.on.done": "Синхронизация включена",
+  "sync2.on.state": "Синхронизация включена. Это устройство: {device}.",
+  "sync2.off.button": "Отключить на этом устройстве",
+  "sync2.off.title": "Отключить синхронизацию на этом устройстве?",
+  "sync2.off.desc":
+    "Данные останутся здесь целиком, просто перестанут обмениваться с другими устройствами. Включить снова можно в любой момент.",
+  "sync2.off.confirm": "Отключить",
+  "sync2.off.done": "Синхронизация на этом устройстве отключена",
+  "sync2.offer.button": "Подключить ещё устройство",
+  "sync2.offer.step1": "Откройте приложение на втором устройстве.",
+  "sync2.offer.step2":
+    "Выберите «Синхронизировать устройства» → «Подключиться к другому устройству» (на уже настроенном — Настройки → Синхронизация).",
+  "sync2.offer.step3": "Наведите камеру на этот код — или вставьте скопированную ссылку.",
+  "sync2.offer.waiting": "Ждём второе устройство… Код действует ещё {time}.",
+  "sync2.offer.expired": "Код истёк. Нажмите «Новый код».",
+  "sync2.offer.making": "Готовим код…",
+  "sync2.offer.copy": "Скопировать ссылку",
+  "sync2.offer.copied": "Ссылка скопирована — отправьте её себе на второе устройство",
+  "sync2.offer.again": "Новый код",
+  "sync2.offer.note":
+    "Не показывайте этот код посторонним: пока он действует, по нему можно получить ваши данные. Лишнее устройство удаляется в списке ниже.",
+  "sync2.offer.passwordLead":
+    "Данные на этом устройстве защищены паролем. Введите его один раз, чтобы передать ключ новому устройству.",
+  "sync2.offer.password": "Пароль приложения",
+  "sync2.offer.show": "Показать код",
+  "sync2.offer.joined": "Подключено: {name}",
+  "sync2.offer.joinedNote":
+    "Данные уже едут на новое устройство. Дальше всё синхронизируется само.",
+  "sync2.join.button": "Подключиться к другому устройству",
+  "sync2.join.hint": "Данные уже есть на компьютере или телефоне — заберём их сюда по QR-коду.",
+  "sync2.join.lead":
+    "На первом устройстве откройте Настройки → Синхронизация → «Подключить ещё устройство». Появится QR-код.",
+  "sync2.join.camera": "Сканировать QR-код",
+  "sync2.join.linkLabel": "Или вставьте ссылку",
+  "sync2.join.linkOnly": "Ссылка подключения",
+  "sync2.join.linkHint":
+    "На первом устройстве нажмите «Скопировать ссылку» и перешлите её себе — например, в мессенджере.",
+  "sync2.join.submit": "Подключить",
+  "sync2.join.working": "Подключаем…",
+  "sync2.join.done": "Подключено — данные загружаются",
   "prefs.homeTransfers.title": "Переводы на главной",
   "prefs.homeTransfers.desc":
     "Считать переводы между своими счетами в доходах и расходах на главной.",
@@ -3756,8 +3815,18 @@ const en: Messages = {
   "vault.source.freshHint": "Empty accounts and operations — you fill them in.",
   "vault.source.file": "Restore from a file",
   "vault.source.fileHint": "A backup file saved from this app.",
-  "vault.source.device": "My data is on another device",
-  "vault.source.deviceHint": "We fetch it from the service that device is connected to.",
+  "vault.source.device": "Sync devices",
+  "vault.source.deviceHint":
+    "The same data on your computer and phone — connected by QR code, no passwords.",
+  "vault.sync.title": "Sync devices",
+  "vault.sync.lead": "Where is your data now?",
+  "vault.sync.first": "This is my first device",
+  "vault.sync.firstHint": "We start here and show a QR code for the second device right away.",
+  "vault.sync.withoutSync": "Start without sync, turn it on later",
+  "vault.sync.otherWays": "Other ways: your own server, name and password",
+  "vault.sync.firstTitle": "Connect your second device",
+  "vault.sync.firstLead":
+    'Sync is on. Scan this code on the second device — or press "Close" and do it later in settings.',
   "vault.restore.title": "Choose the backup file",
   "vault.restore.lead":
     "The file you saved from the app: Import → Backup. Everything in it lands on this device.",
@@ -3856,7 +3925,7 @@ const en: Messages = {
   "calc.error.syntax": "That does not add up — check the expression.",
   "calc.error.divideByZero": "Cannot divide by zero.",
   "set.update.androidConfirm":
-    "The APK download will open. Tap the finished file — Android’s own installer asks for confirmation. Your data and settings are kept.",
+    'The app downloads the update itself and opens the installer — just press "Install". Your data and settings are kept.',
   "set.update.confirmLabel": "Update",
   "set.update.downloading": "Downloading update…",
   "set.update.unavailable": "Auto-update unavailable — opening the releases page.",
@@ -4092,6 +4161,57 @@ const en: Messages = {
   "set.group.everyday": "Everyday",
   "prefs.hideAmounts": "Hide amounts",
   "prefs.showAmounts": "Show amounts",
+  "sync2.title": "Sync devices",
+  "sync2.lead": "Everything is encrypted on the device — the server only sees unreadable bytes.",
+  "sync2.safety":
+    "No passwords or word codes: the second device connects by scanning a QR code on the first one's screen. The code lives 5 minutes and works once.",
+  "sync2.advanced": "Advanced: your own server or sign-in with name and password",
+  "sync2.done": "Done",
+  "sync2.cancel": "Close",
+  "sync2.on.button": "Turn on sync",
+  "sync2.on.hint":
+    "Your data is already on this device. We'll show a QR code for the second one next.",
+  "sync2.on.done": "Sync is on",
+  "sync2.on.state": "Sync is on. This device: {device}.",
+  "sync2.off.button": "Turn off on this device",
+  "sync2.off.title": "Turn off sync on this device?",
+  "sync2.off.desc":
+    "Your data stays here in full; it just stops exchanging with other devices. You can turn it back on any time.",
+  "sync2.off.confirm": "Turn off",
+  "sync2.off.done": "Sync is off on this device",
+  "sync2.offer.button": "Connect another device",
+  "sync2.offer.step1": "Open the app on the second device.",
+  "sync2.offer.step2":
+    'Choose "Sync devices" → "Connect to another device" (on a set-up device — Settings → Sync).',
+  "sync2.offer.step3": "Point the camera at this code — or paste the copied link.",
+  "sync2.offer.waiting": "Waiting for the second device… The code is valid for {time}.",
+  "sync2.offer.expired": 'The code has expired. Press "New code".',
+  "sync2.offer.making": "Preparing the code…",
+  "sync2.offer.copy": "Copy link",
+  "sync2.offer.copied": "Link copied — send it to yourself on the second device",
+  "sync2.offer.again": "New code",
+  "sync2.offer.note":
+    "Don't show this code to others: while it is valid, it gives access to your data. Remove an unwanted device in the list below.",
+  "sync2.offer.passwordLead":
+    "The data on this device is protected by a password. Enter it once to hand the key to the new device.",
+  "sync2.offer.password": "App password",
+  "sync2.offer.show": "Show code",
+  "sync2.offer.joined": "Connected: {name}",
+  "sync2.offer.joinedNote":
+    "Your data is on its way to the new device. From now on everything syncs by itself.",
+  "sync2.join.button": "Connect to another device",
+  "sync2.join.hint":
+    "Your data is already on a computer or phone — we'll bring it here by QR code.",
+  "sync2.join.lead":
+    'On the first device open Settings → Sync → "Connect another device". A QR code will appear.',
+  "sync2.join.camera": "Scan QR code",
+  "sync2.join.linkLabel": "Or paste the link",
+  "sync2.join.linkOnly": "Connection link",
+  "sync2.join.linkHint":
+    'On the first device press "Copy link" and send it to yourself — in a messenger, for example.',
+  "sync2.join.submit": "Connect",
+  "sync2.join.working": "Connecting…",
+  "sync2.join.done": "Connected — your data is loading",
   "prefs.homeTransfers.title": "Transfers on the home screen",
   "prefs.homeTransfers.desc":
     "Count transfers between your own accounts in the home screen's income and spending.",

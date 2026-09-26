@@ -5,6 +5,11 @@
 // понять — они однажды разойдутся, и разойдутся молча: набранное вручную
 // работает, снятое камерой нет, а выглядит это как «камера не читает».
 //
+// КЛЮЧ ОТ ПАКЕТА — ЕСТЬ (с версии 2.0). Параметр `k`: одноразовый ключ,
+// которым запечатан пакет связки на службе (см. lib/sync/pair-package). Это не
+// пароль и не ключ от данных: он открывает один пакет, один раз и пять минут.
+// Без него второе устройство идёт прежним путём — имя и пароль.
+//
 // ЧЕГО В КАРТИНКЕ НЕТ — ПАРОЛЯ. Решение владельца, и оно правильное вдвойне
 // именно здесь: картинку снимают из-за плеча, пересылают в мессенджере и
 // оставляют на экране, отойдя за чаем. Пароль — единственное, чем завёрнут
@@ -27,7 +32,12 @@ export type Pairing = {
   /** Адрес службы. null — в строке его не было; берём тот, что уже знаем. */
   base: string | null;
   code: string;
+  /** Ключ от пакета связки. null — старая картинка или код набран руками. */
+  key: string | null;
 };
+
+/** 32 байта в base64url — 43 знака без добивки. */
+const KEY = /^[A-Za-z0-9_-]{43}$/;
 
 /** Код к общему виду: как ни набери — одно и то же. */
 export function tidyCode(raw: string): string {
@@ -35,9 +45,10 @@ export function tidyCode(raw: string): string {
 }
 
 /** Что кладём в картинку. */
-export function makePairingLink(base: string, code: string): string {
+export function makePairingLink(base: string, code: string, key?: string): string {
   const clean = base.trim().replace(/\/+$/, "");
-  return `${SCHEME}//pair?s=${encodeURIComponent(clean)}&c=${tidyCode(code)}`;
+  const sealedWith = key ? `&k=${key}` : "";
+  return `${SCHEME}//pair?s=${encodeURIComponent(clean)}&c=${tidyCode(code)}${sealedWith}`;
 }
 
 /**
@@ -53,7 +64,7 @@ export function readPairing(raw: string): Pairing | null {
 
   // Сначала — простой случай: человек набрал или снял одни только знаки.
   const bare = tidyCode(text);
-  if (ALPHABET.test(bare)) return { base: null, code: bare };
+  if (ALPHABET.test(bare)) return { base: null, code: bare, key: null };
 
   if (!text.toLowerCase().startsWith(SCHEME)) return null;
 
@@ -73,5 +84,8 @@ export function readPairing(raw: string): Pairing | null {
   // и код, и выведенный из пароля секрет входа открытым текстом.
   if (address && !/^https:\/\/[^/\s]+/i.test(address)) return null;
 
-  return { base: address || null, code };
+  const key = (url.searchParams.get("k") ?? "").trim();
+  if (key && !KEY.test(key)) return null;
+
+  return { base: address || null, code, key: key || null };
 }

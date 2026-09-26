@@ -27,19 +27,17 @@
 // по-прежнему, и это по-прежнему единственный путь, если камера занята,
 // запрещена или её нет вовсе.
 
-import { Copy, Laptop, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Laptop, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 import { SERVER_LINK_CHANGED } from "@/components/settings/server-panel";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { PairingQr } from "@/components/vault/pairing-qr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
-import { makePairingLink } from "@/lib/sync/pairing-link";
 import { serverAccount } from "@/lib/vault/runtime";
 import type { LinkedDevice } from "@/lib/vault/server-account";
 
@@ -57,17 +55,6 @@ export function DevicesPanel() {
 
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [code, setCode] = useState<string | null>(null);
-  /** Адрес своей службы — он едет в картинке вместе с кодом. */
-  const [base, setBase] = useState("");
-  // Код появляется внизу длинной карточки — на компьютере ниже края экрана.
-  // Прогон «как новичок» показал: человек жмёт «Связать» и не видит ничего,
-  // пока не догадается пролистать. Код сам въезжает в поле зрения.
-  const pairingBlock = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!code) return;
-    pairingBlock.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [code]);
 
   const refresh = useCallback(async () => {
     const link = await serverAccount.link();
@@ -76,7 +63,6 @@ export function DevicesPanel() {
       return;
     }
     setLinked(true);
-    setBase(link.base);
     const list = await serverAccount.devices();
     setDevices(list.devices);
     setCurrent(list.current);
@@ -232,70 +218,6 @@ export function DevicesPanel() {
         )}
 
         <p className="rounded-lg border bg-muted/40 p-3 text-sm">{t("dev.forgetNote")}</p>
-
-        <div ref={pairingBlock} className="scroll-mt-24 space-y-3 border-t pt-4">
-          {code ? (
-            <>
-              <p
-                className="select-all text-center font-mono text-3xl font-semibold tracking-[0.2em]"
-                data-testid="pairing-code"
-              >
-                {groupCode(code)}
-              </p>
-              {base ? (
-                <div className="flex justify-center">
-                  <PairingQr value={makePairingLink(base, code)} />
-                </div>
-              ) : null}
-              <p className="text-sm text-muted-foreground">{t("dev.pairLead")}</p>
-              <p className="text-sm text-muted-foreground">{t("dev.pairCamera")}</p>
-              <p className="text-xs text-muted-foreground">{t("dev.pairNote")}</p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    void navigator.clipboard
-                      ?.writeText(groupCode(code))
-                      .then(() => toast.success(t("dev.copied")))
-                      .catch(() => undefined)
-                  }
-                >
-                  <Copy className="size-4" />
-                  {t("dev.copy")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() =>
-                    void work(async () => {
-                      setCode((await serverAccount.issuePairing()).code);
-                    })
-                  }
-                >
-                  <RefreshCw className="size-4" />
-                  {t("dev.pairAgain")}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <Button
-              type="button"
-              disabled={busy}
-              className="h-auto w-full whitespace-normal py-2 sm:w-auto"
-              onClick={() =>
-                void work(async () => {
-                  setCode((await serverAccount.issuePairing()).code);
-                })
-              }
-            >
-              {t("dev.pair")}
-            </Button>
-          )}
-        </div>
       </CardContent>
     </Card>
   );
