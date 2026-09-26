@@ -3,11 +3,10 @@
 // Update check for the Android build.
 //
 // The Tauri updater plugin has no Android implementation, so this reads the same
-// `latest.json` the desktop updater uses and hands the APK to the system. The
-// download and the install itself are Android's job: opening the APK URL starts
-// the system download manager, and tapping the finished file opens the package
-// installer, which asks the owner to confirm — exactly the flow any sideloaded
-// app follows, and the only one available outside the Play Store.
+// `latest.json` the desktop updater uses. The APK is downloaded inside the app
+// by InstallerPlugin.kt and handed straight to the system package installer,
+// which asks the owner to confirm — the only install path outside the Play
+// Store. The browser is never involved.
 //
 // The request goes through the Tauri HTTP plugin (not the webview's fetch) so it
 // is not subject to the page CSP, and the allowed URL is pinned in
@@ -77,17 +76,54 @@ export async function checkAndroidUpdate(): Promise<AvailableUpdate | null> {
 /**
  * Скачать APK и открыть экран установки — не выходя из приложения.
  *
- * Работу делает свой плагин на стороне Android (InstallerPlugin.kt). Если его
- * нет — сборка старше 2.0 или вызов отказал, — остаётся прежний путь: открыть
- * ссылку, и Android скачает файл сам.
+ * Работу делает свой плагин на стороне Android (InstallerPlugin.kt), он же
+ * сообщает, сколько скачано. В браузер человека НЕ отправляем ни при каком
+ * исходе: в 2.0.0 любая заминка сети молча открывала GitHub, и человек
+ * оказывался на чужой странице со скачиванием в шторке — ровно то, от чего это
+ * обновление и уводили. Сорвалось — говорим почему и предлагаем повторить.
  */
-export async function startAndroidUpdate(update: AvailableUpdate): Promise<void> {
+export async function startAndroidUpdate(
+  update: AvailableUpdate,
+  onProgress?: (received: number, total: number) => void
+): Promise<void> {
+  const { Channel, invoke } = await import("@tauri-apps/api/core");
+  const channel = new Channel<{ received: number; total: number }>();
+  if (onProgress) channel.onmessage = (step) => onProgress(step.received, step.total);
+  await invoke("plugin:installer|install", { url: update.url, onProgress: channel });
+}
+
+/** Слова для toast-ов обновления: зовут из настроек и из фоновой проверки. */
+export type UpdateWords = {
+  downloading: string;
+  progress: (percent: number) => string;
+  opening: string;
+  failed: string;
+  retry: string;
+};
+
+/**
+ * Весь путь обновления с точки зрения человека: одна строка «Загрузка… 42%»,
+ * затем системный экран установки. Сорвалось — та же строка становится
+ * ошибкой с кнопкой «Повторить».
+ */
+export async function installAndroidUpdate(
+  update: AvailableUpdate,
+  words: UpdateWords
+): Promise<void> {
+  const { toast } = await import("sonner");
+  const id = toast.loading(words.downloading);
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("plugin:installer|install", { url: update.url });
-  } catch {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(update.url);
+    await startAndroidUpdate(update, (received, total) => {
+      if (total > 0) toast.loading(words.progress(Math.floor((received * 100) / total)), { id });
+    });
+    toast.success(words.opening, { id, duration: 5_000 });
+  } catch (error) {
+    toast.error(words.failed, {
+      id,
+      description: reason(error),
+      duration: 30_000,
+      action: { label: words.retry, onClick: () => void installAndroidUpdate(update, words) }
+    });
   }
 }
 

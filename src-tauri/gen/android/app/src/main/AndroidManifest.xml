@@ -18,7 +18,20 @@
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!-- Резервной копии Android здесь нет — нарочно.
+
+         Android сам складывает данные приложений в копию Google и при новой
+         установке молча кладёт их обратно. В 2.0.0 так и вышло: человек удалил
+         приложение, поставил заново — и получил старые записи и старое
+         подключение к серверу, хотя всё очищал. Хуже того, у данных без пароля
+         ключ лежит рядом с ними, и в копию уехал бы вместе с ними.
+
+         Способы перенести данные у приложения свои и явные: синхронизация по
+         QR-коду и файл резервной копии. Удалил приложение — значит, удалил. -->
     <application
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.financial_assistant"

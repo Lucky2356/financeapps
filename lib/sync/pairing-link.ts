@@ -31,9 +31,15 @@ const ALPHABET = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
 export type Pairing = {
   /** Адрес службы. null — в строке его не было; берём тот, что уже знаем. */
   base: string | null;
+  /** Код прямой связки. Пустой у картинки НОВОГО устройства (см. ticket). */
   code: string;
   /** Ключ от пакета связки. null — старая картинка или код набран руками. */
   key: string | null;
+  /**
+   * Билет обратной связки: картинку показывает НОВОЕ устройство, а снимает
+   * устройство с данными. null — обычная, прямая картинка.
+   */
+  ticket: string | null;
 };
 
 /** 32 байта в base64url — 43 знака без добивки. */
@@ -52,6 +58,15 @@ export function makePairingLink(base: string, code: string, key?: string): strin
 }
 
 /**
+ * Картинка НОВОГО устройства (обратная связка): его снимает устройство, где
+ * данные уже есть, и отвечает пакетом, запечатанным ключом `k`.
+ */
+export function makeRequestLink(base: string, ticket: string, key: string): string {
+  const clean = base.trim().replace(/\/+$/, "");
+  return `${SCHEME}//pair?s=${encodeURIComponent(clean)}&r=${ticket}&k=${key}`;
+}
+
+/**
  * Понять, что принесли, — ссылкой из картинки или восемью знаками с клавиатуры.
  *
  * Возвращает null, а не бросает: сюда приезжает что угодно — чужой QR с
@@ -64,7 +79,7 @@ export function readPairing(raw: string): Pairing | null {
 
   // Сначала — простой случай: человек набрал или снял одни только знаки.
   const bare = tidyCode(text);
-  if (ALPHABET.test(bare)) return { base: null, code: bare, key: null };
+  if (ALPHABET.test(bare)) return { base: null, code: bare, key: null, ticket: null };
 
   if (!text.toLowerCase().startsWith(SCHEME)) return null;
 
@@ -76,8 +91,10 @@ export function readPairing(raw: string): Pairing | null {
   }
   if (url.hostname !== "pair" && url.pathname.replace(/^\/+/, "") !== "pair") return null;
 
-  const code = tidyCode(url.searchParams.get("c") ?? "");
-  if (!ALPHABET.test(code)) return null;
+  const ticket = (url.searchParams.get("r") ?? "").trim();
+  if (ticket && !KEY.test(ticket)) return null;
+  const code = ticket ? "" : tidyCode(url.searchParams.get("c") ?? "");
+  if (!ticket && !ALPHABET.test(code)) return null;
 
   const address = (url.searchParams.get("s") ?? "").trim().replace(/\/+$/, "");
   // Адрес принимается ТОЛЬКО по https. Подсунутая картинка с http увела бы
@@ -86,6 +103,8 @@ export function readPairing(raw: string): Pairing | null {
 
   const key = (url.searchParams.get("k") ?? "").trim();
   if (key && !KEY.test(key)) return null;
+  // Картинке нового устройства без ключа отвечать нечем.
+  if (ticket && !key) return null;
 
-  return { base: address || null, code, key: key || null };
+  return { base: address || null, code, key: key || null, ticket: ticket || null };
 }

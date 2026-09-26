@@ -747,6 +747,79 @@ describe("служба", () => {
       assert.deepEqual(left, [null]);
     });
 
+    it("обратная связка: картинку показывает новое устройство, отвечает старое", async () => {
+      // У компьютера часто нет камеры. Тогда QR показывает он, а снимает телефон
+      // с данными и отвечает на билет своим пакетом.
+      const opened = await call("/pairing/request", { method: "POST", body: {} });
+      assert.equal(opened.status, 201);
+      const { ticket } = opened.body as { ticket: string };
+      assert.match(ticket, /^[A-Za-z0-9_-]{43}$/);
+
+      // Пока не ответили — «ждём», и билет не гаснет.
+      const early = await call(`/pairing/request/${ticket}`, { method: "POST", body: {} });
+      assert.equal(early.status, 202);
+
+      const { token } = await signUp("петя");
+      const answered = await call("/pairing", {
+        method: "POST",
+        token,
+        body: { sealed: "пакет-для-компьютера", request: ticket }
+      });
+      assert.equal(answered.status, 201);
+
+      // На один билет отвечают один раз.
+      const twice = await call("/pairing", {
+        method: "POST",
+        token,
+        body: { sealed: "чужой-пакет", request: ticket }
+      });
+      assert.equal(twice.status, 410);
+
+      const joined = await call(`/pairing/request/${ticket}`, {
+        method: "POST",
+        body: { device: "Компьютер (Windows)" }
+      });
+      assert.equal(joined.status, 200);
+      const answer = joined.body as { token: string; sealed: string; login: string };
+      assert.equal(answer.sealed, "пакет-для-компьютера");
+      assert.equal(answer.login, "петя");
+      assert.equal((await call("/devices", { token: answer.token })).status, 200);
+
+      // Билет погашен, пакет из базы стёрт.
+      const again = await call(`/pairing/request/${ticket}`, { method: "POST", body: {} });
+      assert.equal(again.status, 404);
+      const left = app.db
+        .prepare("select count(*) as n from pairings where sealed is not null")
+        .get<{ n: number }>();
+      assert.equal(left?.n, 0);
+    });
+
+    it("чужой или истёкший билет не срабатывает", async () => {
+      const { token } = await signUp("петя");
+      const unknown = await call("/pairing", {
+        method: "POST",
+        token,
+        body: { sealed: "x", request: "A".repeat(43) }
+      });
+      assert.equal(unknown.status, 404);
+
+      const { ticket } = (await call("/pairing/request", { method: "POST", body: {} })).body as {
+        ticket: string;
+      };
+      app.db
+        .prepare("update pair_requests set expires_at = ?")
+        .run(new Date(Date.now() - 1000).toISOString());
+      const late = await call("/pairing", {
+        method: "POST",
+        token,
+        body: { sealed: "x", request: ticket }
+      });
+      assert.equal(late.status, 410);
+      // И на истёкший билет пакет не выдан: живых кодов у человека нет.
+      const live = app.db.prepare("select count(*) as n from pairings").get<{ n: number }>();
+      assert.equal(live?.n, 0);
+    });
+
     it("пакет больше шестнадцати килобайт не принимается", async () => {
       const { token } = await signUp("петя");
       const big = await call("/pairing", {

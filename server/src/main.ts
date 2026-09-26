@@ -29,7 +29,14 @@ import {
 } from "./auth.ts";
 import { openDatabase } from "./db.ts";
 import { EventBus } from "./events.ts";
-import { issuePairing, joinPairing, redeemPairing } from "./pairing.ts";
+import {
+  answerRequest,
+  issuePairing,
+  joinPairing,
+  openRequest,
+  pollRequest,
+  redeemPairing
+} from "./pairing.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import {
   listSlots,
@@ -224,6 +231,9 @@ export function createApp(options: AppOptions) {
   // 2^40 кодов по двадцать попыток в минуту нельзя и за век, но без счётчика
   // об этом пришлось бы рассуждать, а со счётчиком — не приходится.
   const guessers = new RateLimiter(20);
+  // Новое устройство при обратной связке спрашивает «ответили ли» каждые пару
+  // секунд. Шестьдесят в минуту — с запасом на два устройства за одним роутером.
+  const waiters = new RateLimiter(60);
 
   function now(): string {
     return new Date().toISOString();
@@ -303,6 +313,29 @@ export function createApp(options: AppOptions) {
       // заголовка Host нельзя: заголовок приходит снаружи, и служба
       // отправила бы второе устройство туда, куда её попросил чужой.
       return send(res, 200, PUBLIC_URL ? { ...found, address: PUBLIC_URL } : found);
+    }
+
+    // Обратная связка: картинку показывает новое устройство. Здесь оно
+    // открывает запрос и потом спрашивает, ответили ли на него. Обе ручки —
+    // без входа: у нового устройства ещё ничего нет.
+    if (path === "/pairing/request" && method === "POST") {
+      if (!guessers.allow(`запрос:${addressOf(req)}`, Date.now())) {
+        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+      }
+      return send(res, 201, openRequest(db, now()));
+    }
+
+    if (path.startsWith("/pairing/request/") && method === "POST") {
+      // Спрашивают раз в пару секунд пять минут подряд — отдельный счётчик,
+      // шире, чем на коды: билет в 256 бит перебором не взять.
+      if (!waiters.allow(`ждёт:${addressOf(req)}`, Date.now())) {
+        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+      }
+      const body = await readJson(req);
+      const ticket = decodePart(path.slice("/pairing/request/".length));
+      const joined = pollRequest(db, ticket, now(), text(body.device));
+      if (!joined) return send(res, 202, { waiting: true });
+      return send(res, 200, PUBLIC_URL ? { ...joined, address: PUBLIC_URL } : joined);
     }
 
     // Войти по коду связки — без имени и пароля. Новому устройству заводится
@@ -418,7 +451,15 @@ export function createApp(options: AppOptions) {
 
     if (path === "/pairing" && method === "POST") {
       const body = await readJson(req);
-      return send(res, 201, issuePairing(db, who.personId, now(), text(body.sealed)));
+      // С билетом — ответ на картинку нового устройства (обратная связка).
+      const ticket = text(body.request);
+      return send(
+        res,
+        201,
+        ticket
+          ? answerRequest(db, who.personId, now(), text(body.sealed), ticket)
+          : issuePairing(db, who.personId, now(), text(body.sealed))
+      );
     }
 
     if (path.startsWith("/devices/") && method === "PATCH") {

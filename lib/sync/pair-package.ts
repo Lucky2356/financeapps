@@ -48,6 +48,20 @@ export async function newTransferKey(): Promise<{ key: CryptoKey; text: string }
   return { key, text: toBase64Url(raw) };
 }
 
+/**
+ * Одноразовый ключ из чужой картинки — при обратной связке его придумало
+ * НОВОЕ устройство, а запечатывает им пакет то, где данные уже есть.
+ */
+export async function importTransferKey(text: string): Promise<CryptoKey> {
+  try {
+    return await crypto.subtle.importKey("raw", fromBase64Url(text), { name: "AES-GCM" }, false, [
+      "encrypt"
+    ]);
+  } catch {
+    throw new Error("Код с нового устройства не читается. Покажите на нём новый.");
+  }
+}
+
 /** Запечатать пакет. Выходит строка: вектор и шифротекст одним куском. */
 export async function sealPackage(key: CryptoKey, pack: PairPackage): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));

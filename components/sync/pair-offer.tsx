@@ -7,19 +7,25 @@
 // картинку за него. Пока картинка на экране, приложение само смотрит в список
 // устройств и говорит, когда новое подключилось: иначе человек не знает,
 // сработало ли, и нажимает «ещё раз».
+//
+// ИЛИ НАОБОРОТ. У нового компьютера камеры нет — тогда код показывает он, а
+// здесь, на телефоне с данными, его снимают (режим "scan", обратная связка).
 
-import { Check, Copy, RefreshCw } from "lucide-react";
+import { Camera, Check, Copy, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { SERVER_LINK_CHANGED } from "@/components/settings/server-panel";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PairingQr } from "@/components/vault/pairing-qr";
 import { useI18n } from "@/lib/i18n/context";
+import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
 import {
   accountService,
+  answerPairingRequest,
   offerPairing,
   serverAccount,
   type PairingOffer
@@ -28,8 +34,17 @@ import {
 /** Как часто спрашивать службу, не подключилось ли новое устройство. */
 const POLL_MS = 3000;
 
-export function PairOffer({ onClose }: { onClose: () => void }) {
+export function PairOffer({
+  onClose,
+  mode = "show"
+}: {
+  onClose: () => void;
+  /** show — показать свой код; scan — снять код нового устройства. */
+  mode?: "show" | "scan";
+}) {
   const { t } = useI18n();
+  const confirm = useConfirm();
+  const [answered, setAnswered] = useState(false);
   const [needPassword, setNeedPassword] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [offer, setOffer] = useState<PairingOffer | null>(null);
@@ -50,6 +65,7 @@ export function PairOffer({ onClose }: { onClose: () => void }) {
       known.current = new Set(list.devices.map((device) => device.id));
       const made = await offerPairing(secret);
       remembered.current = secret;
+      setLeft(Math.max(0, Math.round((Date.parse(made.expiresAt) - Date.now()) / 1000)));
       setOffer(made);
       setNeedPassword(false);
       setPassword("");
@@ -60,26 +76,94 @@ export function PairOffer({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
+  /** Снять код нового устройства и ответить на него своими данными. */
+  const scanNew = useCallback(async () => {
+    setError(null);
+    const shot = await scanQr();
+    if (!shot.ok) {
+      if (shot.why !== "cancelled") {
+        setError(
+          shot.why === "denied"
+            ? t("server.cameraDenied")
+            : shot.why === "absent"
+              ? t("server.cameraAbsent")
+              : t("server.cameraBroken")
+        );
+      }
+      return;
+    }
+    // Данные уходят тому, чей код сняли. Спросить — дёшево; снять чужой код
+    // по ошибке или по чьей-то просьбе — нет.
+    const sure = await confirm({
+      title: t("sync2.scan.confirmTitle"),
+      description: t("sync2.scan.confirmDesc"),
+      confirmLabel: t("sync2.scan.confirm")
+    });
+    if (!sure) return;
+    setBusy(true);
+    try {
+      const list = await serverAccount.devices();
+      known.current = new Set(list.devices.map((device) => device.id));
+      await answerPairingRequest(shot.text, remembered.current);
+      setAnswered(true);
+      toast.success(t("sync2.scan.sent"));
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [confirm, t]);
+
+  /** Пароль спросили: проверить его сразу, а не после съёмки. */
+  const acceptPassword = useCallback(
+    async (entered: string) => {
+      if (mode === "show") return make(entered);
+      setBusy(true);
+      setError(null);
+      try {
+        await accountService.pairingPackage(entered);
+        remembered.current = entered;
+        setNeedPassword(false);
+        setPassword("");
+      } catch (cause) {
+        setError((cause as Error).message);
+        return;
+      } finally {
+        setBusy(false);
+      }
+      await scanNew();
+    },
+    [make, mode, scanNew]
+  );
+
   useEffect(() => {
     let alive = true;
     void (async () => {
       const needs = await accountService.pairingNeedsPassword();
       if (!alive) return;
       setNeedPassword(needs);
-      if (!needs) await make();
+      if (needs) return;
+      // Человек нажал «Сканировать» — камеру открываем сразу.
+      if (mode === "scan") await scanNew();
+      else await make();
     })();
     return () => {
       alive = false;
     };
-  }, [make]);
+  }, [make, mode, scanNew]);
 
-  // Ждём новое устройство, пока код жив.
+  // Ждём новое устройство, пока код жив, — или после ответа на его код.
   useEffect(() => {
-    if (!offer || joined) return;
+    if ((!offer && !answered) || joined) return;
     const timer = window.setInterval(() => {
-      const remaining = Math.max(0, Math.round((Date.parse(offer.expiresAt) - Date.now()) / 1000));
-      setLeft(remaining);
-      if (remaining === 0) return;
+      if (offer) {
+        const remaining = Math.max(
+          0,
+          Math.round((Date.parse(offer.expiresAt) - Date.now()) / 1000)
+        );
+        setLeft(remaining);
+        if (remaining === 0 && !answered) return;
+      }
       void serverAccount
         .devices()
         .then((list) => {
@@ -90,9 +174,8 @@ export function PairOffer({ onClose }: { onClose: () => void }) {
         })
         .catch(() => undefined);
     }, POLL_MS);
-    setLeft(Math.max(0, Math.round((Date.parse(offer.expiresAt) - Date.now()) / 1000)));
     return () => window.clearInterval(timer);
-  }, [offer, joined]);
+  }, [offer, answered, joined]);
 
   if (joined) {
     return (
@@ -115,7 +198,7 @@ export function PairOffer({ onClose }: { onClose: () => void }) {
         className="space-y-3 rounded-lg border p-4"
         onSubmit={(event) => {
           event.preventDefault();
-          void make(password);
+          void acceptPassword(password);
         }}
       >
         <p className="text-sm text-muted-foreground">{t("sync2.offer.passwordLead")}</p>
@@ -147,6 +230,28 @@ export function PairOffer({ onClose }: { onClose: () => void }) {
   const seconds = String(left % 60).padStart(2, "0");
   const expired = offer !== null && left === 0;
 
+  if (mode === "scan") {
+    return (
+      <div className="space-y-3 rounded-lg border p-4" data-testid="pair-scan">
+        <p className="text-sm text-muted-foreground">
+          {answered ? t("sync2.scan.sent") : t("sync2.scan.hint")}
+        </p>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <div className="flex flex-wrap gap-2">
+          {cameraPossible() && !answered ? (
+            <Button type="button" disabled={busy} onClick={() => void scanNew()}>
+              <Camera className="size-4" />
+              {t("sync2.scan.button")}
+            </Button>
+          ) : null}
+          <Button type="button" variant="ghost" onClick={onClose}>
+            {t("sync2.cancel")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="space-y-4 rounded-lg border p-4"
@@ -173,6 +278,17 @@ export function PairOffer({ onClose }: { onClose: () => void }) {
       ) : null}
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+      {/* Новое устройство — компьютер без камеры? Тогда код показывает он. */}
+      {cameraPossible() ? (
+        <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+          <p className="text-xs text-muted-foreground">{t("sync2.scan.hint")}</p>
+          <Button type="button" className="w-full" disabled={busy} onClick={() => void scanNew()}>
+            <Camera className="size-4" />
+            {t("sync2.scan.button")}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {offer && !expired ? (

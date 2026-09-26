@@ -27,10 +27,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useI18n } from "@/lib/i18n/context";
 import { DEFAULT_SERVER, hasDefaultServer } from "@/lib/sync/default-server";
+import { cameraPossible } from "@/lib/sync/scan-qr";
 import { enableSync, forgetMyServer, serverAccount, stopSync } from "@/lib/vault/runtime";
 import type { ServerLink } from "@/lib/vault/server-account";
 
-type Mode = "idle" | "offer" | "join";
+type Mode = "idle" | "offer" | "scan" | "join";
 
 export function SyncPanel() {
   const { t } = useI18n();
@@ -120,13 +121,22 @@ export function SyncPanel() {
               <p className="rounded-lg border bg-muted/40 p-3 text-sm" data-testid="sync-on">
                 {t("sync2.on.state", { device: link.device })}
               </p>
-              {mode === "offer" ? (
-                <PairOffer onClose={() => setMode("idle")} />
+              {mode === "offer" || mode === "scan" ? (
+                <PairOffer
+                  mode={mode === "scan" ? "scan" : "show"}
+                  onClose={() => setMode("idle")}
+                />
               ) : (
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" onClick={() => setMode("offer")}>
                     {t("sync2.offer.button")}
                   </Button>
+                  {/* Новый компьютер без камеры покажет свой код — снять его отсюда. */}
+                  {cameraPossible() ? (
+                    <Button type="button" variant="secondary" onClick={() => setMode("scan")}>
+                      {t("sync2.scan.button")}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"

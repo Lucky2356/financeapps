@@ -23,7 +23,7 @@
 // переносит с экрана на экран, не сбиваясь, — шестнадцать уже нет, и это не
 // придирка: код, который набирают с ошибками, люди перестают набирать.
 
-import { createHash, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 import { AuthError, openSession } from "./auth.ts";
@@ -129,9 +129,16 @@ function burn(
   code: string,
   now: string
 ): { personId: string; login: string; sealed: string } {
+  return burnHash(db, fingerprint(code), now);
+}
+
+function burnHash(
+  db: DatabaseSync,
+  hash: string,
+  now: string
+): { personId: string; login: string; sealed: string } {
   sweepPairings(db, now);
 
-  const hash = fingerprint(code);
   const row = db
     .prepare("select person_id, used_at, expires_at, sealed from pairings where code_hash = ?")
     .get<{
@@ -187,8 +194,110 @@ export function joinPairing(
   code: string,
   now: string,
   device: string
-): { login: string; sealed: string; token: string; deviceId: string | null } {
-  const burned = burn(db, code, now);
+): JoinAnswer {
+  return enter(db, burn(db, code, now), now, device);
+}
+
+export type JoinAnswer = { login: string; sealed: string; token: string; deviceId: string | null };
+
+function enter(
+  db: DatabaseSync,
+  burned: { personId: string; login: string; sealed: string },
+  now: string,
+  device: string
+): JoinAnswer {
   const session = openSession(db, burned.personId, device || undefined, now);
   return { login: burned.login, sealed: burned.sealed, ...session };
+}
+
+// ——— обратная связка ———————————————————————————————————————————————————————
+//
+// Прямая связка требует камеры у НОВОГО устройства: оно снимает картинку с
+// экрана старого. Но новым чаще оказывается компьютер — человек начал на
+// телефоне, а потом захотел и на ПК, — и камеры у компьютера нет. Тогда
+// картинку показывает компьютер, а снимает её телефон с данными:
+//
+//   1. новое устройство открывает запрос (без входа) и получает билет;
+//      в картинку кладёт билет и одноразовый ключ пакета;
+//   2. устройство с данными снимает картинку, запечатывает пакет этим ключом
+//      и отвечает на билет — обычным `POST /pairing` со своим входом;
+//   3. новое устройство, спрашивая по билету, получает пакет и свой вход.
+//
+// Служба и здесь не видит ключа пакета: он только в картинке. Билет — 256
+// случайных бит, перебирать его бессмысленно; в базе лежит хешем.
+
+/** Билет обратной связки: 32 случайных байта, в картинке — base64url. */
+const TICKET = /^[A-Za-z0-9_-]{43}$/;
+
+function ticketHash(ticket: string): string {
+  return createHash("sha256").update(ticket).digest("hex");
+}
+
+function requestRow(db: DatabaseSync, ticket: string, now: string): { code_hash: string | null } {
+  const lost = "Код с нового устройства не найден. Покажите на нём новый.";
+  if (!TICKET.test(ticket)) throw new AuthError(404, lost);
+  const row = db
+    .prepare("select expires_at, code_hash from pair_requests where ticket_hash = ?")
+    .get<{ expires_at: string; code_hash: string | null }>(ticketHash(ticket));
+  if (!row) throw new AuthError(404, lost);
+  if (row.expires_at < now) {
+    throw new AuthError(410, "Код на новом устройстве истёк. Покажите на нём новый.");
+  }
+  return row;
+}
+
+/** Шаг 1: новое устройство открывает запрос. */
+export function openRequest(db: DatabaseSync, now: string): { ticket: string; expiresAt: string } {
+  sweepPairings(db, now);
+  const ticket = randomBytes(32).toString("base64url");
+  const expires = new Date(Date.parse(now) + LIVES_MS).toISOString();
+  db.prepare("insert into pair_requests (ticket_hash, created_at, expires_at) values (?,?,?)").run(
+    ticketHash(ticket),
+    now,
+    expires
+  );
+  return { ticket, expiresAt: expires };
+}
+
+/** Шаг 2: устройство с данными отвечает на запрос запечатанным пакетом. */
+export function answerRequest(
+  db: DatabaseSync,
+  personId: string,
+  now: string,
+  sealed: string,
+  ticket: string
+): IssuedCode {
+  const row = requestRow(db, ticket, now);
+  if (row.code_hash) {
+    throw new AuthError(410, "На этот код уже ответили. Покажите на новом устройстве новый.");
+  }
+  const issued = issuePairing(db, personId, now, sealed);
+  // Запись с условием — по той же причине, что и в burn: два ответа подряд
+  // на один билет не должны пройти оба.
+  const took = db
+    .prepare("update pair_requests set code_hash = ? where ticket_hash = ? and code_hash is null")
+    .run(fingerprint(issued.code), ticketHash(ticket));
+  if (took.changes === 0) {
+    throw new AuthError(410, "На этот код уже ответили. Покажите на новом устройстве новый.");
+  }
+  return issued;
+}
+
+/**
+ * Шаг 3: новое устройство спрашивает, ответили ли. Пока нет — null. Ответили —
+ * запрос гасится, и устройство входит так же, как по прямой связке.
+ */
+export function pollRequest(
+  db: DatabaseSync,
+  ticket: string,
+  now: string,
+  device: string
+): JoinAnswer | null {
+  const row = requestRow(db, ticket, now);
+  if (!row.code_hash) return null;
+  const gone = db
+    .prepare("delete from pair_requests where ticket_hash = ? and code_hash = ?")
+    .run(ticketHash(ticket), row.code_hash);
+  if (gone.changes === 0) throw new AuthError(410, "Этот код уже использован.");
+  return enter(db, burnHash(db, row.code_hash, now), now, device);
 }

@@ -21,6 +21,7 @@ import androidx.core.content.FileProvider
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
+import app.tauri.plugin.Channel
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
@@ -31,6 +32,8 @@ import java.net.URL
 @InvokeArg
 class InstallArgs {
   lateinit var url: String
+  /** Куда сообщать, сколько скачано: 40 МБ по мобильной сети — это минуты. */
+  var onProgress: Channel? = null
 }
 
 private const val RELEASES = "https://github.com/Lucky2356/financeapps/releases/download/"
@@ -51,7 +54,7 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
         val dir = File(activity.cacheDir, "updates")
         dir.mkdirs()
         val apk = File(dir, "update.apk")
-        download(args.url, apk)
+        download(args.url, apk, args.onProgress)
 
         val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", apk)
         val intent = Intent(Intent.ACTION_VIEW)
@@ -66,7 +69,7 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
           }
         }
       } catch (error: Exception) {
-        invoke.reject(error.message ?: "Не удалось скачать обновление.")
+        invoke.reject(say(error))
       }
     }.start()
   }
@@ -75,7 +78,15 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
    * Скачать с переходами: ссылка на выпуск отвечает переадресацией на хранилище
    * GitHub, и только по https — переход на http не принимается.
    */
-  private fun download(start: String, target: File) {
+  /** Текст для человека: исключения Java сами по себе говорят по-английски и о сокетах. */
+  private fun say(error: Exception): String = when (error) {
+    is java.net.UnknownHostException -> "Нет соединения с интернетом."
+    is java.net.SocketTimeoutException -> "Сервер долго не отвечает. Проверьте интернет и попробуйте ещё раз."
+    is java.io.IOException -> "Загрузка прервалась. Проверьте интернет и попробуйте ещё раз."
+    else -> error.message ?: "Не удалось скачать обновление."
+  }
+
+  private fun download(start: String, target: File, progress: Channel?) {
     var address = start
     for (hop in 0 until 5) {
       val connection = URL(address).openConnection() as HttpURLConnection
@@ -90,8 +101,35 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
           if (!address.startsWith("https://")) throw Exception("Переадресация не по https.")
           continue
         }
-        if (code != 200) throw Exception("Сервер ответил $code.")
-        connection.inputStream.use { input -> target.outputStream().use { input.copyTo(it) } }
+        if (code != 200) throw Exception("Сервер обновлений ответил $code. Попробуйте позже.")
+        val total = connection.contentLengthLong
+        var received = 0L
+        var reported = -1
+        connection.inputStream.use { input ->
+          target.outputStream().use { output ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+              val read = input.read(buffer)
+              if (read < 0) break
+              output.write(buffer, 0, read)
+              received += read
+              // Раз на процент, а не на каждый кусок: иначе тысячи сообщений.
+              val percent = if (total > 0) (received * 100 / total).toInt() else -1
+              if (percent != reported) {
+                reported = percent
+                val message = JSObject()
+                message.put("received", received)
+                message.put("total", total)
+                progress?.send(message)
+              }
+            }
+          }
+        }
+        // Оборванная загрузка даёт «битый» APK, и Android ответит на него
+        // невнятным «ошибка при разборе пакета». Лучше сказать правду здесь.
+        if (total > 0 && received != total) {
+          throw java.io.IOException("Загрузка прервалась.")
+        }
         return
       } finally {
         connection.disconnect()

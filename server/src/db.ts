@@ -83,6 +83,17 @@ const SCHEMA = `
   -- минут и срабатывает один раз; погашенный не удаляется сразу, чтобы
   -- человек, набравший его второй раз, услышал «уже использован», а не
   -- «не найден» — это разные поломки, и чинят их по-разному.
+  -- Обратная связка: картинку показывает НОВОЕ устройство (у компьютера часто
+  -- нет камеры), а устройство с данными её снимает и отвечает пакетом. Здесь
+  -- ждёт ответа билет нового устройства; лежит хешем, живёт пять минут.
+  -- code_hash — код, выданный в ответ: по нему новое устройство и входит.
+  create table if not exists pair_requests (
+    ticket_hash text primary key,
+    created_at  text not null,
+    expires_at  text not null,
+    code_hash   text
+  );
+
   create table if not exists pairings (
     code_hash  text primary key,
     person_id  text not null references people(id) on delete cascade,
@@ -157,4 +168,5 @@ export function sweepSessions(db: DatabaseSync, now: string): void {
 export function sweepPairings(db: DatabaseSync, now: string): void {
   const long = new Date(Date.parse(now) - 60 * 60 * 1000).toISOString();
   db.prepare("delete from pairings where expires_at < ?").run(long);
+  db.prepare("delete from pair_requests where expires_at < ?").run(long);
 }

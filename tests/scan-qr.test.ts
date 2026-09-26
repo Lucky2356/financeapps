@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Камера живёт только в мобильной сборке, и проверяется здесь не она, а то,
@@ -101,5 +102,42 @@ describe("камера", () => {
     await scanQr();
 
     expect(plugin.scan.mock.calls[0][0].formats).toEqual(["QR_CODE"]);
+  });
+
+  it("пока камера снимает, страница прозрачна и поверх неё рамка с «Отменой»", async () => {
+    // Плагин кладёт камеру ПОД страницу. В 2.0.0 страница оставалась закрашенной
+    // фоном темы — камера работала, но человек её не видел и выйти было нечем.
+    let seen: { scanning: boolean; layer: boolean } | null = null;
+    plugin.scan.mockImplementation(async () => {
+      seen = {
+        scanning: document.documentElement.classList.contains("qr-scanning"),
+        layer: Boolean(document.querySelector('[data-testid="qr-viewfinder"] button'))
+      };
+      return { content: "ABCD2345" };
+    });
+
+    await scanQr();
+
+    expect(seen).toEqual({ scanning: true, layer: true });
+    // После съёмки всё возвращается как было.
+    expect(document.documentElement.classList.contains("qr-scanning")).toBe(false);
+    expect(document.querySelector('[data-testid="qr-viewfinder"]')).toBeNull();
+  });
+
+  it("«Отмена» гасит камеру, и это не ошибка", async () => {
+    let reject: (cause: Error) => void = () => {};
+    plugin.scan.mockImplementation(
+      () => new Promise((_, no) => (reject = no as (cause: Error) => void))
+    );
+    plugin.cancel.mockImplementation(async () => reject(new Error("cancelled")));
+
+    const pending = scanQr();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-testid="qr-viewfinder"] button')).not.toBeNull()
+    );
+    (document.querySelector('[data-testid="qr-viewfinder"] button') as HTMLButtonElement).click();
+
+    expect(await pending).toEqual({ ok: false, why: "cancelled" });
+    expect(document.querySelector('[data-testid="qr-viewfinder"]')).toBeNull();
   });
 });

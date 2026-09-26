@@ -2,14 +2,16 @@
 
 // Подключиться к устройству, где данные уже есть, — по картинке или по ссылке.
 //
-// На телефоне главный путь — камера: навёл и готово. На компьютере камеры
-// обычно нет, поэтому рядом всегда поле для ссылки: первое устройство умеет её
-// скопировать, а переслать себе ссылку в мессенджере умеет любой.
+// Сканирует то устройство, у которого есть камера. На телефоне главный путь —
+// камера: навёл на код с экрана компьютера и готово. У компьютера камеры
+// обычно нет — тогда код показывает ОН, а снимает телефон с данными (см.
+// PairWait). Поле для ссылки остаётся запасным путём на обоих.
 
 import { Camera } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
+import { PairWait } from "@/components/sync/pair-wait";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,20 +32,27 @@ export function PairJoin({
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Без камеры своя картинка нужна сразу: другого пути, кроме пересланной
+  // ссылки, у компьютера нет. С камерой — по желанию.
+  const [showOwn, setShowOwn] = useState(() => !cameraPossible());
+
+  const joined = useCallback(async () => {
+    toast.success(t("sync2.join.done"));
+    if (onJoined) onJoined();
+    else {
+      // Данные приехали в хранилище, а не на экран, — перечитать проще и
+      // надёжнее, чем рассказывать о них каждому экрану по отдельности.
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      window.location.reload();
+    }
+  }, [onJoined, t]);
 
   async function join(raw: string) {
     setError(null);
     setBusy(true);
     try {
       await joinWithLink(raw, DEFAULT_SERVER);
-      toast.success(t("sync2.join.done"));
-      if (onJoined) onJoined();
-      else {
-        // Данные приехали в хранилище, а не на экран, — перечитать проще и
-        // надёжнее, чем рассказывать о них каждому экрану по отдельности.
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        window.location.reload();
-      }
+      await joined();
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -73,7 +82,9 @@ export function PairJoin({
 
   return (
     <div className="space-y-4" data-testid="pair-join">
-      <p className="text-sm text-muted-foreground">{t("sync2.join.lead")}</p>
+      {cameraPossible() ? (
+        <p className="text-sm text-muted-foreground">{t("sync2.join.lead")}</p>
+      ) : null}
 
       {cameraPossible() ? (
         <Button type="button" className="w-full" disabled={busy} onClick={() => void openCamera()}>
@@ -81,6 +92,22 @@ export function PairJoin({
           {t("sync2.join.camera")}
         </Button>
       ) : null}
+
+      {showOwn ? (
+        <PairWait base={DEFAULT_SERVER} onJoined={() => void joined()} />
+      ) : (
+        <div className="space-y-1">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => setShowOwn(true)}
+          >
+            {t("sync2.wait.show")}
+          </Button>
+          <p className="text-xs text-muted-foreground">{t("sync2.wait.showHint")}</p>
+        </div>
+      )}
 
       <form
         className="space-y-2"

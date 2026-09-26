@@ -1814,6 +1814,11 @@ const ru: Messages = {
     "Приложение скачает обновление само и откроет установку — останется нажать «Установить». Данные и настройки сохранятся.",
   "set.update.confirmLabel": "Обновить",
   "set.update.downloading": "Загрузка обновления…",
+  "set.update.progress": "Загрузка обновления… {percent}%",
+  "set.update.opening": "Скачано — открываю установку",
+  "set.update.failed": "Не удалось скачать обновление",
+  "set.update.checkFailed": "Не удалось проверить обновления",
+  "set.update.retry": "Повторить",
   "set.update.unavailable": "Автообновление недоступно — открываю страницу релизов.",
   // Settings: account & security (web)
   // Profiles (desktop)
@@ -2055,7 +2060,7 @@ const ru: Messages = {
   "sync2.title": "Синхронизация устройств",
   "sync2.lead": "Всё шифруется прямо на устройстве — сервер видит только нечитаемые байты.",
   "sync2.safety":
-    "Паролей и кодов из слов не нужно: второе устройство подключается по QR-коду с экрана первого. Код живёт 5 минут и срабатывает один раз.",
+    "Паролей и кодов из слов не нужно: устройства подключаются по QR-коду — сканирует то, у которого есть камера. Код живёт 5 минут и срабатывает один раз.",
   "sync2.advanced": "Дополнительно: своя служба или вход по имени и паролю",
   "sync2.done": "Готово",
   "sync2.cancel": "Закрыть",
@@ -2098,6 +2103,22 @@ const ru: Messages = {
   "sync2.join.linkOnly": "Ссылка подключения",
   "sync2.join.linkHint":
     "На первом устройстве нажмите «Скопировать ссылку» и перешлите её себе — например, в мессенджере.",
+  "sync2.wait.lead":
+    "Отсканируйте этот код телефоном, на котором уже есть данные: Настройки → Синхронизация → «Сканировать QR-код нового устройства». Если синхронизация там ещё не включена — сначала «Включить синхронизацию».",
+  "sync2.wait.waiting": "Ждём телефон… Код действует ещё {time}.",
+  "sync2.wait.expired": "Код истёк. Нажмите «Новый код».",
+  "sync2.wait.making": "Готовим код…",
+  "sync2.wait.show": "Показать QR-код на этом устройстве",
+  "sync2.wait.showHint":
+    "Если на устройстве с данными нельзя показать код — покажите его здесь, а отсканируйте там.",
+  "sync2.scan.button": "Сканировать QR-код нового устройства",
+  "sync2.scan.hint":
+    "Если новое устройство — компьютер без камеры, оно покажет свой QR-код. Отсканируйте его отсюда.",
+  "sync2.scan.confirmTitle": "Подключить новое устройство?",
+  "sync2.scan.confirmDesc":
+    "Оно получит все ваши данные и будет синхронизироваться с этим устройством. Сканируйте только код со своего устройства.",
+  "sync2.scan.confirm": "Подключить",
+  "sync2.scan.sent": "Готово — новое устройство подключается",
   "sync2.join.submit": "Подключить",
   "sync2.join.working": "Подключаем…",
   "sync2.join.done": "Подключено — данные загружаются",
@@ -3928,6 +3949,11 @@ const en: Messages = {
     'The app downloads the update itself and opens the installer — just press "Install". Your data and settings are kept.',
   "set.update.confirmLabel": "Update",
   "set.update.downloading": "Downloading update…",
+  "set.update.progress": "Downloading update… {percent}%",
+  "set.update.opening": "Downloaded — opening the installer",
+  "set.update.failed": "Couldn't download the update",
+  "set.update.checkFailed": "Couldn't check for updates",
+  "set.update.retry": "Retry",
   "set.update.unavailable": "Auto-update unavailable — opening the releases page.",
   // Settings: account & security (web)
   // Profiles (desktop)
@@ -4164,7 +4190,7 @@ const en: Messages = {
   "sync2.title": "Sync devices",
   "sync2.lead": "Everything is encrypted on the device — the server only sees unreadable bytes.",
   "sync2.safety":
-    "No passwords or word codes: the second device connects by scanning a QR code on the first one's screen. The code lives 5 minutes and works once.",
+    "No passwords or word codes: devices connect by QR code — whichever has a camera scans. The code lives 5 minutes and works once.",
   "sync2.advanced": "Advanced: your own server or sign-in with name and password",
   "sync2.done": "Done",
   "sync2.cancel": "Close",
@@ -4209,6 +4235,22 @@ const en: Messages = {
   "sync2.join.linkOnly": "Connection link",
   "sync2.join.linkHint":
     'On the first device press "Copy link" and send it to yourself — in a messenger, for example.',
+  "sync2.wait.lead":
+    'Scan this code with the phone that already has your data: Settings → Sync → "Scan the new device\'s QR code". If sync is not on there yet, press "Turn on sync" first.',
+  "sync2.wait.waiting": "Waiting for the phone… The code is valid for {time}.",
+  "sync2.wait.expired": 'The code expired. Press "New code".',
+  "sync2.wait.making": "Preparing the code…",
+  "sync2.wait.show": "Show a QR code on this device",
+  "sync2.wait.showHint":
+    "If the device with your data can't show a code, show one here and scan it there.",
+  "sync2.scan.button": "Scan the new device's QR code",
+  "sync2.scan.hint":
+    "If the new device is a computer without a camera, it shows its own QR code. Scan it from here.",
+  "sync2.scan.confirmTitle": "Connect the new device?",
+  "sync2.scan.confirmDesc":
+    "It will receive all your data and sync with this device. Only scan a code from your own device.",
+  "sync2.scan.confirm": "Connect",
+  "sync2.scan.sent": "Done — the new device is connecting",
   "sync2.join.submit": "Connect",
   "sync2.join.working": "Connecting…",
   "sync2.join.done": "Connected — your data is loading",
