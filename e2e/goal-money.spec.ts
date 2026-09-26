@@ -46,7 +46,9 @@ test("удаление цели с деньгами спрашивает, куд
   await openSettled(page, "/goals");
 
   await page
-    .getByRole("button", { name: /Удалить/ })
+    // Именно «Удалить цель»: над целями теперь плашка примера со своей
+    // «Удалить пример», и первая попавшаяся «Удалить» стёрла бы весь пример.
+    .getByRole("button", { name: "Удалить цель" })
     .first()
     .click();
   const dialog = page.getByRole("dialog");

@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FirstRun } from "@/components/vault/first-run";
+import { ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
+import { writeMine } from "@/lib/storage/mine";
 import { UnlockScreen } from "@/components/vault/unlock-screen";
 import { useI18n } from "@/lib/i18n/context";
 import { WhoIsIt } from "@/components/vault/who-is-it";
@@ -120,10 +122,26 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Источник данных выбран на первом экране — повторять тот же вопрос в
+  // обучении незачем: «С нуля или пример?» дважды подряд выглядит как сбой.
+  // Первые шаги дальше ведёт «Быстрый старт» на главной, а обучение остаётся
+  // в настройках для того, кто захочет.
+  function firstRunDone() {
+    try {
+      writeMine(ONBOARDING_STORAGE_KEY, "1");
+    } catch {
+      /* localStorage недоступен — обучение просто покажется */
+    }
+    void refresh();
+  }
+
   if (phase === "who") return <WhoIsIt people={people} />;
   if (phase === "fresh") {
     return (
-      <FirstRun onDone={refresh} onLeave={people.length > 1 ? () => setPhase("who") : undefined} />
+      <FirstRun
+        onDone={firstRunDone}
+        onLeave={people.length > 1 ? () => setPhase("who") : undefined}
+      />
     );
   }
   if (phase === "locked") return <UnlockScreen onDone={refresh} />;

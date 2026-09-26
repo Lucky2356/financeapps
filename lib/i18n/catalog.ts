@@ -805,7 +805,7 @@ const ru: Messages = {
   "ob.sampleError": "Не удалось загрузить пример",
   "ob.step0.title": "Добро пожаловать в Финансовый помощник",
   "ob.step0.descDesktop":
-    "Все данные хранятся локально на вашем устройстве — без облака. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках.",
+    "Данные хранятся на вашем устройстве; синхронизация с другими устройствами — по желанию и в зашифрованном виде. Хотите посмотреть приложение на готовом примере или начать с чистого листа? «Загрузить пример» можно будет очистить в любой момент в Настройках.",
   "ob.step1.title": "1. Добавьте счета",
   "ob.step1.desc":
     "На вкладке «Счета» создайте свои счета (наличные, карта, накопительный, брокерский) и укажите текущий баланс. Расходы будут списываться с этих счетов, а доходы — зачисляться на них.",
@@ -1677,7 +1677,7 @@ const ru: Messages = {
   // Settings: data
   "set.data.sampleHint":
     "Демо-данные заполнят приложение примером (счета, операции, бюджеты, цели), чтобы посмотреть, как всё работает. Текущие данные при этом будут заменены.",
-  "set.data.loadSample": "Загрузить демо-данные",
+  "set.data.loadSample": "Загрузить пример",
   "set.data.loading": "Загрузка…",
   "set.data.clearHint":
     "Удалит все счета, операции, цели, бюджеты и настройки — здесь и на других ваших устройствах, связанных с этим. Вернуть можно только из резервной копии.",
@@ -2992,7 +2992,7 @@ const en: Messages = {
   "ob.sampleError": "Failed to load the example",
   "ob.step0.title": "Welcome to Financial Assistant",
   "ob.step0.descDesktop":
-    "All data is stored locally on your device — no cloud. Want to explore the app with a ready-made example or start with a clean slate? “Load example” can be cleared anytime in Settings.",
+    "Your data stays on your device; syncing with your other devices is optional and encrypted. Want to explore the app with a ready-made example or start with a clean slate? “Load example” can be cleared anytime in Settings.",
   "ob.step1.title": "1. Add accounts",
   "ob.step1.desc":
     "On the Accounts tab create your accounts (cash, card, savings, brokerage) and set the current balance. Expenses are deducted from these accounts and income is credited to them.",
@@ -3861,7 +3861,7 @@ const en: Messages = {
   // Settings: data
   "set.data.sampleHint":
     "Demo data fills the app with an example (accounts, transactions, budgets, goals) so you can see how everything works. Your current data will be replaced.",
-  "set.data.loadSample": "Load demo data",
+  "set.data.loadSample": "Load example",
   "set.data.loading": "Loading…",
   "set.data.clearHint":
     "Deletes all accounts, transactions, goals, budgets and settings — here and on your other devices linked to this one. Only a backup can bring them back.",
