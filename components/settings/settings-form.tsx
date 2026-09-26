@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/select";
 import { markThemeChosen } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
+import { useIncludeTransfers } from "@/hooks/use-include-transfers";
 import {
   DEFAULT_ACCOUNT_KEY,
   forgetMyData,
@@ -167,6 +168,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   const confirm = useConfirm();
   const { data: pageData, reload } = useApiPageData(data, "/settings");
   const [clearing, setClearing] = useState(false);
+  const [homeTransfers, setHomeTransfers] = useIncludeTransfers("home");
   const [loadingSample, setLoadingSample] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [settings, setSettings] = useState<EditableSettings>(() => toEditable(pageData));
@@ -515,6 +517,13 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 </SelectItem>
               ))}
             </SelectField>
+            <ToggleRow
+              title={t("prefs.homeTransfers.title")}
+              description={t("prefs.homeTransfers.desc")}
+              help={t("prefs.homeTransfers.help")}
+              checked={homeTransfers}
+              onChange={setHomeTransfers}
+            />
             <ToggleRow
               title={t("prefs.hide.title")}
               description={t("prefs.hide.desc")}

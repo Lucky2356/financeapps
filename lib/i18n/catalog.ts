@@ -145,6 +145,8 @@ const ru: Messages = {
   "plan.periodReset": "Показать все месяцы",
   "plan.noMonths": "В выбранном периоде нет месяцев.",
   "plan.removeMonth": "Удалить месяц",
+  "plan.m.prev": "Предыдущий месяц",
+  "plan.m.next": "Следующий месяц",
   "plan.remove.title": "Удалить месяц из плана?",
   "plan.remove.desc":
     "План, лимиты и комментарии за {month} будут удалены. Лимит, который действовал и дальше, останется следующему месяцу. Операции этого месяца останутся на месте.",
@@ -1119,7 +1121,6 @@ const ru: Messages = {
   "qa.err.sameAccount": "Счета списания и зачисления должны быть разными",
   "qa.transfer.needTwo": "Для перевода нужно минимум два счёта",
   "qa.err.category": "Выберите или создайте категорию",
-  "qa.repeatLast": "Повторить: {category} · {account}",
   "qa.parsed.willSave": "В описание уйдёт: {text}",
   "qa.parsed.willSaveEmpty": "Описание останется пустым",
   // Misc chrome
@@ -2041,6 +2042,11 @@ const ru: Messages = {
   "set.group.everyday": "Каждый день",
   "prefs.hideAmounts": "Скрыть суммы",
   "prefs.showAmounts": "Показать суммы",
+  "prefs.homeTransfers.title": "Переводы на главной",
+  "prefs.homeTransfers.desc":
+    "Считать переводы между своими счетами в доходах и расходах на главной.",
+  "prefs.homeTransfers.help":
+    "Перевод с карты на накопительный счёт — не трата: деньги остались вашими. Обычно главная его не считает. Включите, если хотите видеть такие движения в цифрах месяца. На отчёты это не влияет — там своя галка.",
   "prefs.hide.title": "Скрывать суммы",
   "prefs.hide.desc": "Вместо цифр — точки. Удобно в метро и в очереди.",
   "prefs.hide.help":
@@ -2197,6 +2203,8 @@ const en: Messages = {
   "plan.periodReset": "Show every month",
   "plan.noMonths": "No months in the selected period.",
   "plan.removeMonth": "Remove month",
+  "plan.m.prev": "Previous month",
+  "plan.m.next": "Next month",
   "plan.remove.title": "Remove this month from the plan?",
   "plan.remove.desc":
     "The plan, limits and comments for {month} will be deleted. A limit that carried on past it stays with the next month. The month's operations stay where they are.",
@@ -3169,7 +3177,6 @@ const en: Messages = {
   "qa.err.sameAccount": "Pick two different accounts for a transfer",
   "qa.transfer.needTwo": "A transfer needs at least two accounts",
   "qa.err.category": "Select or create a category",
-  "qa.repeatLast": "Repeat: {category} · {account}",
   "qa.parsed.willSave": "Will be saved as: {text}",
   "qa.parsed.willSaveEmpty": "The description will stay empty",
   // Misc chrome
@@ -4085,6 +4092,11 @@ const en: Messages = {
   "set.group.everyday": "Everyday",
   "prefs.hideAmounts": "Hide amounts",
   "prefs.showAmounts": "Show amounts",
+  "prefs.homeTransfers.title": "Transfers on the home screen",
+  "prefs.homeTransfers.desc":
+    "Count transfers between your own accounts in the home screen's income and spending.",
+  "prefs.homeTransfers.help":
+    "Moving money from a card to savings is not spending: it is still yours. The home screen leaves such moves out by default. Turn this on to see them in the month's figures. Reports are unaffected — they have their own box.",
   "prefs.hide.title": "Hide amounts",
   "prefs.hide.desc": "Dots instead of figures. Handy on the metro or in a queue.",
   "prefs.hide.help":

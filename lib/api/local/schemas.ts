@@ -97,7 +97,9 @@ export const transactionRowSchema = z.object({
   // The debt this payment settles. A debt payment moves money out of an account
   // AND reduces what is owed by the same amount, so it leaves net worth exactly
   // where it was — the capital chart has to know not to count it as spending.
-  liabilityId: z.string().optional()
+  liabilityId: z.string().optional(),
+  // Когда операцию записали — порядок внутри одного дня.
+  createdAt: z.string().optional()
 });
 export const budgetRowSchema = z.object({
   updatedAt,

@@ -47,6 +47,17 @@ type CategoryOption = ImportPageData["categories"][number];
 
 type QuickAddType = "INCOME" | "EXPENSE" | "TRANSFER";
 
+/**
+ * Последняя операция этого типа — верхняя строка журнала, отсортированного по
+ * дате. Переводы в счёт не идут: у них нет категории.
+ */
+function lastOfType(ledger: TransactionsPageData | null, type: QuickAddType) {
+  if (type === "TRANSFER") return undefined;
+  return ledger?.transactions.find(
+    (transaction) => !transaction.transferId && transaction.type === type
+  );
+}
+
 const ACCOUNT_TYPES = [
   { value: "DEBIT_CARD", labelKey: "tx.acctType.DEBIT_CARD" },
   { value: "CASH", labelKey: "tx.acctType.CASH" },
@@ -117,10 +128,13 @@ export function QuickAddFab({
   async function openDialog() {
     // Rules and recent operations feed the category guess. Fetched when the
     // dialog opens rather than kept live: it is a hint, not a total.
-    void apiClient
+    //
+    // Ждём его здесь же: из него берутся категория и счёт последней операции,
+    // и они должны стоять в полях, когда диалог появится.
+    const recent = await apiClient
       .get<TransactionsPageData>("/transactions?limit=100")
-      .then(setLedger)
-      .catch(() => setLedger(null));
+      .catch(() => null);
+    setLedger(recent);
     // Pre-select the last account the operation was added to. On a device that
     // has never added one there is nothing to remember, and the field stayed
     // empty — the form then refused to save with only a toast to explain
@@ -138,16 +152,21 @@ export function QuickAddFab({
     );
     const usable = (id: string | null) =>
       id && available.some((account) => account.id === id) ? id : null;
-    const known = usable(chosen) ?? usable(last);
-    const preselectedAccount = known ?? available[0]?.id ?? "";
-    setAccountId(preselectedAccount);
     // Honour the default transaction type from settings.
+    let openedType = type;
     try {
       const settings = await apiClient.get<SettingsPageData>("/settings");
-      if (settings.defaultTransactionType) setType(settings.defaultTransactionType);
+      if (settings.defaultTransactionType) openedType = settings.defaultTransactionType;
     } catch {
       /* settings unavailable — keep current type */
     }
+    setType(openedType);
+    // Категория и счёт — как у последней операции того же типа: чаще всего
+    // следующая такая же. Счёт, выбранный в настройках, главнее.
+    const previous = lastOfType(recent, openedType);
+    const known = usable(chosen) ?? usable(previous?.account.id ?? null) ?? usable(last);
+    const preselectedAccount = known ?? available[0]?.id ?? "";
+    setAccountId(preselectedAccount);
     setShowNewAccount(false);
     setShowNewCategory(false);
     // Диалог открывается чистым. Раньше это держалось на том, что Radix
@@ -164,7 +183,7 @@ export function QuickAddFab({
     // «1200 продукты картой» не переставило бы счёт с подставленного.
     setFilledIn({ amount: "", accountId: preselectedAccount, date: openedOn, tags: "" });
     setCleanedDescription(null);
-    setCategoryId("");
+    setCategoryId(previous?.category.id ?? "");
     setManualCategory(false);
     setAutoSuggested(false);
     setOpen(true);
@@ -289,46 +308,20 @@ export function QuickAddFab({
 
   function changeType(next: QuickAddType) {
     setType(next);
-    setCategoryId(""); // categories are type-specific
+    // Категории у каждого типа свои — берём ту, что была у последней
+    // операции этого типа.
+    setCategoryId(lastOfType(ledger, next)?.category.id ?? "");
     setToAccountId("");
     setShowNewCategory(false);
     setManualCategory(false);
     setAutoSuggested(false);
   }
 
-  /**
-   * Повтор последней операции: та же категория, тот же счёт, сегодняшняя дата.
-   * Сумму не подставляет — она и есть единственное, что каждый раз другое, и
-   * курсор уже стоит в ней.
-   *
-   * «Последняя» — верхняя строка журнала, отсортированного по дате. Времени
-   * создания у операции нет, поэтому среди операций одного дня наверху
-   * окажется свежедобавленная, а внесённая задним числом наверх не всплывёт.
-   * Это ровно то, что человек и понимает под словом «последняя».
-   */
-  const lastOperation = ledger?.transactions.find((transaction) => !transaction.transferId);
-
-  function repeatLast() {
-    if (!lastOperation) return;
-    setType(lastOperation.type === "INCOME" ? "INCOME" : "EXPENSE");
-    setCategoryId(lastOperation.category.id);
-    setManualCategory(true);
-    setAutoSuggested(false);
-    setAccountId(lastOperation.account.id);
-    setDate(formatInputDate(new Date()));
-    setAmount("");
-    setDescription(lastOperation.description ?? "");
-    setCleanedDescription(null);
-    document.getElementById("fab-amount")?.focus();
-  }
-
   function pickCategory(value: string) {
     // Пустое значение — не выбор человека: пустого пункта в списке нет.
     // Так Radix сообщает, что прежнее значение пропало из списка, а список
-    // меняется при смене типа операции. Без этой проверки «Повторить» с
-    // доходной категорией стирал сам себя: тип переключался на «Доход»,
-    // список пересобирался, и приходило onValueChange("") поверх только что
-    // поставленной категории — дважды.
+    // меняется при смене типа операции, и без этой проверки пересобранный
+    // список стирал только что подставленную категорию.
     if (!value) return;
     setCategoryId(value);
     setManualCategory(true);
@@ -482,25 +475,6 @@ export function QuickAddFab({
               </div>
             </div>
 
-            {/* Одно нажатие вместо четырёх полей: чаще всего следующая операция
-                такая же, как предыдущая. Своей высоты у строки нет — она
-                появляется, только когда есть что повторять. */}
-            {lastOperation ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="justify-start"
-                data-testid="qa-repeat-last"
-                onClick={repeatLast}
-              >
-                {t("qa.repeatLast", {
-                  category: lastOperation.category.label,
-                  account: lastOperation.account.label
-                })}
-              </Button>
-            ) : null}
-
             <form onSubmit={handleSubmit} className="grid gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fab-amount">{t("common.amount")}</Label>
@@ -641,10 +615,13 @@ export function QuickAddFab({
 
               <div className="space-y-2">
                 <Label htmlFor="fab-date">{t("common.date")}</Label>
+                {/* Дата — десять знаков; на всю ширину диалога поле было
+                    почти пустым. */}
                 <Input
                   id="fab-date"
                   name="date"
                   type="date"
+                  className="w-44"
                   value={date}
                   onChange={(event) => setDate(event.target.value)}
                   required

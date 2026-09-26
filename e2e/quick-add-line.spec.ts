@@ -48,22 +48,19 @@ test.describe("ввод строкой", () => {
     await expect(dialog.getByLabel("Сумма")).toHaveValue("999");
   });
 
-  test("повтор последней операции заполняет всё, кроме суммы", async ({ page }) => {
+  test("категория и счёт берутся из последней операции того же типа", async ({ page }) => {
+    // Чаще всего следующая операция такая же, как предыдущая: поля открываются
+    // заполненными, пустой остаётся только сумма, и курсор стоит в ней.
     await page.getByRole("button", { name: "Быстрое добавление операции" }).click();
     const dialog = page.getByRole("dialog");
-
-    const repeat = page.getByTestId("qa-repeat-last");
-    await expect(repeat).toBeVisible();
-    // Подпись называет то, что повторится, — вслепую кнопка не нажимается.
-    const label = (await repeat.textContent()) ?? "";
-    const category = label.replace(/^Повторить:\s*/, "").split(" · ")[0];
-    expect(category.length).toBeGreaterThan(0);
-
-    await repeat.click();
-    await expect(dialog.getByLabel("Категория")).toContainText(category);
-    // Сумма — единственное, что каждый раз другое: её не подставляют, и курсор
-    // стоит именно в ней.
+    await expect(dialog.getByTestId("qa-repeat-last")).toHaveCount(0);
+    await expect(dialog.getByLabel("Категория")).not.toContainText("Выберите категорию");
+    await expect(dialog.getByLabel("Счёт")).not.toContainText("Выберите счёт");
     await expect(dialog.getByLabel("Сумма")).toHaveValue("");
     await expect(dialog.getByLabel("Сумма")).toBeFocused();
+
+    // У дохода категория своя — тоже из последнего дохода, а не пустая.
+    await dialog.getByRole("button", { name: "Доход", exact: true }).click();
+    await expect(dialog.getByLabel("Категория")).not.toContainText("Выберите категорию");
   });
 });

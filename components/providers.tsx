@@ -13,6 +13,7 @@ import { StartScreen } from "@/components/start-screen";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { I18nProvider } from "@/lib/i18n/context";
 import { VaultGate } from "@/components/vault/vault-gate";
+import { WindowTheme } from "@/components/window-theme";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         enableSystem
         disableTransitionOnChange
       >
+        <WindowTheme />
         <ConfirmProvider>
           {/* Всё, что читает книгу, — за воротами замка, и ничего мимо них.
               Держи мы тут хоть что-то снаружи, оно принялось бы за работу над

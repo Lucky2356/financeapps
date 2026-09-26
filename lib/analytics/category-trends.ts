@@ -32,6 +32,11 @@ export type TrendOptions = {
   highThreshold?: number;
   /** Relative drop below average to flag as low (default 0.5 = −50%). */
   lowThreshold?: number;
+  /**
+   * «ГГГГ-ММ» текущего месяца. Без него окно кончается на последнем месяце с
+   * тратами — и одна операция, записанная на будущее, сдвигала всё окно.
+   */
+  currentMonth?: string;
 };
 
 function monthKey(date: string): string {
@@ -55,12 +60,14 @@ export function buildCategoryTrends(
   const expenses = transactions.filter((transaction) => transaction.type === "EXPENSE");
   if (expenses.length === 0) return [];
 
-  // Anchor the window on the latest month present so demo/imported data with an
-  // older timeframe still produces a sensible series.
-  const anchor = expenses.reduce((max, tx) => {
-    const key = monthKey(tx.date);
-    return key > max ? key : max;
-  }, monthKey(expenses[0].date));
+  // Окно кончается на текущем месяце, когда он передан. Без него — на
+  // последнем месяце с тратами, чтобы старые данные тоже давали картину.
+  const anchor =
+    options.currentMonth ??
+    expenses.reduce((max, tx) => {
+      const key = monthKey(tx.date);
+      return key > max ? key : max;
+    }, monthKey(expenses[0].date));
 
   const windowMonths = Array.from({ length: months }, (_, i) =>
     addMonthKey(anchor, -(months - 1 - i))

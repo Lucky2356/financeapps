@@ -100,7 +100,11 @@ export function authParams(db: DatabaseSync, login: string): { vaultMeta: string
   const person = db
     .prepare("select vault from people where login = ?")
     .get<{ vault: string }>(login);
-  if (!person) throw new AuthError(404, "Такого имени здесь нет.");
+  if (!person)
+    throw new AuthError(
+      404,
+      "На этом сервере нет учётной записи с таким именем. Проверьте имя или заведите новую."
+    );
 
   const vault = JSON.parse(person.vault) as {
     kdf: string;

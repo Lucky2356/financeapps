@@ -57,7 +57,8 @@ export function DashboardClient({
   // own accounts is not income and not spending, so it does not get to be the
   // largest slice of both rings at once. The checkbox itself lives in the
   // analytics section — this screen is a summary, not a place to fiddle.
-  const [includeTransfers] = useIncludeTransfers();
+  // Свой выбор у главной — из настроек, а не галка отчётов.
+  const [includeTransfers] = useIncludeTransfers("home");
   const { data } = useApiPageData(initialData, `/dashboard${transfersQuery(includeTransfers)}`);
   const { data: forecast } = useApiPageData(initialForecast, "/forecast");
   const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT);
