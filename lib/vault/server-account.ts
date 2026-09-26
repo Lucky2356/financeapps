@@ -33,7 +33,16 @@ export type ServerLink = {
   token: string;
   /** Как это устройство названо в списке устройств. */
   device: string;
+  /**
+   * Секрет входа записи, заведённой без имени и пароля (с версии 2.0).
+   * Лежит там же, где билет, и никуда не уезжает: нужен, чтобы войти заново,
+   * если билет когда-нибудь пропадёт. У записи с паролем его нет.
+   */
+  secret?: string;
 };
+
+/** Что отдаёт служба новому устройству по коду из картинки. */
+export type JoinAnswer = { base: string; sealed: string };
 
 /** Что служба рассказывает о пароле ДО входа: соль и число прогонов. */
 type AuthParams = { kdf: string; iterations: number; salt: string };
@@ -169,6 +178,30 @@ export async function redeemPairing(base: string, code: string): Promise<Pairing
   return { base: root(named || base), login };
 }
 
+function randomText(bytes: number): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+/**
+ * Шкатулка-заглушка для записи без пароля.
+ *
+ * Служба требует шкатулку при записи — прежний вход по имени и паролю
+ * достаёт из неё соль. Записи без пароля входить так нечем и незачем: ключ от
+ * данных едет от устройства к устройству в картинке QR. Поэтому на службе
+ * лежит пустая обёртка с солью и ничем больше — ключа в ней нет.
+ */
+function emptyVault(): Vault {
+  return {
+    v: 1,
+    kdf: "PBKDF2-SHA256",
+    iterations: 1,
+    password: { salt: randomText(16), iv: "", wrapped: "" },
+    recovery: { salt: "", iv: "", wrapped: "" }
+  };
+}
+
 export class ServerAccount {
   private readonly storage: StorageAdapter;
 
@@ -250,16 +283,98 @@ export class ServerAccount {
   }
 
   /**
+   * Завести запись на службе — без имени и пароля, одним нажатием.
+   *
+   * Имя придумывается случайное: человеку его знать незачем, он его нигде не
+   * вводит. Секрет входа — тоже случайный, и остаётся на устройстве. Ключ от
+   * данных на службу не едет вовсе: второе устройство получит его через
+   * картинку QR.
+   */
+  async registerQuick(input: { base: string; device: string }): Promise<void> {
+    const login = `u-${randomText(12)}`;
+    const secret = randomText(32);
+    const made = await ask(input.base, "/auth/register", {
+      method: "POST",
+      body: { code: "", login, vault: emptyVault(), secret }
+    });
+    if (made.status === 403) {
+      throw new ServerRefused(
+        403,
+        "Служба синхронизации не принимает новых участников без приглашения. " +
+          "Попросите хозяина службы включить открытую запись или выдать приглашение."
+      );
+    }
+    if (made.status !== 201) refuse(made.status, made.data, "Не удалось включить синхронизацию.");
+
+    const entered = await ask(input.base, "/auth/login", {
+      method: "POST",
+      body: { login, secret, device: input.device }
+    });
+    const token = String(entered.data.token ?? "");
+    if (entered.status !== 200 || !token) {
+      refuse(entered.status, entered.data, "Служба не пустила внутрь: не ответила на вход.");
+    }
+    await this.storage.setItem<ServerLink>(SERVER_KEY, {
+      v: 1,
+      base: root(input.base),
+      login,
+      token,
+      device: input.device,
+      secret
+    });
+  }
+
+  /**
+   * Войти по коду из картинки — на НОВОМ устройстве, без имени и пароля.
+   *
+   * Служба гасит код, заводит этому устройству свой билет и отдаёт пакет,
+   * который сама открыть не может. Прежняя служба такой ручки не знает и
+   * отвечает «нужен вход» — тогда так и говорим: службу пора обновить.
+   */
+  async joinByCode(input: { base: string; code: string; device: string }): Promise<JoinAnswer> {
+    const { status, data } = await ask(
+      input.base,
+      `/pairing/${encodeURIComponent(input.code.trim())}`,
+      { method: "POST", body: { device: input.device } }
+    );
+    if (status === 401 || status === 405) {
+      throw new ServerRefused(
+        status,
+        "Служба синхронизации ещё не обновлена до версии 2.0. Обновите её на сервере " +
+          "(git pull и перезапуск) — или подключитесь по имени и паролю."
+      );
+    }
+    if (status !== 200) refuse(status, data, "Код не подошёл.");
+
+    const token = String(data.token ?? "");
+    const sealed = String(data.sealed ?? "");
+    if (!token || !sealed) refuse(status, data, "Служба не отдала данных для подключения.");
+
+    const named = typeof data.address === "string" ? data.address.trim() : "";
+    const base = root(named || input.base);
+    await this.storage.setItem<ServerLink>(SERVER_KEY, {
+      v: 1,
+      base,
+      login: String(data.login ?? ""),
+      token,
+      device: input.device
+    });
+    return { base, sealed };
+  }
+
+  /**
    * Попросить код связки для второго устройства.
    *
    * Живёт пять минут и срабатывает один раз — служба следит за этим сама;
-   * здесь только просят и показывают.
+   * здесь только просят и показывают. Пакет, если он есть, запечатан на этом
+   * устройстве ключом, который уедет только в картинке.
    */
-  async issuePairing(): Promise<PairingCode> {
+  async issuePairing(sealed?: string): Promise<PairingCode> {
     const link = await this.need();
     const { status, data } = await ask(link.base, "/pairing", {
       method: "POST",
-      token: link.token
+      token: link.token,
+      ...(sealed ? { body: { sealed } } : {})
     });
     if (status !== 201) refuse(status, data, "Служба не выдала кода связки.");
     return { code: String(data.code ?? ""), expiresAt: String(data.expiresAt ?? "") };

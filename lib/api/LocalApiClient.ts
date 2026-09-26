@@ -1060,7 +1060,17 @@ export class LocalApiClient implements ApiClient {
       ...(linkedLiabilityId ? { liabilityId: linkedLiabilityId } : {}),
       ...(tags.length ? { tags } : {}),
       ...(input.splitGroupId ? { splitGroupId: String(input.splitGroupId) } : {}),
-      ...(input.transferId ? { transferId: String(input.transferId) } : {})
+      ...(input.transferId ? { transferId: String(input.transferId) } : {}),
+      // Когда операцию записали. Операций одного дня бывает много, и порядок
+      // между ними держался только на месте строки в массиве — а синхронизация
+      // кладёт пришедшую строку туда, где она оказалась при слиянии. Только
+      // что добавленная на телефоне операция вставала на ПК третьей.
+      // Правка момента записи не меняет.
+      ...(previous?.createdAt
+        ? { createdAt: previous.createdAt }
+        : method === "POST"
+          ? { createdAt: new Date().toISOString() }
+          : {})
     };
 
     state.transactions = [
@@ -2287,7 +2297,13 @@ export class LocalApiClient implements ApiClient {
     };
     const filtered = [...state.transactions]
       .filter((transaction) => matchesCriteria(transaction, criteria))
-      .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+      .sort(
+        (left, right) =>
+          new Date(right.date).getTime() - new Date(left.date).getTime() ||
+          // В пределах дня — сначала записанные позже. У старых строк отметки
+          // нет, и свежая встаёт над ними.
+          (right.createdAt ?? "").localeCompare(left.createdAt ?? "")
+      );
     const start = (page - 1) * limit;
 
     // The rows keep the amount as it was recorded — a dollar operation reads

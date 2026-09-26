@@ -50,6 +50,9 @@ import {
   type Roster
 } from "@/lib/vault/people";
 import { ServerAccount } from "@/lib/vault/server-account";
+import { deviceName } from "@/lib/vault/device-name";
+import { newTransferKey, openPackage, sealPackage } from "@/lib/sync/pair-package";
+import { makePairingLink, readPairing } from "@/lib/sync/pairing-link";
 
 /**
  * Настоящее хранилище устройства — пишет и читает как есть.
@@ -320,4 +323,83 @@ export async function rememberMyServer(base: string, login: string): Promise<voi
 export async function forgetMyServer(): Promise<void> {
   const roster = await peopleReady;
   await forgetServer(device, roster?.lastUsedId ?? "");
+}
+
+// ——— связка по картинке (2.0) ———————————————————————————————————————————
+
+/**
+ * Включить синхронизацию на ЭТОМ устройстве — первом.
+ *
+ * Одно нажатие: запись на службе приложения заводится сама, без имени и
+ * пароля. Данных на службу уезжает столько, сколько есть, — зашифрованными.
+ * Если у данных ещё нет замка (совсем новое устройство), он ставится здесь же,
+ * без пароля: ключ всё равно нужен, чтобы шифровать то, что уедет.
+ */
+export async function enableSync(base: string): Promise<void> {
+  if (!(await accountService.vault())) await accountService.createWithoutPassword();
+  await serverAccount.registerQuick({ base, device: deviceName() });
+  const link = await serverAccount.link();
+  if (link) await rememberMyServer(link.base, link.login);
+  await resumeSync();
+  await flushSync();
+}
+
+/** Картинка и ссылка для нового устройства. */
+export type PairingOffer = { link: string; code: string; expiresAt: string };
+
+/**
+ * Приготовить картинку для нового устройства.
+ *
+ * Ключ от данных запечатывается здесь, на устройстве, одноразовым ключом —
+ * и тот уезжает только в картинке. Служба получает запечатанный пакет и не
+ * может его открыть.
+ */
+export async function offerPairing(password?: string): Promise<PairingOffer> {
+  const link = await serverAccount.link();
+  if (!link) throw new Error("Синхронизация на этом устройстве не включена.");
+  const pack = await accountService.pairingPackage(password);
+  const transfer = await newTransferKey();
+  const sealed = await sealPackage(transfer.key, pack);
+  const issued = await serverAccount.issuePairing(sealed);
+  return {
+    link: makePairingLink(link.base, issued.code, transfer.text),
+    code: issued.code,
+    expiresAt: issued.expiresAt
+  };
+}
+
+/**
+ * Подключиться по картинке или ссылке — на НОВОМ устройстве.
+ *
+ * Бросает, если ссылка не та. После успеха приложение стоит перечитать:
+ * книга приехала в хранилище, а не на экран.
+ */
+export async function joinWithLink(raw: string, fallbackBase: string): Promise<void> {
+  const parsed = readPairing(raw);
+  if (!parsed) throw new Error("Это не код подключения. Покажите на первом устройстве новый.");
+  if (!parsed.key) {
+    throw new Error(
+      "Этот код из старой версии приложения. Обновите приложение на первом устройстве " +
+        "и покажите новый код."
+    );
+  }
+  const at = parsed.base ?? fallbackBase;
+  const answer = await serverAccount.joinByCode({
+    base: at,
+    code: parsed.code,
+    device: deviceName()
+  });
+  try {
+    const pack = await openPackage(parsed.key, answer.sealed);
+    await accountService.adoptPackage(pack);
+  } catch (cause) {
+    // Не приняли — связь со службой не оставляем: иначе устройство числилось
+    // бы подключённым к чужим данным, которых открыть не может.
+    await serverAccount.signOut();
+    throw cause;
+  }
+  const link = await serverAccount.link();
+  if (link) await rememberMyServer(link.base, link.login);
+  await resumeSync();
+  await flushSync();
 }

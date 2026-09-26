@@ -26,7 +26,7 @@
 import { createHash, randomInt } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
-import { AuthError } from "./auth.ts";
+import { AuthError, openSession } from "./auth.ts";
 import { sweepPairings } from "./db.ts";
 
 /**
@@ -80,8 +80,22 @@ export type IssuedCode = { code: string; expiresAt: string };
  */
 const MAX_LIVE = 5;
 
-export function issuePairing(db: DatabaseSync, personId: string, now: string): IssuedCode {
+/**
+ * Пакет связки — не больше этого. Внутри ключ данных и пара служебных строк,
+ * сотни байт; предел с запасом, но не тридцать мегабайт тела запроса.
+ */
+const MAX_SEALED_BYTES = 16 * 1024;
+
+export function issuePairing(
+  db: DatabaseSync,
+  personId: string,
+  now: string,
+  sealed = ""
+): IssuedCode {
   sweepPairings(db, now);
+  if (Buffer.byteLength(sealed) > MAX_SEALED_BYTES) {
+    throw new AuthError(413, "Слишком большой пакет связки.");
+  }
 
   const live = db
     .prepare(
@@ -95,27 +109,37 @@ export function issuePairing(db: DatabaseSync, personId: string, now: string): I
   const code = fresh();
   const expires = new Date(Date.parse(now) + LIVES_MS).toISOString();
   db.prepare(
-    "insert into pairings (code_hash, person_id, created_at, expires_at) values (?,?,?,?)"
-  ).run(fingerprint(code), personId, now, expires);
+    "insert into pairings (code_hash, person_id, created_at, expires_at, sealed) values (?,?,?,?,?)"
+  ).run(fingerprint(code), personId, now, expires, sealed || null);
 
   return { code, expiresAt: expires };
 }
 
 /**
- * Предъявить код. Один раз — и больше никогда.
+ * Погасить код: проверить и отметить использованным. Возвращает, чей он и что
+ * к нему приложено.
  *
  * Погашение делается ЗАПИСЬЮ С УСЛОВИЕМ, а не «прочитали, проверили,
  * записали»: между чтением и записью помещается второе предъявление того же
  * кода, и оба прошли бы проверку. Для одноразовой вещи это и значит, что она не
  * одноразовая.
  */
-export function redeemPairing(db: DatabaseSync, code: string, now: string): { login: string } {
+function burn(
+  db: DatabaseSync,
+  code: string,
+  now: string
+): { personId: string; login: string; sealed: string } {
   sweepPairings(db, now);
 
   const hash = fingerprint(code);
   const row = db
-    .prepare("select person_id, used_at, expires_at from pairings where code_hash = ?")
-    .get<{ person_id: string; used_at: string | null; expires_at: string }>(hash);
+    .prepare("select person_id, used_at, expires_at, sealed from pairings where code_hash = ?")
+    .get<{
+      person_id: string;
+      used_at: string | null;
+      expires_at: string;
+      sealed: string | null;
+    }>(hash);
 
   if (!row) throw new AuthError(404, "Код не найден. Он живёт пять минут — попросите новый.");
   if (row.used_at) {
@@ -126,7 +150,9 @@ export function redeemPairing(db: DatabaseSync, code: string, now: string): { lo
   }
 
   const burned = db
-    .prepare("update pairings set used_at = ? where code_hash = ? and used_at is null")
+    .prepare(
+      "update pairings set used_at = ?, sealed = null where code_hash = ? and used_at is null"
+    )
     .run(now, hash);
   if (burned.changes === 0) {
     throw new AuthError(410, "Этот код уже использован. Попросите на первом устройстве новый.");
@@ -137,5 +163,32 @@ export function redeemPairing(db: DatabaseSync, code: string, now: string): { lo
     .get<{ login: string }>(row.person_id);
   if (!person) throw new AuthError(404, "Код не найден. Он живёт пять минут — попросите новый.");
 
-  return { login: person.login };
+  return { personId: row.person_id, login: person.login, sealed: row.sealed ?? "" };
+}
+
+/**
+ * Предъявить код — прежний путь: узнать имя входа, пароль человек введёт сам.
+ * Остаётся для приложений, выпущенных до связки по картинке.
+ */
+export function redeemPairing(db: DatabaseSync, code: string, now: string): { login: string } {
+  return { login: burn(db, code, now).login };
+}
+
+/**
+ * Войти по коду — новый путь, без имени и пароля.
+ *
+ * Код погашается, и новому устройству тут же заводится СВОЙ билет: вход ему
+ * больше не нужен. Пакет отдаётся как лежал и из базы стирается — служба его
+ * не открывала и открыть не может: то, чем он запечатан, есть только в
+ * картинке QR, а картинка на службу не приезжает.
+ */
+export function joinPairing(
+  db: DatabaseSync,
+  code: string,
+  now: string,
+  device: string
+): { login: string; sealed: string; token: string; deviceId: string | null } {
+  const burned = burn(db, code, now);
+  const session = openSession(db, burned.personId, device || undefined, now);
+  return { login: burned.login, sealed: burned.sealed, ...session };
 }

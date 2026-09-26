@@ -47,10 +47,23 @@ import {
   serverAccount
 } from "@/lib/vault/runtime";
 import { Head, Problem, Shell } from "@/components/vault/shell";
+import { PairJoin } from "@/components/sync/pair-join";
+import { PairOffer } from "@/components/sync/pair-offer";
+import { enableSync } from "@/lib/vault/runtime";
 
 const MIN_PASSWORD = 8;
 
-type Step = "source" | "choose" | "password" | "code" | "verify" | "restore" | "join";
+type Step =
+  | "source"
+  | "choose"
+  | "password"
+  | "code"
+  | "verify"
+  | "restore"
+  | "join"
+  | "sync"
+  | "syncFirst"
+  | "syncJoin";
 type Source = "fresh" | "file" | "device";
 
 /**
@@ -252,6 +265,38 @@ export function FirstRun({
     );
   }
 
+  /**
+   * Первое устройство в связке: данных ещё нет, синхронизация включается
+   * сразу, и тут же показывается картинка для второго. Пароль здесь не
+   * спрашивается — его можно поставить потом в настройках.
+   */
+  async function startSyncHere() {
+    setError(null);
+    setBusy(true);
+    try {
+      await enableSync(DEFAULT_SERVER);
+      setStep("syncFirst");
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Служба недоступна — начать без синхронизации, включить её потом. */
+  async function startWithoutSync() {
+    setError(null);
+    setBusy(true);
+    try {
+      if (!(await accountService.vault())) await accountService.createWithoutPassword();
+      onDone();
+    } catch (cause) {
+      setError(t("vault.error", { message: (cause as Error).message }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function switchJoin(next: JoinWay) {
     setJoinWay(next);
     setFound(null);
@@ -320,7 +365,7 @@ export function FirstRun({
               hint={t("vault.source.deviceHint")}
               onClick={() => {
                 setSource("device");
-                setStep("join");
+                setStep(hasDefaultServer() ? "sync" : "join");
               }}
             />
           </div>
@@ -330,6 +375,61 @@ export function FirstRun({
               {t("vault.leave")}
             </Button>
           ) : null}
+        </div>
+      )}
+
+      {step === "sync" && (
+        <div className="space-y-4">
+          {backButton("source")}
+          <Head icon={<ShieldCheck className="size-5" />} title={t("vault.sync.title")} />
+          <p className="text-sm text-muted-foreground">{t("vault.sync.lead")}</p>
+          <div className="space-y-3">
+            <Choice
+              label={t("vault.sync.first")}
+              hint={t("vault.sync.firstHint")}
+              onClick={() => void startSyncHere()}
+            />
+            <Choice
+              label={t("sync2.join.button")}
+              hint={t("sync2.join.hint")}
+              onClick={() => setStep("syncJoin")}
+            />
+          </div>
+          <Problem text={error} />
+          {error ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={busy}
+              onClick={() => void startWithoutSync()}
+            >
+              {t("vault.sync.withoutSync")}
+            </Button>
+          ) : null}
+          <button
+            type="button"
+            className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            onClick={() => back("join")}
+          >
+            {t("vault.sync.otherWays")}
+          </button>
+        </div>
+      )}
+
+      {step === "syncFirst" && (
+        <div className="space-y-4">
+          <Head icon={<ShieldCheck className="size-5" />} title={t("vault.sync.firstTitle")} />
+          <p className="text-sm text-muted-foreground">{t("vault.sync.firstLead")}</p>
+          <PairOffer onClose={onDone} />
+        </div>
+      )}
+
+      {step === "syncJoin" && (
+        <div className="space-y-4">
+          {backButton("sync")}
+          <Head icon={<ShieldCheck className="size-5" />} title={t("sync2.join.button")} />
+          <PairJoin />
         </div>
       )}
 

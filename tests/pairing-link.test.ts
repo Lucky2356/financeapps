@@ -11,7 +11,8 @@ describe("что лежит в картинке связки", () => {
     const link = makePairingLink("https://finance.example.org", "ABCD2345");
     expect(readPairing(link)).toEqual({
       base: "https://finance.example.org",
-      code: "ABCD2345"
+      code: "ABCD2345",
+      key: null
     });
   });
 
@@ -22,16 +23,24 @@ describe("что лежит в картинке связки", () => {
 
   it("восемь знаков с клавиатуры понимаются так же, как картинка", () => {
     // Тот же разборщик: человек либо наводит камеру, либо набирает.
-    expect(readPairing("abcd-2345")).toEqual({ base: null, code: "ABCD2345" });
-    expect(readPairing("  ABCD2345  ")).toEqual({ base: null, code: "ABCD2345" });
+    expect(readPairing("abcd-2345")).toEqual({ base: null, code: "ABCD2345", key: null });
+    expect(readPairing("  ABCD2345  ")).toEqual({ base: null, code: "ABCD2345", key: null });
   });
 
   it("пароля в ссылке нет — и положить его туда нечем", () => {
     // Сторож на решение владельца. Картинку снимают из-за плеча и пересылают;
-    // пароль — единственное, чем завёрнут ключ от данных.
+    // пароль — единственное, чем завёрнут ключ от данных. Ключ от пакета
+    // связки — не пароль: он открывает один пакет, один раз и пять минут.
     const link = makePairingLink("https://finance.example.org", "ABCD2345");
     expect(link).not.toMatch(/pass|pwd|secret|пароль/i);
-    expect(Object.keys(readPairing(link) ?? {}).sort()).toEqual(["base", "code"]);
+    expect(Object.keys(readPairing(link) ?? {}).sort()).toEqual(["base", "code", "key"]);
+  });
+
+  it("ключ пакета едет в ссылке и читается обратно, чужой вид — отвергается", () => {
+    const key = "A".repeat(43);
+    const link = makePairingLink("https://finance.example.org", "ABCD2345", key);
+    expect(readPairing(link)?.key).toBe(key);
+    expect(readPairing(link.replace(key, "короткий"))).toBeNull();
   });
 
   it("адрес по http отвергается целиком", () => {
@@ -59,7 +68,8 @@ describe("что лежит в картинке связки", () => {
     // Так выглядит набранное руками: адрес приложение возьмёт тот, что знает.
     expect(readPairing("financeapps://pair?c=ABCD2345")).toEqual({
       base: null,
-      code: "ABCD2345"
+      code: "ABCD2345",
+      key: null
     });
   });
 

@@ -29,7 +29,7 @@ import {
 } from "./auth.ts";
 import { openDatabase } from "./db.ts";
 import { EventBus } from "./events.ts";
-import { issuePairing, redeemPairing } from "./pairing.ts";
+import { issuePairing, joinPairing, redeemPairing } from "./pairing.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import {
   listSlots,
@@ -305,6 +305,19 @@ export function createApp(options: AppOptions) {
       return send(res, 200, PUBLIC_URL ? { ...found, address: PUBLIC_URL } : found);
     }
 
+    // Войти по коду связки — без имени и пароля. Новому устройству заводится
+    // свой билет, и отдаётся пакет, запечатанный тем, что есть только в
+    // картинке QR.
+    if (path.startsWith("/pairing/") && method === "POST") {
+      if (!guessers.allow(`связка:${addressOf(req)}`, Date.now())) {
+        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+      }
+      const body = await readJson(req);
+      const code = decodePart(path.slice("/pairing/".length));
+      const joined = joinPairing(db, code, now(), text(body.device));
+      return send(res, 200, PUBLIC_URL ? { ...joined, address: PUBLIC_URL } : joined);
+    }
+
     if (path === "/auth/params" && method === "GET") {
       // Ручка без входа, и по ответу видно, заведено ли имя. Без счётчика по
       // ней перебирают имена подряд — с открытой записью это уже не десять
@@ -404,7 +417,8 @@ export function createApp(options: AppOptions) {
     }
 
     if (path === "/pairing" && method === "POST") {
-      return send(res, 201, issuePairing(db, who.personId, now()));
+      const body = await readJson(req);
+      return send(res, 201, issuePairing(db, who.personId, now(), text(body.sealed)));
     }
 
     if (path.startsWith("/devices/") && method === "PATCH") {

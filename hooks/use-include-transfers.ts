@@ -2,14 +2,27 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const KEY = "analytics-include-transfers";
+/**
+ * Два независимых выбора. Отчёты (план/факт, аналитика) делят один — ответ на
+ * «сколько я потратил» не должен зависеть от того, какой отчёт спросил. Главная
+ * — свой, из настроек: галка в план/факте молча меняла и цифры на главной.
+ */
+export type TransfersScope = "reports" | "home";
+
+const KEYS: Record<TransfersScope, string> = {
+  reports: "analytics-include-transfers",
+  home: "home-include-transfers"
+};
 const EVENT = "include-transfers-changed";
 
 // Whether the reading screens count transfers between the owner's own accounts.
 // Kept in one place, and in localStorage, so ticking the box on one report is
 // not undone by walking to the next one — the answer to "what did I spend" must
 // not depend on which screen asked.
-export function useIncludeTransfers(): [boolean, (next: boolean) => void] {
+export function useIncludeTransfers(
+  scope: TransfersScope = "reports"
+): [boolean, (next: boolean) => void] {
+  const KEY = KEYS[scope];
   const [include, setInclude] = useState(false);
 
   useEffect(() => {
@@ -17,17 +30,20 @@ export function useIncludeTransfers(): [boolean, (next: boolean) => void] {
     read();
     window.addEventListener(EVENT, read);
     return () => window.removeEventListener(EVENT, read);
-  }, []);
+  }, [KEY]);
 
-  const update = useCallback((next: boolean) => {
-    setInclude(next);
-    try {
-      localStorage.setItem(KEY, next ? "1" : "0");
-    } catch {
-      /* private mode: the choice simply does not outlive the screen */
-    }
-    window.dispatchEvent(new Event(EVENT));
-  }, []);
+  const update = useCallback(
+    (next: boolean) => {
+      setInclude(next);
+      try {
+        localStorage.setItem(KEY, next ? "1" : "0");
+      } catch {
+        /* private mode: the choice simply does not outlive the screen */
+      }
+      window.dispatchEvent(new Event(EVENT));
+    },
+    [KEY]
+  );
 
   return [include, update];
 }

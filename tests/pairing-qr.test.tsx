@@ -64,7 +64,8 @@ describe("картинка связки", () => {
     // Сторож на шов: рисуем одно, а понимаем другое — и камера «не читает».
     expect(readPairing(LINK)).toEqual({
       base: "https://finance.example.org",
-      code: "ABCD2345"
+      code: "ABCD2345",
+      key: null
     });
   });
 });

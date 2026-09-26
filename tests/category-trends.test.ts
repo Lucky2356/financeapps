@@ -75,4 +75,15 @@ describe("buildCategoryTrends", () => {
     expect(trends[0].categoryId).toBe("fun");
     expect(trends[0].anomaly).toBe("high");
   });
+
+  it("ends the window on the current month, not on a row written for the future", () => {
+    // Одна операция на будущий месяц сдвигала окно: «сейчас» становился
+    // пустой будущий месяц, а настоящий уходил в «обычно».
+    const trends = buildCategoryTrends(
+      [tx("2026-06", 1000), tx("2026-07", 1000), tx("2026-08", 3000), tx("2026-10", 50)],
+      { currentMonth: "2026-08" }
+    );
+    expect(trends[0].currentTotal).toBe(3000);
+    expect(trends[0].averageTotal).toBe(1000);
+  });
 });

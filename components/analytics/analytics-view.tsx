@@ -32,6 +32,7 @@ import {
 import { apiClient } from "@/lib/api/client";
 import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
 import { buildCategoryTrends, type CategoryTrend } from "@/lib/analytics/category-trends";
+import { todayDay } from "@/lib/transactions/date";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { formatCurrency, formatInputDate } from "@/lib/format";
@@ -42,7 +43,6 @@ import { Button } from "@/components/ui/button";
 import { StatGrid } from "@/components/ui/stat-grid";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { useDataVersion } from "@/hooks/use-data-version";
 import { InfoHint } from "@/components/info-hint";
 
@@ -265,36 +265,35 @@ export function AnalyticsView({
         </CardContent>
       </Card>
 
-      {/* Spending by category, once. The screen used to carry a ranked list and
-          a pie of exactly the same numbers side by side; the ranking now lives
-          in the pie's own legend, where it says the same thing in one card. */}
-      <StructureCard
-        title={t("an.structure")}
-        slices={data.topExpenseCategories}
-        shareLabel={t("an.share")}
-        otherLabel={t("section.other")}
-        empty={t("an.noData6m")}
-        currency={data.currency}
-        linkType="EXPENSE"
-        from={data.from}
-        to={data.to}
-      />
-
-      {/* The same for money coming in. Spending alone says how it was used;
-          this says what there was to use. */}
-      <StructureCard
-        title={t("an.structureIncome")}
-        slices={data.topIncomeCategories}
-        shareLabel={t("an.share")}
-        otherLabel={t("section.other")}
-        empty={t("an.noIncome6m")}
-        currency={data.currency}
-        linkType="INCOME"
-        from={data.from}
-        to={data.to}
-      />
-
-      <CategoryTrendsSection currency={data.currency} />
+      {/* Доходы, расходы и тренды — одной линией: слева то, что пришло, в
+          середине то, куда ушло, справа — где траты выбились из привычного.
+          Три карточки читаются вместе, и на широком экране им не нужно
+          стоять друг под другом. На узком они по-прежнему идут столбиком. */}
+      <div className="grid items-start gap-4 xl:grid-cols-3">
+        <StructureCard
+          title={t("an.structureIncome")}
+          slices={data.topIncomeCategories}
+          shareLabel={t("an.share")}
+          otherLabel={t("section.other")}
+          empty={t("an.noIncome6m")}
+          currency={data.currency}
+          linkType="INCOME"
+          from={data.from}
+          to={data.to}
+        />
+        <StructureCard
+          title={t("an.structure")}
+          slices={data.topExpenseCategories}
+          shareLabel={t("an.share")}
+          otherLabel={t("section.other")}
+          empty={t("an.noData6m")}
+          currency={data.currency}
+          linkType="EXPENSE"
+          from={data.from}
+          to={data.to}
+        />
+        <CategoryTrendsSection currency={data.currency} />
+      </div>
     </div>
   );
 }
@@ -355,8 +354,8 @@ function StructureCard({
       </CardHeader>
       <CardContent>
         {shown.length > 0 ? (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="mx-auto size-40 shrink-0 sm:mx-0">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center xl:flex-col xl:items-stretch">
+            <div className="mx-auto size-40 shrink-0 sm:mx-0 xl:mx-auto">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -469,8 +468,10 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
     void (async () => {
       try {
         const from = formatInputDate(addMonths(new Date(), -13));
+        // Весь год, а не сто последних строк: при полусотне операций в месяц
+        // сотня покрывала два месяца, и «обычно» считалось по огрызку.
         const result = await apiClient.get<TransactionsPageData>(
-          `/transactions?limit=100&from=${from}`
+          `/transactions?limit=all&from=${from}`
         );
         if (!cancelled) setTransactions(result.transactions);
       } catch {
@@ -485,43 +486,46 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
     // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
   }, [dataVersion]);
 
-  const trends = useMemo(() => buildCategoryTrends(transactions).slice(0, 8), [transactions]);
+  const trends = useMemo(
+    () => buildCategoryTrends(transactions, { currentMonth: todayDay().slice(0, 7) }).slice(0, 8),
+    [transactions]
+  );
 
   if (trends.length === 0) return null;
 
   return (
-    // Eight categories with a sparkline each is a screenful on its own, and it
-    // is the last thing on the page — folded until it is asked for.
-    <CollapsibleCard title={t("an.trends.title")} storageKey="an-trends">
-      <div className="grid gap-2">
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("an.trends.title")}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-2">
         <p className="text-sm text-muted-foreground">{t("an.trends.desc")}</p>
         {trends.map((trend: CategoryTrend) => (
-          <div
-            key={trend.categoryId}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-          >
-            <div className="flex min-w-0 items-center gap-2">
+          // Две строки вместо одной: в колонке рядом с круговыми диаграммами
+          // название, линия, сумма и метка в ряд не помещались.
+          <div key={trend.categoryId} className="grid gap-1.5 rounded-lg border p-3">
+            <div className="flex items-center gap-2">
               <span
                 className="inline-block size-3 shrink-0 rounded-full"
                 style={{ backgroundColor: trend.color }}
               />
-              <span className="truncate font-medium">{trend.category}</span>
+              <span className="min-w-0 truncate font-medium">{trend.category}</span>
+              <span className="num ml-auto shrink-0 font-semibold">
+                {formatCurrency(trend.currentTotal, currency)}
+              </span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <Sparkline values={trend.monthly.map((m) => m.total)} color={trend.color} />
-              <div className="text-right">
-                <p className="font-semibold">{formatCurrency(trend.currentTotal, currency)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t("an.trends.avg", { amount: formatCurrency(trend.averageTotal, currency) })}
-                </p>
-              </div>
+              <span className="text-xs text-muted-foreground">
+                {t("an.trends.avg", { amount: formatCurrency(trend.averageTotal, currency) })}
+              </span>
               {trend.anomaly === "high" ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
                   <TrendingUp className="size-3" />
                   {t("an.trends.more", { pct: Math.abs(trend.changePct).toFixed(0) })}
                 </span>
               ) : trend.anomaly === "low" ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
                   <TrendingDown className="size-3" />
                   {t("an.trends.less", { pct: Math.abs(trend.changePct).toFixed(0) })}
                 </span>
@@ -529,7 +533,7 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
             </div>
           </div>
         ))}
-      </div>
-    </CollapsibleCard>
+      </CardContent>
+    </Card>
   );
 }

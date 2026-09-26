@@ -25,6 +25,7 @@ import {
   unlockWithRecoveryCode,
   type Vault
 } from "@/lib/sync/vault-crypto";
+import type { PairPackage } from "@/lib/sync/pair-package";
 
 /** Где лежит шкатулка. Читается запертым — см. UNSEALED_KEYS. */
 export const VAULT_KEY = "financeVault";
@@ -289,6 +290,64 @@ export class AccountService {
     await this.plain.setItem(VAULT_KEY, serverVault);
     this.sealed.unlock(bookKey);
     if (options.remember) await this.rememberDevice(bookKey);
+  }
+
+  /**
+   * Нужен ли пароль, чтобы собрать пакет связки.
+   *
+   * Ключ достаётся из памяти устройства, если она есть. Если данные открыты
+   * паролем без галки «не спрашивать», ключ в памяти вкладки неизвлекаемый — и
+   * правильно: пароль спрашивается ещё раз, один раз, на этом же устройстве.
+   */
+  async pairingNeedsPassword(): Promise<boolean> {
+    const remembered = await this.plain.getItem<DeviceMemory>(DEVICE_KEY);
+    return !remembered?.bookKey;
+  }
+
+  /** Всё, что едет второму устройству в запечатанном пакете. */
+  async pairingPackage(password?: string): Promise<PairPackage> {
+    const vault = await this.requireVault();
+    const remembered = await this.plain.getItem<DeviceMemory>(DEVICE_KEY);
+    let bookKey = remembered?.bookKey;
+    if (!bookKey) {
+      if (!password) throw new Error("Введите пароль приложения, чтобы подключить устройство.");
+      const key = await unlockWithPassword(vault, password, { extractable: true });
+      bookKey = toBase64(new Uint8Array(await crypto.subtle.exportKey("raw", key)));
+    }
+    return {
+      v: 1,
+      bookKey,
+      vault,
+      ...(remembered?.recoveryCode ? { recoveryCode: remembered.recoveryCode } : {})
+    };
+  }
+
+  /**
+   * Принять пакет связки — на НОВОМ устройстве.
+   *
+   * То же, что `adopt`, только ключ приезжает готовым, а не выводится из
+   * пароля. Пароль, если он был у первого устройства, остаётся тем же: шкатулка
+   * едет вместе с ключом. Спрашивать его здесь не будут — устройство
+   * запоминает ключ, как при галке «не спрашивать»; запереть его можно потом
+   * в настройках тем же паролем.
+   */
+  async adoptPackage(pack: PairPackage): Promise<void> {
+    const bookKey = await importBookKey(pack.bookKey);
+
+    const own = await this.ownLedgerKeys();
+    if (own.length > 0) {
+      throw new Error(
+        "На этом устройстве уже есть свои записи. Подключение заменит ключ, и прочитать " +
+          "их будет нечем. Выгрузите резервную копию, очистите данные в настройках и " +
+          "подключитесь заново — данные приедут с первого устройства."
+      );
+    }
+
+    await this.sealed.clear();
+    await this.forgetDevice();
+    await this.plain.setItem(VAULT_KEY, pack.vault);
+    this.sealed.unlock(bookKey);
+    await this.rememberDevice(bookKey, pack.recoveryCode);
   }
 
   /**

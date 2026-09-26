@@ -88,7 +88,8 @@ const SCHEMA = `
     person_id  text not null references people(id) on delete cascade,
     created_at text not null,
     expires_at text not null,
-    used_at    text
+    used_at    text,
+    sealed     text
   );
 
   -- Хранится ХЕШ входного билета, а не он сам: украденная база не даёт войти.
@@ -108,7 +109,25 @@ const SCHEMA = `
 export function openDatabase(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
   db.exec(SCHEMA);
+  upgrade(db);
   return db;
+}
+
+/**
+ * Дотянуть базу, заведённую прежней версией службы.
+ *
+ * `create table if not exists` старую таблицу не трогает, поэтому новые
+ * столбцы добавляются здесь, по одному и только если их нет: обновление
+ * службы — это `git pull` и перезапуск, и база обязана пережить его сама.
+ */
+function upgrade(db: DatabaseSync): void {
+  const columns = db
+    .prepare("pragma table_info(pairings)")
+    .all<{ name: string }>()
+    .map((column) => column.name);
+  // Запечатанный пакет связки: ключ данных, завёрнутый тем, что есть только в
+  // картинке QR. Служба хранит его пять минут и открыть не может.
+  if (!columns.includes("sealed")) db.exec("alter table pairings add column sealed text");
 }
 
 /** Убирает просроченные билеты. Зовётся при входе — чистки по часам не нужно. */
