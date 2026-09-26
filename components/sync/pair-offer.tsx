@@ -36,11 +36,14 @@ const POLL_MS = 3000;
 
 export function PairOffer({
   onClose,
-  mode = "show"
+  mode = "show",
+  answerLink
 }: {
   onClose: () => void;
   /** show — показать свой код; scan — снять код нового устройства. */
   mode?: "show" | "scan";
+  /** Код нового устройства уже есть — его открыли обычной камерой. */
+  answerLink?: string;
 }) {
   const { t } = useI18n();
   const confirm = useConfirm();
@@ -77,9 +80,13 @@ export function PairOffer({
   }, []);
 
   /** Снять код нового устройства и ответить на него своими данными. */
+  const given = useRef(answerLink);
   const scanNew = useCallback(async () => {
     setError(null);
-    const shot = await scanQr();
+    // Код открыли обычной камерой — снимать его второй раз незачем.
+    const ready = given.current;
+    given.current = undefined;
+    const shot = ready ? { ok: true as const, text: ready } : await scanQr();
     if (!shot.ok) {
       if (shot.why !== "cancelled") {
         setError(

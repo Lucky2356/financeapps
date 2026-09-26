@@ -19,8 +19,7 @@ const HERS = "пароль-маши-1";
 
 /** Первый запуск целиком, веткой «с нуля, с паролем». */
 async function firstRun(page: import("@playwright/test").Page, password: string) {
-  await page.getByRole("button", { name: "Начать с нуля" }).click();
-  await page.getByRole("button", { name: "Задать пароль" }).click();
+  await page.getByRole("button", { name: "Хотите сразу защитить данные паролем?" }).click();
 
   await page.getByLabel("Пароль", { exact: true }).fill(password);
   await page.getByLabel("Ещё раз").fill(password);

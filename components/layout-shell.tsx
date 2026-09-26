@@ -1,3 +1,6 @@
+import { IncomingLinkWatch } from "@/components/sync/incoming-link-watch";
+import { NewDeviceWatch } from "@/components/sync/new-device-watch";
+import { SampleBanner } from "@/components/sample-banner";
 import { Suspense, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
@@ -43,6 +46,7 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
             the desktop it clears the floating add button, which used to sit on
             top of the last table row and the pagination under it. */}
         <div className="mx-auto w-full max-w-[1760px] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 md:pb-24 lg:px-8 2xl:px-12">
+          <SampleBanner />
           <HubTabs />
           <PageTransition>{children}</PageTransition>
         </div>
@@ -50,6 +54,8 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
       <MobileBottomNav />
       <QuickAddFab accounts={importData.accounts} categories={importData.categories} />
       <KeyboardShortcuts />
+      <NewDeviceWatch />
+      <IncomingLinkWatch />
       <Suspense fallback={null}>
         <ToastListener />
       </Suspense>

@@ -1,5 +1,6 @@
 "use client";
 
+import { BeforeClearCard } from "@/components/settings/before-clear-card";
 import {
   AlertTriangle,
   Check,
@@ -788,6 +789,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           </Group>
           {/* Опасное — последним и отдельно: сюда не попадают, листая. */}
           <Group title={t("set.group.danger")} danger>
+            <BeforeClearCard />
             <SettingRow label={t("set.data.clear")} hint={t("set.data.clearHint")}>
               <Dialog>
                 <DialogTrigger asChild>

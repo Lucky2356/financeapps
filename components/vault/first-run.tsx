@@ -23,8 +23,10 @@
 // об этом в тот день, когда забудет пароль, — то есть когда возвращать будет
 // уже нечего. Два слова обратно стоят десяти секунд сейчас и всех данных потом.
 
+import { takeIncomingLink } from "@/lib/sync/incoming-link";
+import { useRouter } from "next/navigation";
 import { Camera, ChevronLeft, KeyRound, Lock, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import { unwrapBackup } from "@/lib/backup/unwrap";
@@ -55,7 +57,6 @@ const MIN_PASSWORD = 8;
 
 type Step =
   | "source"
-  | "choose"
   | "password"
   | "code"
   | "verify"
@@ -91,9 +92,27 @@ export function FirstRun({
   onLeave?: () => void;
 }) {
   const { t } = useI18n();
+  const router = useRouter();
   const [step, setStep] = useState<Step>("source");
   /** Что человек выбрал на первом экране: решает, куда идти после защиты. */
   const [source, setSource] = useState<Source>("fresh");
+  // Новое устройство открыли ссылкой из QR (кодом устройства с данными) —
+  // сразу подключаемся, минуя выбор.
+  const [incoming, setIncoming] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const link = await takeIncomingLink();
+      const parsed = link ? readPairing(link) : null;
+      if (!alive || !link || !parsed || parsed.ticket) return;
+      setIncoming(link);
+      setSource("device");
+      setStep("syncJoin");
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [busy, setBusy] = useState(false);
@@ -145,12 +164,20 @@ export function FirstRun({
     onDone();
   }
 
-  async function startWithoutPassword() {
+  async function startWithoutPassword(from: Source | "bank") {
     setError(null);
     setBusy(true);
     try {
       await accountService.createWithoutPassword();
-      protectionDone();
+      if (from === "file") {
+        setSource("file");
+        setStep("restore");
+        return;
+      }
+      onDone();
+      // Выписка — это экран импорта: туда и ведём, счета и операции появятся
+      // из файла банка.
+      if (from === "bank") router.push("/import");
     } catch (cause) {
       setError(t("vault.error", { message: (cause as Error).message }));
     } finally {
@@ -344,21 +371,24 @@ export function FirstRun({
           <p className="text-sm text-muted-foreground">{t("vault.source.lead")}</p>
 
           <div className="space-y-3">
+            {/* Сразу в приложение, без вопроса о пароле: человек пришёл записать
+                вчерашний поход в магазин, а не придумывать пароль. Защитить
+                данные предложит «Быстрый старт» на главной — или ссылка ниже,
+                для тех, кто хочет сразу. */}
             <Choice
               label={t("vault.source.fresh")}
               hint={t("vault.source.freshHint")}
-              onClick={() => {
-                setSource("fresh");
-                setStep("choose");
-              }}
+              onClick={() => void startWithoutPassword("fresh")}
+            />
+            <Choice
+              label={t("vault.source.bank")}
+              hint={t("vault.source.bankHint")}
+              onClick={() => void startWithoutPassword("bank")}
             />
             <Choice
               label={t("vault.source.file")}
               hint={t("vault.source.fileHint")}
-              onClick={() => {
-                setSource("file");
-                setStep("choose");
-              }}
+              onClick={() => void startWithoutPassword("file")}
             />
             <Choice
               label={t("vault.source.device")}
@@ -369,6 +399,20 @@ export function FirstRun({
               }}
             />
           </div>
+
+          <Problem text={error} />
+
+          <button
+            type="button"
+            className="w-full text-center text-sm text-primary hover:underline disabled:opacity-60"
+            disabled={busy}
+            onClick={() => {
+              setSource("fresh");
+              setStep("password");
+            }}
+          >
+            {t("vault.source.withPassword")}
+          </button>
 
           {onLeave ? (
             <Button type="button" variant="ghost" className="w-full" onClick={onLeave}>
@@ -429,7 +473,7 @@ export function FirstRun({
         <div className="space-y-4">
           {backButton("sync")}
           <Head icon={<ShieldCheck className="size-5" />} title={t("sync2.join.button")} />
-          <PairJoin />
+          <PairJoin initialLink={incoming} />
         </div>
       )}
 
@@ -591,39 +635,9 @@ export function FirstRun({
         </div>
       )}
 
-      {step === "choose" && (
-        <div className="space-y-4">
-          {backButton("source")}
-          <Head icon={<Lock className="size-5" />} title={t("vault.choose.title")} />
-          <p className="text-sm text-muted-foreground">{t("vault.choose.lead")}</p>
-
-          <Problem text={error} />
-
-          <Button type="button" className="w-full" onClick={() => setStep("password")}>
-            {t("vault.choose.withPassword")}
-          </Button>
-
-          <div className="space-y-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              disabled={busy}
-              onClick={startWithoutPassword}
-            >
-              {busy ? t("vault.choose.working") : t("vault.choose.without")}
-            </Button>
-            {/* Оговорка стоит ПОД кнопкой, а не спрятана за вопросительным
-                знаком: человек читает её в тот момент, когда решает, а не
-                когда пойдёт искать, почему так вышло. */}
-            <p className="text-xs text-muted-foreground">{t("vault.choose.withoutHint")}</p>
-          </div>
-        </div>
-      )}
-
       {step === "password" && (
         <form onSubmit={createAccount} className="space-y-4">
-          {backButton("choose")}
+          {backButton("source")}
           <Head icon={<Lock className="size-5" />} title={t("vault.setup.title")} />
           <p className="text-sm text-muted-foreground">{t("vault.setup.lead")}</p>
 

@@ -17,6 +17,7 @@ package ru.lucky2356.financeapps
 
 import android.app.Activity
 import android.content.Intent
+import android.webkit.WebView
 import androidx.core.content.FileProvider
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -38,8 +39,43 @@ class InstallArgs {
 
 private const val RELEASES = "https://github.com/Lucky2356/financeapps/releases/download/"
 
+/** Ссылка связки из QR-кода: её открывает обычная камера телефона. */
+private const val PAIR_LINK = "financeapps://pair"
+
 @TauriPlugin
 class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
+  // ——— ссылка из QR-кода ———————————————————————————————————————————————
+  //
+  // Человек навёл обычную камеру телефона на QR-код связки, и Android открыл
+  // приложение по ссылке financeapps://pair… (фильтр в AndroidManifest.xml).
+  // Сама ссылка приходит сюда — с запуском или, если приложение уже было
+  // открыто, отдельным намерением. Страница забирает её командой take_link:
+  // при запуске и каждый раз, когда приложение снова на экране.
+  private var pendingLink: String? = null
+
+  private fun remember(intent: Intent?) {
+    val link = intent?.data?.toString() ?: return
+    if (link.startsWith(PAIR_LINK)) pendingLink = link
+  }
+
+  override fun load(webView: WebView) {
+    super.load(webView)
+    remember(activity.intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    remember(intent)
+  }
+
+  @Command
+  fun takeLink(invoke: Invoke) {
+    val answer = JSObject()
+    answer.put("url", pendingLink ?: "")
+    // Один раз: иначе каждое возвращение на экран подключало бы заново.
+    pendingLink = null
+    invoke.resolve(answer)
+  }
+
   @Command
   fun install(invoke: Invoke) {
     val args = invoke.parseArgs(InstallArgs::class.java)

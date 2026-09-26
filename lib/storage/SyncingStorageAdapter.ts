@@ -138,6 +138,13 @@ export const PRE_UPGRADE_SUFFIX = ":before-upgrade";
  */
 export const RESCUE_SUFFIX = ":rescue";
 
+/**
+ * Копия всех данных, отложенная перед «Очистить все данные», — чтобы нажатие
+ * можно было отменить неделю. Местная по той же причине, что и две выше: это
+ * страховка ЭТОГО устройства, а не вторая книга для всех.
+ */
+export const BEFORE_CLEAR_SUFFIX = ":before-clear";
+
 function syncableKey(key: string): boolean {
   return (
     !LOCAL_ONLY_KEYS.includes(key) &&
@@ -148,7 +155,8 @@ function syncableKey(key: string): boolean {
     // Обе копии книги — местные. Ячейка на сервере одна на книгу, и удваивать
     // её копиями, которые нужны только здесь, незачем.
     !key.endsWith(PRE_UPGRADE_SUFFIX) &&
-    !key.endsWith(RESCUE_SUFFIX)
+    !key.endsWith(RESCUE_SUFFIX) &&
+    !key.endsWith(BEFORE_CLEAR_SUFFIX)
   );
 }
 

@@ -29,7 +29,11 @@ import {
   type Tombstone
 } from "@/lib/sync/row-stamps";
 import { localStateSchema } from "@/lib/api/local/schemas";
-import { PRE_UPGRADE_SUFFIX, RESCUE_SUFFIX } from "@/lib/storage/SyncingStorageAdapter";
+import {
+  BEFORE_CLEAR_SUFFIX,
+  PRE_UPGRADE_SUFFIX,
+  RESCUE_SUFFIX
+} from "@/lib/storage/SyncingStorageAdapter";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { futureDated, storedTransactionDate, todayDay } from "@/lib/transactions/date";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
@@ -115,7 +119,7 @@ import type {
   TargetAllocation,
   TransactionRow
 } from "@/types/finance";
-import type { ProfileList, UserProfile } from "@/types/profiles";
+import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
 
 const LEGACY_STATE_KEY = "localFinanceState";
 const PROFILE_LIST_KEY = "profileList";
@@ -126,6 +130,19 @@ export type PreUpgradeBackup = {
   fromVersion: number | null;
   toVersion: number | null;
   backup: Record<string, unknown>;
+};
+
+/** Что отдаёт `/backup/before-clear`: когда очистили и до какого числа можно вернуть. */
+export type BeforeClearCopy = { savedAt: string; until: string };
+
+/** Копия всего, что было до «Очистить все данные». Живёт неделю. */
+const BEFORE_CLEAR_KEY = `financeProfiles${BEFORE_CLEAR_SUFFIX}`;
+const BEFORE_CLEAR_DAYS = 7;
+
+type BeforeClearStored = {
+  savedAt: string;
+  list: ProfileList;
+  states: Record<string, unknown>;
 };
 
 function profileStateKey(profileId: string): string {
@@ -623,6 +640,7 @@ export class LocalApiClient implements ApiClient {
       )) as T;
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/backup/before-upgrade") return (await this.preUpgradeBackup()) as T;
+    if (pathname === "/backup/before-clear") return (await this.beforeClearCopy()) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") {
       // The exported file records when it was made, so the stamp goes into the
@@ -817,9 +835,18 @@ export class LocalApiClient implements ApiClient {
     const { pathname } = normalizePath(path);
 
     if (pathname === "/sample") {
+      // Пример — в своём профиле, а не поверх того, что человек уже завёл.
+      // Раньше «Загрузить пример» ложился в текущие данные, и потом их надо
+      // было чистить — вместе со своими, если успел что-то внести. Теперь
+      // открывается профиль «Пример», а вернуться к своим — одна кнопка.
+      await this.openSampleProfile();
       const sample = this.buildSampleState();
       await this.save(sample);
       return { loaded: true } as TResponse;
+    }
+    if (pathname === "/sample/leave") {
+      await this.leaveSampleProfile(toFormObject(body).remove === "true");
+      return undefined as TResponse;
     }
     if (pathname === "/sync/resolve") return this.resolveConflict<TResponse>(state, body);
     if (pathname === "/accounts")
@@ -874,6 +901,11 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/market/alerts")
       return this.saveAndReturn<TResponse>(state, this.addMarketAlert(state, body));
     if (pathname === "/backup") return this.restoreBackup<TResponse>(body);
+    if (pathname === "/backup/before-clear") {
+      await this.undoClear();
+      return { restored: true } as TResponse;
+    }
+    if (pathname === "/backup/merge") return this.mergeBackup<TResponse>(body);
     if (pathname === "/investments")
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
     if (pathname === "/categories")
@@ -929,6 +961,107 @@ export class LocalApiClient implements ApiClient {
 
     await this.save(restored, { stamp: false });
     return { restored: true } as TResponse;
+  }
+
+  /**
+   * Добавить к текущим данным записи из копии — «Объединить» при подключении.
+   *
+   * Устройство со своими записями подключается к другому: ключ и данные
+   * приезжают оттуда, а свои записи, снятые копией до подключения, ложатся
+   * сюда ДОБАВКОЙ. Ничего из уже лежащего здесь не заменяется.
+   *
+   * Одноимённые категории склеиваются: «Продукты» с двух устройств — это одни
+   * «Продукты», и операции переводятся на ту, что уже есть. Счета — нет:
+   * «Карта» на телефоне и «Карта» на ноутбуке могут быть разными картами, и
+   * сложить их остатки значило бы соврать. Одинаковое имя получает «(2)», чтобы
+   * было видно, что их два, — объединить или убрать лишний человек решит сам.
+   */
+  private async mergeBackup<TResponse>(body: unknown) {
+    const payload = (body as { backup?: unknown })?.backup;
+    const document =
+      payload && typeof payload === "object" && "backup" in payload
+        ? (payload as { backup?: unknown }).backup
+        : payload;
+    const parsed = localStateSchema.safeParse(document);
+    if (!parsed.success) throw new Error("Не удалось прочитать записи для объединения.");
+    const incoming = migrateLocalState(parsed.data);
+
+    let added = 0;
+    const state = await this.state();
+
+    const categoryOf = new Map<string, LocalState["categories"][number]>();
+    for (const category of incoming.categories) {
+      const same =
+        state.categories.find((existing) => existing.id === category.id) ??
+        state.categories.find(
+          (existing) =>
+            existing.kind === category.kind &&
+            existing.label.trim().toLowerCase() === category.label.trim().toLowerCase()
+        );
+      if (same) {
+        categoryOf.set(category.id, same);
+        continue;
+      }
+      state.categories.push(category);
+      categoryOf.set(category.id, category);
+    }
+    const recategorize = <T extends { category: { id: string; label: string } }>(row: T): T => {
+      const target = categoryOf.get(row.category.id);
+      return target
+        ? { ...row, category: { ...row.category, id: target.id, label: target.label } }
+        : row;
+    };
+
+    const names = new Set(state.accounts.map((account) => account.name.trim().toLowerCase()));
+    const accountIds = new Set(state.accounts.map((account) => account.id));
+    for (const account of incoming.accounts) {
+      if (accountIds.has(account.id)) continue;
+      let name = account.name;
+      for (let n = 2; names.has(name.trim().toLowerCase()); n += 1) name = `${account.name} (${n})`;
+      names.add(name.trim().toLowerCase());
+      state.accounts.push({ ...account, name });
+      added += 1;
+    }
+
+    const addById = <T extends { id: string }>(target: T[], rows: T[], shape = (row: T) => row) => {
+      const have = new Set(target.map((row) => row.id));
+      for (const row of rows) {
+        if (have.has(row.id)) continue;
+        target.push(shape(row));
+        added += 1;
+      }
+    };
+    addById(state.transactions, incoming.transactions, (row) => {
+      const moved = recategorize(row);
+      const account = state.accounts.find((item) => item.id === moved.account.id);
+      return account ? { ...moved, account: { ...moved.account, name: account.name } } : moved;
+    });
+    addById(state.recurringTransactions, incoming.recurringTransactions, recategorize);
+    addById(state.goals, incoming.goals);
+    state.goalMovements ??= [];
+    addById(state.goalMovements, incoming.goalMovements ?? []);
+    addById(state.liabilities, incoming.liabilities);
+    addById(state.rules, incoming.rules);
+    addById(
+      state.budgets,
+      incoming.budgets
+        .map((budget) => ({
+          ...budget,
+          categoryId: categoryOf.get(budget.categoryId)?.id ?? budget.categoryId
+        }))
+        // Лимит на ту же категорию в тот же месяц уже есть — здешний главнее.
+        .filter(
+          (budget) =>
+            !state.budgets.some(
+              (existing) =>
+                existing.categoryId === budget.categoryId &&
+                (existing as { month?: string }).month === (budget as { month?: string }).month
+            )
+        )
+    );
+
+    await this.save(state);
+    return { merged: added } as TResponse;
   }
 
   /**
@@ -3989,6 +4122,21 @@ export class LocalApiClient implements ApiClient {
   private async clearEverything(): Promise<void> {
     const list = await this.profileList();
     const ids = new Set([...list.profiles.map((profile) => profile.id), DEFAULT_PROFILE.id]);
+
+    // Сначала — копия всего, что сейчас есть: «Очистить все данные» нажимают и
+    // по ошибке, а резервную копию в файл делают не все. Неделю её можно
+    // вернуть одной кнопкой в настройках; на службу она не ездит.
+    const states: Record<string, unknown> = {};
+    for (const id of ids) {
+      const existing = await this.storage.getItem<unknown>(profileStateKey(id));
+      if (existing) states[id] = existing;
+    }
+    await this.storage.setItem<BeforeClearStored>(BEFORE_CLEAR_KEY, {
+      savedAt: new Date().toISOString(),
+      list,
+      states
+    });
+
     for (const id of ids) {
       const key = profileStateKey(id);
       const existing = await this.storage.getItem<unknown>(key);
@@ -4012,6 +4160,80 @@ export class LocalApiClient implements ApiClient {
       }
     }
     this.invalidateStateCache();
+  }
+
+  /** Копия до очистки, если она есть и ей не больше недели. */
+  private async beforeClearCopy(): Promise<BeforeClearCopy | null> {
+    const stored = await this.storage.getItem<BeforeClearStored>(BEFORE_CLEAR_KEY);
+    if (!stored?.savedAt) return null;
+    const until = new Date(Date.parse(stored.savedAt) + BEFORE_CLEAR_DAYS * 24 * 60 * 60 * 1000);
+    if (until.getTime() < Date.now()) {
+      await this.storage.removeItem(BEFORE_CLEAR_KEY);
+      return null;
+    }
+    return { savedAt: stored.savedAt, until: until.toISOString() };
+  }
+
+  /**
+   * «Вернуть» — всё, как было до очистки. Каждая тетрадка записывается как
+   * правка поверх пустой: так возвращённое уезжает на другие устройства тем
+   * же путём, каким туда уехала очистка.
+   */
+  private async undoClear(): Promise<void> {
+    if (!(await this.beforeClearCopy())) {
+      throw new Error("Копии до очистки нет: её хранят неделю.");
+    }
+    const stored = (await this.storage.getItem<BeforeClearStored>(BEFORE_CLEAR_KEY))!;
+    for (const [profileId, raw] of Object.entries(stored.states)) {
+      const parsed = localStateSchema.safeParse(raw);
+      if (!parsed.success) continue;
+      await this.storage.setItem(PROFILE_LIST_KEY, {
+        ...stored.list,
+        activeProfileId: profileId
+      } satisfies ProfileList);
+      this.invalidateStateCache();
+      await this.save(migrateLocalState(parsed.data), { stamp: false });
+    }
+    await this.storage.setItem(PROFILE_LIST_KEY, stored.list);
+    await this.storage.removeItem(BEFORE_CLEAR_KEY);
+    this.invalidateStateCache();
+  }
+
+  /** Завести профиль «Пример» (или взять прежний) и сделать его текущим. */
+  private async openSampleProfile(): Promise<void> {
+    const list = await this.profileList();
+    if (!list.profiles.some((p) => p.id === SAMPLE_PROFILE_ID)) {
+      list.profiles.push({
+        id: SAMPLE_PROFILE_ID,
+        name: "Пример",
+        color: "#a855f7",
+        createdAt: new Date().toISOString()
+      });
+    }
+    if (list.activeProfileId !== SAMPLE_PROFILE_ID) list.returnTo = list.activeProfileId;
+    list.activeProfileId = SAMPLE_PROFILE_ID;
+    await this.storage.setItem(PROFILE_LIST_KEY, list);
+    this.invalidateStateCache();
+  }
+
+  /** Вернуться из примера к своим данным; по желанию — убрать пример совсем. */
+  private async leaveSampleProfile(remove: boolean): Promise<void> {
+    const list = await this.profileList();
+    const back =
+      list.profiles.find((p) => p.id === list.returnTo && p.id !== SAMPLE_PROFILE_ID) ??
+      list.profiles.find((p) => p.id !== SAMPLE_PROFILE_ID);
+    if (!back) {
+      // Кроме примера профилей нет — заводим основной, пустой.
+      await this.createProfile("Основной", "#0d9488");
+      return this.leaveSampleProfile(remove);
+    }
+    list.activeProfileId = back.id;
+    delete list.returnTo;
+    await this.storage.setItem(PROFILE_LIST_KEY, list);
+    this.invalidateStateCache();
+    if (remove && list.profiles.some((p) => p.id === SAMPLE_PROFILE_ID)) {
+      await this.deleteProfile(SAMPLE_PROFILE_ID);
+    }
   }
 
   private async deleteProfile(profileId: string): Promise<void> {

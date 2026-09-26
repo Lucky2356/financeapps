@@ -35,21 +35,17 @@ async function restart(page: import("@playwright/test").Page) {
 }
 
 /**
- * Выбрать «Задать пароль» на первом экране.
+ * Выбрать «Хотите сразу защитить данные паролем?» на первом экране.
  *
- * Первый запуск теперь начинается с выбора: пароль предлагается, но не
- * требуется. Все проверки замка идут по ветке «с паролем» — ветка «без» живёт
+ * Первый запуск о пароле не спрашивает: «Начать с нуля» ведёт сразу в
+ * приложение. Все проверки замка идут по ветке «с паролем» — ветка «без» живёт
  * своей проверкой ниже.
  */
 async function choosePassword(page: import("@playwright/test").Page) {
   await page.goto("/");
-  const fresh = page.getByRole("button", { name: "Начать с нуля" });
-  await fresh.waitFor({ state: "visible", timeout: 30_000 });
-  await fresh.click();
-
-  const choose = page.getByRole("button", { name: "Задать пароль" });
-  await choose.waitFor({ state: "visible", timeout: 30_000 });
-  await choose.click();
+  const withPassword = page.getByRole("button", { name: "Хотите сразу защитить данные паролем?" });
+  await withPassword.waitFor({ state: "visible", timeout: 30_000 });
+  await withPassword.click();
   await page.getByLabel("Пароль", { exact: true }).waitFor({ state: "visible" });
 }
 
@@ -203,7 +199,6 @@ test("без пароля: приложение открывается сраз�
   // двенадцать слов. Проверяется, что путь до первой операции — одна кнопка.
   await page.goto("/");
   await page.getByRole("button", { name: "Начать с нуля" }).click();
-  await page.getByRole("button", { name: "Пока без пароля" }).click();
 
   await expect(page.getByRole("button", { name: "Загрузить пример" })).toBeVisible({
     timeout: 60_000
@@ -224,7 +219,6 @@ test("из файла: экран просит копию и не принима
   // файлом в руках, и «не тот файл» он должен прочитать словами.
   await page.goto("/");
   await page.getByRole("button", { name: "Восстановить из файла" }).click();
-  await page.getByRole("button", { name: "Пока без пароля" }).click();
 
   await expect(page.getByRole("heading", { name: "Выберите файл резервной копии" })).toBeVisible({
     timeout: 60_000

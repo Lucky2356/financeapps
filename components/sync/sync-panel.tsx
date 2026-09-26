@@ -15,6 +15,7 @@
 // под «Дополнительно», для тех, кому они нужны.
 
 import { Cloud, CloudOff } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -45,6 +46,11 @@ export function SyncPanel() {
   // этом осталась — и без проверки экран говорил бы «включена», а каждое
   // действие отвечало бы «нужен вход».
   const [lost, setLost] = useState(false);
+  // Ссылка из QR, которой открыли приложение (IncomingLinkWatch): join — это
+  // устройство подключается, answer — отвечает новому устройству своими данными.
+  const params = useSearchParams();
+  const joinLink = params.get("join") ?? undefined;
+  const answerLink = params.get("answer") ?? undefined;
 
   const refresh = useCallback(async () => {
     setLink(await serverAccount.link());
@@ -76,8 +82,9 @@ export function SyncPanel() {
       window.dispatchEvent(new Event(SERVER_LINK_CHANGED));
       toast.success(t("sync2.on.done"));
       // Сразу — картинка для второго устройства: ради него синхронизацию и
-      // включают.
-      setMode("offer");
+      // включают. А если приложение открыли кодом нового устройства — ответить
+      // на него.
+      setMode(answerLink ? "scan" : "offer");
     } catch (cause) {
       toast.error((cause as Error).message);
     } finally {
@@ -107,6 +114,17 @@ export function SyncPanel() {
       setBusy(false);
     }
   }
+
+  // Открыли ссылкой: сразу в нужный режим, без лишних нажатий. Через таймер —
+  // смена режима не должна случаться прямо в теле эффекта.
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setTimeout(() => {
+      if (answerLink && link) setMode("scan");
+      else if (joinLink && !link) setMode("join");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [ready, link, joinLink, answerLink]);
 
   /** Связь потеряна: забыть её здесь и начать заново. Записи не трогаются. */
   async function reconnect() {
@@ -184,7 +202,7 @@ export function SyncPanel() {
               )}
             </>
           ) : mode === "join" ? (
-            <PairJoin onCancel={() => setMode("idle")} />
+            <PairJoin initialLink={joinLink} onCancel={() => setMode("idle")} />
           ) : (
             <>
               {hasDefaultServer() ? (

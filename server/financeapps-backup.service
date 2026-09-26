@@ -1,0 +1,17 @@
+[Unit]
+Description=Финансовый помощник — ночная копия базы службы
+Documentation=https://github.com/Lucky2356/financeapps/blob/main/server/README.md
+
+[Service]
+Type=oneshot
+User=financeapps
+Group=financeapps
+# Копия средствами самого SQLite (.backup), а не cp: база может писаться в эту
+# секунду, и скопированный посреди записи файл бывает битым. Хранятся 30
+# последних; старше — удаляются. Содержимое книг и так зашифровано на
+# устройствах, но копию всё равно стоит забирать на другую машину.
+ExecStart=/bin/sh -c 'mkdir -p /var/lib/financeapps/backups && sqlite3 /var/lib/financeapps/finance.db ".backup /var/lib/financeapps/backups/finance-$(date +%%F).db" && find /var/lib/financeapps/backups -name "finance-*.db" -mtime +30 -delete'
+ProtectSystem=strict
+ReadWritePaths=/var/lib/financeapps
+PrivateTmp=yes
+NoNewPrivileges=yes

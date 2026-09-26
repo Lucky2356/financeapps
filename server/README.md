@@ -352,8 +352,25 @@ curl -s https://finance.ваш-домен.ru/admin/people -H "Authorization: Bea
 
 Содержимое книг и так зашифровано — копию можно класть куда угодно.
 
+**Каждую ночь, само.** В складе лежат юнит и таймер systemd: копия в 03:17,
+хранятся 30 последних (`/var/lib/financeapps/backups/finance-ГГГГ-ММ-ДД.db`).
+Нужен `sqlite3` (`sudo apt-get install -y sqlite3`).
+
 ```sh
-# Ежедневно, хранить 30 штук.
+sudo cp /opt/financeapps/server/financeapps-backup.service /etc/systemd/system/
+sudo cp /opt/financeapps/server/financeapps-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now financeapps-backup.timer
+
+# Проверить: когда следующая, и сделать одну прямо сейчас.
+systemctl list-timers financeapps-backup.timer
+sudo systemctl start financeapps-backup.service
+ls -la /var/lib/financeapps/backups/
+```
+
+Вручную — то же одной командой:
+
+```sh
 sudo -u financeapps sqlite3 /var/lib/financeapps/finance.db \
   ".backup /var/lib/financeapps/backup-$(date +%F).db"
 ```

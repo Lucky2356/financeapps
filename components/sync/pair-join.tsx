@@ -8,7 +8,7 @@
 // PairWait). Поле для ссылки остаётся запасным путём на обоих.
 
 import { Camera } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PairWait } from "@/components/sync/pair-wait";
@@ -19,16 +19,21 @@ import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
 import { DEFAULT_SERVER } from "@/lib/sync/default-server";
 import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
+import { apiClient } from "@/lib/api/client";
+import { takeCarryOver } from "@/lib/sync/carry-over";
 import { OwnRecordsError } from "@/lib/vault/account";
 import { joinWithLink } from "@/lib/vault/runtime";
 
 export function PairJoin({
   onJoined,
-  onCancel
+  onCancel,
+  initialLink
 }: {
   /** Данные приняты. По умолчанию — перечитать приложение. */
   onJoined?: () => void;
   onCancel?: () => void;
+  /** Ссылка из QR, которой открыли приложение: подключаемся по ней сразу. */
+  initialLink?: string;
 }) {
   const { t } = useI18n();
   const [link, setLink] = useState("");
@@ -42,6 +47,13 @@ export function PairJoin({
   const [replacing, setReplacing] = useState<string | null>(null);
 
   const joined = useCallback(async () => {
+    // «Объединить»: свои записи, снятые до подключения, — к общим данным.
+    const carried = takeCarryOver();
+    if (carried) {
+      await apiClient
+        .post("/backup/merge", { backup: carried })
+        .catch((cause: Error) => toast.error(cause.message));
+    }
     toast.success(t("sync2.join.done"));
     if (onJoined) onJoined();
     else {
@@ -65,6 +77,21 @@ export function PairJoin({
       setBusy(false);
     }
   }
+
+  // Приложение открыли ссылкой из QR — камера и поле не нужны, код уже здесь.
+  // Через таймер, а не прямо в эффекте: подключение меняет состояние экрана.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!initialLink || opened.current) return;
+    opened.current = true;
+    const timer = window.setTimeout(() => {
+      setLink(initialLink);
+      void join(initialLink);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // join — обычная функция экрана; повторять по её смене незачем.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLink]);
 
   async function openCamera() {
     setError(null);
