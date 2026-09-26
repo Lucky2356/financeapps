@@ -14,6 +14,11 @@ const { calls } = vi.hoisted(() => ({
   calls: { signIn: null as null | { base: string; login: string }, redeemed: ["", ""] }
 }));
 
+// Первый экран уводит в импорт после «Загрузить выписку из банка».
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() })
+}));
+
 vi.mock("@/lib/vault/runtime", () => ({
   accountService: { adopt: async () => undefined },
   enableSync: async () => undefined,

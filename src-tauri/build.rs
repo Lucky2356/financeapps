@@ -1,11 +1,12 @@
 fn main() {
-  // «installer» — свой маленький плагин: скачать APK обновления и открыть
-  // экран установки на Android (gen/android/.../InstallerPlugin.kt). Права на
-  // его единственную команду выводятся здесь, как у настоящих плагинов.
+  // «installer» — свой маленький плагин Android (gen/android/.../InstallerPlugin.kt):
+  // скачать APK обновления и открыть экран установки, а ещё отдать ссылку
+  // financeapps://pair…, которой приложение открыли из QR-кода. Права на его
+  // команды выводятся здесь, как у настоящих плагинов.
   tauri_build::try_build(tauri_build::Attributes::new().plugin(
     "installer",
     tauri_build::InlinedPlugin::new()
-      .commands(&["install"])
+      .commands(&["install", "take_link"])
       .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
   ))
   .expect("failed to run tauri-build");

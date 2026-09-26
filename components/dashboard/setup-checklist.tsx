@@ -12,9 +12,11 @@ import type {
   GoalsPageData,
   TransactionsPageData
 } from "@/lib/data";
+import { AccountsQuickSetup } from "@/components/dashboard/accounts-quick-setup";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
 import { useDataVersion } from "@/hooks/use-data-version";
+import { accountService, serverAccount } from "@/lib/vault/runtime";
 
 const STORAGE_KEY = "setup-checklist-dismissed-v1";
 
@@ -23,6 +25,8 @@ type Counts = {
   transactions: number;
   budgets: number;
   goals: number;
+  password: boolean;
+  synced: boolean;
 };
 
 // Tracks the first-setup progress from real data and guides the next action.
@@ -37,23 +41,28 @@ export function SetupChecklist() {
   const { t } = useI18n();
   const [counts, setCounts] = useState<Counts | null>(null);
   const [loadingSample, setLoadingSample] = useState(false);
+  const [settingUp, setSettingUp] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem(STORAGE_KEY) === "true";
   });
 
   const loadCounts = useCallback(async () => {
-    const [accounts, transactions, budgets, goals] = await Promise.all([
+    const [accounts, transactions, budgets, goals, password, link] = await Promise.all([
       apiClient.get<AccountsPageData>("/accounts").catch(() => null),
       apiClient.get<TransactionsPageData>("/transactions").catch(() => null),
       apiClient.get<BudgetsPageData>("/budgets").catch(() => null),
-      apiClient.get<GoalsPageData>("/goals").catch(() => null)
+      apiClient.get<GoalsPageData>("/goals").catch(() => null),
+      accountService.hasPassword().catch(() => false),
+      serverAccount.link().catch(() => null)
     ]);
     setCounts({
       accounts: accounts?.accounts.length ?? 0,
       transactions: transactions?.pagination.total ?? transactions?.transactions.length ?? 0,
       budgets: budgets?.budgets.filter((b) => b.limitAmount > 0).length ?? 0,
-      goals: goals?.goals.length ?? 0
+      goals: goals?.goals.length ?? 0,
+      password,
+      synced: link !== null
     });
   }, []);
 
@@ -91,11 +100,11 @@ export function SetupChecklist() {
 
   const steps = [
     {
+      // Не в раздел «Счета» с формой на один счёт, а сразу — галочками.
       done: counts.accounts > 0,
       title: t("sc.s1.title"),
       desc: t("sc.s1.desc"),
-      cta: t("sc.s1.cta"),
-      href: "/accounts" as const
+      action: "accounts" as const
     },
     {
       done: counts.transactions > 0,
@@ -116,6 +125,22 @@ export function SetupChecklist() {
       desc: t("sc.s4.desc"),
       cta: t("sc.s4.cta"),
       href: "/goals" as const
+    },
+    // Пароль и второе устройство — по желанию, и поэтому здесь, а не на первом
+    // экране: первый запуск больше не спрашивает о пароле, но напомнить стоит.
+    {
+      done: counts.password,
+      title: t("sc.s5.title"),
+      desc: t("sc.s5.desc"),
+      cta: t("sc.s5.cta"),
+      href: "/settings?section=security" as const
+    },
+    {
+      done: counts.synced,
+      title: t("sc.s6.title"),
+      desc: t("sc.s6.desc"),
+      cta: t("sc.s6.cta"),
+      href: "/settings?section=sync" as const
     }
   ];
   const doneCount = steps.filter((s) => s.done).length;
@@ -176,7 +201,12 @@ export function SetupChecklist() {
                 <p className="font-medium">{step.title}</p>
                 <p className="truncate text-xs text-muted-foreground">{step.desc}</p>
               </div>
-              {step.action === "quick-add" ? (
+              {step.action === "accounts" ? (
+                <Button size="sm" variant="outline" onClick={() => setSettingUp(true)}>
+                  <Plus className="size-3.5" />
+                  {t("sc.s1.quick")}
+                </Button>
+              ) : step.action === "quick-add" ? (
                 <Button
                   size="sm"
                   variant="outline"
@@ -187,7 +217,7 @@ export function SetupChecklist() {
                 </Button>
               ) : (
                 <Button asChild size="sm" variant="outline">
-                  <Link href={step.href}>
+                  <Link href={step.href ?? "/"}>
                     {step.cta}
                     <ArrowRight className="size-3.5" />
                   </Link>
@@ -197,6 +227,7 @@ export function SetupChecklist() {
           )
         )}
       </div>
+      <AccountsQuickSetup open={settingUp} onOpenChange={setSettingUp} />
     </div>
   );
 }

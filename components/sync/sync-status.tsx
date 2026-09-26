@@ -9,6 +9,7 @@
 // перестают замечать красный.
 
 import { CloudAlert, CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -174,7 +175,7 @@ export function SyncStatusIndicator() {
           size="icon"
           aria-label={label}
           title={label}
-          className="relative"
+          className="relative border border-border md:border-0"
         >
           <Icon
             className={cn(
@@ -195,7 +196,12 @@ export function SyncStatusIndicator() {
           <DialogTitle>{t("sync.conflicts.title")}</DialogTitle>
         </DialogHeader>
 
-        <p className="text-sm text-muted-foreground">{label}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/settings?section=sync">{t("sync.status.settings")}</Link>
+          </Button>
+        </div>
 
         {conflicts.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("sync.conflicts.empty")}</p>

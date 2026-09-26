@@ -107,6 +107,8 @@ export const LAST_ACCOUNT_KEY = "quick-add-last-account";
  */
 export const DEFAULT_ACCOUNT_KEY = "quick-add-default-account";
 export const NOTIFY_KEY = "notif-fired";
+/** Устройства, которые это устройство уже видело в «Моих устройствах». */
+export const KNOWN_DEVICES_KEY = "sync-known-devices";
 
 /**
  * Стереть личные мелочи с данными — для «Очистить все данные».

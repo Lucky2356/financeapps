@@ -20,6 +20,7 @@ import { todayDay } from "@/lib/transactions/date";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { useI18n } from "@/lib/i18n/context";
 import { forgetMyData } from "@/lib/storage/mine";
+import { carryOver } from "@/lib/sync/carry-over";
 
 export function ReplaceLocal({
   onReplaced,
@@ -32,6 +33,21 @@ export function ReplaceLocal({
   const { t } = useI18n();
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
   const [busy, setBusy] = useState(false);
+
+  /** Свои записи — в память, чтобы после подключения добавить их к общим. */
+  async function merge() {
+    setBusy(true);
+    try {
+      carryOver(await apiClient.get<unknown>("/backup"));
+      await apiClient.delete("/storage/clear");
+      forgetMyData();
+      onReplaced();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function replace(withBackup: boolean) {
     setBusy(true);
@@ -65,7 +81,10 @@ export function ReplaceLocal({
       <p className="text-sm font-medium">{t("sync2.replace.title")}</p>
       <p className="text-sm text-muted-foreground">{t("sync2.replace.desc")}</p>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button type="button" disabled={busy} onClick={() => void replace(true)}>
+        <Button type="button" disabled={busy} onClick={() => void merge()}>
+          {t("sync2.replace.merge")}
+        </Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void replace(true)}>
           {t("sync2.replace.withBackup")}
         </Button>
         <Button type="button" variant="outline" disabled={busy} onClick={() => void replace(false)}>

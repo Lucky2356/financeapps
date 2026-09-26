@@ -1,5 +1,6 @@
 "use client";
 
+import { SyncStatusIndicator } from "@/components/sync/sync-status";
 import { Plus, Search, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -35,6 +36,10 @@ export function MobileTopBar() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="min-w-0 truncate text-lg font-semibold">{screenTitle}</h1>
         <div className="flex shrink-0 gap-2">
+          {/* Состояние синхронизации — и на телефоне: без него об ошибке
+              связи узнавали, только зайдя в настройки. Пустое место, если
+              синхронизация выключена и споров нет. */}
+          <SyncStatusIndicator />
           <AmountsToggle className="border border-border" />
           <button
             type="button"

@@ -18,16 +18,12 @@ const PASSWORD = "проверочный-пароль";
 setup("завести замок один раз на весь прогон", async ({ page, context }) => {
   await page.goto("/");
 
-  // Первый запуск начинается с выбора, откуда взять данные, а следом — нужен
-  // ли пароль. Снимку нужна ветка «с нуля, с паролем»: по ней идут все
-  // остальные сценарии, и данные они заводят сами.
-  const fresh = page.getByRole("button", { name: "Начать с нуля" });
-  await fresh.waitFor({ state: "visible", timeout: 30_000 });
-  await fresh.click();
-
-  const choose = page.getByRole("button", { name: "Задать пароль" });
-  await choose.waitFor({ state: "visible", timeout: 30_000 });
-  await choose.click();
+  // Первый запуск начинается с выбора, откуда взять данные; пароль там не
+  // спрашивается — для него ссылка под вариантами. Снимку нужна ветка «с нуля,
+  // с паролем»: по ней идут все остальные сценарии, и данные они заводят сами.
+  const withPassword = page.getByRole("button", { name: "Хотите сразу защитить данные паролем?" });
+  await withPassword.waitFor({ state: "visible", timeout: 30_000 });
+  await withPassword.click();
 
   const password = page.getByLabel("Пароль", { exact: true });
   await password.waitFor({ state: "visible", timeout: 30_000 });
