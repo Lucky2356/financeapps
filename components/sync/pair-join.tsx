@@ -12,12 +12,14 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { PairWait } from "@/components/sync/pair-wait";
+import { ReplaceLocal } from "@/components/sync/replace-local";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
 import { DEFAULT_SERVER } from "@/lib/sync/default-server";
 import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
+import { OwnRecordsError } from "@/lib/vault/account";
 import { joinWithLink } from "@/lib/vault/runtime";
 
 export function PairJoin({
@@ -35,6 +37,9 @@ export function PairJoin({
   // Без камеры своя картинка нужна сразу: другого пути, кроме пересланной
   // ссылки, у компьютера нет. С камерой — по желанию.
   const [showOwn, setShowOwn] = useState(() => !cameraPossible());
+  // Ссылка, которую не приняли из-за своих записей на устройстве: после
+  // замены подключаемся по ней же, не заставляя снимать код второй раз.
+  const [replacing, setReplacing] = useState<string | null>(null);
 
   const joined = useCallback(async () => {
     toast.success(t("sync2.join.done"));
@@ -54,7 +59,8 @@ export function PairJoin({
       await joinWithLink(raw, DEFAULT_SERVER);
       await joined();
     } catch (cause) {
-      setError((cause as Error).message);
+      if (cause instanceof OwnRecordsError) setReplacing(raw);
+      else setError((cause as Error).message);
     } finally {
       setBusy(false);
     }
@@ -77,6 +83,19 @@ export function PairJoin({
         : shot.why === "absent"
           ? t("server.cameraAbsent")
           : t("server.cameraBroken")
+    );
+  }
+
+  if (replacing !== null) {
+    return (
+      <ReplaceLocal
+        onReplaced={() => {
+          const raw = replacing;
+          setReplacing(null);
+          void join(raw);
+        }}
+        onCancel={() => setReplacing(null)}
+      />
     );
   }
 

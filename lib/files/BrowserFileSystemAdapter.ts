@@ -28,7 +28,7 @@ export class BrowserFileSystemAdapter implements FileSystemAdapter {
     filename: string,
     content: string,
     mimeType = "text/plain;charset=utf-8"
-  ): Promise<void> {
+  ): Promise<boolean> {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -36,5 +36,7 @@ export class BrowserFileSystemAdapter implements FileSystemAdapter {
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+    // Браузер не говорит, сохранил ли человек файл, — скачивание началось.
+    return true;
   }
 }

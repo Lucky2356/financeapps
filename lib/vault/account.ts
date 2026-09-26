@@ -114,6 +114,21 @@ function fromBase64(value: string): Uint8Array<ArrayBuffer> {
  */
 const LEDGER_FIELDS = ["transactions", "accounts", "goals", "liabilities"] as const;
 
+/**
+ * На устройстве есть свои записи, а подключение заменит ключ. Отдельным
+ * классом, чтобы экран подключения мог не просто показать отказ, а предложить
+ * выход: сохранить копию и заменить записи данными с другого устройства.
+ */
+export class OwnRecordsError extends Error {
+  constructor() {
+    super(
+      "На этом устройстве уже есть свои записи. Подключение заменит их данными с другого " +
+        "устройства."
+    );
+    this.name = "OwnRecordsError";
+  }
+}
+
 export class AccountService {
   constructor(
     private readonly plain: StorageAdapter,
@@ -350,13 +365,7 @@ export class AccountService {
    */
   async assertCanAdopt(): Promise<void> {
     const own = await this.ownLedgerKeys();
-    if (own.length > 0) {
-      throw new Error(
-        "На этом устройстве уже есть свои записи. Подключение заменит ключ, и прочитать " +
-          "их будет нечем. Выгрузите резервную копию, очистите данные в настройках и " +
-          "подключитесь заново — данные приедут с первого устройства."
-      );
-    }
+    if (own.length > 0) throw new OwnRecordsError();
   }
 
   /**

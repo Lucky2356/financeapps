@@ -83,3 +83,55 @@ test("второе устройство подключается по ссылк
   await expect(page.getByTestId("pair-joined")).toBeVisible({ timeout: 30_000 });
   await phone.close();
 });
+
+test("устройство со своими записями предлагает заменить их — и подключается", async ({
+  page,
+  browser
+}) => {
+  // Раньше здесь был отказ: «выгрузите копию, очистите данные, подключитесь
+  // заново». Теперь выбор на месте: сохранить копию и заменить или заменить.
+  test.setTimeout(120_000);
+  await toLocalService(page.context());
+
+  await seedExampleData(page);
+  await openSettled(page, "/settings?section=sync");
+  await page.getByRole("button", { name: /Включить синхронизацию/ }).click();
+  const offer = page.getByTestId("pair-offer");
+  await expect(offer).toHaveAttribute("data-link", /^financeapps:\/\/pair\?/, { timeout: 30_000 });
+  const link = (await offer.getAttribute("data-link")) ?? "";
+
+  // Второе устройство уже ведёт свой учёт: у него свой счёт.
+  const laptop = await browser.newContext({
+    locale: "ru-RU",
+    baseURL: new URL(page.url()).origin
+  });
+  await toLocalService(laptop);
+  const second = await laptop.newPage();
+  await seedExampleData(second);
+  await openSettled(second, "/");
+  await second.getByRole("button", { name: "Быстрое добавление операции" }).last().click();
+  await second.getByRole("button", { name: "+ Новый" }).click();
+  const create = second.getByTestId("new-account-dialog");
+  await create.getByLabel("Название").fill("Счёт только на ноутбуке");
+  await create.getByRole("button", { name: "Создать" }).click();
+  await expect(create).toBeHidden();
+  await second.keyboard.press("Escape");
+
+  await openSettled(second, "/settings?section=sync");
+  await second.getByRole("button", { name: /Подключиться к другому устройству/ }).click();
+  await second.getByLabel(/ссылк/i).fill(link);
+  await second.getByRole("button", { name: "Подключить", exact: true }).click();
+
+  // Вместо отказа — выбор. Код при этом не сгорел: подключаемся по нему же.
+  const choice = second.getByTestId("replace-local").first();
+  await expect(choice).toBeVisible({ timeout: 30_000 });
+  const reloaded = second.waitForEvent("framenavigated", { timeout: 30_000 });
+  await choice.getByRole("button", { name: "Заменить без копии" }).click();
+  await reloaded;
+  await second.waitForLoadState("load");
+
+  await openSettled(second, "/accounts");
+  await expect(second.getByText("Дебетовая карта").first()).toBeVisible({ timeout: 30_000 });
+  await expect(second.getByText("Счёт только на ноутбуке")).toHaveCount(0);
+  await laptop.close();
+});

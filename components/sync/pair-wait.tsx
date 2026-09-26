@@ -13,7 +13,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { PairingQr } from "@/components/vault/pairing-qr";
+import { ReplaceLocal } from "@/components/sync/replace-local";
 import { useI18n } from "@/lib/i18n/context";
+import { OwnRecordsError } from "@/lib/vault/account";
 import { checkPairingRequest, requestPairing, type PairingRequest } from "@/lib/vault/runtime";
 
 /** Как часто спрашивать службу, ответил ли телефон. */
@@ -28,6 +30,8 @@ export function PairWait({ base, onJoined }: { base: string; onJoined: () => voi
   // Подключились — больше не спрашивать: билет погашен, и следующий опрос до
   // перезагрузки показал бы «код не найден» поверх успеха.
   const [done, setDone] = useState(false);
+  // На устройстве свои записи: показать не код, а выбор — заменить их или нет.
+  const [ownRecords, setOwnRecords] = useState(false);
   // Один опрос за раз: медленный ответ службы не должен наслаиваться на
   // следующий и дважды принимать один и тот же пакет.
   const asking = useRef(false);
@@ -37,8 +41,10 @@ export function PairWait({ base, onJoined }: { base: string; onJoined: () => voi
     setError(null);
     try {
       setRequest(await requestPairing(base));
+      setOwnRecords(false);
     } catch (cause) {
-      setError((cause as Error).message);
+      if (cause instanceof OwnRecordsError) setOwnRecords(true);
+      else setError((cause as Error).message);
     } finally {
       setBusy(false);
     }
@@ -52,7 +58,9 @@ export function PairWait({ base, onJoined }: { base: string; onJoined: () => voi
         const made = await requestPairing(base);
         if (alive) setRequest(made);
       } catch (cause) {
-        if (alive) setError((cause as Error).message);
+        if (!alive) return;
+        if (cause instanceof OwnRecordsError) setOwnRecords(true);
+        else setError((cause as Error).message);
       } finally {
         if (alive) setBusy(false);
       }
@@ -94,6 +102,8 @@ export function PairWait({ base, onJoined }: { base: string; onJoined: () => voi
   const minutes = Math.floor(left / 60);
   const seconds = String(left % 60).padStart(2, "0");
   const expired = request !== null && left === 0;
+
+  if (ownRecords) return <ReplaceLocal onReplaced={() => void make()} />;
 
   if (done) {
     return (
