@@ -65,7 +65,8 @@ describe("картинка связки", () => {
     expect(readPairing(LINK)).toEqual({
       base: "https://finance.example.org",
       code: "ABCD2345",
-      key: null
+      key: null,
+      ticket: null
     });
   });
 });

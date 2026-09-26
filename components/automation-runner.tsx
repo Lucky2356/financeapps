@@ -61,8 +61,8 @@ async function runAutomation() {
   }
 
   // Android has no in-place updater, so the app looks for a newer release
-  // itself and says so. Installing stays a deliberate act: the toast opens the
-  // APK, and Android's own installer asks for confirmation.
+  // itself and says so. Installing stays a deliberate act: the toast's button
+  // downloads the APK in-app, and Android's own installer asks for confirmation.
   if (isAndroidShell()) {
     try {
       const {
@@ -71,7 +71,7 @@ async function runAutomation() {
         markChecked,
         shouldAnnounce,
         shouldCheckNow,
-        startAndroidUpdate
+        installAndroidUpdate
       } = await import("@/lib/updates/android");
       if (shouldCheckNow()) {
         const update = await checkAndroidUpdate();
@@ -85,10 +85,14 @@ async function runAutomation() {
             duration: 15_000,
             action: {
               label: translate(locale, "set.update.confirmLabel"),
-              onClick: () => {
-                const downloading = toast.loading(translate(locale, "set.update.downloading"));
-                void startAndroidUpdate(update).finally(() => toast.dismiss(downloading));
-              }
+              onClick: () =>
+                void installAndroidUpdate(update, {
+                  downloading: translate(locale, "set.update.downloading"),
+                  progress: (percent) => translate(locale, "set.update.progress", { percent }),
+                  opening: translate(locale, "set.update.opening"),
+                  failed: translate(locale, "set.update.failed"),
+                  retry: translate(locale, "set.update.retry")
+                })
             }
           });
         }

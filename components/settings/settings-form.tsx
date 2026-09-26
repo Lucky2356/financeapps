@@ -284,12 +284,12 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   // button opens the releases page.
   async function checkForUpdates() {
     // Android has no updater plugin, so the app reads the same release manifest
-    // itself. It can tell the owner a newer version exists and hand the APK to
-    // Android — the download and the install confirmation are the system's job.
+    // itself, downloads the APK in-app (with progress) and opens the system
+    // installer. Only the final «Установить» is Android's.
     if (isAndroidShell()) {
       try {
         setCheckingUpdate(true);
-        const { checkAndroidUpdate, markChecked, startAndroidUpdate } =
+        const { checkAndroidUpdate, installAndroidUpdate, markChecked } =
           await import("@/lib/updates/android");
         const update = await checkAndroidUpdate();
         markChecked();
@@ -303,27 +303,22 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
           confirmLabel: t("set.update.confirmLabel")
         });
         if (!confirmed) return;
-        // 40 МБ по мобильной сети — это не мгновенно: без знака человек решит,
-        // что кнопка не сработала, и нажмёт ещё раз.
-        const downloading = toast.loading(t("set.update.downloading"));
-        try {
-          await startAndroidUpdate(update);
-        } finally {
-          toast.dismiss(downloading);
-        }
+        // 40 МБ по мобильной сети — это не мгновенно: без процента человек
+        // решит, что кнопка не сработала, и нажмёт ещё раз.
+        void installAndroidUpdate(update, {
+          downloading: t("set.update.downloading"),
+          progress: (percent) => t("set.update.progress", { percent }),
+          opening: t("set.update.opening"),
+          failed: t("set.update.failed"),
+          retry: t("set.update.retry")
+        });
       } catch (error) {
-        // Same reasoning as the desktop branch below: a phone has no devtools,
-        // so a bare "недоступно" leaves the owner (and me) with nothing to go
-        // on. The text names which source failed and why.
+        // A phone has no devtools, so a bare "недоступно" leaves the owner
+        // (and me) with nothing to go on: the text names which source failed
+        // and why. The browser stays closed — the button is right here to retry.
         const detail = error instanceof Error ? error.message : String(error);
         console.error("[updater:android]", error);
-        toast.message(t("set.update.unavailable"), { description: detail, duration: 15_000 });
-        try {
-          const { openUrl } = await import("@tauri-apps/plugin-opener");
-          await openUrl(RELEASES_URL);
-        } catch {
-          /* opener unavailable — nothing more to do */
-        }
+        toast.error(t("set.update.checkFailed"), { description: detail, duration: 15_000 });
       } finally {
         setCheckingUpdate(false);
       }

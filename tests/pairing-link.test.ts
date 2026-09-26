@@ -12,7 +12,8 @@ describe("что лежит в картинке связки", () => {
     expect(readPairing(link)).toEqual({
       base: "https://finance.example.org",
       code: "ABCD2345",
-      key: null
+      key: null,
+      ticket: null
     });
   });
 
@@ -23,8 +24,18 @@ describe("что лежит в картинке связки", () => {
 
   it("восемь знаков с клавиатуры понимаются так же, как картинка", () => {
     // Тот же разборщик: человек либо наводит камеру, либо набирает.
-    expect(readPairing("abcd-2345")).toEqual({ base: null, code: "ABCD2345", key: null });
-    expect(readPairing("  ABCD2345  ")).toEqual({ base: null, code: "ABCD2345", key: null });
+    expect(readPairing("abcd-2345")).toEqual({
+      base: null,
+      code: "ABCD2345",
+      key: null,
+      ticket: null
+    });
+    expect(readPairing("  ABCD2345  ")).toEqual({
+      base: null,
+      code: "ABCD2345",
+      key: null,
+      ticket: null
+    });
   });
 
   it("пароля в ссылке нет — и положить его туда нечем", () => {
@@ -33,7 +44,7 @@ describe("что лежит в картинке связки", () => {
     // связки — не пароль: он открывает один пакет, один раз и пять минут.
     const link = makePairingLink("https://finance.example.org", "ABCD2345");
     expect(link).not.toMatch(/pass|pwd|secret|пароль/i);
-    expect(Object.keys(readPairing(link) ?? {}).sort()).toEqual(["base", "code", "key"]);
+    expect(Object.keys(readPairing(link) ?? {}).sort()).toEqual(["base", "code", "key", "ticket"]);
   });
 
   it("ключ пакета едет в ссылке и читается обратно, чужой вид — отвергается", () => {
@@ -69,7 +80,8 @@ describe("что лежит в картинке связки", () => {
     expect(readPairing("financeapps://pair?c=ABCD2345")).toEqual({
       base: null,
       code: "ABCD2345",
-      key: null
+      key: null,
+      ticket: null
     });
   });
 

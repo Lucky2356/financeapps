@@ -17,6 +17,71 @@
 
 import { isAndroidShell } from "@/lib/platform/device";
 
+// ПОЧЕМУ СВОЙ СЛОЙ ПОВЕРХ СТРАНИЦЫ. Плагин в режиме `windowed` кладёт картинку с
+// камеры ПОД страницу и делает прозрачной только подложку WebView. Сама
+// страница закрашена фоном темы — и в 2.0.0 камера работала, а человек видел
+// всё то же окно без камеры и без кнопки «Отмена». Поэтому на время съёмки
+// страница становится прозрачной и невидимой, а поверх камеры рисуется рамка,
+// подсказка и «Отмена». Всё это — голый DOM, а не React: сканер зовут три
+// разных экрана, и каждому пришлось бы рисовать одно и то же самому.
+
+const SCANNING = "qr-scanning";
+const LAYER = "qr-scan-layer";
+
+const STYLE = `
+html.${SCANNING}, html.${SCANNING} body { background: transparent !important; }
+html.${SCANNING} { color-scheme: normal !important; }
+html.${SCANNING} body > *:not(.${LAYER}) { visibility: hidden !important; }
+.${LAYER} { position: fixed; inset: 0; z-index: 2147483647; display: flex;
+  flex-direction: column; align-items: center; justify-content: space-between;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(32px, env(safe-area-inset-bottom));
+  font: 500 16px/1.4 system-ui, sans-serif; color: #fff; pointer-events: none; }
+.${LAYER} p { margin: 0; padding: 10px 14px; border-radius: 10px; text-align: center;
+  background: rgba(0, 0, 0, 0.55); max-width: 320px; }
+.${LAYER} .qr-frame { width: min(70vw, 300px); aspect-ratio: 1; border-radius: 20px;
+  border: 3px solid #fff; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45); }
+.${LAYER} button { pointer-events: auto; min-width: 180px; min-height: 48px;
+  border: 0; border-radius: 12px; background: #fff; color: #111;
+  font: 600 16px/1 system-ui, sans-serif; }
+`;
+
+function words(): { hint: string; cancel: string } {
+  const english = typeof document !== "undefined" && document.documentElement.lang.startsWith("en");
+  return english
+    ? { hint: "Point the camera at the QR code on the other device", cancel: "Cancel" }
+    : { hint: "Наведите камеру на QR-код на другом устройстве", cancel: "Отмена" };
+}
+
+/** Показать рамку поверх камеры. Возвращает, чем её снять. */
+export function showViewfinder(onCancel: () => void): () => void {
+  if (typeof document === "undefined") return () => {};
+  const style = document.createElement("style");
+  style.textContent = STYLE;
+  document.head.appendChild(style);
+
+  const { hint, cancel } = words();
+  const layer = document.createElement("div");
+  layer.className = LAYER;
+  layer.setAttribute("data-testid", "qr-viewfinder");
+  const top = document.createElement("p");
+  top.textContent = hint;
+  const frame = document.createElement("div");
+  frame.className = "qr-frame";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = cancel;
+  button.addEventListener("click", onCancel);
+  layer.append(top, frame, button);
+  document.body.appendChild(layer);
+  document.documentElement.classList.add(SCANNING);
+
+  return () => {
+    document.documentElement.classList.remove(SCANNING);
+    layer.remove();
+    style.remove();
+  };
+}
+
 /** Чем кончилось наведение камеры. */
 export type ScanOutcome =
   | { ok: true; text: string }
@@ -37,6 +102,7 @@ export function cameraPossible(): boolean {
 export async function scanQr(): Promise<ScanOutcome> {
   if (!cameraPossible()) return { ok: false, why: "absent" };
 
+  let hide = () => {};
   try {
     const scanner = await import("@tauri-apps/plugin-barcode-scanner");
 
@@ -48,12 +114,16 @@ export async function scanQr(): Promise<ScanOutcome> {
     if (granted !== "granted") granted = await scanner.requestPermissions();
     if (granted !== "granted") return { ok: false, why: "denied" };
 
+    // «Отмена» гасит видоискатель, и плагин отвечает на ждущий `scan` отказом
+    // «cancelled» — его разбирает catch ниже, как и прежде.
+    hide = showViewfinder(() => void scanner.cancel().catch(() => {}));
     const found = await scanner.scan({
       // Только QR: сканер, хватающий штрихкод с пачки молока, будет хватать
       // его и здесь — а понять такое всё равно нечем.
       formats: [scanner.Format.QRCode],
-      // Видоискатель поверх страницы, а не вместо неё: человек видит, куда
-      // вернётся, и кнопка «отмена» остаётся на виду.
+      // Камера — под страницей, а рамка и «Отмена» — наши, поверх неё
+      // (см. showViewfinder). Без `windowed` плагин закрыл бы экран камерой
+      // целиком, и выйти, не сняв ничего, было бы нечем.
       windowed: true
     });
 
@@ -67,6 +137,7 @@ export async function scanQr(): Promise<ScanOutcome> {
     if (/denied|permission/i.test(said)) return { ok: false, why: "denied" };
     return { ok: false, why: "broken", detail: said };
   } finally {
+    hide();
     // Видоискатель делает страницу прозрачной; не сняв его, мы оставили бы
     // человека смотреть сквозь приложение на камеру.
     try {

@@ -334,6 +334,21 @@ export class AccountService {
   async adoptPackage(pack: PairPackage): Promise<void> {
     const bookKey = await importBookKey(pack.bookKey);
 
+    await this.assertCanAdopt();
+
+    await this.sealed.clear();
+    await this.forgetDevice();
+    await this.plain.setItem(VAULT_KEY, pack.vault);
+    this.sealed.unlock(bookKey);
+    await this.rememberDevice(bookKey, pack.recoveryCode);
+  }
+
+  /**
+   * Можно ли принять чужие данные сюда. Проверяется ДО предъявления кода
+   * службе: код одноразовый, и сгоревший зря код заставил бы человека идти за
+   * новым к первому устройству.
+   */
+  async assertCanAdopt(): Promise<void> {
     const own = await this.ownLedgerKeys();
     if (own.length > 0) {
       throw new Error(
@@ -342,12 +357,6 @@ export class AccountService {
           "подключитесь заново — данные приедут с первого устройства."
       );
     }
-
-    await this.sealed.clear();
-    await this.forgetDevice();
-    await this.plain.setItem(VAULT_KEY, pack.vault);
-    this.sealed.unlock(bookKey);
-    await this.rememberDevice(bookKey, pack.recoveryCode);
   }
 
   /**

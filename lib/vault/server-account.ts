@@ -345,21 +345,69 @@ export class ServerAccount {
       );
     }
     if (status !== 200) refuse(status, data, "Код не подошёл.");
+    return this.enter(input.base, input.device, status, data);
+  }
 
+  /** Запомнить вход, выданный службой по связке, — прямой или обратной. */
+  private async enter(
+    asked: string,
+    device: string,
+    status: number,
+    data: Record<string, unknown>
+  ): Promise<JoinAnswer> {
     const token = String(data.token ?? "");
     const sealed = String(data.sealed ?? "");
     if (!token || !sealed) refuse(status, data, "Служба не отдала данных для подключения.");
 
     const named = typeof data.address === "string" ? data.address.trim() : "";
-    const base = root(named || input.base);
+    const base = root(named || asked);
     await this.storage.setItem<ServerLink>(SERVER_KEY, {
       v: 1,
       base,
       login: String(data.login ?? ""),
       token,
-      device: input.device
+      device
     });
     return { base, sealed };
+  }
+
+  /**
+   * Обратная связка, шаг 1 — на НОВОМ устройстве: открыть запрос, билет от
+   * которого уедет в картинку. Входа для этого не нужно.
+   */
+  async openRequest(base: string): Promise<{ ticket: string; expiresAt: string }> {
+    const { status, data } = await ask(base, "/pairing/request", { method: "POST", body: {} });
+    if (status !== 201) {
+      // Служба до 2.0.1 принимает «request» за код связки и отвечает «не найден».
+      if (status === 401 || status === 404 || status === 405) {
+        throw new ServerRefused(
+          status,
+          "Служба синхронизации ещё не обновлена: показать код на этом устройстве нельзя. " +
+            "Отсканируйте код с экрана другого устройства или вставьте ссылку."
+        );
+      }
+      refuse(status, data, "Служба не открыла подключение.");
+    }
+    return { ticket: String(data.ticket ?? ""), expiresAt: String(data.expiresAt ?? "") };
+  }
+
+  /**
+   * Обратная связка, шаг 3 — на НОВОМ устройстве: спросить, ответили ли на
+   * картинку. null — ещё нет. Ответили — вход запоминается, как при прямой.
+   */
+  async pollRequest(input: {
+    base: string;
+    ticket: string;
+    device: string;
+  }): Promise<JoinAnswer | null> {
+    const { status, data } = await ask(
+      input.base,
+      `/pairing/request/${encodeURIComponent(input.ticket)}`,
+      { method: "POST", body: { device: input.device } }
+    );
+    if (status === 202) return null;
+    if (status !== 200) refuse(status, data, "Подключение не удалось.");
+    return this.enter(input.base, input.device, status, data);
   }
 
   /**
@@ -369,12 +417,12 @@ export class ServerAccount {
    * здесь только просят и показывают. Пакет, если он есть, запечатан на этом
    * устройстве ключом, который уедет только в картинке.
    */
-  async issuePairing(sealed?: string): Promise<PairingCode> {
+  async issuePairing(sealed?: string, request?: string): Promise<PairingCode> {
     const link = await this.need();
     const { status, data } = await ask(link.base, "/pairing", {
       method: "POST",
       token: link.token,
-      ...(sealed ? { body: { sealed } } : {})
+      ...(sealed ? { body: request ? { sealed, request } : { sealed } } : {})
     });
     if (status !== 201) refuse(status, data, "Служба не выдала кода связки.");
     return { code: String(data.code ?? ""), expiresAt: String(data.expiresAt ?? "") };

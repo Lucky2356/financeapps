@@ -9,8 +9,13 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { SyncingStorageAdapter, type Merge } from "@/lib/storage/SyncingStorageAdapter";
 import { HttpSyncTransport } from "@/lib/sync/HttpSyncTransport";
 import { mergeBooks } from "@/lib/sync/merge";
-import { newTransferKey, openPackage, sealPackage } from "@/lib/sync/pair-package";
-import { makePairingLink, readPairing } from "@/lib/sync/pairing-link";
+import {
+  importTransferKey,
+  newTransferKey,
+  openPackage,
+  sealPackage
+} from "@/lib/sync/pair-package";
+import { makePairingLink, makeRequestLink, readPairing } from "@/lib/sync/pairing-link";
 import { AccountService } from "@/lib/vault/account";
 import { ServerAccount } from "@/lib/vault/server-account";
 import { createApp, type App } from "../server/src/main.ts";
@@ -61,10 +66,43 @@ class Phone {
 
   /** То, что делает joinWithLink. */
   async join(offer: { code: string; key: string }): Promise<void> {
+    await this.account.assertCanAdopt();
     const answer = await this.server.joinByCode({ base, code: offer.code, device: "Телефон" });
     await this.account.adoptPackage(await openPackage(offer.key, answer.sealed));
     await this.resume();
   }
+}
+
+/** Обратная связка — то, что делают requestPairing / answerPairingRequest / checkPairingRequest. */
+async function showOwnCode(device: Phone): Promise<{ link: string; ticket: string; key: string }> {
+  await device.account.assertCanAdopt();
+  const transfer = await newTransferKey();
+  const opened = await device.server.openRequest(base);
+  return {
+    // Адрес в картинке — https: http читатель ссылок не принимает.
+    link: makeRequestLink("https://finance.example.org", opened.ticket, transfer.text),
+    ticket: opened.ticket,
+    key: transfer.text
+  };
+}
+
+async function answerCode(device: Phone, link: string): Promise<void> {
+  const parsed = readPairing(link);
+  if (!parsed?.ticket || !parsed.key) throw new Error("не код нового устройства");
+  const pack = await device.account.pairingPackage();
+  const sealed = await sealPackage(await importTransferKey(parsed.key), pack);
+  await device.server.issuePairing(sealed, parsed.ticket);
+}
+
+async function checkAnswered(
+  device: Phone,
+  own: { ticket: string; key: string }
+): Promise<boolean> {
+  const answer = await device.server.pollRequest({ base, ticket: own.ticket, device: "ПК" });
+  if (!answer) return false;
+  await device.account.adoptPackage(await openPackage(own.key, answer.sealed));
+  await device.resume();
+  return true;
 }
 
 async function names(device: Phone): Promise<string[]> {
@@ -135,6 +173,63 @@ describe("связка по картинке", () => {
     expect(kept?.n).toBe(0);
   });
 
+  it("устройство со своими записями получает отказ, и код при этом не сгорает", async () => {
+    // Код одноразовый. Сгори он на отказе — человеку пришлось бы идти к
+    // первому устройству за новым, хотя дело было не в коде.
+    const computer = new Phone();
+    await computer.account.createWithoutPassword();
+    await computer.server.registerQuick({ base, device: "Компьютер" });
+    const offer = await computer.offer();
+
+    const busy = new Phone();
+    await busy.account.createWithoutPassword();
+    await busy.app.post("/accounts", { name: "Своё", type: "CASH", balance: "1" });
+    await expect(busy.join(offer)).rejects.toThrow(/уже есть свои записи/);
+
+    const fresh = new Phone();
+    await fresh.join(offer);
+    expect(await fresh.server.link()).not.toBeNull();
+  });
+
+  it("компьютер без камеры показывает свой код, телефон с данными его снимает", async () => {
+    // Человек начал на телефоне, потом поставил приложение на ПК. Снимать
+    // компьютеру нечем — поэтому код показывает он.
+    const phone = new Phone();
+    await phone.account.createWithoutPassword();
+    await phone.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "700" });
+    await phone.server.registerQuick({ base, device: "Телефон" });
+    await phone.resume();
+
+    const computer = new Phone();
+    const own = await showOwnCode(computer);
+    expect(await checkAnswered(computer, own)).toBe(false);
+
+    await answerCode(phone, own.link);
+    expect(await checkAnswered(computer, own)).toBe(true);
+    expect(await names(computer)).toEqual(["Карта"]);
+
+    // И дальше это обычная синхронизация в обе стороны.
+    await computer.app.post("/accounts", { name: "Наличные", type: "CASH", balance: "5" });
+    await computer.sync.flush();
+    phone.sync.stop();
+    await phone.resume();
+    expect(await names(phone)).toEqual(["Карта", "Наличные"]);
+  });
+
+  it("код нового устройства читается только как код нового устройства", async () => {
+    const transfer = await newTransferKey();
+    const ticket = (await newTransferKey()).text;
+    const link = makeRequestLink("https://finance.example.org", ticket, transfer.text);
+    expect(readPairing(link)).toEqual({
+      base: "https://finance.example.org",
+      code: "",
+      key: transfer.text,
+      ticket
+    });
+    // Без ключа ответить нечем — такая картинка не принимается вовсе.
+    expect(readPairing(link.replace(/&k=[^&]+/, ""))).toBeNull();
+  });
+
   it("чужой ключ пакета не открывает", async () => {
     const computer = new Phone();
     await computer.account.createWithoutPassword();
@@ -152,9 +247,15 @@ describe("связка по картинке", () => {
     expect(readPairing(link)).toEqual({
       base: "https://finance.example.org",
       code: "ABCD2345",
-      key: transfer.text
+      key: transfer.text,
+      ticket: null
     });
     // Восемь знаков руками — прежний путь, без ключа.
-    expect(readPairing("abcd-2345")).toEqual({ base: null, code: "ABCD2345", key: null });
+    expect(readPairing("abcd-2345")).toEqual({
+      base: null,
+      code: "ABCD2345",
+      key: null,
+      ticket: null
+    });
   });
 });
