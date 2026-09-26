@@ -144,6 +144,7 @@ export const recurringRowSchema = z.object({
   type: transactionTypeSchema,
   frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
   nextDate: z.string().min(1),
+  dayOfMonth: z.coerce.number().int().min(1).max(31).optional(),
   description: z.string().nullable().optional().default(null),
   isActive: z.boolean().default(true),
   daysUntilNext: z.coerce.number().finite().default(0),

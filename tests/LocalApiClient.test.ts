@@ -283,6 +283,37 @@ describe("LocalApiClient", () => {
     expect(sasha?.balance).toBe(-924);
   });
 
+  it("recognises its own rows when the same file is imported twice east of Greenwich", async () => {
+    // Строка файла разбирается в МЕСТНУЮ полночь, а дубль искался по её
+    // UTC-дню. В Москве это вчерашний день: повторный импорт не узнавал ни
+    // одной строки и задваивал весь файл. В UTC, где идёт CI, всё сходилось.
+    const zone = process.env.TZ;
+    process.env.TZ = "Europe/Moscow";
+    try {
+      const client = createClient();
+      const body = {
+        dateColumn: "date",
+        amountColumn: "amount",
+        categoryColumn: "category",
+        accountColumn: "account",
+        rows: JSON.stringify([
+          { date: "23.08.2026", amount: "-380", category: "Транспорт", account: "Саша" },
+          { date: "2026-08-22", amount: "-544", category: "Бытовая химия", account: "Саша" }
+        ])
+      };
+      const first = await client.post<{ imported: number; skipped: number }>("/import", body);
+      const second = await client.post<{ imported: number; skipped: number }>("/import", body);
+
+      expect(first.imported).toBe(2);
+      expect(second).toEqual(expect.objectContaining({ imported: 0, skipped: 2 }));
+      const accounts = await client.get<AccountsPageData>("/accounts");
+      expect(accounts.accounts.find((account) => account.name === "Саша")?.balance).toBe(-924);
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
+
   it("files rows with no account of their own under one import account", async () => {
     const client = createClient();
     await client.post("/import", {

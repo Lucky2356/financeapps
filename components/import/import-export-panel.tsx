@@ -46,6 +46,7 @@ import { Label } from "@/components/ui/label";
 import { CsvImportMapper, type CsvColumnMapping } from "@/services/import/CsvImportMapper";
 import { ExportService } from "@/services/export/ExportService";
 import { cn } from "@/lib/utils";
+import { todayDay } from "@/lib/transactions/date";
 
 const emptyMapping: CsvColumnMapping = {
   dateColumn: "",
@@ -222,7 +223,7 @@ export function ImportExportPanel({
   async function exportBackup() {
     try {
       const backup = await apiClient.get<unknown>("/backup");
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = todayDay();
       await fileSystem.saveTextFile(
         `financial-assistant-backup-${stamp}.json`,
         JSON.stringify(backup, null, 2),

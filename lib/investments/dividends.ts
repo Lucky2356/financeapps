@@ -3,6 +3,8 @@
 // upcoming expected payouts. Pure and testable; FX is intentionally ignored —
 // amounts are summed as-entered (most portfolios are single-currency).
 
+import { todayDay } from "@/lib/transactions/date";
+
 export type DividendEvent = {
   type: string;
   date: string;
@@ -62,7 +64,7 @@ export function upcomingDividends(
   expected: ExpectedDividendLike[],
   now: Date = new Date()
 ): ExpectedDividendLike[] {
-  const today = now.toISOString().slice(0, 10);
+  const today = todayDay(now);
   return expected
     .filter((dividend) => dividend.date.slice(0, 10) >= today)
     .sort((a, b) => a.date.localeCompare(b.date));

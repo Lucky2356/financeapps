@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import { todayDay } from "@/lib/transactions/date";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type { AnalyticsData, BudgetsPageData, TransactionsPageData } from "@/lib/data";
 import type { ForecastData, PlanFactPageData } from "@/types/finance";
@@ -28,7 +29,7 @@ async function ledgerInTwoCurrencies() {
     categories: Array<{ id: string; name: string; kind: string }>;
   }>("/categories");
   const food = categories.categories.find((category) => category.name === "Продукты");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDay();
 
   await client.post("/transactions", {
     amount: "1000",
@@ -98,7 +99,7 @@ describe("money in more than one currency", () => {
     const { client, food, expected } = await ledgerInTwoCurrencies();
 
     const plan = await client.get<PlanFactPageData>("/plan");
-    const month = plan.months.find((entry) => entry.month === new Date().toISOString().slice(0, 7));
+    const month = plan.months.find((entry) => entry.month === todayDay().slice(0, 7));
     expect(month?.cells[food?.id ?? ""]?.fact).toBe(expected);
     expect(month?.expense.fact).toBe(expected);
   });
@@ -140,7 +141,9 @@ describe("money in more than one currency", () => {
       accountId: dollars.id,
       categoryId: food?.id,
       frequency: "MONTHLY",
-      nextDate: tomorrow.toISOString().slice(0, 10),
+      // Местный день, а не UTC: к востоку от Гринвича после полуночи
+      // «завтра» по UTC — это ещё сегодня, и платёж попадал в окно дважды.
+      nextDate: todayDay(tomorrow),
       description: "Подписка",
       isActive: "true"
     });
