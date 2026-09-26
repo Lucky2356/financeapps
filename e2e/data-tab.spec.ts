@@ -42,11 +42,9 @@ test("в списке категорий видно иконки", async ({ page
 
   await page.getByRole("button", { name: "Быстрое добавление операции" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog
-    .getByRole("combobox")
-    .filter({ hasText: /категор/i })
-    .first()
-    .click();
+  // По подписи поля, а не по надписи внутри: категория теперь подставляется
+  // из последней операции, и «Выберите категорию» в поле уже не стоит.
+  await dialog.getByLabel("Категория").click();
 
   // Every option carries the category's own picture, the way the plan/fact
   // header and the ledger rows do.

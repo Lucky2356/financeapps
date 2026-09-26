@@ -24,6 +24,7 @@ import { sweepSessions, type Person } from "./db.ts";
 
 /** Сколько живёт входной билет. Месяц: реже — неудобно, дольше — опаснее. */
 const SESSION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 } as const;
 
@@ -259,27 +260,43 @@ export async function login(
     throw new AuthError(401, "Не подходит имя или пароль.");
   }
 
+  const session = openSession(db, person.id, input.device, now);
+  return { ...session, vault: person.vault, personId: person.id };
+}
+
+/**
+ * Выдать билет — при входе или по коду связки.
+ *
+ * Устройство заводится, когда названо: без имени билет есть, а в списке
+ * «Мои устройства» его нет — так входят проверки и старые сборки.
+ */
+export function openSession(
+  db: DatabaseSync,
+  personId: string,
+  device: string | undefined,
+  now: string
+): { token: string; deviceId: string | null } {
   sweepSessions(db, now);
 
   const raw = token();
   const expires = new Date(Date.parse(now) + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   let deviceId: string | null = null;
-  if (input.device) {
+  if (device) {
     deviceId = id("device");
     db.prepare("insert into devices (id, person_id, name, last_seen_at) values (?,?,?,?)").run(
       deviceId,
-      person.id,
-      input.device.slice(0, 80),
+      personId,
+      device.slice(0, 80),
       now
     );
   }
 
   db.prepare(
     "insert into sessions (token_hash, person_id, device_id, created_at, expires_at) values (?,?,?,?,?)"
-  ).run(fingerprint(raw), person.id, deviceId, now, expires);
+  ).run(fingerprint(raw), personId, deviceId, now, expires);
 
-  return { token: raw, vault: person.vault, personId: person.id, deviceId };
+  return { token: raw, deviceId };
 }
 
 /** Кто пришёл. null — билета нет или он просрочен. */
@@ -293,6 +310,17 @@ export function whoIs(
     .prepare("select person_id, device_id, expires_at from sessions where token_hash = ?")
     .get<{ person_id: string; device_id: string | null; expires_at: string }>(fingerprint(raw));
   if (!session || session.expires_at < now) return null;
+  // Билет продлевается, пока им пользуются. Устройство, связанное картинкой,
+  // не знает ни имени, ни пароля — войти заново ему нечем, и месяц без
+  // продления значил бы, что через месяц синхронизация молча встаёт. Писать в
+  // базу на каждый запрос незачем: продлеваем, когда до конца меньше 29 дней.
+  const renewAt = new Date(Date.parse(now) + (SESSION_DAYS - 1) * DAY_MS).toISOString();
+  if (session.expires_at < renewAt) {
+    db.prepare("update sessions set expires_at = ? where token_hash = ?").run(
+      new Date(Date.parse(now) + SESSION_DAYS * DAY_MS).toISOString(),
+      fingerprint(raw)
+    );
+  }
   if (session.device_id) {
     db.prepare("update devices set last_seen_at = ? where id = ?").run(now, session.device_id);
   }

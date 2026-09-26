@@ -707,6 +707,71 @@ describe("служба", () => {
     });
   });
 
+  describe("связка по картинке", () => {
+    // Новое устройство входит по коду из QR — без имени и пароля. Служба
+    // отдаёт ему свой билет и пакет, который сама открыть не может.
+
+    it("по коду новое устройство получает свой билет и пакет, и код гаснет", async () => {
+      const { token } = await signUp("петя");
+      const made = await call("/pairing", {
+        method: "POST",
+        token,
+        body: { sealed: "запечатано-на-устройстве" }
+      });
+      const { code } = made.body as { code: string };
+
+      const joined = await call(`/pairing/${code}`, {
+        method: "POST",
+        body: { device: "Телефон (Android)" }
+      });
+      const answer = joined.body as { token: string; sealed: string; login: string };
+
+      assert.equal(joined.status, 200);
+      assert.equal(answer.sealed, "запечатано-на-устройстве");
+      assert.equal(answer.login, "петя");
+      assert.ok(answer.token && answer.token !== token);
+
+      // Билет рабочий, и новое устройство видно в списке.
+      const list = await call("/devices", { token: answer.token });
+      assert.equal(list.status, 200);
+      const names = (list.body as { devices: Array<{ name: string }> }).devices.map((d) => d.name);
+      assert.ok(names.includes("Телефон (Android)"));
+
+      // Второй раз код не срабатывает, и пакет в базе не остаётся.
+      const again = await call(`/pairing/${code}`, { method: "POST", body: { device: "x" } });
+      assert.equal(again.status, 410);
+      const left = app.db
+        .prepare("select sealed from pairings")
+        .all<{ sealed: string | null }>()
+        .map((row) => row.sealed);
+      assert.deepEqual(left, [null]);
+    });
+
+    it("пакет больше шестнадцати килобайт не принимается", async () => {
+      const { token } = await signUp("петя");
+      const big = await call("/pairing", {
+        method: "POST",
+        token,
+        body: { sealed: "x".repeat(17 * 1024) }
+      });
+      assert.equal(big.status, 413);
+    });
+
+    it("билет продлевается, пока им пользуются", async () => {
+      // Устройству, связанному картинкой, войти заново нечем: ни имени, ни
+      // пароля оно не знает. Без продления через месяц синхронизация встала бы.
+      const { token } = await signUp("петя");
+      const soon = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+      app.db.prepare("update sessions set expires_at = ?").run(soon);
+
+      assert.equal((await call("/devices", { token })).status, 200);
+      const { expires_at } = app.db
+        .prepare("select expires_at from sessions")
+        .get<{ expires_at: string }>()!;
+      assert.ok(Date.parse(expires_at) > Date.now() + 28 * 24 * 60 * 60 * 1000);
+    });
+  });
+
   describe("пределы на человека", () => {
     // Пределы появились вместе с открытой регистрацией и только ради неё. До
     // того единственным, кто мог переполнить службу, был её хозяин; с открытой

@@ -26,9 +26,11 @@ test.describe("телефон", () => {
     await expect(page.getByRole("heading", { name: "Основные" })).toBeVisible();
     await expect(nav).toBeHidden();
 
-    // Раздел короткий: помещается почти целиком, листать ленту не нужно.
+    // Раздел короткий: два экрана телефона, не десять. Предел с запасом на
+    // строку-другую — каждая новая настройка не должна ронять проверку, а
+    // лента на весь список, как было до разделов, — должна.
     const height = await page.evaluate(() => document.documentElement.scrollHeight);
-    expect(height).toBeLessThan(1600);
+    expect(height).toBeLessThan(1800);
 
     await page.getByRole("button", { name: "Все настройки" }).click();
     await expect(nav).toBeVisible();
