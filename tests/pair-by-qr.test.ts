@@ -230,6 +230,34 @@ describe("связка по картинке", () => {
     expect(readPairing(link.replace(/&k=[^&]+/, ""))).toBeNull();
   });
 
+  it("выкинутое устройство узнаёт об этом и подключается заново со своими записями", async () => {
+    // Скриншот владельца: «Синхронизация включена», а на каждое действие —
+    // «Нужен вход.». Служба билет забыла, а запись о связи на устройстве осталась.
+    const computer = new Phone();
+    await computer.account.createWithoutPassword();
+    await computer.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "1" });
+    await computer.server.registerQuick({ base, device: "Компьютер" });
+    await computer.resume();
+    expect(await computer.server.health()).toBe("ok");
+
+    // С другого устройства его выкинули — или данные на службе стёрли.
+    app.db.prepare("delete from sessions").run();
+    expect(await computer.server.health()).toBe("lost");
+    await expect(computer.server.devices()).rejects.toThrow(/больше не узнаёт/);
+
+    // «Подключить заново»: забыть связь здесь и включить синхронизацию снова.
+    computer.sync.stop();
+    await computer.server.forgetHere();
+    await computer.server.registerQuick({ base, device: "Компьютер" });
+    await computer.resume();
+    expect(await computer.server.health()).toBe("ok");
+
+    // Записи уехали на новую запись службы: новое устройство их получает.
+    const phone = new Phone();
+    await phone.join(await computer.offer());
+    expect(await names(phone)).toEqual(["Карта"]);
+  });
+
   it("чужой ключ пакета не открывает", async () => {
     const computer = new Phone();
     await computer.account.createWithoutPassword();

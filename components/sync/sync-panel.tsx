@@ -40,6 +40,11 @@ export function SyncPanel() {
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
   const [busy, setBusy] = useState(false);
+  // Служба больше не узнаёт это устройство: билет погашен (устройство
+  // выкинули с другого) или данные на службе стёрты. Запись о связи здесь при
+  // этом осталась — и без проверки экран говорил бы «включена», а каждое
+  // действие отвечало бы «нужен вход».
+  const [lost, setLost] = useState(false);
 
   const refresh = useCallback(async () => {
     setLink(await serverAccount.link());
@@ -53,6 +58,7 @@ export function SyncPanel() {
       if (!alive) return;
       setLink(stored);
       setReady(true);
+      if (stored && (await serverAccount.health()) === "lost" && alive) setLost(true);
     })();
     const changed = () => void refresh();
     window.addEventListener(SERVER_LINK_CHANGED, changed);
@@ -102,6 +108,24 @@ export function SyncPanel() {
     }
   }
 
+  /** Связь потеряна: забыть её здесь и начать заново. Записи не трогаются. */
+  async function reconnect() {
+    setBusy(true);
+    try {
+      stopSync();
+      await serverAccount.forgetHere();
+      await forgetMyServer();
+      setLost(false);
+      setMode("idle");
+      await refresh();
+      window.dispatchEvent(new Event(SERVER_LINK_CHANGED));
+    } catch (cause) {
+      toast.error((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!ready) return null;
 
   return (
@@ -116,7 +140,18 @@ export function SyncPanel() {
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">{t("sync2.lead")}</p>
 
-          {link ? (
+          {link && lost ? (
+            <div
+              className="space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-3"
+              data-testid="sync-lost"
+            >
+              <p className="text-sm font-medium">{t("sync2.lost.title")}</p>
+              <p className="text-sm text-muted-foreground">{t("sync2.lost.desc")}</p>
+              <Button type="button" disabled={busy} onClick={() => void reconnect()}>
+                {t("sync2.lost.button")}
+              </Button>
+            </div>
+          ) : link ? (
             <>
               <p className="rounded-lg border bg-muted/40 p-3 text-sm" data-testid="sync-on">
                 {t("sync2.on.state", { device: link.device })}
@@ -184,7 +219,7 @@ export function SyncPanel() {
         </CardContent>
       </Card>
 
-      {link ? <DevicesPanel /> : null}
+      {link && !lost ? <DevicesPanel /> : null}
 
       {/* Прежние пути — для своей службы и для записи с именем и паролем. На
           виду им не место: обычному человеку они не нужны и только путают. */}

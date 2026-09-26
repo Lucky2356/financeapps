@@ -2068,6 +2068,10 @@ const ru: Messages = {
   "sync2.on.hint": "На этом устройстве данные уже есть. Потом покажем QR-код для второго.",
   "sync2.on.done": "Синхронизация включена",
   "sync2.on.state": "Синхронизация включена. Это устройство: {device}.",
+  "sync2.lost.title": "Сервер больше не узнаёт это устройство",
+  "sync2.lost.desc":
+    "Так бывает, если устройство отключили в «Моих устройствах» на другом устройстве или данные на сервере стёрты. Записи здесь целы. Нажмите «Подключить заново», а затем включите синхронизацию здесь или подключитесь к другому устройству по QR-коду.",
+  "sync2.lost.button": "Подключить заново",
   "sync2.off.button": "Отключить на этом устройстве",
   "sync2.off.title": "Отключить синхронизацию на этом устройстве?",
   "sync2.off.desc":
@@ -4199,6 +4203,10 @@ const en: Messages = {
     "Your data is already on this device. We'll show a QR code for the second one next.",
   "sync2.on.done": "Sync is on",
   "sync2.on.state": "Sync is on. This device: {device}.",
+  "sync2.lost.title": "The server no longer recognises this device",
+  "sync2.lost.desc":
+    'This happens when the device was removed in "My devices" on another device or the server data was erased. Your records here are intact. Press "Reconnect", then turn on sync here or connect to another device by QR code.',
+  "sync2.lost.button": "Reconnect",
   "sync2.off.button": "Turn off on this device",
   "sync2.off.title": "Turn off sync on this device?",
   "sync2.off.desc":

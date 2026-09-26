@@ -18,7 +18,7 @@
 
 import { LOCAL_ONLY_KEYS } from "@/lib/storage/SyncingStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
-import { ServerRefused } from "@/lib/sync/HttpSyncTransport";
+import { LOST_LINK, ServerRefused } from "@/lib/sync/HttpSyncTransport";
 import { shellFetch } from "@/lib/sync/shell-fetch";
 import { authSecret, unlockWithPassword, type Vault } from "@/lib/sync/vault-crypto";
 
@@ -118,6 +118,12 @@ async function ask(
 
 function refuse(status: number, data: Record<string, unknown>, fallback: string): never {
   throw new ServerRefused(status, String(data.error ?? fallback));
+}
+
+/** Отказ на запрос С ВХОДОМ: 401 значит потерянную связь, а не опечатку. */
+function refuseLinked(status: number, data: Record<string, unknown>, fallback: string): never {
+  if (status === 401) throw new ServerRefused(401, LOST_LINK);
+  refuse(status, data, fallback);
 }
 
 /**
@@ -424,15 +430,36 @@ export class ServerAccount {
       token: link.token,
       ...(sealed ? { body: request ? { sealed, request } : { sealed } } : {})
     });
-    if (status !== 201) refuse(status, data, "Служба не выдала кода связки.");
+    if (status !== 201) refuseLinked(status, data, "Служба не выдала кода связки.");
     return { code: String(data.code ?? ""), expiresAt: String(data.expiresAt ?? "") };
+  }
+
+  /**
+   * Узнаёт ли служба это устройство. lost — билет больше не действует (устройство
+   * выкинули или данные на службе стёрты); offline — до службы не дошли, и
+   * судить не о чем.
+   */
+  async health(): Promise<"ok" | "lost" | "offline"> {
+    const link = await this.link();
+    if (!link) return "lost";
+    try {
+      const { status } = await ask(link.base, "/devices", { token: link.token });
+      return status === 401 ? "lost" : "ok";
+    } catch {
+      return "offline";
+    }
+  }
+
+  /** Забыть связь ЗДЕСЬ, не спрашивая службу: она этот билет и так не знает. */
+  async forgetHere(): Promise<void> {
+    await this.storage.removeItem(SERVER_KEY);
   }
 
   /** Мои устройства и то, которое спрашивает. */
   async devices(): Promise<{ devices: LinkedDevice[]; current: string | null }> {
     const link = await this.need();
     const { status, data } = await ask(link.base, "/devices", { token: link.token });
-    if (status !== 200) refuse(status, data, "Служба не отдала список устройств.");
+    if (status !== 200) refuseLinked(status, data, "Служба не отдала список устройств.");
     return {
       devices: (data.devices ?? []) as LinkedDevice[],
       current: (data.current as string | null) ?? null
@@ -447,7 +474,7 @@ export class ServerAccount {
       token: link.token,
       body: { name }
     });
-    if (status !== 204) refuse(status, data, "Не удалось переименовать устройство.");
+    if (status !== 204) refuseLinked(status, data, "Не удалось переименовать устройство.");
   }
 
   /**
@@ -464,7 +491,7 @@ export class ServerAccount {
       method: "DELETE",
       token: link.token
     });
-    if (status !== 204) refuse(status, data, "Не удалось выкинуть устройство.");
+    if (status !== 204) refuseLinked(status, data, "Не удалось выкинуть устройство.");
   }
 
   /** Запись о службе — или внятный отказ вместо «cannot read property of null». */
