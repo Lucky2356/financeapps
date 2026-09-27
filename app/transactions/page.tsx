@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AiQuickAdd } from "@/components/ai/ai-quick-add";
 import { LoadingCard } from "@/components/loading-card";
 import { PageHeader } from "@/components/page-header";
+import { LedgerViews } from "@/components/transactions/ledger-views";
 import { TransactionManager } from "@/components/transactions/transaction-manager";
 import { TransactionsSummary } from "@/components/transactions/transactions-summary";
 import { TransactionsAnalytics } from "@/components/transactions/transactions-analytics";
@@ -22,7 +23,9 @@ export default async function TransactionsPage() {
       <AiQuickAdd />
       <TransactionsAnalytics />
       <Suspense fallback={<LoadingCard messageKey="loading.transactions" />}>
-        <TransactionManager data={data} />
+        <LedgerViews>
+          <TransactionManager data={data} />
+        </LedgerViews>
       </Suspense>
     </div>
   );
