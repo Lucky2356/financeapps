@@ -96,6 +96,7 @@ import { budgetInForce, effectiveLimit, rolloverCarry } from "@/lib/budget-rollo
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
+import { computeDailyAllowance, type Allowance } from "@/lib/analytics/daily-allowance";
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
@@ -637,6 +638,8 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/rules") return this.rulesPage(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(this.inBase(state)) as T;
+    if (pathname === "/allowance")
+      return this.allowance(this.countingState(this.inBase(state), false)) as T;
     if (pathname === "/dashboard")
       return (await this.dashboard(
         this.countingState(this.inBase(state), searchParams.get("transfers") === "1")
@@ -3031,6 +3034,44 @@ export class LocalApiClient implements ApiClient {
   private countingState(state: LocalState, includeTransfers: boolean): LocalState {
     if (includeTransfers) return state;
     return { ...state, transactions: countableRows(state.transactions, false) };
+  }
+
+  /**
+   * «Можно тратить сегодня» — см. lib/analytics/daily-allowance.ts. Переводы
+   * между своими счетами не считаются ни доходом, ни расходом (countingState
+   * уже без них), плановые платежи — из того же прогноза, что на экране
+   * «Прогноз», чтобы два числа не спорили.
+   */
+  private allowance(state: LocalState): Allowance {
+    const now = new Date();
+    const today = isoDay(now);
+    const yesterday = isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+    const month = today.slice(0, 7);
+    const monthEnd = isoDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const sum = (rows: TransactionRow[]) => rows.reduce((total, row) => total + row.amount, 0);
+    const monthRows = state.transactions.filter((row) => row.date.startsWith(month));
+    const expenses = monthRows.filter((row) => row.type === "EXPENSE");
+    const finance = this.financeInput(state, true);
+    const previous = finance.monthlyCashflow.slice(0, -1).filter((item) => item.income > 0);
+    const upcoming = this.forecast(state)
+      .events.filter(
+        (event) =>
+          event.type === "EXPENSE" &&
+          event.date.slice(0, 10) > today &&
+          event.date.slice(0, 10) <= monthEnd
+      )
+      .reduce((total, event) => total + event.amount, 0);
+    return computeDailyAllowance({
+      today,
+      income: sum(monthRows.filter((row) => row.type === "INCOME")),
+      averageIncome: previous.length
+        ? previous.reduce((total, item) => total + item.income, 0) / previous.length
+        : 0,
+      upcoming,
+      spentBeforeToday: sum(expenses.filter((row) => row.date.slice(0, 10) < today)),
+      spentToday: sum(expenses.filter((row) => row.date.slice(0, 10) === today)),
+      spentYesterday: sum(expenses.filter((row) => row.date.slice(0, 10) === yesterday))
+    });
   }
 
   private async dashboard(state: LocalState): Promise<DashboardData> {

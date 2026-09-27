@@ -7,6 +7,7 @@ import { CashflowChart, ExpenseCategoryChart, NetWorthChart } from "@/components
 import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
+import { DailyAllowanceCard } from "@/components/dashboard/daily-allowance-card";
 import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
 import { NetWorthBreakdownCard } from "@/components/dashboard/net-worth-breakdown";
 import { MetricCard } from "@/components/metric-card";
@@ -93,6 +94,7 @@ export function DashboardClient({
   // Each widget's rendered content; null when its own precondition isn't met.
   const widgets = useMemo<Record<DashboardWidget, ReactNode>>(
     () => ({
+      allowance: <DailyAllowanceCard currency={data.currency} />,
       overview: <DashboardOverview data={data} />,
       forecast: <DashboardForecastStrip forecast={forecast} />,
       emergencyFund: <EmergencyFundCard fund={data.emergencyFund} currency={data.currency} />,

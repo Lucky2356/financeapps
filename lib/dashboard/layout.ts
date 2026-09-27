@@ -4,6 +4,7 @@
 // helpers below are unit-tested; storage access lives in the component.
 
 export const DASHBOARD_WIDGETS = [
+  "allowance",
   "overview",
   "forecast",
   "emergencyFund",
@@ -28,6 +29,8 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
   hidden: ["metrics"]
 };
 
+const SHOWN_FIRST_WHEN_NEW: readonly DashboardWidget[] = ["allowance"];
+
 function isWidget(value: unknown): value is DashboardWidget {
   return typeof value === "string" && (DASHBOARD_WIDGETS as readonly string[]).includes(value);
 }
@@ -41,7 +44,14 @@ export function normalizeLayout(
   if (!saved) return { order: [...DASHBOARD_WIDGETS], hidden: [] };
   const savedOrder = Array.isArray(saved.order) ? saved.order.filter(isWidget) : [];
   const seen = new Set(savedOrder);
-  const order = [...savedOrder, ...DASHBOARD_WIDGETS.filter((widget) => !seen.has(widget))];
+  const missing = DASHBOARD_WIDGETS.filter((widget) => !seen.has(widget));
+  // «Можно тратить сегодня» — то, ради чего главную открывают каждый день: у
+  // тех, кто настроил главную раньше, она встаёт наверх, а не в самый низ.
+  const order = [
+    ...missing.filter((widget) => SHOWN_FIRST_WHEN_NEW.includes(widget)),
+    ...savedOrder,
+    ...missing.filter((widget) => !SHOWN_FIRST_WHEN_NEW.includes(widget))
+  ];
   const hidden = Array.isArray(saved.hidden) ? saved.hidden.filter(isWidget) : [];
   return { order, hidden: hidden.filter((widget) => order.includes(widget)) };
 }

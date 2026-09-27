@@ -15,7 +15,9 @@ describe("normalizeLayout", () => {
 
   it("appends new widgets missing from a saved order", () => {
     const layout = normalizeLayout({ order: ["charts", "metrics"], hidden: [] });
-    expect(layout.order.slice(0, 2)).toEqual(["charts", "metrics"]);
+    // Свой порядок сохранён; «Можно тратить сегодня» встаёт над ним, а прочие
+    // новые — после.
+    expect(layout.order.slice(0, 3)).toEqual(["allowance", "charts", "metrics"]);
     // every known widget is present exactly once
     expect(new Set(layout.order).size).toBe(DASHBOARD_WIDGETS.length);
   });
