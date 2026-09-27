@@ -97,6 +97,7 @@ import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import { computeDailyAllowance, type Allowance } from "@/lib/analytics/daily-allowance";
+import { buildMonthRecap, previousMonth } from "@/lib/analytics/month-recap";
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
@@ -638,6 +639,28 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/rules") return this.rulesPage(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(this.inBase(state)) as T;
+    if (pathname === "/month-recap") {
+      // Итоги ПРОШЛОГО месяца по умолчанию: их показывают в начале нового.
+      const counted = this.countingState(this.inBase(state), false);
+      const today = isoDay(new Date());
+      const month = /^\d{4}-\d{2}$/.test(searchParams.get("month") ?? "")
+        ? String(searchParams.get("month"))
+        : previousMonth(today.slice(0, 7));
+      return buildMonthRecap({
+        month,
+        // Идущий месяц — на сегодня, и прошлый для сравнения — к тому же числу.
+        asOfDay: month === today.slice(0, 7) ? Number(today.slice(8, 10)) : null,
+        rows: counted.transactions.map((row) => ({
+          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label,
+          color: row.category.color
+        })),
+        budgets: this.budgets(counted, month).budgets
+      }) as T;
+    }
     if (pathname === "/allowance")
       return this.allowance(this.countingState(this.inBase(state), false)) as T;
     if (pathname === "/dashboard")
