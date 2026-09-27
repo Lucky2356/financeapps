@@ -25,6 +25,7 @@ vi.mock("@/services/market/createMarketDataProvider", () => {
     getSecurityByTicker: async (ticker) => (ticker === BOND.ticker ? BOND : null),
     getHistoricalPrices: async () => [],
     getIndexHistory: async () => [],
+    getPayouts: async () => [],
     updateMarketPrices: async () => undefined,
     searchSecurities: async () => [BOND]
   } as MarketDataService;

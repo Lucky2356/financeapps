@@ -1,3 +1,4 @@
+import { parseCoupons, parseDividends, type Payout } from "@/lib/market/payouts";
 import { format, subDays } from "date-fns";
 
 import type { AssetKind } from "@/types/enums";
@@ -336,6 +337,28 @@ export class MoexMarketDataProvider implements MarketDataService {
       return matches.find((security) => security.ticker === t) ?? null;
     } catch {
       return this.fallback.getSecurityByTicker(ticker);
+    }
+  }
+
+  async getPayouts(ticker: string, kind: AssetKind): Promise<Payout[]> {
+    const secid = encodeURIComponent(ticker.toUpperCase());
+    try {
+      if (kind === "BOND") {
+        const response = await fetchWithTimeout(
+          `https://iss.moex.com/iss/securities/${secid}/bondization.json?iss.meta=off&iss.only=coupons&limit=100`
+        );
+        if (!response.ok) return [];
+        return parseCoupons(ticker, await response.json());
+      }
+      if (kind === "GOLD") return [];
+      const response = await fetchWithTimeout(
+        `https://iss.moex.com/iss/securities/${secid}/dividends.json?iss.meta=off`
+      );
+      if (!response.ok) return [];
+      return parseDividends(ticker, await response.json());
+    } catch {
+      // Нет сети — выплат просто не видно; портфель от этого не ломается.
+      return [];
     }
   }
 

@@ -701,6 +701,7 @@ export class LocalApiClient implements ApiClient {
       );
       return { results } as T;
     }
+    if (pathname === "/investments/payouts") return (await this.payouts(state)) as T;
     if (pathname === "/investments/index") {
       // Индекс Мосбиржи для сравнения: IMOEX (цены) или MCFTR (с дивидендами).
       const index = searchParams.get("index") === "MCFTR" ? "MCFTR" : "IMOEX";
@@ -2871,6 +2872,79 @@ export class LocalApiClient implements ApiClient {
       },
       getClientLocale()
     );
+  }
+
+  /**
+   * Выплаты по бумагам портфеля: ближайшие на год вперёд — с суммой на ваше
+   * количество, и недавние (за 90 дней), которые ещё не отмечены полученными.
+   * Отметка «Получено» — это обычная запись дивиденда в «Доход»: так выплата
+   * попадает и во «Весь доход», и в налог.
+   */
+  private async payouts(state: LocalState) {
+    const provider = createMarketDataProvider();
+    const today = isoDay(new Date());
+    const yearAhead = isoDay(new Date(Date.now() + 365 * 86_400_000));
+    const recentFrom = isoDay(new Date(Date.now() - 90 * 86_400_000));
+    const received = (state.realizedInvestmentEvents ?? []).filter(
+      (event) => event.type === "DIVIDEND"
+    );
+    const positions = state.investments.portfolio;
+    const found: Array<{
+      ticker: string;
+      name: string;
+      kind: "DIVIDEND" | "COUPON";
+      date: string;
+      perShare: number;
+      quantity: number;
+      amount: number;
+    }> = [];
+    for (let start = 0; start < positions.length; start += 4) {
+      await Promise.all(
+        positions.slice(start, start + 4).map(async (position) => {
+          const list = await provider
+            .getPayouts(position.ticker, position.assetKind ?? "STOCK")
+            .catch(() => []);
+          for (const payout of list) {
+            if (payout.date < recentFrom || payout.date > yearAhead) continue;
+            found.push({
+              ticker: position.ticker,
+              name: position.name,
+              kind: payout.kind,
+              date: payout.date,
+              perShare: payout.perShare,
+              quantity: position.quantity,
+              amount: roundMoney(
+                convert(
+                  payout.perShare * position.quantity,
+                  payout.currency,
+                  state.currency,
+                  this.rates(state)
+                )
+              )
+            });
+          }
+        })
+      );
+    }
+    found.sort((a, b) => a.date.localeCompare(b.date));
+    // Недавняя выплата считается полученной, если по этой бумаге после её даты
+    // (в пределах двух месяцев) уже записан дивиденд.
+    const isReceived = (payout: (typeof found)[number]) =>
+      received.some((event) => {
+        const date = event.date.slice(0, 10);
+        return (
+          event.ticker === payout.ticker &&
+          date >= payout.date &&
+          date <= isoDay(new Date(Date.parse(payout.date) + 60 * 86_400_000))
+        );
+      });
+    const upcoming = found.filter((payout) => payout.date >= today);
+    return {
+      currency: state.currency,
+      upcoming,
+      recent: found.filter((payout) => payout.date < today && !isReceived(payout)),
+      yearAhead: roundMoney(upcoming.reduce((sum, payout) => sum + payout.amount, 0))
+    };
   }
 
   /**

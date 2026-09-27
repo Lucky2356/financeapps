@@ -24,6 +24,7 @@ import { PortfolioHero } from "@/components/investments/portfolio-hero";
 import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
 import { RealizedTaxReport } from "@/components/investments/realized-tax-report";
 import { HoldingsTable } from "@/components/investments/holdings-table";
+import { UpcomingPayouts } from "@/components/investments/upcoming-payouts";
 import { DividendTracker } from "@/components/investments/dividend-tracker";
 import { MarketAlertsPanel } from "@/components/investments/market-alerts-panel";
 import { RebalancePanel } from "@/components/investments/rebalance-panel";
@@ -581,6 +582,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       {/* ── Доход — выплаты, продажи, налоги ─────────────────────────────── */}
       {activeTab === "income" ? (
         <div className="space-y-4">
+          <UpcomingPayouts />
           <DividendTracker />
           <RealizedTaxReport />
           {data.portfolio.length > 0 && (

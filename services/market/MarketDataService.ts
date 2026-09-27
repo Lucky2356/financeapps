@@ -1,3 +1,4 @@
+import type { Payout } from "@/lib/market/payouts";
 import type { AssetKind, SecurityRisk } from "@/types/enums";
 
 export type MarketSecurity = {
@@ -36,6 +37,8 @@ export interface MarketDataService {
   getHistoricalPrices(ticker: string, from: Date, to: Date): Promise<HistoricalPrice[]>;
   /** История индекса Мосбиржи (IMOEX, MCFTR) — для сравнения с портфелем. */
   getIndexHistory(index: string, from: Date, to: Date): Promise<HistoricalPrice[]>;
+  /** Дивиденды (акции, фонды) или купоны (облигации) по бумаге. */
+  getPayouts(ticker: string, kind: AssetKind): Promise<Payout[]>;
   updateMarketPrices(): Promise<void>;
   // Search the full exchange universe by ticker or name (for adding anything
   // listed). `kind` narrows the search to one type of asset.
