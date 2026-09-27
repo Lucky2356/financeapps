@@ -2,7 +2,7 @@
 
 // Замок в настройках: чем открывается эта книга и что с этим можно сделать.
 
-import { Lock, LockOpen } from "lucide-react";
+import { Fingerprint, Lock, LockOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { RecoveryWords } from "@/components/vault/recovery-words";
 import { announceVaultChanged } from "@/components/vault/vault-gate";
 import { useI18n } from "@/lib/i18n/context";
+import { biometricAvailable } from "@/lib/vault/biometric";
 import { accountService } from "@/lib/vault/runtime";
 
 export function VaultPanel() {
@@ -23,13 +24,44 @@ export function VaultPanel() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
+  // Отпечаток: есть ли датчик с отпечатками, включён ли вход, и пароль для
+  // включения (ключ данных нужно достать заново — без пароля его не взять).
+  const [canBiometric, setCanBiometric] = useState(false);
+  const [biometricOn, setBiometricOn] = useState(false);
+  const [biometricPassword, setBiometricPassword] = useState("");
+  const [askingPassword, setAskingPassword] = useState(false);
 
   useEffect(() => {
     void Promise.resolve().then(async () => {
       setRemembered(await accountService.remembered());
       setHasPassword(await accountService.hasPassword());
+      setCanBiometric(await biometricAvailable());
+      setBiometricOn(await accountService.biometricEnabled());
     });
   }, []);
+
+  async function enableBiometric(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const done = await accountService.enableBiometric(biometricPassword, {
+        title: t("bio.promptEnable"),
+        cancel: t("common.cancel")
+      });
+      if (done.ok) {
+        setBiometricOn(true);
+        setAskingPassword(false);
+        toast.success(t("bio.enabled"));
+      } else if (done.why !== "cancelled") {
+        toast.error(done.detail || t("bio.failed"));
+      }
+    } catch {
+      toast.error(t("vault.unlock.wrong"));
+    } finally {
+      setBiometricPassword("");
+      setBusy(false);
+    }
+  }
 
   /**
    * Задать пароль записи, заведённой без него.
@@ -160,6 +192,57 @@ export function VaultPanel() {
             {t("vault.settings.change")}
           </Button>
         </form>
+
+        {/* Вход по отпечатку — только на телефоне с отпечатками и только при
+            заданном пароле: без пароля и так ничего не спрашивают. */}
+        {canBiometric && hasPassword ? (
+          <div className="space-y-3 border-t pt-4" data-testid="biometric-row">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <Fingerprint className="size-4 text-primary" />
+                  {t("bio.title")}
+                </p>
+                <p className="text-xs text-muted-foreground">{t("bio.hint")}</p>
+              </div>
+              {biometricOn ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await accountService.disableBiometric();
+                    setBiometricOn(false);
+                    toast.success(t("bio.disabled"));
+                  }}
+                >
+                  {t("bio.turnOff")}
+                </Button>
+              ) : (
+                <Button type="button" size="sm" onClick={() => setAskingPassword((was) => !was)}>
+                  {t("bio.turnOn")}
+                </Button>
+              )}
+            </div>
+            {askingPassword && !biometricOn ? (
+              <form onSubmit={enableBiometric} className="space-y-2">
+                <Label htmlFor="bio-password">{t("bio.password")}</Label>
+                <Input
+                  id="bio-password"
+                  type="password"
+                  autoComplete="current-password"
+                  autoFocus
+                  value={biometricPassword}
+                  onChange={(event) => setBiometricPassword(event.target.value)}
+                  required
+                />
+                <Button type="submit" disabled={busy} className="w-full sm:w-auto">
+                  {t("bio.confirm")}
+                </Button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* «Запереть» — то же, что выйти: ключ уходит из памяти, устройство
             забывает его, и данные снова спрашивают пароль.

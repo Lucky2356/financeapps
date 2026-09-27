@@ -18,6 +18,11 @@ import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
 import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
+import {
+  QUICK_ADD_OPEN,
+  takeQuickAddRequest,
+  type QuickAddRequest
+} from "@/lib/transactions/quick-add-request";
 import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -125,7 +130,7 @@ export function QuickAddFab({
     setData: setRefs
   } = useApiPageData<ImportPageData>(initialRefs, "/import");
 
-  async function openDialog() {
+  async function openDialog(request: QuickAddRequest = {}) {
     // Rules and recent operations feed the category guess. Fetched when the
     // dialog opens rather than kept live: it is a hint, not a total.
     //
@@ -160,6 +165,8 @@ export function QuickAddFab({
     } catch {
       /* settings unavailable — keep current type */
     }
+    // Ярлык «Доход» на значке важнее типа по умолчанию из настроек.
+    if (request.type) openedType = request.type;
     setType(openedType);
     // Категория и счёт — как у последней операции того же типа: чаще всего
     // следующая такая же. Счёт, выбранный в настройках, главнее.
@@ -188,14 +195,22 @@ export function QuickAddFab({
     setManualCategory(false);
     setAutoSuggested(false);
     setOpen(true);
+    // Ярлык «Сканировать чек»: окно открыто — сразу камера.
+    if (request.scanReceipt && cameraPossible()) void scanReceipt(openedType);
   }
 
   useEffect(() => {
+    // Открыть по просьбе снаружи: ярлык на значке, кнопка «Операция» и т. п.
+    // Просьба могла прийти раньше, чем эта кнопка появилась, — тогда она ждёт.
     const handler = () => {
-      void openDialog();
+      const request = takeQuickAddRequest();
+      void openDialog(request ?? {});
     };
-    window.addEventListener("quick-add-open", handler);
-    return () => window.removeEventListener("quick-add-open", handler);
+    window.addEventListener(QUICK_ADD_OPEN, handler);
+    const early = takeQuickAddRequest();
+    // На микрозадачу, а не прямо в эффекте: окно открывается состоянием.
+    if (early) void Promise.resolve().then(() => openDialog(early));
+    return () => window.removeEventListener(QUICK_ADD_OPEN, handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -315,7 +330,7 @@ export function QuickAddFab({
 
   // QR с кассового чека: сумма, дата и расход/возврат — без набора руками.
   // Категорию подставляет то же, что и всегда: прошлые операции и правила.
-  async function scanReceipt() {
+  async function scanReceipt(current: QuickAddType = type) {
     const shot = await scanQr({ hint: t("qa.receipt.hint") });
     if (!shot.ok) {
       if (shot.why === "denied") toast.error(t("qa.receipt.denied"));
@@ -327,7 +342,7 @@ export function QuickAddFab({
       toast.error(t("qa.receipt.notReceipt"));
       return;
     }
-    if (receipt.type !== type) changeType(receipt.type);
+    if (receipt.type !== current) changeType(receipt.type);
     const written = String(receipt.amount);
     setAmount(written);
     setDate(receipt.date);
