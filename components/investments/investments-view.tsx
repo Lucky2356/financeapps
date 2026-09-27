@@ -223,6 +223,31 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     );
   }
 
+  // Вся подборка разом — каждой бумагой как докупкой, как и по одной.
+  async function addAllSuggestions() {
+    const picked = [...suggestions];
+    await run(
+      async () => {
+        for (const suggestion of picked) {
+          await apiClient.post("/investments", {
+            action: "addLot",
+            ticker: suggestion.ticker,
+            quantity: String(suggestion.suggestedQuantity),
+            price: String(suggestion.price)
+          });
+        }
+      },
+      {
+        success: t("inv.pick.addedAll", { count: picked.length }),
+        error: t("inv.toast.addError"),
+        onSuccess: async () => {
+          setSuggestions([]);
+          await refresh();
+        }
+      }
+    );
+  }
+
   async function submitPosition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -528,6 +553,28 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
               {suggested && suggestions.length > 0 ? (
                 <div className="space-y-2">
+                  {/* Итог подборки и «добавить всё» — одной строкой сверху:
+                      подбирали под бюджет, и первым делом хочется видеть,
+                      сколько это вместе. */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                    <span>
+                      {t("inv.pick.total", {
+                        amount: formatCurrency(
+                          suggestions.reduce((sum, item) => sum + item.suggestedAmount, 0),
+                          data.currency
+                        )
+                      })}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void addAllSuggestions()}
+                    >
+                      <Plus className="size-4" />
+                      {t("inv.pick.addAll")}
+                    </Button>
+                  </div>
                   {suggestions.map((suggestion) => (
                     <div
                       key={suggestion.ticker}
