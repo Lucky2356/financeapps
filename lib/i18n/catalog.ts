@@ -1351,6 +1351,7 @@ const ru: Messages = {
   "inv.col.current": "Текущая",
   "inv.col.pnl": "P/L",
   "inv.col.share": "Доля",
+  "inv.col.accrued": "НКД (в цене)",
   "inv.addPosition": "Добавить позицию",
   "inv.addPosition.desc":
     "Найдите бумагу, укажите количество и среднюю цену покупки. Это учетная запись портфеля, не инвестиционный совет.",
@@ -1398,6 +1399,7 @@ const ru: Messages = {
   "inv.rt.qty": "Кол-во",
   "inv.rt.sellPrice": "Цена продажи",
   "inv.rt.buyPrice": "Цена покупки",
+  "inv.rt.buyPriceAuto": "Из покупок",
   "inv.rt.toAccount": "Куда зачислить выручку",
   "inv.rt.noAccount": "Никуда — оставить у брокера",
   "inv.rt.sellNote":
@@ -3544,6 +3546,7 @@ const en: Messages = {
   "inv.col.current": "Current",
   "inv.col.pnl": "P/L",
   "inv.col.share": "Share",
+  "inv.col.accrued": "Accrued interest (in price)",
   "inv.addPosition": "Add position",
   "inv.addPosition.desc":
     "Find a security, enter the quantity and average purchase price. This is a portfolio record, not investment advice.",
@@ -3590,6 +3593,7 @@ const en: Messages = {
   "inv.rt.qty": "Quantity",
   "inv.rt.sellPrice": "Sell price",
   "inv.rt.buyPrice": "Buy price",
+  "inv.rt.buyPriceAuto": "From purchases",
   "inv.rt.toAccount": "Where the proceeds go",
   "inv.rt.noAccount": "Nowhere — leave it with the broker",
   "inv.rt.sellNote":

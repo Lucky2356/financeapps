@@ -2789,6 +2789,12 @@ export class LocalApiClient implements ApiClient {
       const security = securityByTicker.get(position.ticker);
       const price = security && security.price > 0 ? security.price : position.currentPrice;
       const currentValue = roundMoney(price * position.quantity);
+      // Облигация: цена с биржи уже с НКД. Стоимость с ним и остаётся, а
+      // прибыль — по чистой цене, иначе она завышена на весь накопленный купон.
+      const accrued =
+        security && security.price > 0
+          ? (security.accruedInterest ?? 0)
+          : (position.accruedInterest ?? 0);
       return {
         ticker: position.ticker,
         name: security?.name ?? position.name,
@@ -2802,9 +2808,10 @@ export class LocalApiClient implements ApiClient {
         averageBuyPrice: position.averageBuyPrice,
         currentPrice: price,
         currentValue,
-        pnl: roundMoney((price - position.averageBuyPrice) * position.quantity),
+        pnl: roundMoney((price - accrued - position.averageBuyPrice) * position.quantity),
         share: 0,
         risk: security?.risk ?? position.risk,
+        ...(accrued > 0 ? { accruedInterest: accrued } : {}),
         // The purchases the average was derived from travel with the position.
         ...(position.lots?.length ? { lots: position.lots } : {})
       };
@@ -2814,11 +2821,20 @@ export class LocalApiClient implements ApiClient {
       ...row,
       share: total > 0 ? percent(row.currentValue, total) : 0
     }));
+    // История за месяц по каждой бумаге — по четыре разом, а не по одной: этот
+    // расчёт идёт на каждое открытие и раз в 45 секунд, и портфель из десяти
+    // бумаг ждал десять запросов подряд. Бумага без истории не роняет всё.
     const historical: Record<string, number[]> = {};
-    for (const row of portfolio) {
-      historical[row.ticker] = (
-        await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())
-      ).map((item) => item.price);
+    const from = subMonths(new Date(), 1);
+    for (let start = 0; start < portfolio.length; start += 4) {
+      await Promise.all(
+        portfolio.slice(start, start + 4).map(async (row) => {
+          const points = await provider
+            .getHistoricalPrices(row.ticker, from, new Date())
+            .catch(() => []);
+          historical[row.ticker] = points.map((item) => item.price);
+        })
+      );
     }
     const analysis = new InvestmentAnalysisService().analyze(
       portfolio,

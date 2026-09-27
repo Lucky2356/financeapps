@@ -338,11 +338,15 @@ export type PortfolioRow = {
   sectorOverride?: string;
   quantity: number;
   averageBuyPrice: number;
+  /** С НКД у облигаций — столько бумага стоит сейчас. */
   currentPrice: number;
   currentValue: number;
+  /** По чистой цене: НКД — не прибыль, его платили при покупке. */
   pnl: number;
   share: number;
   risk: SecurityRisk;
+  /** НКД на одну облигацию, ₽. Нет — не облигация или биржа недоступна. */
+  accruedInterest?: number;
   /**
    * The purchases this position was built from. `quantity` and
    * `averageBuyPrice` above are derived from them. Absent on positions entered

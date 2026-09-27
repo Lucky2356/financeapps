@@ -16,6 +16,12 @@ export type MarketSecurity = {
    * advice nobody can follow — the lot is 10. Absent means one.
    */
   lotSize?: number;
+  /**
+   * Накопленный купонный доход (НКД) облигации на одну бумагу, в рублях. Уже
+   * входит в `price` — столько стоит бумага с НКД. Прибыль считается без него:
+   * средняя цена покупки у брокера — чистая, НКД при покупке платится отдельно.
+   */
+  accruedInterest?: number;
 };
 
 export type HistoricalPrice = {

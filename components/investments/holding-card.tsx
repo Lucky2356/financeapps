@@ -104,6 +104,12 @@ export function HoldingCard({
               value={formatCurrency(position.currentPrice, currency)}
             />
             <Detail label={t("inv.col.share")} value={formatPercent(position.share)} />
+            {position.accruedInterest ? (
+              <Detail
+                label={t("inv.col.accrued")}
+                value={formatCurrency(position.accruedInterest * position.quantity, currency)}
+              />
+            ) : null}
           </dl>
           <div className="mt-4">
             <InlineStockChart

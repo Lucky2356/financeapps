@@ -215,6 +215,8 @@ type SnapshotRow = {
   assetKind: AssetKind;
   /** Exchange lot: the smallest number of shares that can actually be bought. */
   lotSize: number;
+  /** НКД на бумагу в рублях; у всего, что не облигация, — 0. */
+  accruedInterest: number;
   board: BoardSpec;
 };
 // Per-ticker daily stats from history: the official last close (what brokers show
@@ -431,6 +433,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         marketPrice: toRoubles(quotedMarket),
         changeDay: typeof pct === "number" ? Number(pct.toFixed(2)) : 0,
         lotSize: lot > 0 ? lot : 1,
+        accruedInterest: roundKopecks(accrued),
         name: String(security?.["SHORTNAME"] ?? ""),
         assetKind: spec.assetKind ?? kindFromSecType(String(security?.["SECTYPE"] ?? "")),
         board: spec
@@ -479,7 +482,8 @@ export class MoexMarketDataProvider implements MarketDataService {
           price: row.live > 0 ? row.live : row.marketPrice,
           changeDay: row.changeDay,
           change30d: 0,
-          lotSize: row.lotSize
+          lotSize: row.lotSize,
+          ...(row.accruedInterest > 0 ? { accruedInterest: row.accruedInterest } : {})
         } satisfies MarketSecurity;
       });
 
