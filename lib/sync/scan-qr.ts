@@ -53,13 +53,15 @@ function words(): { hint: string; cancel: string } {
 }
 
 /** Показать рамку поверх камеры. Возвращает, чем её снять. */
-export function showViewfinder(onCancel: () => void): () => void {
+export function showViewfinder(onCancel: () => void, ownHint?: string): () => void {
   if (typeof document === "undefined") return () => {};
   const style = document.createElement("style");
   style.textContent = STYLE;
   document.head.appendChild(style);
 
-  const { hint, cancel } = words();
+  const said = words();
+  const hint = ownHint ?? said.hint;
+  const cancel = said.cancel;
   const layer = document.createElement("div");
   layer.className = LAYER;
   layer.setAttribute("data-testid", "qr-viewfinder");
@@ -99,7 +101,11 @@ export function cameraPossible(): boolean {
   return isAndroidShell();
 }
 
-export async function scanQr(): Promise<ScanOutcome> {
+/**
+ * `hint` — что написать над рамкой. По умолчанию — про QR связки на другом
+ * устройстве; сканер чека говорит своё.
+ */
+export async function scanQr(options: { hint?: string } = {}): Promise<ScanOutcome> {
   if (!cameraPossible()) return { ok: false, why: "absent" };
 
   let hide = () => {};
@@ -116,7 +122,7 @@ export async function scanQr(): Promise<ScanOutcome> {
 
     // «Отмена» гасит видоискатель, и плагин отвечает на ждущий `scan` отказом
     // «cancelled» — его разбирает catch ниже, как и прежде.
-    hide = showViewfinder(() => void scanner.cancel().catch(() => {}));
+    hide = showViewfinder(() => void scanner.cancel().catch(() => {}), options.hint);
     const found = await scanner.scan({
       // Только QR: сканер, хватающий штрихкод с пачки молока, будет хватать
       // его и здесь — а понять такое всё равно нечем.

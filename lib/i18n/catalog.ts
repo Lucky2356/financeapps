@@ -1144,6 +1144,12 @@ const ru: Messages = {
   "inv.searching": "Поиск…",
   // Quick-add FAB
   "qa.fabAria": "Быстрое добавление операции",
+  "qa.receipt.scan": "Сканировать QR с чека",
+  "qa.receipt.hint": "Наведите камеру на QR-код внизу кассового чека",
+  "qa.receipt.denied": "Нет доступа к камере — разрешите его в настройках телефона.",
+  "qa.receipt.broken": "Камера не открылась. Введите сумму вручную.",
+  "qa.receipt.notReceipt": "Это не QR кассового чека. Он обычно внизу чека, рядом с «ФН» и «ФД».",
+  "qa.receipt.done": "Из чека: {amount}, {time}. Проверьте категорию и сохраните.",
   "qa.title": "Быстрое добавление",
   "qa.descLabel": "Описание (необязательно)",
   "qa.descPlaceholder": "Например: продукты",
@@ -3340,6 +3346,13 @@ const en: Messages = {
   "inv.searching": "Searching…",
   // Quick-add FAB
   "qa.fabAria": "Quick-add a transaction",
+  "qa.receipt.scan": "Scan the receipt QR",
+  "qa.receipt.hint": "Point the camera at the QR code at the bottom of the receipt",
+  "qa.receipt.denied": "No camera access — allow it in the phone settings.",
+  "qa.receipt.broken": "The camera did not open. Enter the amount by hand.",
+  "qa.receipt.notReceipt":
+    "This is not a receipt QR code. It is usually at the bottom, next to FN and FD.",
+  "qa.receipt.done": "From the receipt: {amount}, {time}. Check the category and save.",
   "qa.title": "Quick add",
   "qa.descLabel": "Description (optional)",
   "qa.descPlaceholder": "E.g. groceries",

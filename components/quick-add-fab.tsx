@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, ScanLine } from "lucide-react";
 
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,8 @@ import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
+import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
+import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
 import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -274,6 +276,33 @@ export function QuickAddFab({
     setAutoSuggested(false);
   }
 
+  // QR с кассового чека: сумма, дата и расход/возврат — без набора руками.
+  // Категорию подставляет то же, что и всегда: прошлые операции и правила.
+  async function scanReceipt() {
+    const shot = await scanQr({ hint: t("qa.receipt.hint") });
+    if (!shot.ok) {
+      if (shot.why === "denied") toast.error(t("qa.receipt.denied"));
+      else if (shot.why === "broken") toast.error(t("qa.receipt.broken"));
+      return;
+    }
+    const receipt = parseFnsReceipt(shot.text);
+    if (!receipt) {
+      toast.error(t("qa.receipt.notReceipt"));
+      return;
+    }
+    if (receipt.type !== type) changeType(receipt.type);
+    const written = String(receipt.amount);
+    setAmount(written);
+    setDate(receipt.date);
+    setFilledIn((was) => ({ ...was, amount: written, date: receipt.date }));
+    toast.success(
+      t("qa.receipt.done", {
+        amount: formatCurrency(receipt.amount, "RUB"),
+        time: receipt.time
+      })
+    );
+  }
+
   function pickCategory(value: string) {
     // Пустое значение — не выбор человека: пустого пункта в списке нет.
     // Так Radix сообщает, что прежнее значение пропало из списка, а список
@@ -398,6 +427,17 @@ export function QuickAddFab({
           <DialogHeader>
             <DialogTitle>{t("qa.title")}</DialogTitle>
           </DialogHeader>
+          {cameraPossible() ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => void scanReceipt()}
+            >
+              <ScanLine className="size-4" />
+              {t("qa.receipt.scan")}
+            </Button>
+          ) : null}
           <div className="grid gap-4">
             <div className="space-y-2">
               <Label>{t("tx.type")}</Label>
