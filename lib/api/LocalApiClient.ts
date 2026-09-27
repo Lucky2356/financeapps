@@ -96,6 +96,8 @@ import { budgetInForce, effectiveLimit, rolloverCarry } from "@/lib/budget-rollo
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
+import { recordPortfolioSnapshot, type PortfolioSnapshot } from "@/lib/investments/snapshots";
+import { sellGain } from "@/services/InvestmentTaxReportService";
 import { computeDailyAllowance, type Allowance } from "@/lib/analytics/daily-allowance";
 import { buildMonthRecap, previousMonth } from "@/lib/analytics/month-recap";
 import {
@@ -181,6 +183,8 @@ type LocalState = {
   currencyRates: CurrencyRates;
   currencyRatesUpdatedAt: string | null;
   netWorthSnapshots: NetWorthSnapshot[];
+  /** Раз в день: стоимость портфеля и вложенное — см. lib/investments/snapshots.ts. */
+  portfolioSnapshots?: PortfolioSnapshot[];
   realizedInvestmentEvents: Array<Stamped<RealizedInvestmentEvent>>;
   expectedDividends: Array<Stamped<ExpectedDividend>>;
   targetAllocations: Array<Stamped<TargetAllocation>>;
@@ -695,6 +699,21 @@ export class LocalApiClient implements ApiClient {
       );
       return { results } as T;
     }
+    if (pathname === "/investments/index") {
+      // Индекс Мосбиржи для сравнения: IMOEX (цены) или MCFTR (с дивидендами).
+      const index = searchParams.get("index") === "MCFTR" ? "MCFTR" : "IMOEX";
+      const range = searchParams.get("range") ?? "6m";
+      const prices = await createMarketDataProvider().getIndexHistory(
+        index,
+        historyRangeStart(range),
+        new Date()
+      );
+      return {
+        index,
+        range,
+        points: prices.map((p) => ({ date: p.date.toISOString(), price: p.price }))
+      } as T;
+    }
     if (pathname === "/investments/history") {
       const ticker = (searchParams.get("ticker") ?? "").toUpperCase();
       const range = searchParams.get("range") ?? "6m";
@@ -728,6 +747,17 @@ export class LocalApiClient implements ApiClient {
           sectorStructure: invData.sectorStructure,
           assetStructure: invData.assetStructure
         };
+        // Снимок дня: портфель пуст — снимать нечего (иначе история
+        // начиналась бы с нулей до первой покупки).
+        if (invData.portfolio.length > 0) {
+          fresh.portfolioSnapshots = recordPortfolioSnapshot(
+            fresh.portfolioSnapshots ?? [],
+            isoDay(new Date()),
+            invData.portfolio.reduce((sum, row) => sum + row.currentValue, 0),
+            invData.portfolio.reduce((sum, row) => sum + row.quantity * row.averageBuyPrice, 0)
+          );
+          invData.history = fresh.portfolioSnapshots;
+        }
         await this.save(fresh);
       });
       return invData as T;
@@ -2841,6 +2871,38 @@ export class LocalApiClient implements ApiClient {
     );
   }
 
+  /**
+   * Весь доход от вложений, а не только «бумажный»: бумажная прибыль того, что
+   * держишь, плюс зафиксированная на продажах, плюс полученные дивиденды и
+   * купоны. Без продаж и выплат портфель, где продали удачно и получили
+   * дивиденды, выглядел беднее, чем есть.
+   */
+  private investmentTotals(state: LocalState, portfolio: InvestmentData["portfolio"]) {
+    const rates = this.rates(state);
+    const toBase = (amount: number, currency?: string) =>
+      convert(amount, currency || state.currency, state.currency, rates);
+    const events = state.realizedInvestmentEvents ?? [];
+    const yearAgo = isoDay(new Date(Date.now() - 365 * 86_400_000));
+    const unrealized = portfolio.reduce((sum, row) => sum + row.pnl, 0);
+    const invested = portfolio.reduce((sum, row) => sum + row.quantity * row.averageBuyPrice, 0);
+    const realized = events
+      .filter((event) => event.type === "SELL")
+      .reduce((sum, event) => sum + toBase(sellGain(event), event.currency), 0);
+    const payouts = events.filter((event) => event.type === "DIVIDEND");
+    const dividends = payouts.reduce((sum, event) => sum + toBase(event.amount, event.currency), 0);
+    const dividends12m = payouts
+      .filter((event) => event.date.slice(0, 10) >= yearAgo)
+      .reduce((sum, event) => sum + toBase(event.amount, event.currency), 0);
+    return {
+      invested: roundMoney(invested),
+      unrealized: roundMoney(unrealized),
+      realized: roundMoney(realized),
+      dividends: roundMoney(dividends),
+      dividends12m: roundMoney(dividends12m),
+      total: roundMoney(unrealized + realized + dividends)
+    };
+  }
+
   private async investments(state: LocalState): Promise<InvestmentData> {
     const provider = createMarketDataProvider();
     const securities = await provider.getSecurities();
@@ -2941,7 +3003,9 @@ export class LocalApiClient implements ApiClient {
         translate(getClientLocale(), `inv.kind.${kind}`)
       ),
       risks: analysis.risks,
-      education: analysis.education
+      education: analysis.education,
+      totals: this.investmentTotals(state, portfolio),
+      history: state.portfolioSnapshots ?? []
     };
   }
 

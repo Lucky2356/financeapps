@@ -202,6 +202,19 @@ function historyUrl(spec: BoardSpec, ticker: string, from: string, till: string)
 
 const SHARES_BOARD = BOARDS[0];
 
+/** Сколько строк история отдаёт за раз. */
+const HISTORY_PAGE = 100;
+
+/** Индексы Мосбиржи: IMOEX — цены, MCFTR — полной доходности (с дивидендами). */
+export const INDEX_BOARD: BoardSpec = {
+  board: "SNDX",
+  engine: "stock",
+  market: "index",
+  assetKind: "OTHER",
+  securityColumns: [],
+  marketColumns: []
+};
+
 // `live` is the trustworthy intraday price (LAST/LCURRENTPRICE), 0 when the market
 // is closed; `marketPrice` is the weighted-average last-resort. Callers prefer
 // live → last historical close → marketPrice. Both are already in roubles: a
@@ -323,6 +336,19 @@ export class MoexMarketDataProvider implements MarketDataService {
       return matches.find((security) => security.ticker === t) ?? null;
     } catch {
       return this.fallback.getSecurityByTicker(ticker);
+    }
+  }
+
+  async getIndexHistory(index: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
+    try {
+      return await this.fetchHistory(
+        index.toUpperCase(),
+        format(from, "yyyy-MM-dd"),
+        format(to, "yyyy-MM-dd"),
+        INDEX_BOARD
+      );
+    } catch {
+      return this.fallback.getIndexHistory(index, from, to);
     }
   }
 
@@ -544,10 +570,24 @@ export class MoexMarketDataProvider implements MarketDataService {
     till: string,
     spec: BoardSpec
   ): Promise<HistoricalPrice[]> {
-    const response = await fetchWithTimeout(historyUrl(spec, ticker, from, till));
-    if (!response.ok) throw new Error(`MOEX history returned HTTP ${response.status}`);
-    const json = (await response.json()) as {
-      history: { columns: string[]; data: (string | number | null)[][] };
+    // Биржа отдаёт историю страницами по 100 строк. Бралась только первая, и
+    // график за год или пять лет обрывался на сотом торговом дне — примерно
+    // через пять месяцев от начала. Дочитываем, пока страница полная.
+    const pages: { columns: string[]; data: (string | number | null)[][] }[] = [];
+    for (let start = 0, page = 0; page < 20; page += 1) {
+      const response = await fetchWithTimeout(
+        `${historyUrl(spec, ticker, from, till)}&start=${start}`
+      );
+      if (!response.ok) throw new Error(`MOEX history returned HTTP ${response.status}`);
+      const body = (await response.json()) as {
+        history: { columns: string[]; data: (string | number | null)[][] };
+      };
+      pages.push(body.history);
+      if (body.history.data.length < HISTORY_PAGE) break;
+      start += body.history.data.length;
+    }
+    const json = {
+      history: { columns: pages[0]?.columns ?? [], data: pages.flatMap((part) => part.data) }
     };
 
     const colDate = json.history.columns.indexOf("TRADEDATE");

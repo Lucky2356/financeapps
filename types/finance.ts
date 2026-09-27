@@ -481,6 +481,17 @@ export type InvestmentData = {
   assetStructure: ChartDatum[];
   risks: RecommendationView[];
   education: RecommendationView[];
+  /** Весь доход от вложений: бумажный + с продаж + выплаты. */
+  totals?: {
+    invested: number;
+    unrealized: number;
+    realized: number;
+    dividends: number;
+    dividends12m: number;
+    total: number;
+  };
+  /** Снимки по дням: стоимость и вложенное (lib/investments/snapshots.ts). */
+  history?: Array<{ date: string; value: number; invested: number }>;
 };
 
 // A realized investment event (desktop tax ledger): a sale or a dividend.

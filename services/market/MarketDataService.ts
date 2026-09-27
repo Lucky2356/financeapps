@@ -34,6 +34,8 @@ export interface MarketDataService {
   getSecurities(): Promise<MarketSecurity[]>;
   getSecurityByTicker(ticker: string): Promise<MarketSecurity | null>;
   getHistoricalPrices(ticker: string, from: Date, to: Date): Promise<HistoricalPrice[]>;
+  /** История индекса Мосбиржи (IMOEX, MCFTR) — для сравнения с портфелем. */
+  getIndexHistory(index: string, from: Date, to: Date): Promise<HistoricalPrice[]>;
   updateMarketPrices(): Promise<void>;
   // Search the full exchange universe by ticker or name (for adding anything
   // listed). `kind` narrows the search to one type of asset.

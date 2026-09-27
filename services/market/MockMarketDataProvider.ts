@@ -228,6 +228,24 @@ export class MockMarketDataProvider implements MarketDataService {
     return dates;
   }
 
+  async getIndexHistory(index: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
+    // Без сети — ровная синтетика, как у бумаг: чтобы график сравнения был
+    // виден и в проверках, и без биржи.
+    const days: HistoricalPrice[] = [];
+    let cursor = startOfDay(from);
+    let step = 0;
+    while (cursor <= startOfDay(to)) {
+      days.push({
+        ticker: index.toUpperCase(),
+        date: cursor,
+        price: priceForSecurity(3000, 0.012, step, 7)
+      });
+      cursor = addDays(cursor, 1);
+      step += 1;
+    }
+    return days;
+  }
+
   async updateMarketPrices(): Promise<void> {
     await this.getHistoricalPrices("SBER", subDays(new Date(), 1), new Date());
   }
