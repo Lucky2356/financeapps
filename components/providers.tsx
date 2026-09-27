@@ -8,6 +8,7 @@ import { AppSettingsSync } from "@/components/app-settings-sync";
 import { AutomationRunner } from "@/components/automation-runner";
 import { CommandPalette } from "@/components/command-palette";
 import { OnboardingTour } from "@/components/onboarding-tour";
+import { WhatsNew } from "@/components/whats-new";
 import { PreferencesRoot } from "@/components/preferences-root";
 import { StartScreen } from "@/components/start-screen";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
@@ -39,6 +40,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <AutomationRunner />
             <CommandPalette />
             <OnboardingTour />
+            <WhatsNew />
             <StartScreen />
             <PreferencesRoot>{children}</PreferencesRoot>
           </VaultGate>

@@ -56,8 +56,23 @@ const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(
 const apkName = `financial-assistant_${version}_universal.apk`;
 const apkUrl = `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${apkName}`;
 
+// Одна строка «что нового» — для предложения обновиться, пока обновление ещё
+// не стоит. Берётся из того же файла, что окно «Что нового» после обновления
+// (lib/whats-new/releases.generated.json, собран из CHANGELOG): слова одни.
+// Нет файла или выпуска в нём — поле просто не пишется, updater его не требует.
+let notes;
+try {
+  const releases = JSON.parse(
+    readFileSync(join("lib", "whats-new", "releases.generated.json"), "utf8")
+  );
+  notes = releases.find((release) => release.version === version)?.summary || undefined;
+} catch {
+  notes = undefined;
+}
+
 const manifest = {
   version,
+  ...(notes ? { notes } : {}),
   pub_date: new Date().toISOString(),
   platforms: {
     "windows-x86_64": { signature, url },

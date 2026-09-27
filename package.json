@@ -29,6 +29,7 @@
     "android:build:debug": "node scripts/tauri-android.mjs build --debug --apk",
     "desktop:icons": "powershell -ExecutionPolicy Bypass -File scripts/generate-tauri-icons.ps1",
     "desktop:preflight": "node scripts/desktop-preflight.mjs",
+    "whats-new": "node --experimental-strip-types --no-warnings scripts/make-whats-new.ts",
     "prepare": "husky"
   },
   "lint-staged": {

@@ -12,6 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FirstRun } from "@/components/vault/first-run";
 import { ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { writeMine } from "@/lib/storage/mine";
+import { APP_VERSION } from "@/lib/constants";
+import { WHATS_NEW_KEY } from "@/lib/whats-new/seen";
 import { UnlockScreen } from "@/components/vault/unlock-screen";
 import { useI18n } from "@/lib/i18n/context";
 import { WhoIsIt } from "@/components/vault/who-is-it";
@@ -129,6 +131,8 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
   function firstRunDone() {
     try {
       writeMine(ONBOARDING_STORAGE_KEY, "1");
+      // И «Что нового» — первому запуску нечего сообщать: для него новое всё.
+      writeMine(WHATS_NEW_KEY, APP_VERSION);
     } catch {
       /* localStorage недоступен — обучение просто покажется */
     }

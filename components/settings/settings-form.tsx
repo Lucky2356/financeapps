@@ -68,6 +68,14 @@ import {
 import { markThemeChosen } from "@/lib/theme-preference";
 import { cn } from "@/lib/utils";
 import { useIncludeTransfers } from "@/hooks/use-include-transfers";
+import { WHATS_NEW_OPEN_EVENT } from "@/components/whats-new";
+import { updateTeaser } from "@/lib/updates/latest";
+
+/** «Что нового: …» одной строкой над вопросом «Скачать и установить?». */
+function withTeaser(notes: string | undefined, question: string): string {
+  const teaser = updateTeaser(notes);
+  return teaser ? `${teaser}\n\n${question}` : question;
+}
 import {
   DEFAULT_ACCOUNT_KEY,
   forgetMyData,
@@ -300,7 +308,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
         }
         const confirmed = await confirm({
           title: t("set.update.available", { version: update.version }),
-          description: t("set.update.androidConfirm"),
+          description: withTeaser(update.notes, t("set.update.androidConfirm")),
           confirmLabel: t("set.update.confirmLabel")
         });
         if (!confirmed) return;
@@ -339,9 +347,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       }
       const confirmed = await confirm({
         title: t("set.update.available", { version: update.version }),
-        description: update.notes
-          ? `${update.notes}\n\n${t("set.update.downloadConfirm")}`
-          : t("set.update.downloadConfirm"),
+        description: withTeaser(update.notes, t("set.update.downloadConfirm")),
         confirmLabel: t("set.update.confirmLabel")
       });
       if (!confirmed) return;
@@ -826,7 +832,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       lead: t("set.nav.about.lead"),
       icon: Info,
       keywords:
-        "о приложении about версия version обновления updates горячие клавиши shortcuts обучение onboarding знакомство",
+        "о приложении about версия version обновления updates что нового whats new изменения changelog горячие клавиши shortcuts обучение onboarding знакомство",
       node: (
         <>
           <Group>
@@ -843,6 +849,17 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               >
                 <Download className="size-4" />
                 {checkingUpdate ? t("set.about.checking") : t("set.about.checkUpdates")}
+              </Button>
+            </SettingRow>
+            <SettingRow label={t("set.about.whatsNew")} hint={t("set.about.whatsNewHint")}>
+              <Button
+                variant="outline"
+                type="button"
+                className="w-full"
+                onClick={() => window.dispatchEvent(new Event(WHATS_NEW_OPEN_EVENT))}
+              >
+                <Sparkles className="size-4" />
+                {t("set.about.whatsNewOpen")}
               </Button>
             </SettingRow>
             <SettingRow label={t("set.about.tour")} hint={t("set.about.tourHint")}>
