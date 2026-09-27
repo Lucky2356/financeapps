@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  HandCoins,
   LayoutDashboard,
   LineChart,
   PieChart,
@@ -22,6 +23,7 @@ import { HoldingCard } from "@/components/investments/holding-card";
 import { PortfolioHero } from "@/components/investments/portfolio-hero";
 import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
 import { RealizedTaxReport } from "@/components/investments/realized-tax-report";
+import { HoldingsTable } from "@/components/investments/holdings-table";
 import { DividendTracker } from "@/components/investments/dividend-tracker";
 import { MarketAlertsPanel } from "@/components/investments/market-alerts-panel";
 import { RebalancePanel } from "@/components/investments/rebalance-panel";
@@ -81,10 +83,13 @@ const riskVariant = {
 
 // Three plain tabs with icons: Overview (everything that matters at a glance),
 // Market (search + watchlist + picker) and Analytics (deeper breakdowns).
+// Четыре вкладки — по вопросам, которые задают: «сколько у меня», «сколько
+// я на этом заработал», «как устроен портфель», «что купить».
 const TABS = [
   { id: "overview", labelKey: "inv.tab.overview", icon: LayoutDashboard },
-  { id: "market", labelKey: "inv.tab.market", icon: Store },
-  { id: "analytics", labelKey: "inv.tab.analytics", icon: PieChart }
+  { id: "income", labelKey: "inv.tab.income", icon: HandCoins },
+  { id: "analytics", labelKey: "inv.tab.analytics", icon: PieChart },
+  { id: "market", labelKey: "inv.tab.market", icon: Store }
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -292,7 +297,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               type="button"
               onClick={() => selectTab(tab.id)}
               className={cn(
-                "flex min-w-0 grow basis-[calc(33.333%-0.167rem)] items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors",
+                "flex min-w-0 grow basis-[calc(25%-0.1875rem)] items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs font-medium transition-colors",
                 "sm:basis-0 sm:gap-2 sm:px-3 sm:text-sm",
                 activeTab === tab.id
                   ? "bg-background text-foreground shadow-sm"
@@ -317,6 +322,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               portfolio={data.portfolio}
               currency={data.currency}
               dayChangeByTicker={dayChangeByTicker}
+              totals={data.totals}
+              history={data.history}
             />
             <Card>
               <CardContent className="py-10">
@@ -345,8 +352,14 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               portfolio={data.portfolio}
               currency={data.currency}
               dayChangeByTicker={dayChangeByTicker}
+              totals={data.totals}
+              history={data.history}
             />
-            <PortfolioValueChart portfolio={data.portfolio} />
+            <PortfolioValueChart
+              portfolio={data.portfolio}
+              history={data.history}
+              currency={data.currency}
+            />
             <AllocationBar data={data.structure} />
 
             <Card>
@@ -366,19 +379,33 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="stagger grid gap-3">
-                {data.portfolio.map((position) => (
-                  <HoldingCard
-                    key={position.ticker}
-                    position={position}
+              <CardContent>
+                {/* ПК — таблица с сортировкой; телефон — карточки под палец. */}
+                <div className="hidden md:block">
+                  <HoldingsTable
+                    portfolio={data.portfolio}
                     currency={data.currency}
-                    dayChange={dayChangeByTicker.get(position.ticker)}
-                    expanded={expandedTicker === position.ticker}
-                    onToggle={() => toggleExpand(position.ticker)}
-                    onEdit={() => setEditingPosition(position)}
-                    onRemove={() => void removePosition(position.ticker)}
+                    dayChangeByTicker={dayChangeByTicker}
+                    expandedTicker={expandedTicker}
+                    onToggle={toggleExpand}
+                    onEdit={setEditingPosition}
+                    onRemove={(ticker) => void removePosition(ticker)}
                   />
-                ))}
+                </div>
+                <div className="stagger grid gap-3 md:hidden">
+                  {data.portfolio.map((position) => (
+                    <HoldingCard
+                      key={position.ticker}
+                      position={position}
+                      currency={data.currency}
+                      dayChange={dayChangeByTicker.get(position.ticker)}
+                      expanded={expandedTicker === position.ticker}
+                      onToggle={() => toggleExpand(position.ticker)}
+                      onEdit={() => setEditingPosition(position)}
+                      onRemove={() => void removePosition(position.ticker)}
+                    />
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -551,12 +578,21 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
         </div>
       ) : null}
 
+      {/* ── Доход — выплаты, продажи, налоги ─────────────────────────────── */}
+      {activeTab === "income" ? (
+        <div className="space-y-4">
+          <DividendTracker />
+          <RealizedTaxReport />
+          {data.portfolio.length > 0 && (
+            <TaxEstimateCard positions={data.portfolio} currency={data.currency} />
+          )}
+        </div>
+      ) : null}
+
       {/* ── Analytics — structure, sectors, risks & education ──────────────── */}
       {activeTab === "analytics" ? (
         <div className="space-y-4">
-          {/* Where the money actually sits, in one line, before any chart. */}
-          <AllocationBar data={data.structure} />
-
+          {/* Полоса распределения — на «Обзоре»; здесь — разбор по разрезам. */}
           <PortfolioBreakdown
             structure={data.structure}
             sectorStructure={data.sectorStructure}
@@ -564,13 +600,8 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
             riskProfile={data.riskProfile}
           />
 
-          {data.portfolio.length > 0 && (
-            <TaxEstimateCard positions={data.portfolio} currency={data.currency} />
-          )}
           <RebalancePanel positions={data.portfolio} currency={data.currency} />
           <MarketAlertsPanel />
-          <DividendTracker />
-          <RealizedTaxReport />
 
           <section className="grid items-start gap-4 lg:grid-cols-2">
             <RecommendationList titleKey="inv.portfolioRisks" items={data.risks} />

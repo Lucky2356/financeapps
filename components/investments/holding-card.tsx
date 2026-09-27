@@ -53,17 +53,20 @@ export function HoldingCard({
           )}
         />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold leading-tight">{position.ticker}</p>
-          {/* Kind before name: a bond and a share behave nothing alike, and the
-              ticker alone does not say which one you are looking at. */}
-          <p className="truncate text-xs text-muted-foreground">
-            {t(`inv.kind.${position.assetKind ?? "STOCK"}`)} · {position.name}
+          {/* Тикер и движение за день — рядом: «что это» и «что с ним сегодня». */}
+          <p className="flex items-center gap-2 font-semibold leading-tight">
+            {position.ticker}
+            {dayKnown ? (
+              <span className={cn("text-xs font-medium tabular-nums", toneClass(dayPositive))}>
+                {dayPositive ? "▲" : "▼"} {Math.abs(dayChange ?? 0).toFixed(2)}%
+              </span>
+            ) : null}
           </p>
           {/* Средняя цена покупки — на виду, а не в развёрнутой карточке: по ней
               человек решает, докупать ли, и сверяет с ценой сейчас. Прятать её
               за нажатие значило заставлять раскрывать каждую бумагу по очереди. */}
           <p
-            className="mt-1 truncate text-xs tabular-nums text-muted-foreground"
+            className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground"
             data-testid="holding-average"
           >
             {t("inv.card.average", {
@@ -71,68 +74,43 @@ export function HoldingCard({
               avg: formatCurrency(position.averageBuyPrice, currency)
             })}
           </p>
+          {/* Kind before name: a bond and a share behave nothing alike, and the
+              ticker alone does not say which one you are looking at. */}
+          <p className="truncate text-xs text-muted-foreground">
+            {t(`inv.kind.${position.assetKind ?? "STOCK"}`)} · {position.name}
+          </p>
         </div>
-        <div className="shrink-0 text-right">
+        <div className="shrink-0 text-right tabular-nums">
           <p className="font-semibold leading-tight">
             {formatCurrency(position.currentValue, currency)}
           </p>
-          <p className="mt-0.5 flex flex-wrap items-center justify-end gap-x-1.5 text-xs">
-            {dayKnown ? (
-              <span className={cn("font-medium", toneClass(dayPositive))}>
-                {dayPositive ? "▲" : "▼"} {Math.abs(dayChange ?? 0).toFixed(2)}%
-              </span>
-            ) : null}
-            <span className={cn("font-medium", toneClass(pnlPositive))}>
-              {t("inv.col.pnl")} {pnlPositive ? "+" : ""}
-              {formatCurrency(position.pnl, currency)} ({pnlPositive ? "+" : ""}
-              {returnPct.toFixed(1)}%)
-            </span>
+          <p className={cn("mt-0.5 text-xs font-medium", toneClass(pnlPositive))}>
+            {pnlPositive ? "+" : ""}
+            {formatCurrency(position.pnl, currency)}
+          </p>
+          <p className={cn("text-xs", toneClass(pnlPositive))}>
+            {pnlPositive ? "+" : ""}
+            {returnPct.toFixed(1)}%
           </p>
         </div>
       </button>
+      {/* Доля в портфеле — полоской: «сколько места занимает» видно без цифр. */}
+      <div className="mx-4 -mt-2 mb-3 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+        <div
+          className="h-full rounded-full bg-primary/60"
+          style={{ width: `${Math.min(Math.max(position.share, 0), 100)}%` }}
+        />
+      </div>
 
       {expanded ? (
         <div className="border-t p-4 duration-200 animate-in fade-in-0 slide-in-from-top-1">
-          <dl className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
-            <Detail label={t("inv.col.qty")} value={position.quantity.toLocaleString()} />
-            <Detail
-              label={t("inv.col.avg")}
-              value={formatCurrency(position.averageBuyPrice, currency)}
-            />
-            <Detail
-              label={t("inv.col.current")}
-              value={formatCurrency(position.currentPrice, currency)}
-            />
-            <Detail label={t("inv.col.share")} value={formatPercent(position.share)} />
-            {position.accruedInterest ? (
-              <Detail
-                label={t("inv.col.accrued")}
-                value={formatCurrency(position.accruedInterest * position.quantity, currency)}
-              />
-            ) : null}
-          </dl>
-          <div className="mt-4">
-            <InlineStockChart
-              seed={{
-                ticker: position.ticker,
-                name: position.name,
-                price: position.currentPrice,
-                changeDay: dayChange,
-                sector: position.sector
-              }}
-              currency={currency}
-            />
-          </div>
-          <div className="mt-4 flex gap-2">
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              <Edit2 className="size-4" />
-              {t("common.edit")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={onRemove}>
-              <Trash2 className="size-4 text-destructive" />
-              {t("common.delete")}
-            </Button>
-          </div>
+          <HoldingDetails
+            position={position}
+            currency={currency}
+            dayChange={dayChange}
+            onEdit={onEdit}
+            onRemove={onRemove}
+          />
         </div>
       ) : null}
     </div>
@@ -145,5 +123,87 @@ function Detail({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 font-medium">{value}</dd>
     </div>
+  );
+}
+
+/**
+ * Подробности позиции: цифры, график, покупки и действия. Одни и те же в
+ * карточке на телефоне и в раскрытой строке таблицы на ПК.
+ */
+export function HoldingDetails({
+  position,
+  currency,
+  dayChange,
+  onEdit,
+  onRemove
+}: {
+  position: InvestmentData["portfolio"][number];
+  currency: string;
+  dayChange?: number;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const { t } = useI18n();
+  const lots = [...(position.lots ?? [])].sort((a, b) => b.date.localeCompare(a.date));
+  return (
+    <>
+      <dl className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
+        <Detail label={t("inv.col.qty")} value={position.quantity.toLocaleString()} />
+        <Detail
+          label={t("inv.col.avg")}
+          value={formatCurrency(position.averageBuyPrice, currency)}
+        />
+        <Detail
+          label={t("inv.col.current")}
+          value={formatCurrency(position.currentPrice, currency)}
+        />
+        <Detail label={t("inv.col.share")} value={formatPercent(position.share)} />
+        {position.accruedInterest ? (
+          <Detail
+            label={t("inv.col.accrued")}
+            value={formatCurrency(position.accruedInterest * position.quantity, currency)}
+          />
+        ) : null}
+      </dl>
+      {lots.length > 0 ? (
+        <div className="mt-4 space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">{t("inv.lotsTitle")}</p>
+          <ul className="space-y-1 text-sm tabular-nums">
+            {lots.map((lot, index) => (
+              <li key={`${lot.date}-${index}`} className="flex justify-between gap-3">
+                <span className="text-muted-foreground">
+                  {new Date(`${lot.date}T12:00:00`).toLocaleDateString("ru-RU")}
+                </span>
+                <span>
+                  {lot.quantity.toLocaleString()} × {formatCurrency(lot.price, currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="mt-4">
+        <InlineStockChart
+          seed={{
+            ticker: position.ticker,
+            name: position.name,
+            price: position.currentPrice,
+            changeDay: dayChange,
+            sector: position.sector
+          }}
+          currency={currency}
+        />
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Edit2 className="size-4" />
+          {t("common.edit")}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onRemove}>
+          <Trash2 className="size-4 text-destructive" />
+          {t("common.delete")}
+        </Button>
+      </div>
+    </>
   );
 }

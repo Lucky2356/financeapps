@@ -104,7 +104,9 @@ import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
   SAMPLE_CATEGORIES,
+  SAMPLE_DIVIDEND,
   SAMPLE_GOALS,
+  SAMPLE_PORTFOLIO,
   SAMPLE_TRANSACTIONS,
   sampleDate,
   sampleDeadline
@@ -3062,6 +3064,45 @@ export class LocalApiClient implements ApiClient {
       const category = categories.find((item) => item.id === budget.categoryId);
       return category ? this.buildBudgetRow(state, category, budget.limitAmount) : null;
     }).filter((row): row is NonNullable<typeof row> => row !== null);
+    // Портфель примера: покупки лотами, цены обновятся с биржи при открытии.
+    state.investments.portfolio = SAMPLE_PORTFOLIO.map((position) => {
+      const lots = position.lots.map((lot) => ({
+        date: isoDay(sampleDate(-lot.monthsAgo, 10)),
+        quantity: lot.quantity,
+        price: lot.price
+      }));
+      const summary = summarizeLots(lots);
+      const price = lots[lots.length - 1].price;
+      return {
+        ticker: position.ticker,
+        name: position.name,
+        assetKind: "STOCK" as const,
+        sector: position.sector,
+        quantity: summary.quantity,
+        averageBuyPrice: summary.averageBuyPrice,
+        currentPrice: price,
+        currentValue: roundMoney(price * summary.quantity),
+        pnl: roundMoney((price - summary.averageBuyPrice) * summary.quantity),
+        share: 0,
+        risk: position.risk,
+        lots: sortLots(lots)
+      };
+    });
+    state.realizedInvestmentEvents = [
+      {
+        id: "sample-dividend",
+        type: "DIVIDEND",
+        ticker: SAMPLE_DIVIDEND.ticker,
+        name: SAMPLE_DIVIDEND.name,
+        date: isoDay(sampleDate(-SAMPLE_DIVIDEND.monthsAgo, 18)),
+        quantity: 0,
+        sellPrice: 0,
+        buyPrice: 0,
+        amount: SAMPLE_DIVIDEND.amount,
+        fee: 0,
+        currency: state.currency
+      }
+    ];
     return state;
   }
 
