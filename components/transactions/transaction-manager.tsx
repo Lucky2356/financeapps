@@ -200,18 +200,30 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   // A mis-tap next to the edit pencil used to wipe a record with no way back —
   // the dialog names the operation so it is clear WHICH one is about to go.
   async function removeTransaction(transaction: TransactionsPageData["transactions"][number]) {
+    // Часть разделённой покупки удаляется вместе с остальными частями: одна
+    // половина чека без другой — это уже неправда о покупке.
+    const group = transaction.splitGroupId;
+    const parts = group
+      ? pageData.transactions.filter((tx) => tx.splitGroupId === group).length
+      : 1;
     const ok = await confirm({
       title: t("tx.delete.title"),
-      description: t("tx.delete.desc", {
-        category: transaction.category.label,
-        amount: rowAmount(transaction),
-        date: formatDate(transaction.date)
-      }),
+      description:
+        group && parts > 1
+          ? t("tx.delete.split", { count: parts, date: formatDate(transaction.date) })
+          : t("tx.delete.desc", {
+              category: transaction.category.label,
+              amount: rowAmount(transaction),
+              date: formatDate(transaction.date)
+            }),
       destructive: true,
       confirmLabel: t("common.delete")
     });
     if (!ok) return;
-    await run(() => apiClient.delete(`/transactions?id=${encodeURIComponent(transaction.id)}`), {
+    const path = group
+      ? `/transactions?splitGroupId=${encodeURIComponent(group)}`
+      : `/transactions?id=${encodeURIComponent(transaction.id)}`;
+    await run(() => apiClient.delete(path), {
       success: t("tx.toast.deleted"),
       error: t("tx.toast.deleteError"),
       onSuccess: refresh

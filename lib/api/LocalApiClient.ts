@@ -753,6 +753,13 @@ export class LocalApiClient implements ApiClient {
       state.accounts = state.accounts.map((account) =>
         account.id === itemId ? { ...account, isArchived: true } : account
       );
+    } else if (pathname === "/transactions" && searchParams.get("splitGroupId")) {
+      // Чек, разложенный по категориям, удаляется целиком — его части по
+      // отдельности ничего не значат.
+      const group = searchParams.get("splitGroupId");
+      for (const part of state.transactions.filter((item) => item.splitGroupId === group)) {
+        this.deleteTransaction(state, part.id);
+      }
     } else if (pathname === "/transactions" && itemId) {
       this.deleteTransaction(state, itemId);
     } else if (pathname === "/goals" && itemId) {
@@ -856,6 +863,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
       return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
+    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "split")
+      return this.saveAndReturn<TResponse>(state, this.createSplit(state, body));
     if (pathname === "/transactions") {
       const tx = this.upsertTransaction(state, body, method);
       const budgetWarning = this.budgetWarningFor(state, tx);
@@ -1215,6 +1224,56 @@ export class LocalApiClient implements ApiClient {
     ];
     this.applyBalance(state, account.id, type === "INCOME" ? amount : -amount);
     return transaction;
+  }
+
+  /**
+   * Одна покупка — несколько категорий: «Пятёрочка 2 340 ₽» — это продукты 1 900
+   * и бытовая химия 440. Записывается как несколько операций с общим
+   * `splitGroupId`: итоги по категориям считают каждую часть там, где она есть,
+   * а список показывает их как одну покупку. Все части пишутся разом — или ни
+   * одной: половина чека хуже, чем никакого.
+   */
+  private createSplit(state: LocalState, body: unknown): TransactionRow[] {
+    const input = toFormObject(body);
+    let parts: Array<{ categoryId?: unknown; amount?: unknown }>;
+    try {
+      parts = JSON.parse(String(input.parts ?? "[]"));
+    } catch {
+      parts = [];
+    }
+    if (!Array.isArray(parts) || parts.length < 2)
+      throw new Error("Разделить можно минимум на две части.");
+    const cleaned = parts.map((part) => ({
+      categoryId: String(part?.categoryId ?? ""),
+      amount: Number(String(part?.amount ?? "").replace(",", "."))
+    }));
+    if (cleaned.some((part) => !part.categoryId || !(part.amount > 0)))
+      throw new Error("У каждой части нужны категория и сумма больше нуля.");
+
+    // Проверить всё до первой записи: upsertTransaction меняет состояние сразу,
+    // и отказ на третьей части оставил бы две первые в памяти.
+    if (!state.accounts.some((item) => item.id === input.accountId && !item.isArchived))
+      throw new Error("Выберите существующий счет и категорию.");
+    if (cleaned.some((part) => !state.categories.some((item) => item.id === part.categoryId)))
+      throw new Error("Выберите существующий счет и категорию.");
+    if (cleaned.some((part) => !isUsableMoney(part.amount))) throw new Error(MONEY_RANGE_ERROR);
+
+    const group = id("split");
+    const { parts: _parts, action: _action, ...common } = input;
+    void _parts;
+    void _action;
+    return cleaned.map((part) =>
+      this.upsertTransaction(
+        state,
+        {
+          ...common,
+          categoryId: part.categoryId,
+          amount: String(part.amount),
+          splitGroupId: group
+        },
+        "POST"
+      )
+    );
   }
 
   // Returns budget overflow info when an EXPENSE pushes its category over the limit.
