@@ -40,7 +40,7 @@ import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts } from "@/lib/debts/settled";
-import { parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
+import { isUsableLot, parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildAssetKindStructure, buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
@@ -85,7 +85,10 @@ import {
 } from "@/services/RecurringTransactionService";
 import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
-import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
+import {
+  createMarketDataProvider,
+  marketDataSource
+} from "@/services/market/createMarketDataProvider";
 import { historyRangeStart } from "@/lib/market/history-range";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
@@ -2024,7 +2027,9 @@ export class LocalApiClient implements ApiClient {
     if (action === "refreshMarket") await provider.updateMarketPrices();
     const securities = await provider.getSecurities();
     const ticker = input.ticker?.toUpperCase();
-    const marketSource = process.env.NEXT_PUBLIC_MARKET_DATA === "moex" ? "MOEX ISS" : "MOCK";
+    // Раньше «MOCK» писалось всегда, когда переменная не равна "moex", — хотя
+    // по умолчанию цены живые. Правило теперь одно с выбором поставщика.
+    const marketSource = marketDataSource();
 
     if (action === "refreshMarket") {
       state.investments = await this.investments(state);
@@ -2070,6 +2075,27 @@ export class LocalApiClient implements ApiClient {
       securities.find((item) => item.ticker === ticker) ??
       (await provider.getSecurityByTicker(ticker));
     if (!security) throw new Error("Security not found in the market directory.");
+
+    // «Докупить» — одна покупка к тому, что уже есть. Раньше подборка слала
+    // количество и среднюю, и позиция с тем же тикером заменялась целиком:
+    // купленное пропадало. Теперь покупка добавляется к лотам; позиция со
+    // средней, введённой вручную, становится первым лотом — количество и
+    // средняя сохраняются, дата у него сегодняшняя, другой нет.
+    if (action === "addLot") {
+      const held = state.investments.portfolio.find((item) => item.ticker === ticker);
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(input.date ?? ""))
+        ? String(input.date)
+        : isoDay(new Date());
+      const lot = { date, quantity: Number(input.quantity), price: Number(input.price) };
+      if (!isUsableLot(lot)) throw new Error("Введите количество и цену больше нуля.");
+      const before: PurchaseLot[] =
+        held?.lots && held.lots.length > 0
+          ? held.lots
+          : held && held.quantity > 0 && held.averageBuyPrice > 0
+            ? [{ date, quantity: held.quantity, price: held.averageBuyPrice }]
+            : [];
+      input.lots = JSON.stringify([...before, lot]);
+    }
 
     // The form sends EITHER a list of purchases (the app works out the weighted
     // average) OR a quantity and an average typed in by hand. Lots win when both
@@ -2247,6 +2273,14 @@ export class LocalApiClient implements ApiClient {
     // Everything the sale changed, so it can be changed back — a sale typed by
     // mistake used to be undeletable in the only way that mattered: the record
     // went, the shares did not come back.
+    // Цена покупки для налога — из тех самых лотов, что ушли (FIFO), если её не
+    // ввели руками. Раньше её всегда вводили сами, и налог мог считаться с одной
+    // цены, а портфель списывался по другой.
+    if (!(event.buyPrice > 0)) {
+      event.buyPrice = taken.length
+        ? summarizeLots(taken).averageBuyPrice
+        : position.averageBuyPrice;
+    }
     event.soldFrom = {
       averageBuyPrice: position.averageBuyPrice,
       ...(taken.length ? { lots: taken } : {}),

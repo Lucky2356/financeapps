@@ -196,10 +196,12 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   async function addSuggestion(suggestion: InvestmentSuggestion) {
     await run(
       () =>
+        // Докупка, а не замена: бумага из подборки может уже лежать в портфеле.
         apiClient.post("/investments", {
+          action: "addLot",
           ticker: suggestion.ticker,
           quantity: String(suggestion.suggestedQuantity),
-          averageBuyPrice: String(suggestion.price)
+          price: String(suggestion.price)
         }),
       {
         success: t("inv.toast.added", {

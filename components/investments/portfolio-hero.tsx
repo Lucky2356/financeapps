@@ -47,7 +47,8 @@ export function PortfolioHero({
         value={formatCurrency(value, currency)}
         caption={t("inv.hero.caption", { count: portfolio.length })}
         changePercent={dayBase > 0 ? dayPct : null}
-        trend={portfolio.length > 1 ? portfolio.map((p) => p.currentValue) : undefined}
+        // Спарклайна нет, пока нет истории: раньше сюда шли стоимости позиций
+        // подряд, и «график» рисовал не время, а порядок бумаг в списке.
       />
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile

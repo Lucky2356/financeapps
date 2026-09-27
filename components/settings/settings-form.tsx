@@ -903,7 +903,11 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     textSize,
     startScreen,
     defaultAccount,
-    accounts
+    accounts,
+    // Без этого переключатель «Переводы на главной» рисовался со значением
+    // на момент открытия: включить — да, а выключить уже нет, он оставался
+    // включённым и на каждое нажатие снова включал.
+    homeTransfers
   ]);
 
   const trimmedQuery = query.trim().toLowerCase();
