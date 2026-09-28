@@ -357,6 +357,41 @@ export const planNoteSchema = z.object({
   factNote: z.string().trim().max(500).default("")
 });
 
+// Таблица бюджета (lib/sheet): столбцы, ячейки, месяцы-строки и цели.
+const sheetMonth = z.string().regex(/^\d{4}-\d{2}$/);
+export const sheetColumnSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
+  kind: z.enum([
+    "opening",
+    "income",
+    "expense",
+    "toSavings",
+    "fromSavings",
+    "savingsOpening",
+    "savingsIncome"
+  ]),
+  categoryId: z.string().nullable().optional(),
+  order: z.coerce.number().finite(),
+  hidden: z.boolean().optional()
+});
+export const sheetCellSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  month: sheetMonth,
+  columnId: z.string().min(1),
+  input: z.string().max(500)
+});
+export const sheetMonthSchema = z.object({ updatedAt, id: sheetMonth });
+export const sheetTargetSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  label: z.string().trim().min(1).max(80),
+  date: z.string().max(10),
+  amount: z.coerce.number().finite()
+});
+
 export const goalMovementSchema = z.object({
   updatedAt,
   id: z.string().min(1),
@@ -456,6 +491,22 @@ export const localStateSchema = z.object({
   // through the operations — needs the movement written down to stay right about
   // the months before it.
   goalMovements: z.array(goalMovementSchema).default([]),
+  sheetColumns: z.array(sheetColumnSchema).default([]),
+  sheetCells: z.array(sheetCellSchema).default([]),
+  sheetMonths: z.array(sheetMonthSchema).default([]),
+  sheetTargets: z.array(sheetTargetSchema).default([]),
+  // Таблица до переноса из Excel — ради «Отменить перенос». Не строки:
+  // одна копия на устройство, в слияние не идёт.
+  sheetBackup: z
+    .object({
+      takenAt: z.string(),
+      columns: z.array(sheetColumnSchema),
+      cells: z.array(sheetCellSchema),
+      months: z.array(sheetMonth),
+      targets: z.array(sheetTargetSchema)
+    })
+    .nullable()
+    .optional(),
   transactions: z.array(transactionRowSchema).default([]),
   budgets: z.array(budgetRowSchema).default([]),
   goals: z.array(goalRowSchema).default([]),

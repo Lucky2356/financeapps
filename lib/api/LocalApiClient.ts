@@ -20,6 +20,13 @@ import type {
   TransactionsPageData
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
+import {
+  importSheet,
+  readSheet,
+  writeSheet,
+  type SheetImport,
+  type SheetState
+} from "@/lib/api/local/sheet";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
 import {
   STAMPED,
@@ -160,7 +167,7 @@ function profileStateKey(profileId: string): string {
 const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
-type LocalState = {
+type LocalState = SheetState & {
   schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
   /** Следы удалённых строк — см. lib/sync/row-stamps. */
   deletions?: Tombstone[];
@@ -787,6 +794,13 @@ export class LocalApiClient implements ApiClient {
         searchParams.get("transfers") === "1"
       ) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
+    if (pathname === "/sheet") return readSheet(state) as T;
+    if (pathname === "/sheet/facts")
+      return this.sheetFacts(
+        this.countingState(this.inBase(state), false),
+        searchParams.get("from") ?? "",
+        searchParams.get("to") ?? ""
+      ) as T;
 
     throw new Error(`Local API route is not implemented: ${pathname}`);
   }
@@ -983,6 +997,15 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertCategory(state, body, method));
     if (pathname === "/plan")
       return this.saveAndReturn<TResponse>(state, this.savePlan(state, body));
+    if (pathname === "/sheet") {
+      const input = (body ?? {}) as Record<string, unknown>;
+      if (input.action === "import")
+        return this.saveAndReturn<TResponse>(state, this.importSheet(state, input.payload));
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeSheet(state, input, () => id("col"))
+      );
+    }
     if (pathname === "/profiles/create") {
       const input = toFormObject(body);
       const profile = await this.createProfile(input.name ?? "Профиль", input.color ?? "#0d9488");
@@ -4008,6 +4031,43 @@ export class LocalApiClient implements ApiClient {
       savingsRateTrend: derived.savingsRateTrend,
       insights: derived.insights
     };
+  }
+
+  /**
+   * Перенос таблицы из Excel. Столбцам «создать категорию» категории
+   * заводятся здесь же (или берутся уже существующие с тем же именем), чтобы
+   * «Продукты» из таблицы сразу открывали операции.
+   */
+  private importSheet(state: LocalState, raw: unknown) {
+    const payload = raw as SheetImport & {
+      columns: Array<SheetImport["columns"][number] & { createCategory?: "INCOME" | "EXPENSE" }>;
+    };
+    if (!payload || !Array.isArray(payload.columns) || !Array.isArray(payload.rows))
+      throw new Error("Нечего переносить.");
+    for (const column of payload.columns) {
+      if (!column.createCategory || column.categoryId) continue;
+      const same = state.categories.find(
+        (category) =>
+          category.kind === column.createCategory &&
+          category.label.trim().toLowerCase() === column.name.trim().toLowerCase()
+      );
+      column.categoryId =
+        same?.id ??
+        this.upsertCategory(state, { name: column.name, kind: column.createCategory }, "POST").id;
+    }
+    return importSheet(state, payload, () => id("col"), new Date().toISOString());
+  }
+
+  /** Факт из учёта по категориям и месяцам — для «Сравнить с учётом» в таблице. */
+  private sheetFacts(state: LocalState, from: string, to: string) {
+    const months: Record<string, Record<string, number>> = {};
+    for (const row of state.transactions) {
+      const month = row.date.slice(0, 7);
+      if ((from && month < from) || (to && month > to)) continue;
+      const bucket = (months[month] ??= {});
+      bucket[row.category.id] = roundMoney((bucket[row.category.id] ?? 0) + row.amount);
+    }
+    return { months };
   }
 
   private upsertCategory(state: LocalState, body: unknown, method: "POST" | "PUT") {
