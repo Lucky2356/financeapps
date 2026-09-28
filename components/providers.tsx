@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 
 import { AppSettingsSync } from "@/components/app-settings-sync";
 import { AutomationRunner } from "@/components/automation-runner";
+import { PhoneReminders } from "@/components/phone-reminders";
 import { CommandPalette } from "@/components/command-palette";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { WhatsNew } from "@/components/whats-new";
@@ -38,6 +39,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <VaultGate>
             <AppSettingsSync />
             <AutomationRunner />
+            <PhoneReminders />
             <CommandPalette />
             <OnboardingTour />
             <WhatsNew />
