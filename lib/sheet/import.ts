@@ -224,12 +224,15 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
     if (!name) role = "skip";
     const categoryKind = role === "income" ? "INCOME" : role === "expense" ? "EXPENSE" : null;
     const categoryId = categoryKind ? matchCategory(name, categoryKind, categories) : null;
+    // «Доходы» — сумма всех доходов, а не статья: заводить под неё категорию
+    // незачем (а «Зарплата» или «Подработка» — пожалуйста).
+    const generic = role === "income" && /^доход/.test(normalize(name));
     columns.push({
       index,
       name: name || `Столбец ${index + 1}`,
       role,
       categoryId,
-      createCategory: categoryKind && !categoryId ? categoryKind : null
+      createCategory: categoryKind && !categoryId && !generic ? categoryKind : null
     });
   }
 

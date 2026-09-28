@@ -12,6 +12,7 @@ import {
   Repeat,
   Scale,
   Settings,
+  Sheet,
   Tag,
   TrendingUp,
   WalletCards,
@@ -61,6 +62,9 @@ const TAB = {
   forecast: { href: "/forecast", label: "Прогноз", labelKey: "nav.forecast", icon: LineChart },
   reports: { href: "/reports", label: "Отчёты", labelKey: "nav.reports", icon: FileText },
   plan: { href: "/plan", label: "План/факт", labelKey: "nav.planFact", icon: Scale },
+  // Своя таблица бюджета, как в Excel (components/sheet). Отдельная от
+  // план/факта: там цифры из учёта, здесь — то, что человек задумал сам.
+  sheet: { href: "/sheet", label: "Таблица", labelKey: "nav.sheet", icon: Sheet },
   budgets: { href: "/budgets", label: "Лимиты", labelKey: "nav.limits", icon: Gauge },
   goals: { href: "/goals", label: "Цели", labelKey: "nav.goals", icon: Flag },
   recurring: {
@@ -101,7 +105,7 @@ export const HUB_GROUPS: HubGroup[] = [
   },
   {
     landing: "/budgets",
-    tabs: [TAB.budgets, TAB.goals, TAB.recurring, TAB.subscriptions]
+    tabs: [TAB.budgets, TAB.sheet, TAB.goals, TAB.recurring, TAB.subscriptions]
   }
 ];
 
@@ -125,6 +129,7 @@ export const DESKTOP_NAV: NavItem[] = [
   { href: "/transactions", label: "Учёт", labelKey: "section.accounting", icon: ArrowDownUp },
   { href: "/budgets", label: "Лимиты", labelKey: "nav.limits", icon: Gauge },
   { href: "/goals", label: "Цели", labelKey: "nav.goals", icon: Flag },
+  { href: "/sheet", label: "Таблица", labelKey: "nav.sheet", icon: Sheet },
   {
     href: "/recurring",
     label: "Планирование",

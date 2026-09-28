@@ -47,6 +47,7 @@ const ru: Messages = {
   "nav.investments": "Инвестиции",
   "nav.reports": "Отчёты",
   "nav.planFact": "План/факт",
+  "nav.sheet": "Таблица",
   "nav.import": "Данные",
   "nav.settings": "Настройки",
   // Error boundaries
@@ -118,6 +119,9 @@ const ru: Messages = {
     "Watchlist, портфель с реальными ценами Московской биржи, структура, риски и образовательные подсказки без индивидуальных инвестиционных рекомендаций.",
   "page.plan.title": "План/факт",
   "page.plan.desc": "План на месяц вы вписываете сами, факт и разница считаются по операциям.",
+  "page.sheet.title": "Таблица",
+  "page.sheet.desc":
+    "Своя таблица бюджета, как в Excel: месяцы строками, статьи столбцами, Остаток и Итог считаются сами.",
   "drill.loading": "Загружаем операции…",
   "drill.failed": "Не удалось загрузить операции",
   "drill.empty": "За этим числом нет отдельных операций.",
@@ -2387,6 +2391,7 @@ const en: Messages = {
   "nav.investments": "Investments",
   "nav.reports": "Reports",
   "nav.planFact": "Plan vs actual",
+  "nav.sheet": "Sheet",
   "nav.import": "Data",
   "nav.settings": "Settings",
   // Error boundaries
@@ -2455,6 +2460,9 @@ const en: Messages = {
     "Watchlist, a portfolio with real Moscow Exchange prices, structure, risks and educational tips with no individual investment advice.",
   "page.plan.title": "Plan vs actual",
   "page.plan.desc": "You type the monthly plan; actuals and the gap are read off your operations.",
+  "page.sheet.title": "Sheet",
+  "page.sheet.desc":
+    "Your own budget sheet, like in Excel: months as rows, items as columns, balance and total calculated for you.",
   "drill.loading": "Loading operations…",
   "drill.failed": "Could not load the operations",
   "drill.empty": "No individual operations behind this figure.",
