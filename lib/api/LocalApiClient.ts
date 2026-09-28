@@ -27,6 +27,18 @@ import {
   type SheetImport,
   type SheetState
 } from "@/lib/api/local/sheet";
+import {
+  deductionKindOf,
+  readCashback,
+  readDeductions,
+  readTrips,
+  tripTagFor,
+  writeCashback,
+  writeDeductionYear,
+  writeTrips,
+  type ExtrasState
+} from "@/lib/api/local/extras";
+import { depositsEndingSoon } from "@/lib/accounts/deposits";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
 import {
   STAMPED,
@@ -178,76 +190,77 @@ function profileStateKey(profileId: string): string {
 const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
-type LocalState = SheetState & {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
-  /** Следы удалённых строк — см. lib/sync/row-stamps. */
-  deletions?: Tombstone[];
-  currency: CurrencyCode;
-  demoMode: boolean;
-  emergencyFundMonthsTarget: number;
-  riskProfileCode: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE";
-  theme: "light" | "dark" | "system";
-  density: "comfortable" | "compact";
-  defaultTransactionType: "INCOME" | "EXPENSE";
-  lastBackupAt: string | null;
-  accounts: Array<Stamped<AccountRow & { isArchived?: boolean }>>;
-  liabilities: Array<Stamped<Omit<LiabilityRow, "progress">>>;
-  rules: Array<Stamped<CategorizationRule>>;
-  autoMaterializeRecurring: boolean;
-  paymentReminders: boolean;
-  aiEnabled: boolean;
-  aiProvider: string;
-  aiEffort: string;
-  aiApiKey: string;
-  aiModel: string;
-  currencyRates: CurrencyRates;
-  currencyRatesUpdatedAt: string | null;
-  netWorthSnapshots: NetWorthSnapshot[];
-  /** Раз в день: стоимость портфеля и вложенное — см. lib/investments/snapshots.ts. */
-  portfolioSnapshots?: PortfolioSnapshot[];
-  realizedInvestmentEvents: Array<Stamped<RealizedInvestmentEvent>>;
-  expectedDividends: Array<Stamped<ExpectedDividend>>;
-  targetAllocations: Array<Stamped<TargetAllocation>>;
-  marketAlerts: Array<Stamped<MarketAlert>>;
-  categories: Array<Stamped<CategoryOption>>;
-  plans: Array<Stamped<{ month: string; categoryId: string; amount: number }>>;
-  planNotes: Array<Stamped<{ month: string; note: string; factNote: string }>>;
-  /** Months pinned into the plan/fact grid by hand (see savePlan/addMonth). */
-  planMonths?: string[];
-  /** Top-ups of saving goals — a balance change with no operation behind it. */
-  goalMovements?: Array<
-    Stamped<{
-      id: string;
-      goalId: string;
-      accountId: string;
-      amount: number;
-      date: string;
-    }>
-  >;
-  transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
-  budgets: Array<Stamped<BudgetsPageData["budgets"][number]>>;
-  goals: Array<Stamped<GoalsPageData["goals"][number]>>;
-  recurringTransactions: Array<
-    Stamped<RecurringTransactionsPageData["recurringTransactions"][number]> & {
-      /**
-       * Legacy: up to 1.4.0 a template posted its first operation immediately and
-       * kept the link here. Nothing writes or reads it any more — kept so states
-       * saved by older versions still validate.
-       */
-      lastTransactionId?: string;
-      /** Пробный период до (YYYY-MM-DD) — сторож напомнит за три дня. */
-      trialEndsOn?: string | null;
-    }
-  >;
-  investments: InvestmentData;
-  importBatches?: Array<
-    Stamped<{
-      id: string;
-      importedAt: string;
-      transactionIds: string[];
-    }>
-  >;
-};
+type LocalState = SheetState &
+  ExtrasState & {
+    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+    /** Следы удалённых строк — см. lib/sync/row-stamps. */
+    deletions?: Tombstone[];
+    currency: CurrencyCode;
+    demoMode: boolean;
+    emergencyFundMonthsTarget: number;
+    riskProfileCode: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE";
+    theme: "light" | "dark" | "system";
+    density: "comfortable" | "compact";
+    defaultTransactionType: "INCOME" | "EXPENSE";
+    lastBackupAt: string | null;
+    accounts: Array<Stamped<AccountRow & { isArchived?: boolean }>>;
+    liabilities: Array<Stamped<Omit<LiabilityRow, "progress">>>;
+    rules: Array<Stamped<CategorizationRule>>;
+    autoMaterializeRecurring: boolean;
+    paymentReminders: boolean;
+    aiEnabled: boolean;
+    aiProvider: string;
+    aiEffort: string;
+    aiApiKey: string;
+    aiModel: string;
+    currencyRates: CurrencyRates;
+    currencyRatesUpdatedAt: string | null;
+    netWorthSnapshots: NetWorthSnapshot[];
+    /** Раз в день: стоимость портфеля и вложенное — см. lib/investments/snapshots.ts. */
+    portfolioSnapshots?: PortfolioSnapshot[];
+    realizedInvestmentEvents: Array<Stamped<RealizedInvestmentEvent>>;
+    expectedDividends: Array<Stamped<ExpectedDividend>>;
+    targetAllocations: Array<Stamped<TargetAllocation>>;
+    marketAlerts: Array<Stamped<MarketAlert>>;
+    categories: Array<Stamped<CategoryOption>>;
+    plans: Array<Stamped<{ month: string; categoryId: string; amount: number }>>;
+    planNotes: Array<Stamped<{ month: string; note: string; factNote: string }>>;
+    /** Months pinned into the plan/fact grid by hand (see savePlan/addMonth). */
+    planMonths?: string[];
+    /** Top-ups of saving goals — a balance change with no operation behind it. */
+    goalMovements?: Array<
+      Stamped<{
+        id: string;
+        goalId: string;
+        accountId: string;
+        amount: number;
+        date: string;
+      }>
+    >;
+    transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
+    budgets: Array<Stamped<BudgetsPageData["budgets"][number]>>;
+    goals: Array<Stamped<GoalsPageData["goals"][number]>>;
+    recurringTransactions: Array<
+      Stamped<RecurringTransactionsPageData["recurringTransactions"][number]> & {
+        /**
+         * Legacy: up to 1.4.0 a template posted its first operation immediately and
+         * kept the link here. Nothing writes or reads it any more — kept so states
+         * saved by older versions still validate.
+         */
+        lastTransactionId?: string;
+        /** Пробный период до (YYYY-MM-DD) — сторож напомнит за три дня. */
+        trialEndsOn?: string | null;
+      }
+    >;
+    investments: InvestmentData;
+    importBatches?: Array<
+      Stamped<{
+        id: string;
+        importedAt: string;
+        transactionIds: string[];
+      }>
+    >;
+  };
 
 const defaultCategories: CategoryOption[] = [
   { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7", icon: "Banknote" },
@@ -484,7 +497,10 @@ function createInitialState(): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: []
+    importBatches: [],
+    cashbackRules: [],
+    trips: [],
+    deductionYears: []
   };
 }
 
@@ -527,7 +543,10 @@ function createBlankState(categories: CategoryOption[]): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: []
+    importBatches: [],
+    cashbackRules: [],
+    trips: [],
+    deductionYears: []
   };
 }
 
@@ -841,6 +860,79 @@ export class LocalApiClient implements ApiClient {
     }
     if (pathname === "/photos")
       return (await this.readPhoto(state, searchParams.get("id") ?? "")) as T;
+    if (pathname === "/cashback") {
+      const month = /^\d{4}-\d{2}$/.test(searchParams.get("month") ?? "")
+        ? String(searchParams.get("month"))
+        : isoDay(new Date()).slice(0, 7);
+      return readCashback(
+        state,
+        month,
+        this.countingState(state, false)
+          .transactions.filter((row) => row.type === "EXPENSE")
+          .map((row) => ({
+            id: row.id,
+            date: row.date,
+            amount: row.amount,
+            accountId: row.account.id,
+            categoryId: row.category.id,
+            category: row.category.label
+          }))
+      ) as T;
+    }
+    if (pathname === "/trips") {
+      const based = this.countingState(this.inBase(state), false);
+      const rates = this.rates(state);
+      return readTrips(
+        state,
+        (tripCurrency) =>
+          based.transactions
+            .filter((row) => row.type === "EXPENSE" && row.tags?.length)
+            .map((row) => ({
+              date: row.date,
+              amount: convert(row.amount, state.currency, tripCurrency, rates),
+              categoryId: row.category.id,
+              category: row.category.label,
+              color: row.category.color,
+              tags: row.tags
+            })),
+        isoDay(new Date())
+      ) as T;
+    }
+    if (pathname === "/deductions") {
+      const year = Number(searchParams.get("year")) || new Date().getFullYear();
+      const based = this.countingState(this.inBase(state), false);
+      const kinds = new Map(
+        state.categories.flatMap((c) => (c.deduction ? [[c.id, c.deduction] as const] : []))
+      );
+      const salaryWords = /зарплат|зп\b|аванс|преми|оклад|salary|wage/i;
+      return readDeductions(state, {
+        year,
+        spends: based.transactions.flatMap((row) => {
+          const kind = row.type === "EXPENSE" ? kinds.get(row.category.id) : undefined;
+          return kind
+            ? [
+                {
+                  id: row.id,
+                  date: row.date,
+                  amount: row.amount,
+                  kind,
+                  description: row.description,
+                  category: row.category.label
+                }
+              ]
+            : [];
+        }),
+        netSalary: based.transactions
+          .filter(
+            (row) =>
+              row.type === "INCOME" &&
+              row.date.startsWith(String(year)) &&
+              salaryWords.test(row.category.label)
+          )
+          .reduce((sum, row) => sum + row.amount, 0),
+        marked: [...kinds.entries()].map(([categoryId, kind]) => ({ categoryId, kind }))
+      }) as T;
+    }
     if (pathname === "/sheet/facts")
       return this.sheetFacts(
         this.countingState(this.inBase(state), false),
@@ -1065,6 +1157,34 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/plan")
       return this.saveAndReturn<TResponse>(state, this.savePlan(state, body));
     if (pathname === "/photos") return this.attachPhoto<TResponse>(state, body);
+    if (pathname === "/cashback")
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeCashback(state, (body ?? {}) as Record<string, unknown>, () => id("cb"), {
+          account: (accountId) =>
+            state.accounts.some((item) => item.id === accountId && !item.isArchived),
+          category: (categoryId) => state.categories.some((item) => item.id === categoryId)
+        })
+      );
+    if (pathname === "/trips")
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeTrips(state, (body ?? {}) as Record<string, unknown>, () => id("trip"))
+      );
+    if (pathname === "/deductions") {
+      const input = (body ?? {}) as Record<string, unknown>;
+      if (input.action === "mark") {
+        const kind = deductionKindOf(input.kind);
+        state.categories = state.categories.map((category) => {
+          if (category.id !== input.categoryId) return category;
+          const { deduction: _was, ...rest } = category;
+          void _was;
+          return kind ? { ...rest, deduction: kind } : rest;
+        });
+        return this.saveAndReturn<TResponse>(state, { categoryId: input.categoryId, kind });
+      }
+      return this.saveAndReturn<TResponse>(state, writeDeductionYear(state, input));
+    }
     if (pathname === "/sheet") {
       const input = (body ?? {}) as Record<string, unknown>;
       if (input.action === "import")
@@ -1288,7 +1408,13 @@ export class LocalApiClient implements ApiClient {
         const compounding: AccountRow["interestCompounding"] =
           period === "QUARTERLY" || period === "YEARLY" ? period : "MONTHLY";
         return { interestRate: rate, interestCompounding: compounding };
-      })()
+      })(),
+      // Срок вклада — только у сберегательного счёта; пусто — накопительный.
+      depositEndsOn:
+        (input.type || "DEBIT_CARD") === "SAVINGS" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(String(input.depositEndsOn ?? ""))
+          ? String(input.depositEndsOn)
+          : undefined
     };
 
     state.accounts =
@@ -1337,6 +1463,12 @@ export class LocalApiClient implements ApiClient {
       .map((value) => value.trim())
       .filter(Boolean)
       .slice(0, 12);
+    // Идёт поездка — новая трата получает её метку сама (lib/trips). Плановые
+    // платежи (аренда, подписки) — не поездка, и «не отмечать» тоже уважается.
+    if (method === "POST" && !recurringId && input.noTrip !== "1" && type === "EXPENSE") {
+      const tripTag = tripTagFor(state, storedTransactionDate(input.date).slice(0, 10));
+      if (tripTag && !tags.includes(tripTag)) tags.push(tripTag);
+    }
     const transaction: TransactionRow & { recurringId?: string } = {
       id: method === "PUT" && input.id ? input.id : id("tx"),
       amount,
@@ -2959,7 +3091,7 @@ export class LocalApiClient implements ApiClient {
 
   private forecast(state: LocalState): ForecastPageData {
     const rates = this.rates(state);
-    return new CashflowForecastService().build(
+    const result = new CashflowForecastService().build(
       {
         source: "database",
         currency: state.currency,
@@ -2976,6 +3108,28 @@ export class LocalApiClient implements ApiClient {
       },
       getClientLocale()
     );
+    // Вклад кончается на этой неделе — в колокольчик и в уведомления: решить,
+    // куда деньги, пока банк не продлил их под меньший процент.
+    const locale = getClientLocale();
+    const ending = depositsEndingSoon(state.accounts.filter((account) => !account.isArchived)).map(
+      ({ account, daysLeft }) => ({
+        id: `deposit-${account.id}-${account.depositEndsOn}`,
+        title: translate(locale, "deposit.endingTitle", {
+          name: account.name,
+          when:
+            daysLeft === 0
+              ? translate(locale, "notif.due.today")
+              : daysLeft === 1
+                ? translate(locale, "notif.due.tomorrow")
+                : translate(locale, "notif.due.inDays", { days: daysLeft })
+        }),
+        description: translate(locale, "deposit.endingDesc", {
+          amount: formatCurrency(account.balance, account.currency)
+        }),
+        severity: "WARNING" as const
+      })
+    );
+    return ending.length ? { ...result, warnings: [...ending, ...result.warnings] } : result;
   }
 
   /**

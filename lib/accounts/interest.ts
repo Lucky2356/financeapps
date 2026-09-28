@@ -25,6 +25,8 @@ export type InterestAccount = {
   interestRate?: number;
   /** How often the interest is added to the balance. Defaults to monthly. */
   interestCompounding?: CompoundingPeriod;
+  /** Вклад до этой даты (YYYY-MM-DD); после неё проценты не идут. Нет — накопительный счёт. */
+  depositEndsOn?: string;
 };
 
 export type InterestAccrual = {
@@ -100,6 +102,8 @@ export function interestSchedule(
       Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(start.getUTCDate(), lastDay))
     );
     if (date > horizon) break;
+    // Вклад кончился — дальше денег на нём нет, и процентов тоже.
+    if (account.depositEndsOn && date.toISOString().slice(0, 10) > account.depositEndsOn) break;
 
     const amount = periodInterest(balance, rate, months);
     if (amount <= 0) break;

@@ -19,6 +19,9 @@ import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
 import { ReceiptPhotoDialog } from "@/components/transactions/receipt-photo-dialog";
+import { bestCard, rateFor, type CashbackRule } from "@/lib/cashback/cashback";
+import type { CashbackPageData, TripsPageData } from "@/lib/api/local/extras";
+import type { TripView } from "@/lib/trips/trips";
 import { cameraPossible, scanQr, waitForNoModal } from "@/lib/sync/scan-qr";
 import {
   QUICK_ADD_OPEN,
@@ -125,6 +128,10 @@ export function QuickAddFab({
   // Сумма пришла с QR чека — после записи предложим сфотографировать сам чек.
   const [fromReceipt, setFromReceipt] = useState(false);
   const [photoFor, setPhotoFor] = useState<string | null>(null);
+  // Условия кэшбэка этого месяца и идущая поездка — подсказки под полями.
+  const [cashback, setCashback] = useState<CashbackRule[]>([]);
+  const [trip, setTrip] = useState<TripView | null>(null);
+  const [skipTrip, setSkipTrip] = useState(false);
 
   // The server props are empty on the desktop static build — the real accounts
   // and categories live in the client API (LocalApiClient/IndexedDB).
@@ -145,6 +152,15 @@ export function QuickAddFab({
       .get<TransactionsPageData>("/transactions?limit=100")
       .catch(() => null);
     setLedger(recent);
+    void apiClient
+      .get<CashbackPageData>("/cashback")
+      .then((result) => setCashback(result?.rules ?? []))
+      .catch(() => setCashback([]));
+    void apiClient
+      .get<TripsPageData>("/trips")
+      .then((result) => setTrip(result?.active ?? null))
+      .catch(() => setTrip(null));
+    setSkipTrip(false);
     // Pre-select the last account the operation was added to. On a device that
     // has never added one there is nothing to remember, and the field stayed
     // empty — the form then refused to save with only a toast to explain
@@ -228,6 +244,25 @@ export function QuickAddFab({
     (a) => !(a as AccountOption & { isArchived?: boolean }).isArchived
   );
   const filteredCategories = refs.categories.filter((c) => c.kind === type);
+
+  // Какой картой выгоднее — по условиям кэшбэка месяца операции.
+  const operationMonth = (date || formatInputDate(new Date())).slice(0, 7);
+  const best =
+    type === "EXPENSE" && categoryId ? bestCard(cashback, categoryId, operationMonth) : null;
+  const currentRate =
+    accountId && categoryId
+      ? (rateFor(cashback, accountId, categoryId, operationMonth)?.percent ?? 0)
+      : 0;
+  const bestAccount = best ? activeAccounts.find((a) => a.id === best.accountId) : undefined;
+  const betterCard =
+    best && bestAccount && best.accountId !== accountId && best.percent > currentRate
+      ? { id: bestAccount.id, name: bestAccount.name, percent: best.percent }
+      : null;
+  const operationDay = date || formatInputDate(new Date());
+  const tripHere =
+    type === "EXPENSE" && trip && trip.from <= operationDay && operationDay <= trip.to
+      ? trip
+      : null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -715,7 +750,44 @@ export function QuickAddFab({
                     ))}
                   </SelectContent>
                 </Select>
+                {betterCard ? (
+                  <p
+                    className="flex flex-wrap items-center gap-x-2 text-xs text-success"
+                    data-testid="cashback-hint"
+                  >
+                    {t("cashback.better", {
+                      card: betterCard.name,
+                      percent: betterCard.percent
+                    })}
+                    <button
+                      type="button"
+                      className="font-medium underline"
+                      onClick={() => setAccountId(betterCard.id)}
+                    >
+                      {t("cashback.switch")}
+                    </button>
+                  </p>
+                ) : null}
               </div>
+
+              {tripHere ? (
+                <label
+                  className="flex items-center justify-between gap-2 rounded-md bg-primary/10 px-3 py-2 text-xs"
+                  data-testid="trip-hint"
+                >
+                  <span>{t("trip.on", { name: tripHere.name, tag: tripHere.tag })}</span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[hsl(var(--primary))]"
+                      checked={skipTrip}
+                      onChange={(event) => setSkipTrip(event.target.checked)}
+                    />
+                    {t("trip.skip")}
+                  </span>
+                  {skipTrip ? <input type="hidden" name="noTrip" value="1" /> : null}
+                </label>
+              ) : null}
 
               {type === "TRANSFER" ? (
                 <div className="space-y-2">

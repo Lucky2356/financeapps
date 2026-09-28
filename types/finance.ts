@@ -239,6 +239,8 @@ export type AccountRow = {
   interestRate?: number;
   /** How often that interest is added to the balance. */
   interestCompounding?: "MONTHLY" | "QUARTERLY" | "YEARLY";
+  /** Вклад до этой даты (YYYY-MM-DD); нет — счёт без срока. */
+  depositEndsOn?: string;
 };
 
 export type LiabilityKind = "CREDIT_CARD" | "LOAN" | "MORTGAGE" | "INSTALLMENT" | "OTHER";

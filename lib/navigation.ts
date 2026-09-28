@@ -3,6 +3,9 @@ import {
   BarChart3,
   CalendarClock,
   CreditCard,
+  Percent,
+  Plane,
+  Landmark,
   Download,
   FileText,
   Flag,
@@ -66,6 +69,14 @@ const TAB = {
   // план/факта: там цифры из учёта, здесь — то, что человек задумал сам.
   sheet: { href: "/sheet", label: "Таблица", labelKey: "nav.sheet", icon: Sheet },
   budgets: { href: "/budgets", label: "Лимиты", labelKey: "nav.limits", icon: Gauge },
+  cashback: { href: "/cashback", label: "Кэшбэк", labelKey: "nav.cashback", icon: Percent },
+  trips: { href: "/trips", label: "Поездки", labelKey: "nav.trips", icon: Plane },
+  deductions: {
+    href: "/deductions",
+    label: "Вычеты",
+    labelKey: "nav.deductions",
+    icon: Landmark
+  },
   goals: { href: "/goals", label: "Цели", labelKey: "nav.goals", icon: Flag },
   recurring: {
     href: "/recurring",
@@ -105,7 +116,16 @@ export const HUB_GROUPS: HubGroup[] = [
   },
   {
     landing: "/budgets",
-    tabs: [TAB.budgets, TAB.sheet, TAB.goals, TAB.recurring, TAB.subscriptions]
+    tabs: [
+      TAB.budgets,
+      TAB.sheet,
+      TAB.goals,
+      TAB.recurring,
+      TAB.subscriptions,
+      TAB.cashback,
+      TAB.trips,
+      TAB.deductions
+    ]
   }
 ];
 
@@ -148,7 +168,11 @@ export const DESKTOP_HUBS: HubGroup[] = [
   { landing: "/transactions", tabs: [TAB.transactions, TAB.debts, TAB.import] },
   // What is planned but has not happened yet. Subscriptions are recurring
   // payments by another name, so they live beside the scheduled ones.
-  { landing: "/recurring", tabs: [TAB.recurring, TAB.subscriptions] },
+  // Кэшбэк, поездки и вычеты — тоже про то, что будет с деньгами дальше.
+  {
+    landing: "/recurring",
+    tabs: [TAB.recurring, TAB.subscriptions, TAB.cashback, TAB.trips, TAB.deductions]
+  },
   // Reading the money rather than recording it.
   { landing: "/plan", tabs: [TAB.plan, TAB.analytics, TAB.forecast, TAB.reports] }
 ];

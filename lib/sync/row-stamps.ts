@@ -82,6 +82,9 @@ export const STAMPED: ReadonlyArray<readonly [string, Identity]> = [
   ["sheetCells", byId],
   ["sheetMonths", byId],
   ["sheetTargets", byId],
+  ["cashbackRules", byId],
+  ["trips", byId],
+  ["deductionYears", byId],
   // У плана нет id: он опознаётся месяцем и статьёй, у заметки — одним месяцем.
   ["plans", byFields("month", "categoryId")],
   ["planNotes", byFields("month")]

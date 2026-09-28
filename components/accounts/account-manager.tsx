@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { earnsInterest, interestSchedule, totalInterest } from "@/lib/accounts/interest";
+import { depositOutlook } from "@/lib/accounts/deposits";
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData } from "@/lib/data";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
@@ -384,8 +385,40 @@ function ArchiveAccountDialog({
 // The rate an account earns, plus what it adds over a year — the number the
 // owner actually wants to see next to a savings balance.
 function InterestNote({ account }: { account: AccountsPageData["accounts"][number] }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   if (!earnsInterest(account)) return null;
+  // Вклад со сроком — доход в месяц и сколько будет к концу; счёт без срока —
+  // в месяц и за год.
+  const outlook = depositOutlook(account);
+  // Срок вклада прошёл — процентов больше нет, и обещать их незачем.
+  if (!outlook && account.depositEndsOn) return null;
+  if (outlook) {
+    const money = (value: number) => formatCurrency(value, account.currency);
+    return (
+      <p className="mt-1 text-xs text-success" data-testid="deposit-outlook">
+        {outlook.endsOn
+          ? t("deposit.outlook", {
+              monthly: money(outlook.monthly),
+              date: new Date(`${outlook.endsOn}T12:00:00`).toLocaleDateString(
+                locale === "en" ? "en-GB" : "ru-RU",
+                { day: "numeric", month: "short", year: "numeric" }
+              ),
+              atEnd: money(outlook.atEnd),
+              untilEnd: money(outlook.untilEnd)
+            })
+          : t("deposit.outlookOpen", {
+              monthly: money(outlook.monthly),
+              untilEnd: money(outlook.untilEnd)
+            })}
+        {outlook.daysLeft !== null ? (
+          <span className="text-muted-foreground">
+            {" "}
+            · {t("deposit.daysLeft", { days: outlook.daysLeft })}
+          </span>
+        ) : null}
+      </p>
+    );
+  }
   return (
     <p className="mt-1 text-xs text-success">
       {t("acc.interest.year", {
@@ -478,6 +511,18 @@ function AccountDialog({
               />
               <p className="text-xs text-muted-foreground">{t("acc.rate.hint")}</p>
             </div>
+            {type === "SAVINGS" ? (
+              <div className="space-y-2 sm:col-span-2 sm:order-last">
+                <Label htmlFor="deposit-ends">{t("deposit.until")}</Label>
+                <Input
+                  id="deposit-ends"
+                  name="depositEndsOn"
+                  type="date"
+                  defaultValue={account?.depositEndsOn ?? ""}
+                />
+                <p className="text-xs text-muted-foreground">{t("deposit.untilHint")}</p>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <FieldLabel help={t("help.acc.compounding")}>{t("acc.compounding")}</FieldLabel>
               <Select

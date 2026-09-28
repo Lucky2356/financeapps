@@ -48,6 +48,9 @@ const ru: Messages = {
   "nav.reports": "Отчёты",
   "nav.planFact": "План/факт",
   "nav.sheet": "Таблица",
+  "nav.cashback": "Кэшбэк",
+  "nav.trips": "Поездки",
+  "nav.deductions": "Вычеты",
   "nav.import": "Данные",
   "nav.settings": "Настройки",
   // Error boundaries
@@ -120,6 +123,18 @@ const ru: Messages = {
   "page.plan.title": "План/факт",
   "page.plan.desc": "План на месяц вы вписываете сами, факт и разница считаются по операциям.",
   "page.sheet.title": "Таблица",
+  "page.cashback.title": "Кэшбэк",
+  "page.cashback.desc": "Какой картой платить в этом месяце и сколько кэшбэка пришло.",
+  "page.cashback.help":
+    "Запишите категории повышенного кэшбэка каждой карты на месяц — приложение подскажет при записи траты, какой картой выгоднее, и посчитает, сколько пришло и сколько упущено. «Скопировать с прошлого месяца» переносит условия, если банк их не менял.",
+  "page.trips.title": "Поездки",
+  "page.trips.desc": "Бюджет отпуска: сколько ушло, на что и сколько можно в день.",
+  "page.trips.help":
+    "Пока поездка идёт, каждая новая трата получает её метку сама — ничего отмечать не нужно. Бюджет — в валюте поездки, траты пересчитываются по курсам приложения.",
+  "page.deductions.title": "Налоговые вычеты",
+  "page.deductions.desc": "Сколько НДФЛ можно вернуть за лечение, обучение, спорт и ИИС.",
+  "page.deductions.help":
+    "Отметьте категории, траты которых идут в вычет, — приложение посчитает возврат с лимитами 2024 года и не больше уплаченного налога. Список операций можно выгрузить для декларации.",
   "page.sheet.desc":
     "Своя таблица бюджета, как в Excel: месяцы строками, статьи столбцами, Остаток и Итог считаются сами.",
   "drill.loading": "Загружаем операции…",
@@ -1116,6 +1131,19 @@ const ru: Messages = {
   "photo.has": "Есть фото чека",
   "photo.offer": "Сфотографировать чек?",
   "photo.offerAction": "Снять",
+  "deposit.endingTitle": "Вклад «{name}» заканчивается {when}",
+  "deposit.endingDesc":
+    "На нём {amount}. Решите, куда переложить, — иначе банк может продлить под меньший процент.",
+  "deposit.until": "Вклад до",
+  "deposit.untilHint":
+    "Пусто — накопительный счёт без срока. За неделю до конца приложение напомнит.",
+  "deposit.outlook": "≈ {monthly} в месяц · к {date} будет {atEnd} (+{untilEnd})",
+  "deposit.outlookOpen": "≈ {monthly} в месяц · за год +{untilEnd}",
+  "deposit.daysLeft": "осталось {days} дн.",
+  "trip.on": "Поездка «{name}» — трата получит метку #{tag}",
+  "trip.skip": "Не отмечать",
+  "cashback.better": "Выгоднее картой «{card}» — {percent} % кэшбэка",
+  "cashback.switch": "Взять её",
   "week.close": "Закрыть сводку недели",
   "allow.title": "Можно тратить сегодня",
   "allow.perDayShort": "в день до конца месяца",
@@ -2433,6 +2461,9 @@ const en: Messages = {
   "nav.reports": "Reports",
   "nav.planFact": "Plan vs actual",
   "nav.sheet": "Sheet",
+  "nav.cashback": "Cashback",
+  "nav.trips": "Trips",
+  "nav.deductions": "Tax refunds",
   "nav.import": "Data",
   "nav.settings": "Settings",
   // Error boundaries
@@ -2502,6 +2533,19 @@ const en: Messages = {
   "page.plan.title": "Plan vs actual",
   "page.plan.desc": "You type the monthly plan; actuals and the gap are read off your operations.",
   "page.sheet.title": "Sheet",
+  "page.cashback.title": "Cashback",
+  "page.cashback.desc": "Which card to pay with this month and how much cashback came in.",
+  "page.cashback.help":
+    "Record each card's bonus categories for the month — the app will suggest the better card when you add a purchase and count what you earned and missed. “Copy from last month” carries the terms over.",
+  "page.trips.title": "Trips",
+  "page.trips.desc": "Holiday budget: how much went, on what, and how much per day is left.",
+  "page.trips.help":
+    "While a trip is on, every new expense gets its tag automatically. The budget is in the trip currency; spending is converted at the app's rates.",
+  "page.deductions.title": "Tax refunds",
+  "page.deductions.desc":
+    "How much income tax you can get back for medical, education, sport and IIS.",
+  "page.deductions.help":
+    "Mark the categories whose spending qualifies — the app applies the 2024 limits and caps the refund at the tax you paid. The list of operations can be exported for the return.",
   "page.sheet.desc":
     "Your own budget sheet, like in Excel: months as rows, items as columns, balance and total calculated for you.",
   "drill.loading": "Loading operations…",
@@ -3497,6 +3541,19 @@ const en: Messages = {
   "photo.has": "Has a receipt photo",
   "photo.offer": "Take a photo of the receipt?",
   "photo.offerAction": "Take",
+  "deposit.endingTitle": "Deposit “{name}” ends {when}",
+  "deposit.endingDesc":
+    "It holds {amount}. Decide where it goes — otherwise the bank may roll it over at a lower rate.",
+  "deposit.until": "Deposit until",
+  "deposit.untilHint":
+    "Empty — a savings account with no term. The app reminds you a week before the end.",
+  "deposit.outlook": "≈ {monthly} a month · by {date} it will be {atEnd} (+{untilEnd})",
+  "deposit.outlookOpen": "≈ {monthly} a month · +{untilEnd} a year",
+  "deposit.daysLeft": "{days} days left",
+  "trip.on": "Trip “{name}” — the expense gets the #{tag} tag",
+  "trip.skip": "Don't tag",
+  "cashback.better": "Card “{card}” pays more — {percent}% cashback",
+  "cashback.switch": "Use it",
   "week.close": "Close the weekly summary",
   "allow.title": "Safe to spend today",
   "allow.perDayShort": "a day until month end",
