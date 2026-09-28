@@ -41,7 +41,9 @@ test("быстрое добавление умеет переводы между
   // both and stops asking for a category.
   await expect(dialog.getByText("Списать со счета")).toBeVisible();
   await expect(dialog.getByText("Зачислить на счет")).toBeVisible();
-  await expect(dialog.getByText("Категория")).toBeHidden();
+  await expect(dialog.getByText("Категория", { exact: true })).toBeHidden();
+  // Разделить на категории переводу тоже нечего.
+  await expect(dialog.getByText("Разделить по категориям")).toBeHidden();
 });
 
 test("на главной есть разбивка и по расходам, и по доходам", async ({ page }) => {
