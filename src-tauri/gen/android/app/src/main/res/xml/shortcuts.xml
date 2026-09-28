@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ярлыки на значке приложения (долгое нажатие): записать трату, доход или
+     чек, не проходя через главную. Намерения явные — в MainActivity, поэтому
+     фильтров для этих ссылок в манифесте нет: открыть их из браузера или
+     чужого приложения нельзя. Ссылку забирает InstallerPlugin.takeLink. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="expense"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_expense"
+        android:shortcutLongLabel="@string/shortcut_expense_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ru.lucky2356.financeapps"
+            android:targetClass="ru.lucky2356.financeapps.MainActivity"
+            android:data="financeapps://add?type=EXPENSE" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="income"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_income"
+        android:shortcutLongLabel="@string/shortcut_income_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ru.lucky2356.financeapps"
+            android:targetClass="ru.lucky2356.financeapps.MainActivity"
+            android:data="financeapps://add?type=INCOME" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="receipt"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_receipt"
+        android:shortcutLongLabel="@string/shortcut_receipt_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ru.lucky2356.financeapps"
+            android:targetClass="ru.lucky2356.financeapps.MainActivity"
+            android:data="financeapps://receipt" />
+    </shortcut>
+</shortcuts>

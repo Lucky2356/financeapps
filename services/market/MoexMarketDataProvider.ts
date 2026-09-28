@@ -1,3 +1,4 @@
+import { parseCoupons, parseDividends, type Payout } from "@/lib/market/payouts";
 import { format, subDays } from "date-fns";
 
 import type { AssetKind } from "@/types/enums";
@@ -202,6 +203,19 @@ function historyUrl(spec: BoardSpec, ticker: string, from: string, till: string)
 
 const SHARES_BOARD = BOARDS[0];
 
+/** Сколько строк история отдаёт за раз. */
+const HISTORY_PAGE = 100;
+
+/** Индексы Мосбиржи: IMOEX — цены, MCFTR — полной доходности (с дивидендами). */
+export const INDEX_BOARD: BoardSpec = {
+  board: "SNDX",
+  engine: "stock",
+  market: "index",
+  assetKind: "OTHER",
+  securityColumns: [],
+  marketColumns: []
+};
+
 // `live` is the trustworthy intraday price (LAST/LCURRENTPRICE), 0 when the market
 // is closed; `marketPrice` is the weighted-average last-resort. Callers prefer
 // live → last historical close → marketPrice. Both are already in roubles: a
@@ -215,6 +229,8 @@ type SnapshotRow = {
   assetKind: AssetKind;
   /** Exchange lot: the smallest number of shares that can actually be bought. */
   lotSize: number;
+  /** НКД на бумагу в рублях; у всего, что не облигация, — 0. */
+  accruedInterest: number;
   board: BoardSpec;
 };
 // Per-ticker daily stats from history: the official last close (what brokers show
@@ -321,6 +337,41 @@ export class MoexMarketDataProvider implements MarketDataService {
       return matches.find((security) => security.ticker === t) ?? null;
     } catch {
       return this.fallback.getSecurityByTicker(ticker);
+    }
+  }
+
+  async getPayouts(ticker: string, kind: AssetKind): Promise<Payout[]> {
+    const secid = encodeURIComponent(ticker.toUpperCase());
+    try {
+      if (kind === "BOND") {
+        const response = await fetchWithTimeout(
+          `https://iss.moex.com/iss/securities/${secid}/bondization.json?iss.meta=off&iss.only=coupons&limit=100`
+        );
+        if (!response.ok) return [];
+        return parseCoupons(ticker, await response.json());
+      }
+      if (kind === "GOLD") return [];
+      const response = await fetchWithTimeout(
+        `https://iss.moex.com/iss/securities/${secid}/dividends.json?iss.meta=off`
+      );
+      if (!response.ok) return [];
+      return parseDividends(ticker, await response.json());
+    } catch {
+      // Нет сети — выплат просто не видно; портфель от этого не ломается.
+      return [];
+    }
+  }
+
+  async getIndexHistory(index: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
+    try {
+      return await this.fetchHistory(
+        index.toUpperCase(),
+        format(from, "yyyy-MM-dd"),
+        format(to, "yyyy-MM-dd"),
+        INDEX_BOARD
+      );
+    } catch {
+      return this.fallback.getIndexHistory(index, from, to);
     }
   }
 
@@ -431,6 +482,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         marketPrice: toRoubles(quotedMarket),
         changeDay: typeof pct === "number" ? Number(pct.toFixed(2)) : 0,
         lotSize: lot > 0 ? lot : 1,
+        accruedInterest: roundKopecks(accrued),
         name: String(security?.["SHORTNAME"] ?? ""),
         assetKind: spec.assetKind ?? kindFromSecType(String(security?.["SECTYPE"] ?? "")),
         board: spec
@@ -479,7 +531,8 @@ export class MoexMarketDataProvider implements MarketDataService {
           price: row.live > 0 ? row.live : row.marketPrice,
           changeDay: row.changeDay,
           change30d: 0,
-          lotSize: row.lotSize
+          lotSize: row.lotSize,
+          ...(row.accruedInterest > 0 ? { accruedInterest: row.accruedInterest } : {})
         } satisfies MarketSecurity;
       });
 
@@ -540,10 +593,24 @@ export class MoexMarketDataProvider implements MarketDataService {
     till: string,
     spec: BoardSpec
   ): Promise<HistoricalPrice[]> {
-    const response = await fetchWithTimeout(historyUrl(spec, ticker, from, till));
-    if (!response.ok) throw new Error(`MOEX history returned HTTP ${response.status}`);
-    const json = (await response.json()) as {
-      history: { columns: string[]; data: (string | number | null)[][] };
+    // Биржа отдаёт историю страницами по 100 строк. Бралась только первая, и
+    // график за год или пять лет обрывался на сотом торговом дне — примерно
+    // через пять месяцев от начала. Дочитываем, пока страница полная.
+    const pages: { columns: string[]; data: (string | number | null)[][] }[] = [];
+    for (let start = 0, page = 0; page < 20; page += 1) {
+      const response = await fetchWithTimeout(
+        `${historyUrl(spec, ticker, from, till)}&start=${start}`
+      );
+      if (!response.ok) throw new Error(`MOEX history returned HTTP ${response.status}`);
+      const body = (await response.json()) as {
+        history: { columns: string[]; data: (string | number | null)[][] };
+      };
+      pages.push(body.history);
+      if (body.history.data.length < HISTORY_PAGE) break;
+      start += body.history.data.length;
+    }
+    const json = {
+      history: { columns: pages[0]?.columns ?? [], data: pages.flatMap((part) => part.data) }
     };
 
     const colDate = json.history.columns.indexOf("TRADEDATE");

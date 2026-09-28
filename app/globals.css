@@ -123,6 +123,14 @@
   :root[data-text="large"] {
     font-size: 112.5%;
   }
+  /* Плотный вид — мельче на восьмую часть (14 px из 16); вместе с крупным
+     текстом — 14 × 1,125. */
+  :root[data-density="compact"] {
+    font-size: 87.5%;
+  }
+  :root[data-density="compact"][data-text="large"] {
+    font-size: 98.4375%;
+  }
 
   /* The hub tab strip: snap-scrolled sideways with no visible scrollbar, per
      the design. Tailwind has no utility for the vendor scrollbar pseudo-element. */

@@ -26,12 +26,26 @@ import {
   type Vault
 } from "@/lib/sync/vault-crypto";
 import type { PairPackage } from "@/lib/sync/pair-package";
+import {
+  forgetBiometric,
+  openWithBiometric,
+  sealWithBiometric,
+  type BiometricOutcome,
+  type Sealed
+} from "@/lib/vault/biometric";
 
 /** Где лежит шкатулка. Читается запертым — см. UNSEALED_KEYS. */
 export const VAULT_KEY = "financeVault";
 
 /** Где лежит пометка «на этом устройстве не спрашивать». */
 export const DEVICE_KEY = "financeDevice";
+/**
+ * Ключ данных, запечатанный под отпечаток (lib/vault/biometric.ts). Сам по
+ * себе бесполезен: открыть его может только хранилище Android этого телефона
+ * и только после отпечатка. Не шифруется и никуда не уезжает — как и пометка
+ * устройства: см. UNSEALED_KEYS.
+ */
+export const BIOMETRIC_KEY = "financeBiometric";
 
 /**
  * Что помнит устройство, когда владелец попросил не спрашивать пароль.
@@ -405,6 +419,50 @@ export class AccountService {
     });
     this.sealed.unlock(bookKey);
     if (options.remember) await this.rememberDevice(bookKey);
+  }
+
+  /** Включён ли вход по отпечатку на этом устройстве. */
+  async biometricEnabled(): Promise<boolean> {
+    return (await this.plain.getItem<Sealed>(BIOMETRIC_KEY)) !== null;
+  }
+
+  /**
+   * Включить вход по отпечатку. Нужен пароль: ключ данных в памяти открыт
+   * неизвлекаемым, и достать его, чтобы запечатать, можно только заново из
+   * шкатулки.
+   */
+  async enableBiometric(
+    password: string,
+    words: { title: string; cancel: string }
+  ): Promise<BiometricOutcome<true>> {
+    const vault = await this.requireVault();
+    const bookKey = await unlockWithPassword(vault, password, { extractable: true });
+    const raw = toBase64(new Uint8Array(await crypto.subtle.exportKey("raw", bookKey)));
+    const sealed = await sealWithBiometric(raw, words);
+    if (!sealed.ok) return sealed;
+    await this.plain.setItem<Sealed>(BIOMETRIC_KEY, sealed.value);
+    return { ok: true, value: true };
+  }
+
+  /** Отпереть отпечатком. Отпечатки в телефоне поменялись — выключается сам. */
+  async unlockWithBiometric(words: {
+    title: string;
+    cancel: string;
+  }): Promise<BiometricOutcome<true>> {
+    const sealed = await this.plain.getItem<Sealed>(BIOMETRIC_KEY);
+    if (!sealed) return { ok: false, why: "absent" };
+    const opened = await openWithBiometric(sealed, words);
+    if (!opened.ok) {
+      if (opened.why === "invalidated") await this.disableBiometric();
+      return opened;
+    }
+    this.sealed.unlock(await importBookKey(opened.value));
+    return { ok: true, value: true };
+  }
+
+  async disableBiometric(): Promise<void> {
+    await this.plain.removeItem(BIOMETRIC_KEY);
+    await forgetBiometric();
   }
 
   /** Отпирает кодом восстановления — для забывшего пароль. */

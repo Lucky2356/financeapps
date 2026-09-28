@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, ScanLine, X } from "lucide-react";
 
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,13 @@ import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
+import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
+import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
+import {
+  QUICK_ADD_OPEN,
+  takeQuickAddRequest,
+  type QuickAddRequest
+} from "@/lib/transactions/quick-add-request";
 import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -95,6 +102,9 @@ export function QuickAddFab({
   // отправке. Тело запроса от этого не изменилось — форма по-прежнему уходит
   // через FormData.
   const [amount, setAmount] = useState("");
+  // Разделить покупку по категориям: основная категория получает остаток,
+  // здесь — остальные части.
+  const [splitParts, setSplitParts] = useState<Array<{ categoryId: string; amount: string }>>([]);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [tags, setTags] = useState("");
@@ -120,7 +130,7 @@ export function QuickAddFab({
     setData: setRefs
   } = useApiPageData<ImportPageData>(initialRefs, "/import");
 
-  async function openDialog() {
+  async function openDialog(request: QuickAddRequest = {}) {
     // Rules and recent operations feed the category guess. Fetched when the
     // dialog opens rather than kept live: it is a hint, not a total.
     //
@@ -155,6 +165,8 @@ export function QuickAddFab({
     } catch {
       /* settings unavailable — keep current type */
     }
+    // Ярлык «Доход» на значке важнее типа по умолчанию из настроек.
+    if (request.type) openedType = request.type;
     setType(openedType);
     // Категория и счёт — как у последней операции того же типа: чаще всего
     // следующая такая же. Счёт, выбранный в настройках, главнее.
@@ -179,17 +191,26 @@ export function QuickAddFab({
     setFilledIn({ amount: "", accountId: preselectedAccount, date: openedOn, tags: "" });
     setCleanedDescription(null);
     setCategoryId(previous?.category.id ?? "");
+    setSplitParts([]);
     setManualCategory(false);
     setAutoSuggested(false);
     setOpen(true);
+    // Ярлык «Сканировать чек»: окно открыто — сразу камера.
+    if (request.scanReceipt && cameraPossible()) void scanReceipt(openedType);
   }
 
   useEffect(() => {
+    // Открыть по просьбе снаружи: ярлык на значке, кнопка «Операция» и т. п.
+    // Просьба могла прийти раньше, чем эта кнопка появилась, — тогда она ждёт.
     const handler = () => {
-      void openDialog();
+      const request = takeQuickAddRequest();
+      void openDialog(request ?? {});
     };
-    window.addEventListener("quick-add-open", handler);
-    return () => window.removeEventListener("quick-add-open", handler);
+    window.addEventListener(QUICK_ADD_OPEN, handler);
+    const early = takeQuickAddRequest();
+    // На микрозадачу, а не прямо в эффекте: окно открывается состоянием.
+    if (early) void Promise.resolve().then(() => openDialog(early));
+    return () => window.removeEventListener(QUICK_ADD_OPEN, handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -210,6 +231,8 @@ export function QuickAddFab({
     if (type === "TRANSFER") return submitTransfer(payload);
     if (!accountId) return toast.error(t("qa.err.account"));
     if (!categoryId) return toast.error(t("qa.err.category"));
+
+    if (splitParts.length > 0) return submitSplit(payload);
 
     try {
       const result = await apiClient.post<{ budgetWarning?: BudgetWarning }>("/transactions", {
@@ -233,6 +256,36 @@ export function QuickAddFab({
           })
         );
       }
+      setOpen(false);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("tx.toast.saveError"));
+    }
+  }
+
+  // Покупка по нескольким категориям: основная получает остаток.
+  async function submitSplit(payload: Record<string, FormDataEntryValue>) {
+    const extras = splitParts.filter((part) => part.categoryId && toNumber(part.amount) > 0);
+    const rest = splitRemainder(amount, splitParts);
+    if (extras.length !== splitParts.length) return toast.error(t("qa.split.errPart"));
+    if (!(rest > 0)) return toast.error(t("qa.split.errRest"));
+    try {
+      await apiClient.post("/transactions", {
+        ...payload,
+        action: "split",
+        type,
+        accountId,
+        parts: JSON.stringify([
+          { categoryId, amount: String(rest) },
+          ...extras.map((part) => ({ categoryId: part.categoryId, amount: part.amount }))
+        ])
+      });
+      try {
+        writeMine(LAST_ACCOUNT_KEY, accountId);
+      } catch {
+        /* ignore */
+      }
+      toast.success(t("qa.split.added", { count: extras.length + 1 }));
       setOpen(false);
       router.refresh();
     } catch (error) {
@@ -272,6 +325,34 @@ export function QuickAddFab({
     setShowNewCategory(false);
     setManualCategory(false);
     setAutoSuggested(false);
+    setSplitParts([]);
+  }
+
+  // QR с кассового чека: сумма, дата и расход/возврат — без набора руками.
+  // Категорию подставляет то же, что и всегда: прошлые операции и правила.
+  async function scanReceipt(current: QuickAddType = type) {
+    const shot = await scanQr({ hint: t("qa.receipt.hint") });
+    if (!shot.ok) {
+      if (shot.why === "denied") toast.error(t("qa.receipt.denied"));
+      else if (shot.why === "broken") toast.error(t("qa.receipt.broken"));
+      return;
+    }
+    const receipt = parseFnsReceipt(shot.text);
+    if (!receipt) {
+      toast.error(t("qa.receipt.notReceipt"));
+      return;
+    }
+    if (receipt.type !== current) changeType(receipt.type);
+    const written = String(receipt.amount);
+    setAmount(written);
+    setDate(receipt.date);
+    setFilledIn((was) => ({ ...was, amount: written, date: receipt.date }));
+    toast.success(
+      t("qa.receipt.done", {
+        amount: formatCurrency(receipt.amount, "RUB"),
+        time: receipt.time
+      })
+    );
   }
 
   function pickCategory(value: string) {
@@ -398,6 +479,17 @@ export function QuickAddFab({
           <DialogHeader>
             <DialogTitle>{t("qa.title")}</DialogTitle>
           </DialogHeader>
+          {cameraPossible() ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => void scanReceipt()}
+            >
+              <ScanLine className="size-4" />
+              {t("qa.receipt.scan")}
+            </Button>
+          ) : null}
           <div className="grid gap-4">
             <div className="space-y-2">
               <Label>{t("tx.type")}</Label>
@@ -477,6 +569,72 @@ export function QuickAddFab({
                 {autoSuggested ? (
                   <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
                 ) : null}
+                {splitParts.length > 0 ? (
+                  <div className="space-y-2 rounded-lg border p-2" data-testid="split-parts">
+                    <p className="px-1 text-xs text-muted-foreground">
+                      {t("qa.split.rest", {
+                        amount: formatCurrency(Math.max(splitRemainder(amount, splitParts), 0))
+                      })}
+                    </p>
+                    {splitParts.map((part, index) => (
+                      <div key={index} className="grid grid-cols-[1fr_7rem_auto] gap-2">
+                        <Select
+                          value={part.categoryId || undefined}
+                          onValueChange={keepChoice((value: string) =>
+                            setSplitParts((was) =>
+                              was.map((row, at) =>
+                                at === index ? { ...row, categoryId: value } : row
+                              )
+                            )
+                          )}
+                        >
+                          <SelectTrigger aria-label={t("qa.split.partCategory", { n: index + 2 })}>
+                            <SelectValue placeholder={t("ai.selectCategory")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {filteredCategories.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                <CategoryOptionLabel
+                                  label={c.label}
+                                  color={c.color}
+                                  icon={c.icon}
+                                />
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <AmountInput
+                          aria-label={t("qa.split.partAmount", { n: index + 2 })}
+                          placeholder="0"
+                          value={part.amount}
+                          onValueChange={(value) =>
+                            setSplitParts((was) =>
+                              was.map((row, at) => (at === index ? { ...row, amount: value } : row))
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("qa.split.remove")}
+                          onClick={() =>
+                            setSplitParts((was) => was.filter((_, at) => at !== index))
+                          }
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setSplitParts((was) => [...was, { categoryId: "", amount: "" }])}
+                >
+                  {splitParts.length > 0 ? t("qa.split.more") : t("qa.split.start")}
+                </button>
               </div>
 
               {/* Account — «+ Новый» opens NewAccountDialog over this one. */}
@@ -614,4 +772,15 @@ export function QuickAddFab({
       />
     </>
   );
+}
+
+function toNumber(value: string): number {
+  const parsed = Number(String(value).replace(",", ".").replace(/\s/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Сколько остаётся основной категории, когда остальные части вписаны. */
+export function splitRemainder(total: string, parts: ReadonlyArray<{ amount: string }>): number {
+  const rest = parts.reduce((sum, part) => sum - toNumber(part.amount), toNumber(total));
+  return Math.round(rest * 100) / 100;
 }

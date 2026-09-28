@@ -1,4 +1,10 @@
 <resources>
     <string name="app_name">Финансовый помощник</string>
     <string name="main_activity_title">Финансовый помощник</string>
+    <string name="shortcut_expense">Расход</string>
+    <string name="shortcut_expense_long">Записать расход</string>
+    <string name="shortcut_income">Доход</string>
+    <string name="shortcut_income_long">Записать доход</string>
+    <string name="shortcut_receipt">Чек</string>
+    <string name="shortcut_receipt_long">Сканировать чек</string>
 </resources>

@@ -40,7 +40,7 @@ import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts } from "@/lib/debts/settled";
-import { parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
+import { isUsableLot, parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildAssetKindStructure, buildSectorStructure } from "@/lib/data/derive";
 import type { CategorizationRule } from "@/lib/categorization-rules";
@@ -85,7 +85,10 @@ import {
 } from "@/services/RecurringTransactionService";
 import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
-import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
+import {
+  createMarketDataProvider,
+  marketDataSource
+} from "@/services/market/createMarketDataProvider";
 import { historyRangeStart } from "@/lib/market/history-range";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { suggestedLimitFor } from "@/lib/budget-suggest";
@@ -93,11 +96,17 @@ import { budgetInForce, effectiveLimit, rolloverCarry } from "@/lib/budget-rollo
 import { buildEmergencyFund } from "@/lib/emergency-fund";
 import { buildNetWorthBreakdown, buildNetWorthTrend, computeNetWorth } from "@/lib/net-worth";
 import { isoDay, recordSnapshot, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
+import { recordPortfolioSnapshot, type PortfolioSnapshot } from "@/lib/investments/snapshots";
+import { sellGain } from "@/services/InvestmentTaxReportService";
+import { computeDailyAllowance, type Allowance } from "@/lib/analytics/daily-allowance";
+import { buildMonthRecap, previousMonth } from "@/lib/analytics/month-recap";
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
   SAMPLE_CATEGORIES,
+  SAMPLE_DIVIDEND,
   SAMPLE_GOALS,
+  SAMPLE_PORTFOLIO,
   SAMPLE_TRANSACTIONS,
   sampleDate,
   sampleDeadline
@@ -176,6 +185,8 @@ type LocalState = {
   currencyRates: CurrencyRates;
   currencyRatesUpdatedAt: string | null;
   netWorthSnapshots: NetWorthSnapshot[];
+  /** Раз в день: стоимость портфеля и вложенное — см. lib/investments/snapshots.ts. */
+  portfolioSnapshots?: PortfolioSnapshot[];
   realizedInvestmentEvents: Array<Stamped<RealizedInvestmentEvent>>;
   expectedDividends: Array<Stamped<ExpectedDividend>>;
   targetAllocations: Array<Stamped<TargetAllocation>>;
@@ -634,6 +645,30 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/rules") return this.rulesPage(state) as T;
     if (pathname === "/recurring") return this.recurring(state) as T;
     if (pathname === "/forecast") return this.forecast(this.inBase(state)) as T;
+    if (pathname === "/month-recap") {
+      // Итоги ПРОШЛОГО месяца по умолчанию: их показывают в начале нового.
+      const counted = this.countingState(this.inBase(state), false);
+      const today = isoDay(new Date());
+      const month = /^\d{4}-\d{2}$/.test(searchParams.get("month") ?? "")
+        ? String(searchParams.get("month"))
+        : previousMonth(today.slice(0, 7));
+      return buildMonthRecap({
+        month,
+        // Идущий месяц — на сегодня, и прошлый для сравнения — к тому же числу.
+        asOfDay: month === today.slice(0, 7) ? Number(today.slice(8, 10)) : null,
+        rows: counted.transactions.map((row) => ({
+          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label,
+          color: row.category.color
+        })),
+        budgets: this.budgets(counted, month).budgets
+      }) as T;
+    }
+    if (pathname === "/allowance")
+      return this.allowance(this.countingState(this.inBase(state), false)) as T;
     if (pathname === "/dashboard")
       return (await this.dashboard(
         this.countingState(this.inBase(state), searchParams.get("transfers") === "1")
@@ -665,6 +700,22 @@ export class LocalApiClient implements ApiClient {
         kind && ASSET_KINDS.includes(kind as AssetKind) ? (kind as AssetKind) : undefined
       );
       return { results } as T;
+    }
+    if (pathname === "/investments/payouts") return (await this.payouts(state)) as T;
+    if (pathname === "/investments/index") {
+      // Индекс Мосбиржи для сравнения: IMOEX (цены) или MCFTR (с дивидендами).
+      const index = searchParams.get("index") === "MCFTR" ? "MCFTR" : "IMOEX";
+      const range = searchParams.get("range") ?? "6m";
+      const prices = await createMarketDataProvider().getIndexHistory(
+        index,
+        historyRangeStart(range),
+        new Date()
+      );
+      return {
+        index,
+        range,
+        points: prices.map((p) => ({ date: p.date.toISOString(), price: p.price }))
+      } as T;
     }
     if (pathname === "/investments/history") {
       const ticker = (searchParams.get("ticker") ?? "").toUpperCase();
@@ -699,6 +750,17 @@ export class LocalApiClient implements ApiClient {
           sectorStructure: invData.sectorStructure,
           assetStructure: invData.assetStructure
         };
+        // Снимок дня: портфель пуст — снимать нечего (иначе история
+        // начиналась бы с нулей до первой покупки).
+        if (invData.portfolio.length > 0) {
+          fresh.portfolioSnapshots = recordPortfolioSnapshot(
+            fresh.portfolioSnapshots ?? [],
+            isoDay(new Date()),
+            invData.portfolio.reduce((sum, row) => sum + row.currentValue, 0),
+            invData.portfolio.reduce((sum, row) => sum + row.quantity * row.averageBuyPrice, 0)
+          );
+          invData.history = fresh.portfolioSnapshots;
+        }
         await this.save(fresh);
       });
       return invData as T;
@@ -750,6 +812,13 @@ export class LocalApiClient implements ApiClient {
       state.accounts = state.accounts.map((account) =>
         account.id === itemId ? { ...account, isArchived: true } : account
       );
+    } else if (pathname === "/transactions" && searchParams.get("splitGroupId")) {
+      // Чек, разложенный по категориям, удаляется целиком — его части по
+      // отдельности ничего не значат.
+      const group = searchParams.get("splitGroupId");
+      for (const part of state.transactions.filter((item) => item.splitGroupId === group)) {
+        this.deleteTransaction(state, part.id);
+      }
     } else if (pathname === "/transactions" && itemId) {
       this.deleteTransaction(state, itemId);
     } else if (pathname === "/goals" && itemId) {
@@ -853,6 +922,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
       return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
+    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "split")
+      return this.saveAndReturn<TResponse>(state, this.createSplit(state, body));
     if (pathname === "/transactions") {
       const tx = this.upsertTransaction(state, body, method);
       const budgetWarning = this.budgetWarningFor(state, tx);
@@ -1212,6 +1283,56 @@ export class LocalApiClient implements ApiClient {
     ];
     this.applyBalance(state, account.id, type === "INCOME" ? amount : -amount);
     return transaction;
+  }
+
+  /**
+   * Одна покупка — несколько категорий: «Пятёрочка 2 340 ₽» — это продукты 1 900
+   * и бытовая химия 440. Записывается как несколько операций с общим
+   * `splitGroupId`: итоги по категориям считают каждую часть там, где она есть,
+   * а список показывает их как одну покупку. Все части пишутся разом — или ни
+   * одной: половина чека хуже, чем никакого.
+   */
+  private createSplit(state: LocalState, body: unknown): TransactionRow[] {
+    const input = toFormObject(body);
+    let parts: Array<{ categoryId?: unknown; amount?: unknown }>;
+    try {
+      parts = JSON.parse(String(input.parts ?? "[]"));
+    } catch {
+      parts = [];
+    }
+    if (!Array.isArray(parts) || parts.length < 2)
+      throw new Error("Разделить можно минимум на две части.");
+    const cleaned = parts.map((part) => ({
+      categoryId: String(part?.categoryId ?? ""),
+      amount: Number(String(part?.amount ?? "").replace(",", "."))
+    }));
+    if (cleaned.some((part) => !part.categoryId || !(part.amount > 0)))
+      throw new Error("У каждой части нужны категория и сумма больше нуля.");
+
+    // Проверить всё до первой записи: upsertTransaction меняет состояние сразу,
+    // и отказ на третьей части оставил бы две первые в памяти.
+    if (!state.accounts.some((item) => item.id === input.accountId && !item.isArchived))
+      throw new Error("Выберите существующий счет и категорию.");
+    if (cleaned.some((part) => !state.categories.some((item) => item.id === part.categoryId)))
+      throw new Error("Выберите существующий счет и категорию.");
+    if (cleaned.some((part) => !isUsableMoney(part.amount))) throw new Error(MONEY_RANGE_ERROR);
+
+    const group = id("split");
+    const { parts: _parts, action: _action, ...common } = input;
+    void _parts;
+    void _action;
+    return cleaned.map((part) =>
+      this.upsertTransaction(
+        state,
+        {
+          ...common,
+          categoryId: part.categoryId,
+          amount: String(part.amount),
+          splitGroupId: group
+        },
+        "POST"
+      )
+    );
   }
 
   // Returns budget overflow info when an EXPENSE pushes its category over the limit.
@@ -2024,7 +2145,9 @@ export class LocalApiClient implements ApiClient {
     if (action === "refreshMarket") await provider.updateMarketPrices();
     const securities = await provider.getSecurities();
     const ticker = input.ticker?.toUpperCase();
-    const marketSource = process.env.NEXT_PUBLIC_MARKET_DATA === "moex" ? "MOEX ISS" : "MOCK";
+    // Раньше «MOCK» писалось всегда, когда переменная не равна "moex", — хотя
+    // по умолчанию цены живые. Правило теперь одно с выбором поставщика.
+    const marketSource = marketDataSource();
 
     if (action === "refreshMarket") {
       state.investments = await this.investments(state);
@@ -2070,6 +2193,27 @@ export class LocalApiClient implements ApiClient {
       securities.find((item) => item.ticker === ticker) ??
       (await provider.getSecurityByTicker(ticker));
     if (!security) throw new Error("Security not found in the market directory.");
+
+    // «Докупить» — одна покупка к тому, что уже есть. Раньше подборка слала
+    // количество и среднюю, и позиция с тем же тикером заменялась целиком:
+    // купленное пропадало. Теперь покупка добавляется к лотам; позиция со
+    // средней, введённой вручную, становится первым лотом — количество и
+    // средняя сохраняются, дата у него сегодняшняя, другой нет.
+    if (action === "addLot") {
+      const held = state.investments.portfolio.find((item) => item.ticker === ticker);
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(input.date ?? ""))
+        ? String(input.date)
+        : isoDay(new Date());
+      const lot = { date, quantity: Number(input.quantity), price: Number(input.price) };
+      if (!isUsableLot(lot)) throw new Error("Введите количество и цену больше нуля.");
+      const before: PurchaseLot[] =
+        held?.lots && held.lots.length > 0
+          ? held.lots
+          : held && held.quantity > 0 && held.averageBuyPrice > 0
+            ? [{ date, quantity: held.quantity, price: held.averageBuyPrice }]
+            : [];
+      input.lots = JSON.stringify([...before, lot]);
+    }
 
     // The form sends EITHER a list of purchases (the app works out the weighted
     // average) OR a quantity and an average typed in by hand. Lots win when both
@@ -2247,6 +2391,14 @@ export class LocalApiClient implements ApiClient {
     // Everything the sale changed, so it can be changed back — a sale typed by
     // mistake used to be undeletable in the only way that mattered: the record
     // went, the shares did not come back.
+    // Цена покупки для налога — из тех самых лотов, что ушли (FIFO), если её не
+    // ввели руками. Раньше её всегда вводили сами, и налог мог считаться с одной
+    // цены, а портфель списывался по другой.
+    if (!(event.buyPrice > 0)) {
+      event.buyPrice = taken.length
+        ? summarizeLots(taken).averageBuyPrice
+        : position.averageBuyPrice;
+    }
     event.soldFrom = {
       averageBuyPrice: position.averageBuyPrice,
       ...(taken.length ? { lots: taken } : {}),
@@ -2722,6 +2874,111 @@ export class LocalApiClient implements ApiClient {
     );
   }
 
+  /**
+   * Выплаты по бумагам портфеля: ближайшие на год вперёд — с суммой на ваше
+   * количество, и недавние (за 90 дней), которые ещё не отмечены полученными.
+   * Отметка «Получено» — это обычная запись дивиденда в «Доход»: так выплата
+   * попадает и во «Весь доход», и в налог.
+   */
+  private async payouts(state: LocalState) {
+    const provider = createMarketDataProvider();
+    const today = isoDay(new Date());
+    const yearAhead = isoDay(new Date(Date.now() + 365 * 86_400_000));
+    const recentFrom = isoDay(new Date(Date.now() - 90 * 86_400_000));
+    const received = (state.realizedInvestmentEvents ?? []).filter(
+      (event) => event.type === "DIVIDEND"
+    );
+    const positions = state.investments.portfolio;
+    const found: Array<{
+      ticker: string;
+      name: string;
+      kind: "DIVIDEND" | "COUPON";
+      date: string;
+      perShare: number;
+      quantity: number;
+      amount: number;
+    }> = [];
+    for (let start = 0; start < positions.length; start += 4) {
+      await Promise.all(
+        positions.slice(start, start + 4).map(async (position) => {
+          const list = await provider
+            .getPayouts(position.ticker, position.assetKind ?? "STOCK")
+            .catch(() => []);
+          for (const payout of list) {
+            if (payout.date < recentFrom || payout.date > yearAhead) continue;
+            found.push({
+              ticker: position.ticker,
+              name: position.name,
+              kind: payout.kind,
+              date: payout.date,
+              perShare: payout.perShare,
+              quantity: position.quantity,
+              amount: roundMoney(
+                convert(
+                  payout.perShare * position.quantity,
+                  payout.currency,
+                  state.currency,
+                  this.rates(state)
+                )
+              )
+            });
+          }
+        })
+      );
+    }
+    found.sort((a, b) => a.date.localeCompare(b.date));
+    // Недавняя выплата считается полученной, если по этой бумаге после её даты
+    // (в пределах двух месяцев) уже записан дивиденд.
+    const isReceived = (payout: (typeof found)[number]) =>
+      received.some((event) => {
+        const date = event.date.slice(0, 10);
+        return (
+          event.ticker === payout.ticker &&
+          date >= payout.date &&
+          date <= isoDay(new Date(Date.parse(payout.date) + 60 * 86_400_000))
+        );
+      });
+    const upcoming = found.filter((payout) => payout.date >= today);
+    return {
+      currency: state.currency,
+      upcoming,
+      recent: found.filter((payout) => payout.date < today && !isReceived(payout)),
+      yearAhead: roundMoney(upcoming.reduce((sum, payout) => sum + payout.amount, 0))
+    };
+  }
+
+  /**
+   * Весь доход от вложений, а не только «бумажный»: бумажная прибыль того, что
+   * держишь, плюс зафиксированная на продажах, плюс полученные дивиденды и
+   * купоны. Без продаж и выплат портфель, где продали удачно и получили
+   * дивиденды, выглядел беднее, чем есть.
+   */
+  private investmentTotals(state: LocalState, portfolio: InvestmentData["portfolio"]) {
+    const rates = this.rates(state);
+    const toBase = (amount: number, currency?: string) =>
+      convert(amount, currency || state.currency, state.currency, rates);
+    const events = state.realizedInvestmentEvents ?? [];
+    const yearAgo = isoDay(new Date(Date.now() - 365 * 86_400_000));
+    const unrealized = portfolio.reduce((sum, row) => sum + row.pnl, 0);
+    const invested = portfolio.reduce((sum, row) => sum + row.quantity * row.averageBuyPrice, 0);
+    const realized = events
+      .filter((event) => event.type === "SELL")
+      .reduce((sum, event) => sum + toBase(sellGain(event), event.currency), 0);
+    const payouts = events.filter((event) => event.type === "DIVIDEND");
+    const dividends = payouts.reduce((sum, event) => sum + toBase(event.amount, event.currency), 0);
+    const dividends12m = payouts
+      .filter((event) => event.date.slice(0, 10) >= yearAgo)
+      .reduce((sum, event) => sum + toBase(event.amount, event.currency), 0);
+    return {
+      invested: roundMoney(invested),
+      unrealized: roundMoney(unrealized),
+      realized: roundMoney(realized),
+      dividends: roundMoney(dividends),
+      dividends12m: roundMoney(dividends12m),
+      total: roundMoney(unrealized + realized + dividends)
+    };
+  }
+
   private async investments(state: LocalState): Promise<InvestmentData> {
     const provider = createMarketDataProvider();
     const securities = await provider.getSecurities();
@@ -2755,6 +3012,12 @@ export class LocalApiClient implements ApiClient {
       const security = securityByTicker.get(position.ticker);
       const price = security && security.price > 0 ? security.price : position.currentPrice;
       const currentValue = roundMoney(price * position.quantity);
+      // Облигация: цена с биржи уже с НКД. Стоимость с ним и остаётся, а
+      // прибыль — по чистой цене, иначе она завышена на весь накопленный купон.
+      const accrued =
+        security && security.price > 0
+          ? (security.accruedInterest ?? 0)
+          : (position.accruedInterest ?? 0);
       return {
         ticker: position.ticker,
         name: security?.name ?? position.name,
@@ -2768,9 +3031,10 @@ export class LocalApiClient implements ApiClient {
         averageBuyPrice: position.averageBuyPrice,
         currentPrice: price,
         currentValue,
-        pnl: roundMoney((price - position.averageBuyPrice) * position.quantity),
+        pnl: roundMoney((price - accrued - position.averageBuyPrice) * position.quantity),
         share: 0,
         risk: security?.risk ?? position.risk,
+        ...(accrued > 0 ? { accruedInterest: accrued } : {}),
         // The purchases the average was derived from travel with the position.
         ...(position.lots?.length ? { lots: position.lots } : {})
       };
@@ -2780,11 +3044,20 @@ export class LocalApiClient implements ApiClient {
       ...row,
       share: total > 0 ? percent(row.currentValue, total) : 0
     }));
+    // История за месяц по каждой бумаге — по четыре разом, а не по одной: этот
+    // расчёт идёт на каждое открытие и раз в 45 секунд, и портфель из десяти
+    // бумаг ждал десять запросов подряд. Бумага без истории не роняет всё.
     const historical: Record<string, number[]> = {};
-    for (const row of portfolio) {
-      historical[row.ticker] = (
-        await provider.getHistoricalPrices(row.ticker, subMonths(new Date(), 1), new Date())
-      ).map((item) => item.price);
+    const from = subMonths(new Date(), 1);
+    for (let start = 0; start < portfolio.length; start += 4) {
+      await Promise.all(
+        portfolio.slice(start, start + 4).map(async (row) => {
+          const points = await provider
+            .getHistoricalPrices(row.ticker, from, new Date())
+            .catch(() => []);
+          historical[row.ticker] = points.map((item) => item.price);
+        })
+      );
     }
     const analysis = new InvestmentAnalysisService().analyze(
       portfolio,
@@ -2806,7 +3079,9 @@ export class LocalApiClient implements ApiClient {
         translate(getClientLocale(), `inv.kind.${kind}`)
       ),
       risks: analysis.risks,
-      education: analysis.education
+      education: analysis.education,
+      totals: this.investmentTotals(state, portfolio),
+      history: state.portfolioSnapshots ?? []
     };
   }
 
@@ -2863,6 +3138,45 @@ export class LocalApiClient implements ApiClient {
       const category = categories.find((item) => item.id === budget.categoryId);
       return category ? this.buildBudgetRow(state, category, budget.limitAmount) : null;
     }).filter((row): row is NonNullable<typeof row> => row !== null);
+    // Портфель примера: покупки лотами, цены обновятся с биржи при открытии.
+    state.investments.portfolio = SAMPLE_PORTFOLIO.map((position) => {
+      const lots = position.lots.map((lot) => ({
+        date: isoDay(sampleDate(-lot.monthsAgo, 10)),
+        quantity: lot.quantity,
+        price: lot.price
+      }));
+      const summary = summarizeLots(lots);
+      const price = lots[lots.length - 1].price;
+      return {
+        ticker: position.ticker,
+        name: position.name,
+        assetKind: "STOCK" as const,
+        sector: position.sector,
+        quantity: summary.quantity,
+        averageBuyPrice: summary.averageBuyPrice,
+        currentPrice: price,
+        currentValue: roundMoney(price * summary.quantity),
+        pnl: roundMoney((price - summary.averageBuyPrice) * summary.quantity),
+        share: 0,
+        risk: position.risk,
+        lots: sortLots(lots)
+      };
+    });
+    state.realizedInvestmentEvents = [
+      {
+        id: "sample-dividend",
+        type: "DIVIDEND",
+        ticker: SAMPLE_DIVIDEND.ticker,
+        name: SAMPLE_DIVIDEND.name,
+        date: isoDay(sampleDate(-SAMPLE_DIVIDEND.monthsAgo, 18)),
+        quantity: 0,
+        sellPrice: 0,
+        buyPrice: 0,
+        amount: SAMPLE_DIVIDEND.amount,
+        fee: 0,
+        currency: state.currency
+      }
+    ];
     return state;
   }
 
@@ -2922,6 +3236,44 @@ export class LocalApiClient implements ApiClient {
   private countingState(state: LocalState, includeTransfers: boolean): LocalState {
     if (includeTransfers) return state;
     return { ...state, transactions: countableRows(state.transactions, false) };
+  }
+
+  /**
+   * «Можно тратить сегодня» — см. lib/analytics/daily-allowance.ts. Переводы
+   * между своими счетами не считаются ни доходом, ни расходом (countingState
+   * уже без них), плановые платежи — из того же прогноза, что на экране
+   * «Прогноз», чтобы два числа не спорили.
+   */
+  private allowance(state: LocalState): Allowance {
+    const now = new Date();
+    const today = isoDay(now);
+    const yesterday = isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+    const month = today.slice(0, 7);
+    const monthEnd = isoDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const sum = (rows: TransactionRow[]) => rows.reduce((total, row) => total + row.amount, 0);
+    const monthRows = state.transactions.filter((row) => row.date.startsWith(month));
+    const expenses = monthRows.filter((row) => row.type === "EXPENSE");
+    const finance = this.financeInput(state, true);
+    const previous = finance.monthlyCashflow.slice(0, -1).filter((item) => item.income > 0);
+    const upcoming = this.forecast(state)
+      .events.filter(
+        (event) =>
+          event.type === "EXPENSE" &&
+          event.date.slice(0, 10) > today &&
+          event.date.slice(0, 10) <= monthEnd
+      )
+      .reduce((total, event) => total + event.amount, 0);
+    return computeDailyAllowance({
+      today,
+      income: sum(monthRows.filter((row) => row.type === "INCOME")),
+      averageIncome: previous.length
+        ? previous.reduce((total, item) => total + item.income, 0) / previous.length
+        : 0,
+      upcoming,
+      spentBeforeToday: sum(expenses.filter((row) => row.date.slice(0, 10) < today)),
+      spentToday: sum(expenses.filter((row) => row.date.slice(0, 10) === today)),
+      spentYesterday: sum(expenses.filter((row) => row.date.slice(0, 10) === yesterday))
+    });
   }
 
   private async dashboard(state: LocalState): Promise<DashboardData> {

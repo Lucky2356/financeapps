@@ -77,4 +77,20 @@ describe("make-latest-json", () => {
       notes: undefined
     });
   });
+
+  // Строка «что нового» в предложении обновиться — из того же файла, что окно
+  // после обновления. Нет выпуска в файле — поля нет (выше: notes undefined).
+  it("carries the release summary as notes when the release is known", () => {
+    mkdirSync(join(workspace, "lib", "whats-new"), { recursive: true });
+    writeFileSync(
+      join(workspace, "lib", "whats-new", "releases.generated.json"),
+      JSON.stringify([{ version: VERSION, summary: "🚀 Коротко о главном" }])
+    );
+    const manifest = runScript();
+
+    expect(manifest.notes).toBe("🚀 Коротко о главном");
+    expect(findUpdate(parseReleaseManifest(manifest), "1.0.0", ANDROID_PLATFORM)?.notes).toBe(
+      "🚀 Коротко о главном"
+    );
+  });
 });

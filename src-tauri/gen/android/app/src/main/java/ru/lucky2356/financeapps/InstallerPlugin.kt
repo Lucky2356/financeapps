@@ -17,8 +17,16 @@ package ru.lucky2356.financeapps
 
 import android.app.Activity
 import android.content.Intent
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
+import android.security.keystore.KeyProperties
+import android.util.Base64
 import android.webkit.WebView
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.fragment.app.FragmentActivity
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -29,6 +37,16 @@ import app.tauri.plugin.Plugin
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+
+@InvokeArg
+class SlotArgs {
+  var slot: String = "main"
+}
 
 @InvokeArg
 class InstallArgs {
@@ -37,10 +55,35 @@ class InstallArgs {
   var onProgress: Channel? = null
 }
 
+@InvokeArg
+class SealArgs {
+  lateinit var secret: String
+  /** Чей ключ: у каждого человека на устройстве свой. */
+  var slot: String = "main"
+  lateinit var title: String
+  lateinit var cancel: String
+}
+
+@InvokeArg
+class OpenArgs {
+  var slot: String = "main"
+  lateinit var iv: String
+  lateinit var data: String
+  lateinit var title: String
+  lateinit var cancel: String
+}
+
 private const val RELEASES = "https://github.com/Lucky2356/financeapps/releases/download/"
 
-/** Ссылка связки из QR-кода: её открывает обычная камера телефона. */
-private const val PAIR_LINK = "financeapps://pair"
+/**
+ * Ссылки, которыми открывают приложение: связка из QR-кода (её открывает
+ * обычная камера) и ярлыки на значке — «Расход», «Доход», «Сканировать чек».
+ */
+private val LINKS = listOf("financeapps://pair", "financeapps://add", "financeapps://receipt")
+
+/** Ключ в хранилище Android, которым запечатан ключ данных под отпечаток. */
+private fun biometricAlias(slot: String) =
+  "financeapps.biometric." + slot.filter { it.isLetterOrDigit() || it == '_' || it == '-' }
 
 @TauriPlugin
 class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
@@ -55,7 +98,7 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
 
   private fun remember(intent: Intent?) {
     val link = intent?.data?.toString() ?: return
-    if (link.startsWith(PAIR_LINK)) pendingLink = link
+    if (LINKS.any { link.startsWith(it) }) pendingLink = link
   }
 
   override fun load(webView: WebView) {
@@ -74,6 +117,155 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
     // Один раз: иначе каждое возвращение на экран подключало бы заново.
     pendingLink = null
     invoke.resolve(answer)
+  }
+
+  // ——— вход по отпечатку —————————————————————————————————————————————————
+  //
+  // Ключ данных приложения запечатывается ключом из хранилища Android, который
+  // открывается только отпечатком (или лицом — тем, что Android считает
+  // «сильной» биометрией). Сам ключ хранилища из телефона не достать, а новый
+  // отпечаток в настройках телефона делает его недействительным — тогда снова
+  // нужен пароль. Здесь нет ничего, что знало бы пароль: только запечатать и
+  // распечатать то, что дала страница.
+
+  @Command
+  fun biometricStatus(invoke: Invoke) {
+    val answer = JSObject()
+    val can = BiometricManager.from(activity)
+      .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+    answer.put("available", can == BiometricManager.BIOMETRIC_SUCCESS)
+    // Отпечатков нет, но датчик есть — можно подсказать, где их добавить.
+    answer.put("enrollable", can == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED)
+    invoke.resolve(answer)
+  }
+
+  @Command
+  fun biometricSeal(invoke: Invoke) {
+    val args = invoke.parseArgs(SealArgs::class.java)
+    try {
+      // Каждое включение — новый ключ: старый, если был, больше не нужен.
+      forgetKey(args.slot)
+      val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+      cipher.init(Cipher.ENCRYPT_MODE, createKey(args.slot))
+      prompt(invoke, cipher, args.title, args.cancel) { ready ->
+        val sealed = ready.doFinal(args.secret.toByteArray(Charsets.UTF_8))
+        val answer = JSObject()
+        answer.put("iv", Base64.encodeToString(ready.iv, Base64.NO_WRAP))
+        answer.put("data", Base64.encodeToString(sealed, Base64.NO_WRAP))
+        answer
+      }
+    } catch (error: Exception) {
+      invoke.reject("[broken] " + (error.message ?: "Не удалось включить вход по отпечатку."))
+    }
+  }
+
+  @Command
+  fun biometricOpen(invoke: Invoke) {
+    val args = invoke.parseArgs(OpenArgs::class.java)
+    try {
+      val key = existingKey(args.slot)
+      if (key == null) {
+        invoke.reject("[invalidated] Вход по отпечатку сброшен — войдите паролем.")
+        return
+      }
+      val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+      cipher.init(
+        Cipher.DECRYPT_MODE,
+        key,
+        GCMParameterSpec(128, Base64.decode(args.iv, Base64.NO_WRAP))
+      )
+      prompt(invoke, cipher, args.title, args.cancel) { ready ->
+        val secret = ready.doFinal(Base64.decode(args.data, Base64.NO_WRAP))
+        val answer = JSObject()
+        answer.put("secret", String(secret, Charsets.UTF_8))
+        answer
+      }
+    } catch (error: KeyPermanentlyInvalidatedException) {
+      // В телефоне добавили новый отпечаток: прежний ключ Android сам сделал
+      // недействительным. Так и задумано — чужой палец не должен открыть данные.
+      forgetKey(args.slot)
+      invoke.reject("[invalidated] В телефоне изменились отпечатки — войдите паролем и включите вход по отпечатку снова.")
+    } catch (error: Exception) {
+      invoke.reject("[broken] " + (error.message ?: "Не удалось войти по отпечатку."))
+    }
+  }
+
+  @Command
+  fun biometricForget(invoke: Invoke) {
+    forgetKey(invoke.parseArgs(SlotArgs::class.java).slot)
+    invoke.resolve(JSObject())
+  }
+
+  private fun prompt(
+    invoke: Invoke,
+    cipher: Cipher,
+    title: String,
+    cancel: String,
+    finish: (Cipher) -> JSObject
+  ) {
+    val host = activity as? FragmentActivity
+    if (host == null) {
+      invoke.reject("[broken] Окно приложения не поддерживает отпечаток.")
+      return
+    }
+    activity.runOnUiThread {
+      val biometric = BiometricPrompt(
+        host,
+        ContextCompat.getMainExecutor(activity),
+        object : BiometricPrompt.AuthenticationCallback() {
+          override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+            try {
+              val ready = result.cryptoObject?.cipher ?: throw Exception("Нет шифра.")
+              invoke.resolve(finish(ready))
+            } catch (error: Exception) {
+              invoke.reject("[broken] " + (error.message ?: "Не удалось."))
+            }
+          }
+
+          override fun onAuthenticationError(code: Int, message: CharSequence) {
+            val cancelled = code == BiometricPrompt.ERROR_USER_CANCELED ||
+              code == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+              code == BiometricPrompt.ERROR_CANCELED
+            invoke.reject((if (cancelled) "[cancelled] " else "[broken] ") + message)
+          }
+        }
+      )
+      val info = BiometricPrompt.PromptInfo.Builder()
+        .setTitle(title)
+        .setNegativeButtonText(cancel)
+        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        .build()
+      biometric.authenticate(info, BiometricPrompt.CryptoObject(cipher))
+    }
+  }
+
+  private fun keyStore(): KeyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+
+  private fun existingKey(slot: String): SecretKey? =
+    keyStore().getKey(biometricAlias(slot), null) as? SecretKey
+
+  private fun forgetKey(slot: String) {
+    try {
+      keyStore().deleteEntry(biometricAlias(slot))
+    } catch (ignored: Exception) {
+      /* ключа не было — забывать нечего */
+    }
+  }
+
+  private fun createKey(slot: String): SecretKey {
+    val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+    val spec = KeyGenParameterSpec.Builder(
+      biometricAlias(slot),
+      KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+    )
+      .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+      .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+      .setKeySize(256)
+      .setUserAuthenticationRequired(true)
+      .setInvalidatedByBiometricEnrollment(true)
+      .build()
+    generator.init(spec)
+    return generator.generateKey()
   }
 
   @Command

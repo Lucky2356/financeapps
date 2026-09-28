@@ -138,3 +138,26 @@ export function findUpdate(
   if (!target) return null;
   return { version: manifest.version, url: target.url, notes: manifest.notes };
 }
+
+/**
+ * Одна строка «что нового» для предложения обновиться.
+ *
+ * В latest.json это уже строка-итог выпуска. Но запасной путь на Android берёт
+ * тело выпуска с GitHub — там весь раздел CHANGELOG с разметкой, для
+ * всплывающей подсказки это стена текста. Берём первый абзац, без разметки, и
+ * не длиннее `max` знаков.
+ */
+export function updateTeaser(notes: string | undefined, max = 160): string {
+  if (!notes) return "";
+  const first =
+    notes
+      .split(/\n\s*\n/)
+      .map((part) => part.trim())
+      .find((part) => part && !part.startsWith("#")) ?? "";
+  const plain = first
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  return plain.length > max ? `${plain.slice(0, max - 1).trimEnd()}…` : plain;
+}

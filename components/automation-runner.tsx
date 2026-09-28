@@ -9,6 +9,7 @@ import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
 import { isAndroidShell } from "@/lib/platform/device";
 import { isDesktopShell } from "@/lib/updates/desktop";
+import { updateTeaser } from "@/lib/updates/latest";
 import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
 import type { DashboardData, ForecastData } from "@/types/finance";
 import { NOTIFY_KEY, readMine, writeMine } from "@/lib/storage/mine";
@@ -82,6 +83,7 @@ async function runAutomation() {
           markAnnounced(update.version);
           const locale = getClientLocale();
           toast.message(translate(locale, "set.update.available", { version: update.version }), {
+            description: updateTeaser(update.notes) || undefined,
             duration: 15_000,
             action: {
               label: translate(locale, "set.update.confirmLabel"),
@@ -121,6 +123,7 @@ async function runAutomation() {
           markAnnounced("desktop", update.version);
           const locale = getClientLocale();
           toast.message(translate(locale, "set.update.available", { version: update.version }), {
+            description: updateTeaser(update.notes) || undefined,
             duration: 15_000,
             action: {
               label: translate(locale, "set.update.confirmLabel"),

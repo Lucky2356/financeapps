@@ -87,7 +87,7 @@ test.describe("скриншоты", () => {
     await chartsPainted(page, "path.recharts-curve");
     await page.screenshot({ path: `${DIR}/04-инвестиции.png` });
 
-    await page.getByTestId("section-tabs").getByRole("button", { name: "Аналитика" }).click();
+    await page.getByTestId("section-tabs").getByRole("button", { name: "Анализ" }).click();
     await chartsPainted(page, "path.recharts-sector");
     await page.screenshot({ path: `${DIR}/05-инвестиции-аналитика.png` });
 

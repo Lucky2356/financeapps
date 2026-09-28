@@ -10,11 +10,16 @@ import { themeChosenThisSession } from "@/lib/theme-preference";
 // Applies interface density globally by scaling the root font size.
 // Tailwind spacing/typography is rem-based, so this proportionally tightens
 // paddings, gaps and text across the whole app.
+//
+// Размер задаёт CSS по атрибуту (app/globals.css), а не встроенный стиль.
+// Встроенный `font-size: 16px` на <html> перебивал любое правило, и
+// «Крупный текст» в настройках не менял ничего. Плотность и крупный текст —
+// два атрибута, и их сочетание CSS знает.
 export function applyDensity(density: "comfortable" | "compact") {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.dataset.density = density;
-  root.style.fontSize = density === "compact" ? "14px" : "16px";
+  root.style.removeProperty("font-size");
 }
 
 // On load, reads persisted settings and applies theme + density everywhere.

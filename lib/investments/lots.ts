@@ -92,3 +92,21 @@ export function parsePurchaseLots(raw: unknown): PurchaseLot[] {
 export function sortLots<T extends { date: string }>(lots: readonly T[]): T[] {
   return [...lots].sort((left, right) => left.date.localeCompare(right.date));
 }
+
+/**
+ * Во что обошлись `quantity` бумаг, если продавать самые старые первыми (FIFO) —
+ * так же, как приложение списывает их из портфеля при продаже. Средняя цена
+ * этих бумаг, или null, если в лотах столько нет.
+ */
+export function fifoCost(lots: readonly PurchaseLot[], quantity: number): number | null {
+  if (!(quantity > 0)) return null;
+  let remaining = quantity;
+  let cost = 0;
+  for (const lot of sortLots(lots.filter(isUsableLot))) {
+    const off = Math.min(lot.quantity, remaining);
+    cost += off * lot.price;
+    remaining -= off;
+    if (remaining <= 1e-9) return Number((cost / quantity).toFixed(4));
+  }
+  return null;
+}

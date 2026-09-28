@@ -288,6 +288,49 @@ export const SAMPLE_GOALS: SampleGoal[] = [
  * been spent, and the screen said so, on a ledger the owner had not typed a
  * single line into. A sample of the month so far never runs past today.
  */
+/**
+ * Небольшой портфель примера: без него раздел «Инвестиции» в примере пуст, и
+ * посмотреть, как он устроен, не на чем. Покупки — по месяцам назад, цены —
+ * правдоподобные; текущие цены приходят с биржи как у настоящих бумаг.
+ */
+export type SamplePosition = {
+  ticker: string;
+  name: string;
+  sector: string;
+  risk: "LOW" | "MEDIUM" | "HIGH";
+  lots: Array<{ monthsAgo: number; quantity: number; price: number }>;
+};
+
+export const SAMPLE_PORTFOLIO: SamplePosition[] = [
+  {
+    ticker: "SBER",
+    name: "Сбербанк",
+    sector: "Финансы",
+    risk: "MEDIUM",
+    lots: [
+      { monthsAgo: 11, quantity: 50, price: 262 },
+      { monthsAgo: 4, quantity: 30, price: 298 }
+    ]
+  },
+  {
+    ticker: "LKOH",
+    name: "Лукойл",
+    sector: "Нефть и газ",
+    risk: "MEDIUM",
+    lots: [{ monthsAgo: 9, quantity: 3, price: 6950 }]
+  },
+  {
+    ticker: "YDEX",
+    name: "Яндекс",
+    sector: "Технологии",
+    risk: "HIGH",
+    lots: [{ monthsAgo: 6, quantity: 4, price: 4100 }]
+  }
+];
+
+/** Полученный дивиденд примера — чтобы «Весь доход» и «Доход» было на чём показать. */
+export const SAMPLE_DIVIDEND = { ticker: "SBER", name: "Сбербанк", amount: 1_650, monthsAgo: 3 };
+
 export function sampleDate(monthOffset: number, day: number): Date {
   const date = new Date();
   const dayInMonth = monthOffset === 0 ? Math.min(day, date.getDate()) : day;

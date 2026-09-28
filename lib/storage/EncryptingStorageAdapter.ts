@@ -22,8 +22,9 @@ import { openBook, sealBook, type SealedBook } from "@/lib/sync/vault-crypto";
 /**
  * Ключи, которые не шифруются. Каждый — с причиной, и причина одна из двух.
  *
- *   financeVault, financeDevice — без них замок не отпереть: это сама шкатулка
- *     с ключом книги и пометка устройства. Содержимого книги в них нет.
+ *   financeVault, financeDevice, financeBiometric — без них замок не отпереть:
+ *     это сама шкатулка с ключом книги, пометка устройства и ключ под
+ *     отпечатком. Содержимого книги в них нет.
  *   financeSync — номера версий ячеек на сервере, которые ведёт слой
  *     синхронизации. Он стоит НИЖЕ шифрования и читает свою запись сам; запечатай
  *     мы её, он прочитал бы вместо чисел шкатулку, счёл бы её книгой и принялся
@@ -44,6 +45,8 @@ import { openBook, sealBook, type SealedBook } from "@/lib/sync/vault-crypto";
 export const UNSEALED_KEYS: readonly string[] = [
   "financeVault",
   "financeDevice",
+  // Ключ данных под отпечатком: открыть его может только хранилище Android.
+  "financeBiometric",
   "financeSync",
   "financeServer"
 ];

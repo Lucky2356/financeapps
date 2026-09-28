@@ -2,8 +2,8 @@
 
 // Экран замка: пароль при запуске и путь назад для того, кто его забыл.
 
-import { Lock, LifeBuoy } from "lucide-react";
-import { useState } from "react";
+import { Fingerprint, Lock, LifeBuoy } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Head, Problem, Shell } from "@/components/vault/shell";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/lib/i18n/context";
+import { biometricAvailable } from "@/lib/vault/biometric";
 import { accountService } from "@/lib/vault/runtime";
 
 export function UnlockScreen({ onDone }: { onDone: () => void }) {
@@ -24,6 +25,40 @@ export function UnlockScreen({ onDone }: { onDone: () => void }) {
   const [nextPassword, setNextPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [biometric, setBiometric] = useState(false);
+  const asked = useRef(false);
+
+  async function byFingerprint() {
+    setError(null);
+    const done = await accountService.unlockWithBiometric({
+      title: t("bio.promptUnlock"),
+      cancel: t("bio.usePassword")
+    });
+    if (done.ok) {
+      onDone();
+      return;
+    }
+    if (done.why === "invalidated") {
+      setBiometric(false);
+      setError(done.detail || t("bio.invalidated"));
+    } else if (done.why === "broken") {
+      setError(done.detail || t("bio.failed"));
+    }
+  }
+
+  // Вход по отпечатку включён — окно отпечатка сразу, один раз за показ
+  // экрана; отменил — остаётся пароль и кнопка «Войти по отпечатку».
+  useEffect(() => {
+    void Promise.resolve().then(async () => {
+      const ready = (await accountService.biometricEnabled()) && (await biometricAvailable());
+      setBiometric(ready);
+      if (ready && !asked.current) {
+        asked.current = true;
+        await byFingerprint();
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function attempt(run: () => Promise<void>) {
     setBusy(true);
@@ -106,6 +141,18 @@ export function UnlockScreen({ onDone }: { onDone: () => void }) {
       >
         <Head icon={<Lock className="size-5" />} title={t("vault.unlock.title")} />
         <p className="text-sm text-muted-foreground">{t("vault.unlock.lead")}</p>
+
+        {biometric ? (
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => void byFingerprint()}
+            data-testid="unlock-biometric"
+          >
+            <Fingerprint className="size-4" />
+            {t("bio.unlock")}
+          </Button>
+        ) : null}
 
         <div className="space-y-2">
           <Label htmlFor="vault-unlock-password">{t("vault.setup.password")}</Label>

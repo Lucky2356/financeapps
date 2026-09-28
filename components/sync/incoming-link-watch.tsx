@@ -12,6 +12,7 @@ import { useEffect } from "react";
 
 import { takeIncomingLink } from "@/lib/sync/incoming-link";
 import { readPairing } from "@/lib/sync/pairing-link";
+import { readShortcutLink, requestQuickAdd } from "@/lib/transactions/quick-add-request";
 
 export function IncomingLinkWatch() {
   const router = useRouter();
@@ -19,6 +20,12 @@ export function IncomingLinkWatch() {
   useEffect(() => {
     async function look() {
       const link = await takeIncomingLink();
+      // Ярлык на значке: «Расход», «Доход», «Сканировать чек».
+      const shortcut = link ? readShortcutLink(link) : null;
+      if (shortcut) {
+        requestQuickAdd(shortcut);
+        return;
+      }
       const parsed = link ? readPairing(link) : null;
       if (!link || !parsed) return;
       const kind = parsed.ticket ? "answer" : "join";

@@ -338,11 +338,15 @@ export type PortfolioRow = {
   sectorOverride?: string;
   quantity: number;
   averageBuyPrice: number;
+  /** С НКД у облигаций — столько бумага стоит сейчас. */
   currentPrice: number;
   currentValue: number;
+  /** По чистой цене: НКД — не прибыль, его платили при покупке. */
   pnl: number;
   share: number;
   risk: SecurityRisk;
+  /** НКД на одну облигацию, ₽. Нет — не облигация или биржа недоступна. */
+  accruedInterest?: number;
   /**
    * The purchases this position was built from. `quantity` and
    * `averageBuyPrice` above are derived from them. Absent on positions entered
@@ -477,6 +481,17 @@ export type InvestmentData = {
   assetStructure: ChartDatum[];
   risks: RecommendationView[];
   education: RecommendationView[];
+  /** Весь доход от вложений: бумажный + с продаж + выплаты. */
+  totals?: {
+    invested: number;
+    unrealized: number;
+    realized: number;
+    dividends: number;
+    dividends12m: number;
+    total: number;
+  };
+  /** Снимки по дням: стоимость и вложенное (lib/investments/snapshots.ts). */
+  history?: Array<{ date: string; value: number; invested: number }>;
 };
 
 // A realized investment event (desktop tax ledger): a sale or a dividend.

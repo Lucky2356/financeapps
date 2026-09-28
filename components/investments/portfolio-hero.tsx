@@ -1,6 +1,6 @@
 "use client";
 
-import { Coins, Percent, TrendingUp, Wallet } from "lucide-react";
+import { Coins, HandCoins, TrendingUp, Wallet } from "lucide-react";
 
 import { HeroCard } from "@/components/ui/hero-card";
 import { StatGrid } from "@/components/ui/stat-grid";
@@ -15,11 +15,15 @@ import type { InvestmentData } from "@/types/finance";
 export function PortfolioHero({
   portfolio,
   currency,
-  dayChangeByTicker
+  dayChangeByTicker,
+  totals,
+  history
 }: {
   portfolio: InvestmentData["portfolio"];
   currency: string;
   dayChangeByTicker: Map<string, number>;
+  totals?: InvestmentData["totals"];
+  history?: InvestmentData["history"];
 }) {
   const { t } = useI18n();
 
@@ -27,6 +31,8 @@ export function PortfolioHero({
   const value = portfolio.reduce((sum, p) => sum + p.currentValue, 0);
   const pnl = value - cost;
   const returnPct = cost > 0 ? (pnl / cost) * 100 : 0;
+  // Весь доход: бумажный + с продаж + выплаты. Без данных — только бумажный.
+  const totalIncome = totals ? totals.total : pnl;
 
   // Today's absolute move = Σ position value × its day-change%; only positions
   // with a known day-change contribute (best-effort, from board/watchlist).
@@ -47,14 +53,16 @@ export function PortfolioHero({
         value={formatCurrency(value, currency)}
         caption={t("inv.hero.caption", { count: portfolio.length })}
         changePercent={dayBase > 0 ? dayPct : null}
-        trend={portfolio.length > 1 ? portfolio.map((p) => p.currentValue) : undefined}
+        // Спарклайн — из снимков по дням. Раньше сюда шли стоимости позиций
+        // подряд, и «график» рисовал не время, а порядок бумаг в списке.
+        trend={history && history.length >= 2 ? history.slice(-60).map((p) => p.value) : undefined}
       />
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
           label={t("inv.pnlLabel")}
           hint="tip.inv.pnlLabel"
           value={`${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, currency)}`}
-          caption={t("inv.tile.pnlCaption")}
+          caption={t("inv.tile.pnlPct", { pct: `${pnl >= 0 ? "+" : ""}${returnPct.toFixed(1)}` })}
           icon={TrendingUp}
           tone={pnl >= 0 ? "success" : "danger"}
         />
@@ -66,12 +74,14 @@ export function PortfolioHero({
           icon={Coins}
         />
         <StatTile
-          label={t("inv.returnLabel")}
-          hint="tip.inv.returnLabel"
-          value={`${pnl >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`}
-          caption={t("inv.tile.returnCaption")}
-          icon={Percent}
-          tone={pnl >= 0 ? "success" : "danger"}
+          label={t("inv.tile.total")}
+          hint="tip.inv.tile.total"
+          value={`${totalIncome >= 0 ? "+" : ""}${formatCurrency(totalIncome, currency)}`}
+          caption={t("inv.tile.totalCaption", {
+            payouts: formatCurrency(totals?.dividends12m ?? 0, currency)
+          })}
+          icon={HandCoins}
+          tone={totalIncome >= 0 ? "success" : "danger"}
         />
         <StatTile
           label={t("inv.tile.today")}

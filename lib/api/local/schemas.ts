@@ -421,6 +421,15 @@ export const localStateSchema = z.object({
   netWorthSnapshots: z
     .array(z.object({ date: z.string().min(1), value: z.coerce.number().finite() }))
     .default([]),
+  portfolioSnapshots: z
+    .array(
+      z.object({
+        date: z.string().min(1),
+        value: z.coerce.number().finite(),
+        invested: z.coerce.number().finite()
+      })
+    )
+    .default([]),
   realizedInvestmentEvents: z.array(realizedEventSchema).default([]),
   expectedDividends: z.array(expectedDividendSchema).default([]),
   targetAllocations: z.array(targetAllocationSchema).default([]),

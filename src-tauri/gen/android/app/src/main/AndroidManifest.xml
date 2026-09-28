@@ -58,6 +58,10 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="financeapps" android:host="pair" />
             </intent-filter>
+            <!-- Ярлыки на значке: «Расход», «Доход», «Сканировать чек». -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <provider

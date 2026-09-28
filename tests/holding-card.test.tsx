@@ -41,5 +41,5 @@ it("средняя цена покупки видна, не раскрывая �
 
   const line = screen.getByTestId("holding-average");
   expect(line.textContent).toMatch(/40 шт\./);
-  expect(line.textContent).toMatch(/средняя цена покупки 175/);
+  expect(line.textContent).toMatch(/средняя 175/);
 });

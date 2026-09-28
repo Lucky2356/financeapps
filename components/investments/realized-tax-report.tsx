@@ -141,7 +141,16 @@ export function RealizedTaxReport() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="rt-buy">{t("inv.rt.buyPrice")}</Label>
-                <Input id="rt-buy" name="buyPrice" type="number" step="any" min="0" required />
+                {/* Пусто — возьмём из покупок по FIFO, тех самых, что уйдут из
+                    портфеля. Ввести руками можно, если брокер считал иначе. */}
+                <Input
+                  id="rt-buy"
+                  name="buyPrice"
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder={t("inv.rt.buyPriceAuto")}
+                />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="rt-fee">{t("inv.rt.fee")}</Label>

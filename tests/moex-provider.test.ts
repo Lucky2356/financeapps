@@ -216,3 +216,42 @@ describe("MoexMarketDataProvider across boards", () => {
     expect(matches[0].ticker).toBe("SBER");
   });
 });
+
+// История приходит страницами по 100 строк: без дочитывания график за год
+// обрывался на сотом торговом дне.
+describe("история с биржи — все страницы", () => {
+  function pageOf(start: number, count: number) {
+    return {
+      history: {
+        columns: ["TRADEDATE", "CLOSE"],
+        data: Array.from({ length: count }, (_, i) => {
+          const day = new Date(Date.UTC(2025, 0, 1 + start + i));
+          return [day.toISOString().slice(0, 10), 100 + start + i];
+        })
+      }
+    };
+  }
+
+  it("дочитывает, пока страница полная", async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        asked.push(String(url));
+        const start = Number(/[?&]start=(\d+)/.exec(String(url))?.[1] ?? 0);
+        const body = start === 0 ? pageOf(0, 100) : start === 100 ? pageOf(100, 30) : pageOf(0, 0);
+        return { ok: true, json: async () => body } as Response;
+      })
+    );
+    const { MoexMarketDataProvider } = await import("@/services/market/MoexMarketDataProvider");
+    const points = await new MoexMarketDataProvider().getIndexHistory(
+      "IMOEX",
+      new Date(2025, 0, 1),
+      new Date(2025, 11, 31)
+    );
+    expect(points).toHaveLength(130);
+    // Индекс — с доски индексов, а не акций.
+    expect(asked[0]).toContain("/markets/index/boards/SNDX/securities/IMOEX.json");
+    expect(asked).toHaveLength(2);
+  });
+});

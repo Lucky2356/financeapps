@@ -3,6 +3,7 @@ import { addDays, startOfDay, subDays } from "date-fns";
 import { rankSecurities } from "@/lib/investments/security-match";
 import type { AssetKind } from "@/types/enums";
 import { sectorForTicker } from "@/lib/market/sectors";
+import type { Payout } from "@/lib/market/payouts";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 
 // The stand-in universe is blue chips only, so the kind is stamped on when a
@@ -226,6 +227,41 @@ export class MockMarketDataProvider implements MarketDataService {
     }
 
     return dates;
+  }
+
+  async getPayouts(ticker: string, kind: AssetKind): Promise<Payout[]> {
+    // Без сети — одна прошедшая и одна будущая выплата у каждой бумаги из
+    // списка: чтобы «Ближайшие выплаты» и «Получено» было видно и проверить.
+    const security = securities.find((item) => item.ticker === ticker.toUpperCase());
+    if (!security || kind === "GOLD") return [];
+    const iso = (date: Date) => date.toISOString().slice(0, 10);
+    const perShare = Math.round(security.basePrice * 0.035 * 100) / 100;
+    const payout = (date: Date): Payout => ({
+      ticker: security.ticker,
+      kind: kind === "BOND" ? "COUPON" : "DIVIDEND",
+      date: iso(date),
+      perShare,
+      currency: "RUB"
+    });
+    return [payout(subDays(new Date(), 20)), payout(addDays(new Date(), 45))];
+  }
+
+  async getIndexHistory(index: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
+    // Без сети — ровная синтетика, как у бумаг: чтобы график сравнения был
+    // виден и в проверках, и без биржи.
+    const days: HistoricalPrice[] = [];
+    let cursor = startOfDay(from);
+    let step = 0;
+    while (cursor <= startOfDay(to)) {
+      days.push({
+        ticker: index.toUpperCase(),
+        date: cursor,
+        price: priceForSecurity(3000, 0.012, step, 7)
+      });
+      cursor = addDays(cursor, 1);
+      step += 1;
+    }
+    return days;
   }
 
   async updateMarketPrices(): Promise<void> {

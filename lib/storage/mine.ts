@@ -41,6 +41,11 @@ export function rememberWho(id: string): void {
 }
 
 /** Имя ключа этого человека. */
+/** Кто сейчас за устройством: пусто — первый человек. */
+export function currentWho(): string {
+  return who;
+}
+
 export function mineKey(key: string): string {
   return who ? `${PERSON_MARK}${who}/${key}` : key;
 }

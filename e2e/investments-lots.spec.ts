@@ -16,11 +16,12 @@ test("считает среднюю цену покупки по списку п
 
   await seedExampleData(page);
   await openSettled(page, "/investments");
-  await page.getByRole("button", { name: "Добавить первую бумагу" }).click();
+  await page.getByRole("button", { name: "Добавить бумагу" }).first().click();
 
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox").first().fill("SBER");
-  await dialog.getByRole("button", { name: /SBER/ }).first().click();
+  // Бумага не из примера: в примере уже есть SBER, LKOH и YDEX.
+  await dialog.getByRole("textbox").first().fill("GAZP");
+  await dialog.getByRole("button", { name: /GAZP/ }).first().click();
 
   const rows = dialog.locator("input[type='date']");
   await rows.first().fill("2026-01-10");
@@ -42,11 +43,12 @@ test("считает среднюю цену покупки по списку п
   // not enough and the suite failed on timing, not on behaviour.
   await expect(dialog).toBeHidden({ timeout: 45_000 });
 
-  // 40 shares at an average of 175 ₽ — "вложено" is 7 000 ₽. Same live-price
-  // round-trip as above: generous, because what is under test is the arithmetic,
-  // not how fast MOEX answers while the rest of the suite runs beside it.
-  await expect(page.getByText("SBER").first()).toBeVisible({ timeout: 45_000 });
-  await expect(page.getByText(/7\s?000/).first()).toBeVisible({ timeout: 45_000 });
+  // 40 shares at an average of 175 ₽. Same live-price round-trip as above:
+  // generous, because what is under test is the arithmetic, not how fast MOEX
+  // answers while the rest of the suite runs beside it.
+  await expect(
+    page.getByTestId("holding-average").filter({ hasText: /40 шт\. · средняя 175/ })
+  ).toBeVisible({ timeout: 45_000 });
 });
 
 // The dialog keeps its state inside itself, and it used to stay mounted after
@@ -57,7 +59,7 @@ test("форма добавления бумаги открывается чис
   await seedExampleData(page);
   await openSettled(page, "/investments");
 
-  await page.getByRole("button", { name: "Добавить первую бумагу" }).click();
+  await page.getByRole("button", { name: "Добавить бумагу" }).first().click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox").first().fill("SBER");
   await dialog.getByRole("button", { name: /SBER/ }).first().click();
@@ -66,7 +68,7 @@ test("форма добавления бумаги открывается чис
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
-  await page.getByRole("button", { name: "Добавить первую бумагу" }).click();
+  await page.getByRole("button", { name: "Добавить бумагу" }).first().click();
   // A search field, not a chosen security.
   await expect(dialog.getByRole("textbox").first()).toBeVisible();
   // Проверяется отсутствие ВЫБРАННОЙ бумаги, а не отсутствие её названия на
