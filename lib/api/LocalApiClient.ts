@@ -1263,7 +1263,12 @@ export class LocalApiClient implements ApiClient {
       ...(linkedRecurringId ? { recurringId: linkedRecurringId } : {}),
       ...(linkedLiabilityId ? { liabilityId: linkedLiabilityId } : {}),
       ...(tags.length ? { tags } : {}),
-      ...(input.splitGroupId ? { splitGroupId: String(input.splitGroupId) } : {}),
+      // Правка одной части разделённой покупки оставляет её частью покупки:
+      // форма правки группу не присылает, и без этого часть отрывалась —
+      // пропадал значок «разбивка», а удаление покупки её не задевало.
+      ...(input.splitGroupId || previous?.splitGroupId
+        ? { splitGroupId: String(input.splitGroupId || previous?.splitGroupId) }
+        : {}),
       ...(input.transferId ? { transferId: String(input.transferId) } : {}),
       // Когда операцию записали. Операций одного дня бывает много, и порядок
       // между ними держался только на месте строки в массиве — а синхронизация

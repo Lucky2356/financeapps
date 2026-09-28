@@ -1074,8 +1074,8 @@ const ru: Messages = {
   "cal.empty": "В этот день операций нет.",
   "cal.planned": "По плану",
   "allow.title": "Можно тратить сегодня",
-  "allow.perDay": "{amount} в день до конца месяца",
-  "allow.perDayFresh": "Столько в день до конца месяца — сегодня ещё ничего не потрачено",
+  "allow.perDayShort": "в день до конца месяца",
+  "allow.spentOf": "Потрачено {spent} из {perDay}",
   "allow.spent": "Уже потрачено",
   "allow.over": "Уже больше, чем позволяет месяц",
   "allow.overHint":
@@ -1444,6 +1444,13 @@ const ru: Messages = {
   "inv.pay.received": "Получено",
   "inv.pay.marked": "Записано: {amount} — во «Весь доход» и в налог.",
   "inv.pay.error": "Не удалось записать выплату.",
+  "inv.pay.confirmTitle": "Выплата по {ticker} пришла",
+  "inv.pay.confirmHint":
+    "До налога — {gross}. Брокер обычно удерживает 13 %, поэтому подставлена сумма «на руки»: поправьте её, если на счёт пришло другое.",
+  "inv.pay.net": "Сколько пришло на счёт",
+  "inv.pay.paidOn": "Когда пришла",
+  "inv.pay.save": "Записать",
+  "inv.pay.errAmount": "Укажите сумму больше нуля.",
   "inv.pay.note":
     "Даты и суммы — с Московской биржи, до налога. Дивиденд может быть ещё не утверждён собранием акционеров.",
   "inv.cmp.mode": "Что показать",
@@ -3385,8 +3392,8 @@ const en: Messages = {
   "cal.empty": "No operations on this day.",
   "cal.planned": "Planned",
   "allow.title": "Safe to spend today",
-  "allow.perDay": "{amount} a day until the end of the month",
-  "allow.perDayFresh": "That much a day until month end — nothing spent today yet",
+  "allow.perDayShort": "a day until month end",
+  "allow.spentOf": "Spent {spent} of {perDay}",
   "allow.spent": "Already spent",
   "allow.over": "Already more than the month allows",
   "allow.overHint":
@@ -3755,6 +3762,13 @@ const en: Messages = {
   "inv.pay.received": "Received",
   "inv.pay.marked": "Recorded: {amount} — in total income and tax.",
   "inv.pay.error": "Could not record the payout.",
+  "inv.pay.confirmTitle": "{ticker} payout received",
+  "inv.pay.confirmHint":
+    "Before tax — {gross}. Brokers usually withhold 13%, so the net amount is filled in: change it if a different sum arrived.",
+  "inv.pay.net": "Amount received",
+  "inv.pay.paidOn": "Received on",
+  "inv.pay.save": "Record",
+  "inv.pay.errAmount": "Enter an amount above zero.",
   "inv.pay.note":
     "Dates and amounts come from the Moscow Exchange, before tax. A dividend may not be approved by shareholders yet.",
   "inv.cmp.mode": "What to show",
