@@ -2075,6 +2075,23 @@ const ru: Messages = {
   "dev.forgetNote":
     "Выкинуть — про связь, а не про данные: на том устройстве они останутся целиком, просто перестанут ездить. Стереть их отсюда нельзя.",
   "dev.forgotten": "Устройство выкинуто.",
+  "dev.primary": "главное",
+  "dev.makePrimary": "Сделать главным",
+  "dev.forgetSelf": "Отключить это устройство",
+  "dev.onlyPrimary":
+    "Выкидывать другие устройства можно только с главного — «{name}». Это устройство может отключить само себя.",
+  "dev.confirmForget": "Выкинуть «{name}»?",
+  "dev.confirmForgetHint":
+    "Оно перестанет получать и отправлять данные. Данные на нём останутся — стереть их отсюда нельзя.",
+  "dev.confirmSelf": "Отключить это устройство?",
+  "dev.confirmSelfHint":
+    "Данные здесь останутся, но синхронизация остановится. Подключить заново можно по QR с другого устройства.",
+  "dev.confirmPrimary": "Сделать главным «{name}»?",
+  "dev.confirmPrimaryHint":
+    "Выкидывать другие устройства можно будет только с него. Это устройство главным быть перестанет.",
+  "dev.password": "Пароль приложения",
+  "dev.badPassword": "Пароль не подходит.",
+  "dev.primaryDone": "Главное устройство сменилось.",
   "dev.empty": "Пока ни одного — даже этого. Странно; попробуйте подключиться заново.",
   "dev.loading": "Спрашиваем службу…",
   "dev.pair": "Связать ещё одно устройство",
@@ -4390,6 +4407,23 @@ const en: Messages = {
   "dev.forgetNote":
     "Throwing out is about the link, not the data: it stays on that device in full, it just stops travelling. Wiping it from here is not possible.",
   "dev.forgotten": "Device thrown out.",
+  "dev.primary": "primary",
+  "dev.makePrimary": "Make primary",
+  "dev.forgetSelf": "Disconnect this device",
+  "dev.onlyPrimary":
+    "Only the primary device — “{name}” — can remove other devices. This one can disconnect itself.",
+  "dev.confirmForget": "Throw out “{name}”?",
+  "dev.confirmForgetHint":
+    "It will stop sending and receiving data. Its data stays on it — it cannot be wiped from here.",
+  "dev.confirmSelf": "Disconnect this device?",
+  "dev.confirmSelfHint":
+    "Data stays here, but sync stops. Reconnect with a QR code from another device.",
+  "dev.confirmPrimary": "Make “{name}” primary?",
+  "dev.confirmPrimaryHint":
+    "Only it will be able to remove other devices. This device stops being primary.",
+  "dev.password": "App password",
+  "dev.badPassword": "Wrong password.",
+  "dev.primaryDone": "Primary device changed.",
   "dev.empty": "None at all — not even this one. Odd; try connecting again.",
   "dev.loading": "Asking the service…",
   "dev.pair": "Link another device",

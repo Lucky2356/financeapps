@@ -19,6 +19,8 @@ import {
   AuthError,
   authParams,
   forgetDevice,
+  makePrimary,
+  primaryDevice,
   issueInvitation,
   login,
   logout,
@@ -443,10 +445,14 @@ export function createApp(options: AppOptions) {
     if (path === "/devices" && method === "GET") {
       const devices = db
         .prepare(
-          "select id, name, last_seen_at from devices where person_id = ? order by last_seen_at desc"
+          "select id, name, last_seen_at, created_at from devices where person_id = ? order by last_seen_at desc"
         )
         .all(who.personId);
-      return send(res, 200, { devices, current: who.deviceId });
+      return send(res, 200, {
+        devices,
+        current: who.deviceId,
+        primary: primaryDevice(db, who.personId, now())
+      });
     }
 
     if (path === "/pairing" && method === "POST") {
@@ -468,8 +474,14 @@ export function createApp(options: AppOptions) {
       return send(res, 204);
     }
 
+    if (path.startsWith("/devices/") && path.endsWith("/primary") && method === "POST") {
+      const target = path.slice("/devices/".length, -"/primary".length);
+      makePrimary(db, who, decodePart(target), now());
+      return send(res, 204);
+    }
+
     if (path.startsWith("/devices/") && method === "DELETE") {
-      forgetDevice(db, who.personId, decodePart(path.slice("/devices/".length)));
+      forgetDevice(db, who, decodePart(path.slice("/devices/".length)), now());
       return send(res, 204);
     }
 

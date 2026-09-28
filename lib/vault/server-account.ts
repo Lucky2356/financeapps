@@ -53,6 +53,8 @@ export type LinkedDevice = {
   name: string;
   /** Когда служба видела его последний раз, ISO. */
   last_seen_at: string;
+  /** Когда подключено (служба 2.3.0+). */
+  created_at?: string | null;
 };
 
 /** Код связки, выданный первым устройством. */
@@ -456,14 +458,33 @@ export class ServerAccount {
   }
 
   /** Мои устройства и то, которое спрашивает. */
-  async devices(): Promise<{ devices: LinkedDevice[]; current: string | null }> {
+  async devices(): Promise<{
+    devices: LinkedDevice[];
+    current: string | null;
+    /**
+     * Главное устройство — только с него выкидывают другие. undefined —
+     * служба старше 2.3.0 и главного не знает: тогда можно, как раньше.
+     */
+    primary: string | null | undefined;
+  }> {
     const link = await this.need();
     const { status, data } = await ask(link.base, "/devices", { token: link.token });
     if (status !== 200) refuseLinked(status, data, "Служба не отдала список устройств.");
     return {
       devices: (data.devices ?? []) as LinkedDevice[],
-      current: (data.current as string | null) ?? null
+      current: (data.current as string | null) ?? null,
+      primary: "primary" in data ? ((data.primary as string | null) ?? null) : undefined
     };
+  }
+
+  /** Сделать главным другое устройство. Может только нынешнее главное. */
+  async makePrimary(id: string): Promise<void> {
+    const link = await this.need();
+    const { status, data } = await ask(link.base, `/devices/${encodeURIComponent(id)}/primary`, {
+      method: "POST",
+      token: link.token
+    });
+    if (status !== 204) refuseLinked(status, data, "Не удалось сделать устройство главным.");
   }
 
   /** Переименовать своё устройство: два «Компьютер (Windows)» неотличимы. */

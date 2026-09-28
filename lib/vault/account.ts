@@ -426,6 +426,20 @@ export class AccountService {
     if (options.remember) await this.rememberDevice(bookKey);
   }
 
+  /**
+   * Верный ли пароль. Ничего не отпирает и не запоминает — только проверяет:
+   * так опасные действия (выкинуть устройство) спрашивают пароль ещё раз.
+   */
+  async checkPassword(password: string): Promise<boolean> {
+    const vault = await this.requireVault();
+    try {
+      await unlockWithPassword(vault, password);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Включён ли вход по отпечатку на этом устройстве. */
   async biometricEnabled(): Promise<boolean> {
     return (await this.plain.getItem<Sealed>(BIOMETRIC_KEY)) !== null;

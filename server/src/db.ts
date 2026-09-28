@@ -46,7 +46,9 @@ const SCHEMA = `
     secret_hash text not null,
     secret_salt text not null,
     vault       text not null,
-    created_at  text not null
+    created_at  text not null,
+    -- Главное устройство: только с него можно выкидывать другие.
+    primary_device_id text
   );
 
   -- Ячейка на человека и профиль. Уже существующие в приложении профили каждый
@@ -73,7 +75,10 @@ const SCHEMA = `
     id           text primary key,
     person_id    text not null references people(id) on delete cascade,
     name         text not null,
-    last_seen_at text not null
+    last_seen_at text not null,
+    -- Когда подключено. Самое давнее живое устройство — главное, если главным
+    -- не назначили другое (см. primaryDevice в auth.ts).
+    created_at   text
   );
 
   -- Короткий код связки: «покажите его второму устройству».
@@ -139,6 +144,24 @@ function upgrade(db: DatabaseSync): void {
   // Запечатанный пакет связки: ключ данных, завёрнутый тем, что есть только в
   // картинке QR. Служба хранит его пять минут и открыть не может.
   if (!columns.includes("sealed")) db.exec("alter table pairings add column sealed text");
+
+  const has = (table: string, column: string) =>
+    db
+      .prepare(`pragma table_info(${table})`)
+      .all<{ name: string }>()
+      .some((row) => row.name === column);
+  // Главное устройство (2.3.0). Устройствам, заведённым раньше, дата
+  // подключения берётся из их самого раннего входа — так главным становится
+  // то, что и правда подключили первым.
+  if (!has("devices", "created_at")) {
+    db.exec("alter table devices add column created_at text");
+    db.exec(`update devices set created_at = coalesce(
+      (select min(s.created_at) from sessions s where s.device_id = devices.id),
+      last_seen_at)`);
+  }
+  if (!has("people", "primary_device_id")) {
+    db.exec("alter table people add column primary_device_id text");
+  }
 }
 
 /** Убирает просроченные билеты. Зовётся при входе — чистки по часам не нужно. */
