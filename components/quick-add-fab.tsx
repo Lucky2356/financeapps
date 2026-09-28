@@ -17,7 +17,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
-import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
+import { cameraPossible, scanQr, waitForNoModal } from "@/lib/sync/scan-qr";
 import {
   QUICK_ADD_OPEN,
   takeQuickAddRequest,
@@ -194,9 +194,13 @@ export function QuickAddFab({
     setSplitParts([]);
     setManualCategory(false);
     setAutoSuggested(false);
+    // Ярлык «Сканировать чек»: сначала камера, окно — уже с суммой. Не
+    // наоборот: поверх открытого окна камера вешает телефон (см. scanReceipt).
+    if (request.scanReceipt && cameraPossible()) {
+      void scanReceipt(openedType);
+      return;
+    }
     setOpen(true);
-    // Ярлык «Сканировать чек»: окно открыто — сразу камера.
-    if (request.scanReceipt && cameraPossible()) void scanReceipt(openedType);
   }
 
   useEffect(() => {
@@ -330,8 +334,16 @@ export function QuickAddFab({
 
   // QR с кассового чека: сумма, дата и расход/возврат — без набора руками.
   // Категорию подставляет то же, что и всегда: прошлые операции и правила.
+  //
+  // ОКНО НА ВРЕМЯ СЪЁМКИ ЗАКРЫВАЕТСЯ. Открытое модальное окно держит страницу
+  // (гасит касания, ловит фокус), и камера поверх него вешала телефон намертво.
+  // Поля живут здесь, а не в окне, — после съёмки оно открывается с тем же,
+  // что было, плюс сумма и дата с чека.
   async function scanReceipt(current: QuickAddType = type) {
+    setOpen(false);
+    await waitForNoModal();
     const shot = await scanQr({ hint: t("qa.receipt.hint") });
+    setOpen(true);
     if (!shot.ok) {
       if (shot.why === "denied") toast.error(t("qa.receipt.denied"));
       else if (shot.why === "broken") toast.error(t("qa.receipt.broken"));
