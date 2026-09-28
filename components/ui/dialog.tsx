@@ -27,6 +27,68 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/**
+ * Появлялась ли клавиатура, пока окно открыто.
+ *
+ * Считается по высоте видимой части: клавиатура телефона отнимает у неё
+ * заметно больше пятой части. Раз появившись, ответ остаётся «да» до закрытия
+ * окна — компонент живёт ровно столько, сколько окно открыто.
+ */
+function useKeyboardSeen(): boolean {
+  const [seen, setSeen] = React.useState(false);
+  React.useEffect(() => {
+    const height = () => window.visualViewport?.height ?? window.innerHeight;
+    const start = height();
+    const check = () => {
+      if (height() < start * 0.8) setSeen(true);
+    };
+    const viewport = window.visualViewport;
+    viewport?.addEventListener("resize", check);
+    window.addEventListener("resize", check);
+    return () => {
+      viewport?.removeEventListener("resize", check);
+      window.removeEventListener("resize", check);
+    };
+  }, []);
+  return seen;
+}
+
+/**
+ * Слой, который ставит окно по центру.
+ *
+ * Flexbox, а не `left-1/2` с translate: translate попадает в середину только
+ * пока containing block фиксированного — это вьюпорт; любой предок с
+ * transform, filter или zoom его сдвигает, и одно окно на ПК из-за этого
+ * стояло в углу. Сам слой пропускает касания насквозь — закрыть окно нажатием
+ * мимо него можно по-прежнему.
+ *
+ * ПО ЦЕНТРУ — ПОКА НЕТ КЛАВИАТУРЫ. Середина окна зависит от его высоты, а
+ * высоту меняет клавиатура. Человек вводил сумму, касался «Категории» — поле
+ * теряло фокус, клавиатура уходила, окно вырастало, и диалог по центру
+ * съезжал вниз на полклавиатуры: касание приходило уже мимо кнопки, и
+ * нажимать приходилось дважды. Раньше поэтому окна на телефоне всегда стояли у
+ * верха — владелец справедливо счёл это некрасивым. Теперь окно стоит по
+ * центру, а как только появилась клавиатура — встаёт к верху и остаётся там,
+ * пока открыто: когда клавиатура уходит, двигаться ему уже некуда.
+ * Стерегут e2e/quick-add-touch.spec.ts и e2e/dialog-center.spec.ts.
+ */
+function CenteringLayer({ children }: { children: React.ReactNode }) {
+  const keyboard = useKeyboardSeen();
+  return (
+    <div
+      data-keyboard={keyboard ? "" : undefined}
+      className={cn(
+        "pointer-events-none fixed inset-0 z-50 flex justify-center p-4",
+        keyboard
+          ? "items-start pt-[max(1rem,env(safe-area-inset-top))]"
+          : "items-center pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]"
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
@@ -44,21 +106,7 @@ const DialogContent = React.forwardRef<
   return (
     <DialogPortal>
       <DialogOverlay />
-      {/* A layer that centres by flexbox rather than by `left-1/2` plus a
-          translate. The translate trick only lands in the middle while the
-          fixed containing block IS the viewport — any transformed, filtered or
-          zoomed ancestor moves it, and one desktop window showed the dialog
-          sitting off in a corner because of exactly that. The layer itself
-          passes clicks through, so closing by clicking outside still works.
-
-          НА ТЕЛЕФОНЕ — К ВЕРХУ, А НЕ К ЦЕНТРУ. Середина окна зависит от его
-          высоты, а высоту меняет клавиатура. Человек вводил сумму, касался
-          «Категории» — поле теряло фокус, клавиатура уходила, окно вырастало,
-          и диалог съезжал вниз на полклавиатуры. Список на касание открывается
-          по click, а click приходит, когда палец поднят, — уже мимо кнопки.
-          Приходилось нажимать дважды. Верхний край от высоты окна не зависит.
-          Стережёт e2e/quick-add-touch.spec.ts. */}
-      <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:items-center sm:pt-4">
+      <CenteringLayer>
         <DialogPrimitive.Content
           ref={setNode}
           className={cn(
@@ -101,7 +149,7 @@ const DialogContent = React.forwardRef<
             <span className="sr-only">{t("common.close")}</span>
           </DialogPrimitive.Close>
         </DialogPrimitive.Content>
-      </div>
+      </CenteringLayer>
     </DialogPortal>
   );
 });
