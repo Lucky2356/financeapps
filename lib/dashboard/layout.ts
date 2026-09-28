@@ -4,8 +4,8 @@
 // helpers below are unit-tested; storage access lives in the component.
 
 export const DASHBOARD_WIDGETS = [
-  "allowance",
   "overview",
+  "allowance",
   "forecast",
   "emergencyFund",
   "netWorth",
@@ -18,7 +18,11 @@ export type DashboardWidget = (typeof DASHBOARD_WIDGETS)[number];
 export type DashboardLayout = {
   order: DashboardWidget[];
   hidden: DashboardWidget[];
+  /** Версия раскладки: 2 — «Можно тратить сегодня» уже снята с самого верха. */
+  v?: number;
 };
+
+const LAYOUT_VERSION = 2;
 
 // "metrics" is off by default: the overview grid at the top of the screen shows
 // the same four figures, and two copies of the same numbers on one screen is
@@ -26,10 +30,17 @@ export type DashboardLayout = {
 // cards with their sparklines back.
 export const DEFAULT_LAYOUT: DashboardLayout = {
   order: [...DASHBOARD_WIDGETS],
-  hidden: ["metrics"]
+  hidden: ["metrics"],
+  v: LAYOUT_VERSION
 };
 
-const SHOWN_FIRST_WHEN_NEW: readonly DashboardWidget[] = ["allowance"];
+/** Поставить виджет сразу после сводки (или в конец, если сводки нет). */
+function afterOverview(order: DashboardWidget[], widget: DashboardWidget): DashboardWidget[] {
+  const rest = order.filter((item) => item !== widget);
+  const at = rest.indexOf("overview");
+  if (at < 0) return [...rest, widget];
+  return [...rest.slice(0, at + 1), widget, ...rest.slice(at + 1)];
+}
 
 function isWidget(value: unknown): value is DashboardWidget {
   return typeof value === "string" && (DASHBOARD_WIDGETS as readonly string[]).includes(value);
@@ -41,19 +52,27 @@ function isWidget(value: unknown): value is DashboardWidget {
 export function normalizeLayout(
   saved: Partial<DashboardLayout> | null | undefined
 ): DashboardLayout {
-  if (!saved) return { order: [...DASHBOARD_WIDGETS], hidden: [] };
-  const savedOrder = Array.isArray(saved.order) ? saved.order.filter(isWidget) : [];
-  const seen = new Set(savedOrder);
-  const missing = DASHBOARD_WIDGETS.filter((widget) => !seen.has(widget));
-  // «Можно тратить сегодня» — то, ради чего главную открывают каждый день: у
-  // тех, кто настроил главную раньше, она встаёт наверх, а не в самый низ.
-  const order = [
-    ...missing.filter((widget) => SHOWN_FIRST_WHEN_NEW.includes(widget)),
-    ...savedOrder,
-    ...missing.filter((widget) => !SHOWN_FIRST_WHEN_NEW.includes(widget))
-  ];
+  if (!saved) return { order: [...DASHBOARD_WIDGETS], hidden: [], v: LAYOUT_VERSION };
+  let order = Array.isArray(saved.order) ? saved.order.filter(isWidget) : [];
+  // 2.2.0 ставила «Можно тратить сегодня» самой первой — над сводкой, крупно.
+  // Это было некрасиво: главная начиналась не с денег. Один раз переносим её
+  // за сводку; если человек потом сам поднимет её наверх — так и останется.
+  if (saved.v !== LAYOUT_VERSION && order[0] === "allowance") {
+    order = afterOverview(order, "allowance");
+  }
+  const seen = new Set(order);
+  for (const widget of DASHBOARD_WIDGETS) {
+    if (seen.has(widget)) continue;
+    // Новое у тех, кто настроил главную раньше: «Можно тратить сегодня» —
+    // сразу под сводкой, остальное — в конец.
+    order = widget === "allowance" ? afterOverview(order, widget) : [...order, widget];
+  }
   const hidden = Array.isArray(saved.hidden) ? saved.hidden.filter(isWidget) : [];
-  return { order, hidden: hidden.filter((widget) => order.includes(widget)) };
+  return {
+    order,
+    hidden: hidden.filter((widget) => order.includes(widget)),
+    v: LAYOUT_VERSION
+  };
 }
 
 export function isHidden(layout: DashboardLayout, widget: DashboardWidget): boolean {

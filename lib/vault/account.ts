@@ -316,6 +316,9 @@ export class AccountService {
 
     await this.sealed.clear();
     await this.forgetDevice();
+    // Ключ данных меняется — отпечаток запечатал прежний и открыл бы им
+    // чужие теперь данные (не прочитав ничего).
+    await this.disableBiometric();
     await this.plain.setItem(VAULT_KEY, serverVault);
     this.sealed.unlock(bookKey);
     if (options.remember) await this.rememberDevice(bookKey);
@@ -367,6 +370,8 @@ export class AccountService {
 
     await this.sealed.clear();
     await this.forgetDevice();
+    // Ключ данных приехал новый — прежний отпечаток к нему не подходит.
+    await this.disableBiometric();
     await this.plain.setItem(VAULT_KEY, pack.vault);
     this.sealed.unlock(bookKey);
     await this.rememberDevice(bookKey, pack.recoveryCode);
@@ -521,6 +526,7 @@ export class AccountService {
   async forgetEverything(): Promise<void> {
     this.sealed.lock();
     await this.plain.clear();
+    await forgetBiometric();
   }
 
   /** Помнит ли это устройство ключ. */

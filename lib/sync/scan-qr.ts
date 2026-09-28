@@ -101,12 +101,42 @@ export function cameraPossible(): boolean {
   return isAndroidShell();
 }
 
+// ПОЧЕМУ НЕ ПОВЕРХ ОКНА. Открытое модальное окно (Radix Dialog) держит всю
+// страницу у себя: гасит касания у body (`pointer-events: none`), ловит фокус,
+// запирает прокрутку. Видоискатель прячет всё под собой и кладёт свой слой в
+// body — и в 2.2.0 сканер чека, открытый из окна быстрого добавления, вешал
+// телефон намертво: камера есть, а нажать нельзя ничего. Поэтому окно сначала
+// закрывают, ждут, пока оно снимется, и только потом открывают камеру.
+
+/** Открыто ли сейчас модальное окно, которое держит страницу. */
+export function modalOpen(): boolean {
+  if (typeof document === "undefined") return false;
+  return (
+    document.querySelector('[role="dialog"], [role="alertdialog"]') !== null ||
+    document.body.style.pointerEvents === "none" ||
+    document.body.hasAttribute("data-scroll-locked")
+  );
+}
+
+/** Дождаться, пока закрытое окно снимется со страницы (анимация закрытия). */
+export async function waitForNoModal(timeoutMs = 2000): Promise<boolean> {
+  const until = Date.now() + timeoutMs;
+  while (modalOpen()) {
+    if (Date.now() > until) return false;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  return true;
+}
+
 /**
  * `hint` — что написать над рамкой. По умолчанию — про QR связки на другом
  * устройстве; сканер чека говорит своё.
  */
 export async function scanQr(options: { hint?: string } = {}): Promise<ScanOutcome> {
   if (!cameraPossible()) return { ok: false, why: "absent" };
+  // Страховка: поверх модального окна камера вешает телефон (см. modalOpen).
+  // Лучше честно отказать, чем открыть видоискатель, из которого не выйти.
+  if (modalOpen()) return { ok: false, why: "broken", detail: "modal dialog is open" };
 
   let hide = () => {};
   try {

@@ -49,46 +49,115 @@ function formatDate(iso: string, locale: string): string {
   });
 }
 
-function Item({ item }: { item: WhatsNewItem }) {
-  // «**Главное** — пояснение», «**Главное**: пояснение»: перед знаком
-  // препинания пробел не нужен.
-  const glue = item.lead && item.text && !/^[,.:;]/.test(item.text) ? " " : "";
+// КОРОТКО, ПОДРОБНО — ПО НАЖАТИЮ. В 2.2.0 окно показывало все пункты целиком,
+// с пояснениями, — на телефоне это были экраны текста, и дочитывать их никто
+// не стал бы. Теперь пункт — одна строка с главным; пояснение раскрывается
+// нажатием, одно за раз. Разделы, кроме первого, свёрнуты.
+
+/** «— делает всё сразу» → «Делает всё сразу»: пояснение без тире в начале. */
+function explanation(text: string): string {
+  const bare = text.replace(/^[\s—–:,.-]+/, "");
+  return bare.charAt(0).toUpperCase() + bare.slice(1);
+}
+
+function Item({
+  item,
+  open,
+  onToggle
+}: {
+  item: WhatsNewItem;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  // Без жирного или без пояснения раскрывать нечего — пункт одной строкой.
+  if (!item.lead || !item.text) {
+    return <li className="py-1.5 text-sm leading-snug">{item.lead || item.text}</li>;
+  }
   return (
-    <li className="text-sm leading-relaxed">
-      {item.lead ? <span className="font-medium text-foreground">{item.lead}</span> : null}
-      {glue}
-      <span className="text-muted-foreground">{item.text}</span>
+    <li>
+      <button
+        type="button"
+        className="flex w-full items-start gap-2 py-1.5 text-left text-sm leading-snug"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className="flex-1 font-medium">{item.lead}</span>
+        <ChevronDown
+          className={cn(
+            "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open ? (
+        <p className="pb-2 pr-6 text-sm leading-relaxed text-muted-foreground">
+          {explanation(item.text)}
+        </p>
+      ) : null}
     </li>
   );
 }
 
 function ReleaseBody({ release }: { release: WhatsNewRelease }) {
+  const [openItem, setOpenItem] = useState<string | null>(null);
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(release.sections.slice(0, 1).map((section) => section.title))
+  );
+  const toggleItem = (key: string) => setOpenItem((was) => (was === key ? null : key));
+  const list = (items: WhatsNewItem[], prefix: string) => (
+    <ul className="divide-y divide-border/60">
+      {items.map((item, index) => {
+        const key = `${prefix}-${index}`;
+        return (
+          <Item key={key} item={item} open={openItem === key} onToggle={() => toggleItem(key)} />
+        );
+      })}
+    </ul>
+  );
+
   if (release.kind === "fixes") {
-    return (
-      <ul className="list-disc space-y-2 pl-5 marker:text-muted-foreground">
-        {release.sections.flatMap((section) =>
-          section.items.map((item, index) => <Item key={`${section.title}-${index}`} item={item} />)
-        )}
-      </ul>
+    return list(
+      release.sections.flatMap((section) => section.items),
+      "fixes"
     );
   }
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {release.sections.map((section) => {
         const Icon = sectionIcon(section.title);
+        const isOpen = openSections.has(section.title);
         return (
-          <section key={section.title} className="space-y-2">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <section key={section.title}>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 py-1 text-left text-sm font-semibold"
+              aria-expanded={isOpen}
+              onClick={() =>
+                setOpenSections((was) => {
+                  const next = new Set(was);
+                  if (next.has(section.title)) next.delete(section.title);
+                  else next.add(section.title);
+                  return next;
+                })
+              }
+            >
               <span className="flex size-6 items-center justify-center rounded-md bg-primary/12 text-primary">
                 <Icon className="size-3.5" />
               </span>
-              {section.title}
-            </h3>
-            <ul className="list-disc space-y-2 pl-5 marker:text-muted-foreground">
-              {section.items.map((item, index) => (
-                <Item key={index} item={item} />
-              ))}
-            </ul>
+              <span className="flex-1">
+                {section.title}
+                <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">
+                  · {section.items.length}
+                </span>
+              </span>
+              <ChevronDown
+                className={cn(
+                  "size-4 shrink-0 text-muted-foreground transition-transform",
+                  isOpen && "rotate-180"
+                )}
+              />
+            </button>
+            {isOpen ? <div className="pl-8">{list(section.items, section.title)}</div> : null}
           </section>
         );
       })}
@@ -117,20 +186,33 @@ export function WhatsNewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl" data-testid="whats-new">
+      <DialogContent
+        className="gap-3 p-5 pb-0 sm:max-w-lg sm:p-6 sm:pb-0"
+        data-testid="whats-new"
+        // Фокус не на первый раздел: рамка фокуса на нём выглядела как ошибка.
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <DialogHeader>
-          <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-            {newest.kind === "fixes" ? (
-              <Wrench className="size-6" />
-            ) : (
-              <Sparkles className="size-6" />
-            )}
-          </span>
-          <DialogTitle className="mt-3">{title}</DialogTitle>
-          <DialogDescription className="leading-relaxed">
-            <span className="tabular-nums">{formatDate(newest.date, locale)}</span>
-            {newest.summary ? ` · ${newest.summary}` : null}
-          </DialogDescription>
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+              {newest.kind === "fixes" ? (
+                <Wrench className="size-5" />
+              ) : (
+                <Sparkles className="size-5" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <DialogTitle>{title}</DialogTitle>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {formatDate(newest.date, locale)}
+              </p>
+            </div>
+          </div>
+          {newest.summary ? (
+            <DialogDescription className="leading-snug">{newest.summary}</DialogDescription>
+          ) : (
+            <DialogDescription className="sr-only">{title}</DialogDescription>
+          )}
         </DialogHeader>
 
         <ReleaseBody release={newest} />
@@ -176,7 +258,9 @@ export function WhatsNewDialog({
           </div>
         ) : null}
 
-        <DialogFooter>
+        {/* «Понятно» всегда на виду: подвал прилипает к низу окна, как ни
+            прокручивай. */}
+        <DialogFooter className="sticky bottom-0 -mx-5 border-t bg-card px-5 py-3 sm:-mx-6 sm:px-6">
           <Button type="button" className="w-full sm:w-auto" onClick={() => onOpenChange(false)}>
             {t("wn.ok")}
           </Button>

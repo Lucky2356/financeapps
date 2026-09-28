@@ -16,10 +16,13 @@ test("после обновления окно «Что нового» — од�
   await expect(dialog).toBeVisible({ timeout: 15_000 });
   await expect(dialog.getByRole("heading", { name: /^(Что нового|Исправления) в / })).toBeVisible();
 
-  // Окно в экране целиком: кнопка «Понятно» достижима прокруткой внутри него.
-  const box = await dialog.boundingBox();
-  expect(box && box.x >= 0 && box.x + box.width <= 360).toBe(true);
-  await dialog.getByRole("button", { name: "Понятно" }).click();
+  // Окно в экране целиком, и «Понятно» видна сразу — без прокрутки.
+  const box = (await dialog.boundingBox())!;
+  expect(box.x >= 0 && box.x + box.width <= 360).toBe(true);
+  expect(box.y >= 0 && box.y + box.height <= 740).toBe(true);
+  const ok = dialog.getByRole("button", { name: "Понятно" });
+  await expect(ok).toBeInViewport();
+  await ok.click();
   await expect(dialog).toBeHidden();
 
   await openSettled(page, "/");

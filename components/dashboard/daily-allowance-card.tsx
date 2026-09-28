@@ -2,14 +2,15 @@
 
 // «Можно тратить сегодня» — одно число на каждый день.
 //
-// Цифра крупно, цвет — укладываемся или нет, под ней — сколько в день до конца
-// месяца и сколько потратили вчера. «Из чего складывается» раскрывает расчёт:
-// число, которому нельзя проверить происхождение, быстро перестают слушать.
+// Одна строка под сводкой: сколько осталось на сегодня (цвет — укладываемся
+// или нет) и сколько в день до конца месяца. Нажатие раскрывает расчёт и
+// вчерашние траты: число, которому нельзя проверить происхождение, быстро
+// перестают слушать.
 
 import { ChevronDown, Wallet } from "lucide-react";
 import { useState } from "react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { Allowance } from "@/lib/analytics/daily-allowance";
 import { formatCurrency } from "@/lib/format";
@@ -48,55 +49,58 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
   const minus = (value: number) => (value > 0 ? `−${money(value)}` : money(0));
   const over = data.status === "over";
 
+  // Узкая полоса, а не большая карточка: одно число на каждый день не должно
+  // заслонять остальную главную. Всё прочее — по нажатию.
   return (
     <Card data-testid="daily-allowance">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2">
-          <Wallet className="size-4 text-primary" />
-          {t("allow.title")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div>
-          <p className={cn("text-3xl font-bold tracking-tight tabular-nums", TONE[data.status])}>
-            {money(Math.max(data.leftToday, 0))}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+      <button
+        type="button"
+        className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {/* Значок — только там, где есть место: на телефоне он выталкивал
+            заголовок на вторую строку. */}
+        <span className="hidden size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:flex">
+          <Wallet className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{t("allow.title")}</span>
+          <span className="block truncate text-xs text-muted-foreground">
             {over
               ? t("allow.over")
               : data.spentToday > 0
-                ? t("allow.perDay", { amount: money(data.perDay) })
-                : t("allow.perDayFresh")}
-          </p>
-          {over ? (
-            <p className="mt-1 text-xs text-muted-foreground">{t("allow.overHint")}</p>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap gap-2 text-xs">
-          {data.spentToday > 0 ? (
-            <span className="rounded-full bg-muted px-2.5 py-1 tabular-nums">
-              {t("allow.todaySpent", { amount: money(data.spentToday) })}
-            </span>
-          ) : null}
-          <span className="rounded-full bg-muted px-2.5 py-1 tabular-nums">
-            {t("allow.yesterday", { amount: money(data.spentYesterday) })}
+                ? t("allow.spentOf", {
+                    spent: money(data.spentToday),
+                    perDay: money(data.perDay)
+                  })
+                : t("allow.perDayShort")}
           </span>
-        </div>
-        {data.incomeSource === "average" ? (
-          <p className="text-xs text-muted-foreground">{t("allow.byAverage")}</p>
-        ) : null}
-
-        <button
-          type="button"
-          className="flex items-center gap-1 text-xs text-primary hover:underline"
-          aria-expanded={open}
-          onClick={() => setOpen((was) => !was)}
-        >
-          {t("allow.how")}
-          <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} />
-        </button>
-        {open ? (
+        </span>
+        <span className={cn("shrink-0 text-base font-semibold tabular-nums", TONE[data.status])}>
+          {money(Math.max(data.leftToday, 0))}
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open ? (
+        <CardContent className="space-y-3 border-t pt-3">
+          {over ? <p className="text-xs text-muted-foreground">{t("allow.overHint")}</p> : null}
+          <div className="flex flex-wrap gap-2 text-xs">
+            {data.spentToday > 0 ? (
+              <span className="rounded-full bg-muted px-2.5 py-1 tabular-nums">
+                {t("allow.todaySpent", { amount: money(data.spentToday) })}
+              </span>
+            ) : null}
+            <span className="rounded-full bg-muted px-2.5 py-1 tabular-nums">
+              {t("allow.yesterday", { amount: money(data.spentYesterday) })}
+            </span>
+          </div>
+          <p className="text-xs font-medium text-muted-foreground">{t("allow.how")}</p>
           <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm tabular-nums">
             <dt className="text-muted-foreground">
               {data.incomeSource === "average" ? t("allow.incomeAverage") : t("allow.income")}
@@ -111,8 +115,11 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
             <dt className="text-muted-foreground">{t("allow.days")}</dt>
             <dd className="text-right">{data.daysLeft}</dd>
           </dl>
-        ) : null}
-      </CardContent>
+          {data.incomeSource === "average" ? (
+            <p className="text-xs text-muted-foreground">{t("allow.byAverage")}</p>
+          ) : null}
+        </CardContent>
+      ) : null}
     </Card>
   );
 }

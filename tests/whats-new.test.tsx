@@ -198,6 +198,18 @@ describe("окно", () => {
     expect(localStorage.getItem(WHATS_NEW_KEY)).toBe("3.1.0");
   });
 
+  it("коротко: пункт — одна строка, пояснение по нажатию", async () => {
+    localStorage.setItem("onboarding-v2-done", "1");
+    localStorage.setItem(WHATS_NEW_KEY, "3.0.1");
+    await mount(parseChangelog(SAMPLE));
+
+    const lead = await screen.findByRole("button", { name: "Новая кнопка" });
+    expect(screen.queryByText(/делает всё сразу/)).toBeNull();
+    await userEvent.click(lead);
+    expect(screen.getByText("Делает всё сразу. Продолжение пункта.")).toBeInTheDocument();
+    expect(lead).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("выпуск исправлений называется «Исправления в …»", async () => {
     localStorage.setItem("onboarding-v2-done", "1");
     localStorage.setItem(WHATS_NEW_KEY, "3.0.0");

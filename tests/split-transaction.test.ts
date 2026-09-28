@@ -69,6 +69,34 @@ describe("разделить операцию", () => {
     expect(accounts.accounts.find((a) => a.id === account.id)?.balance).toBe(10000);
   });
 
+  it("правка одной части не отрывает её от покупки", async () => {
+    const { api, account, food, home } = await setup();
+    const parts = await api.post<Array<{ id: string; splitGroupId: string }>>("/transactions", {
+      action: "split",
+      type: "EXPENSE",
+      accountId: account.id,
+      date: "2026-09-27",
+      parts: JSON.stringify([
+        { categoryId: food.id, amount: "100" },
+        { categoryId: home.id, amount: "50" }
+      ])
+    });
+    // Форма правки группу не присылает — только поля операции.
+    await api.put("/transactions", {
+      id: parts[1].id,
+      type: "EXPENSE",
+      accountId: account.id,
+      categoryId: home.id,
+      amount: "70",
+      date: "2026-09-27"
+    });
+
+    const list = await api.get<TransactionsPageData>("/transactions");
+    const edited = list.transactions.find((tx) => tx.id === parts[1].id);
+    expect(edited?.amount).toBe(70);
+    expect(edited?.splitGroupId).toBe(parts[0].splitGroupId);
+  });
+
   it("часть с чужой категорией — не пишется ни одна", async () => {
     const { api, account, food } = await setup();
     await expect(

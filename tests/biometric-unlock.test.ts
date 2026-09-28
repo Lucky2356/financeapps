@@ -81,6 +81,17 @@ describe("вход по отпечатку", () => {
     expect(phone.forgotten).toBe(1);
   });
 
+  it("подключение к чужим данным выключает отпечаток: он запечатал прежний ключ", async () => {
+    const { account, plain } = await lockedDevice();
+    await account.enableBiometric("пароль", WORDS);
+    const other = await lockedDevice();
+    const pack = await other.account.pairingPackage("пароль");
+
+    await account.adoptPackage(pack);
+    expect(await plain.getItem(BIOMETRIC_KEY)).toBeNull();
+    expect(phone.forgotten).toBe(1);
+  });
+
   it("запись под отпечатком не шифруется книгой — иначе ею нечего было бы открыть", async () => {
     const { account, plain } = await lockedDevice();
     await account.enableBiometric("пароль", WORDS);

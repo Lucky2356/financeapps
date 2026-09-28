@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test";
 
 import { openSettled, seedExampleData } from "./helpers";
 
-// «Можно тратить сегодня» — наверху главной, и расчёт можно раскрыть.
+// «Можно тратить сегодня» — узкая полоса под сводкой, расчёт раскрывается по
+// нажатию. В 2.2.0 она была крупной карточкой в самом верху — владелец счёл
+// это некрасивым.
 
 test.use({ viewport: { width: 360, height: 740 } });
 
@@ -13,15 +15,19 @@ test("главная показывает, сколько можно трати�
   const card = page.getByTestId("daily-allowance");
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(
-    card.getByText(/в день до конца месяца|больше, чем позволяет месяц/).first()
+    card.getByText(/в день до конца месяца|Потрачено .* из |больше, чем позволяет месяц/).first()
   ).toBeVisible();
 
-  // Наверху: выше обзора.
+  // Под сводкой, а не над ней.
   const cardTop = (await card.boundingBox())!.y;
   const overviewTop = (await page.getByRole("heading", { name: "Обзор" }).first().boundingBox())!.y;
-  expect(cardTop).toBeLessThan(overviewTop);
+  expect(cardTop).toBeGreaterThan(overviewTop);
+  // Узкая: одна строка, а не карточка на полэкрана.
+  expect((await card.boundingBox())!.height).toBeLessThan(90);
 
-  await card.getByRole("button", { name: "Из чего складывается" }).click();
+  const row = card.getByRole("button", { name: /Можно тратить сегодня/ });
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+  await row.click();
   await expect(card.getByText("Платежи до конца месяца")).toBeVisible();
   const box = (await card.boundingBox())!;
   expect(box.x + box.width).toBeLessThanOrEqual(360);

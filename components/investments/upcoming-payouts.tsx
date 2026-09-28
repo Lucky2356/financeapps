@@ -12,10 +12,25 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+
+/** Налог, который брокер удерживает с дивидендов и купонов резидента. */
+const TAX_WITHHELD = 0.13;
+
+const toNumber = (value: string) => Number(value.replace(/\s/g, "").replace(",", "."));
 
 type Payout = {
   ticker: string;
@@ -43,19 +58,40 @@ export function UpcomingPayouts() {
   const kind = (payout: Payout) =>
     payout.kind === "COUPON" ? t("inv.pay.coupon") : t("inv.pay.dividend");
 
+  // «Получено» — не сразу запись, а короткое подтверждение: брокер присылает
+  // выплату уже без 13 % налога, и записать надо то, что пришло на счёт, — иначе
+  // «Весь доход» завышен. Сумма «на руки» подставлена, её можно поправить.
+  const [confirm, setConfirm] = useState<Payout | null>(null);
+  const [netAmount, setNetAmount] = useState("");
+  const [paidOn, setPaidOn] = useState("");
+
+  function askReceived(payout: Payout) {
+    setConfirm(payout);
+    setNetAmount(String(Math.round(payout.amount * (1 - TAX_WITHHELD) * 100) / 100));
+    // Сегодня — по местному времени: toISOString дал бы вчера до трёх ночи
+    // по Москве.
+    setPaidOn(formatInputDate(new Date()));
+  }
+
   async function markReceived(payout: Payout) {
     const key = `${payout.ticker}-${payout.date}`;
+    const amount = toNumber(netAmount);
+    if (!(amount > 0)) {
+      toast.error(t("inv.pay.errAmount"));
+      return;
+    }
     setBusy(key);
     try {
       await apiClient.post("/investments/events", {
         type: "DIVIDEND",
         ticker: payout.ticker,
         name: payout.name,
-        amount: String(payout.amount),
-        date: new Date().toISOString().slice(0, 10),
+        amount: String(amount),
+        date: paidOn || formatInputDate(new Date()),
         currency: data.currency
       });
-      toast.success(t("inv.pay.marked", { amount: money(payout.amount) }));
+      toast.success(t("inv.pay.marked", { amount: money(amount) }));
+      setConfirm(null);
       await reload();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("inv.pay.error"));
@@ -96,7 +132,7 @@ export function UpcomingPayouts() {
                     type="button"
                     size="sm"
                     disabled={busy === key}
-                    onClick={() => void markReceived(payout)}
+                    onClick={() => askReceived(payout)}
                   >
                     <Check className="size-4" />
                     {t("inv.pay.received")}
@@ -133,6 +169,51 @@ export function UpcomingPayouts() {
         ) : null}
         <p className="text-xs text-muted-foreground">{t("inv.pay.note")}</p>
       </CardContent>
+
+      <Dialog open={confirm !== null} onOpenChange={(next) => !next && setConfirm(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {confirm ? t("inv.pay.confirmTitle", { ticker: confirm.ticker }) : ""}
+            </DialogTitle>
+            <DialogDescription>
+              {confirm ? t("inv.pay.confirmHint", { gross: money(confirm.amount) }) : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="payout-net">{t("inv.pay.net")}</Label>
+              <Input
+                id="payout-net"
+                inputMode="decimal"
+                value={netAmount}
+                onChange={(event) => setNetAmount(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="payout-date">{t("inv.pay.paidOn")}</Label>
+              <Input
+                id="payout-date"
+                type="date"
+                value={paidOn}
+                onChange={(event) => setPaidOn(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirm(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              disabled={confirm !== null && busy === `${confirm.ticker}-${confirm.date}`}
+              onClick={() => confirm && void markReceived(confirm)}
+            >
+              {t("inv.pay.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
