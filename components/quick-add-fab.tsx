@@ -2,6 +2,7 @@
 
 import { Plus, ScanLine, X } from "lucide-react";
 
+import { FavoriteChips } from "@/components/transactions/favorite-chips";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -239,7 +240,10 @@ export function QuickAddFab({
     if (splitParts.length > 0) return submitSplit(payload);
 
     try {
-      const result = await apiClient.post<{ budgetWarning?: BudgetWarning }>("/transactions", {
+      const result = await apiClient.post<{
+        budgetWarning?: BudgetWarning;
+        unusual?: { usual: number };
+      }>("/transactions", {
         ...payload,
         type,
         accountId,
@@ -258,6 +262,16 @@ export function QuickAddFab({
             spent: formatCurrency(result.budgetWarning.spent),
             limit: formatCurrency(result.budgetWarning.limit)
           })
+        );
+      }
+      // Сторож: втрое больше обычного — не лишний ли ноль?
+      if (result?.unusual) {
+        toast.warning(
+          t("watch.unusualNow", {
+            amount: formatCurrency(toNumber(amount)),
+            usual: formatCurrency(result.unusual.usual)
+          }),
+          { duration: 10_000 }
         );
       }
       setOpen(false);
@@ -501,6 +515,16 @@ export function QuickAddFab({
               <ScanLine className="size-4" />
               {t("qa.receipt.scan")}
             </Button>
+          ) : null}
+          {type !== "TRANSFER" ? (
+            <FavoriteChips
+              key={type}
+              type={type}
+              onRecorded={() => {
+                setOpen(false);
+                router.refresh();
+              }}
+            />
           ) : null}
           <div className="grid gap-4">
             <div className="space-y-2">

@@ -32,7 +32,8 @@ describe("normalizeLayout", () => {
       order: ["allowance", "overview", "forecast", "charts"] as never,
       hidden: []
     });
-    expect(old.order.slice(0, 3)).toEqual(["overview", "allowance", "forecast"]);
+    // И новое «Стоит проверить» — сразу под ней.
+    expect(old.order.slice(0, 4)).toEqual(["overview", "allowance", "watchdog", "forecast"]);
     // Человек сам поднял её наверх уже в новой версии — так и остаётся.
     const chosen = normalizeLayout({
       ...old,

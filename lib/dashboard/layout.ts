@@ -6,6 +6,7 @@
 export const DASHBOARD_WIDGETS = [
   "overview",
   "allowance",
+  "watchdog",
   "forecast",
   "emergencyFund",
   "netWorth",
@@ -61,12 +62,21 @@ export function normalizeLayout(
     order = afterOverview(order, "allowance");
   }
   const seen = new Set(order);
-  for (const widget of DASHBOARD_WIDGETS) {
-    if (seen.has(widget)) continue;
-    // Новое у тех, кто настроил главную раньше: «Можно тратить сегодня» —
-    // сразу под сводкой, остальное — в конец.
-    order = widget === "allowance" ? afterOverview(order, widget) : [...order, widget];
-  }
+  DASHBOARD_WIDGETS.forEach((widget, index) => {
+    if (seen.has(widget)) return;
+    // Новое у тех, кто настроил главную раньше, встаёт туда же, где оно в
+    // порядке по умолчанию, — после своего соседа («Можно тратить сегодня» —
+    // под сводкой, «Стоит проверить» — под ним). Соседа нет — в конец.
+    const neighbour = [...DASHBOARD_WIDGETS.slice(0, index)]
+      .reverse()
+      .find((item) => order.includes(item));
+    if (!neighbour) {
+      order = [...order, widget];
+    } else {
+      const at = order.indexOf(neighbour);
+      order = [...order.slice(0, at + 1), widget, ...order.slice(at + 1)];
+    }
+  });
   const hidden = Array.isArray(saved.hidden) ? saved.hidden.filter(isWidget) : [];
   return {
     order,

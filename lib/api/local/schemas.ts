@@ -157,7 +157,9 @@ export const recurringRowSchema = z.object({
     icon: z.string().trim().max(64).optional()
   }),
   // Id of the transaction this template last created — kept in sync on edit/delete
-  lastTransactionId: z.string().optional()
+  lastTransactionId: z.string().optional(),
+  // Пробный период до — сторож лишних трат напоминает за три дня.
+  trialEndsOn: z.string().nullable().optional()
 });
 export const watchlistRowSchema = z.object({
   ticker: z

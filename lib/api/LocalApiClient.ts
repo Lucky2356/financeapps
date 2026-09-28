@@ -107,6 +107,8 @@ import { recordPortfolioSnapshot, type PortfolioSnapshot } from "@/lib/investmen
 import { sellGain } from "@/services/InvestmentTaxReportService";
 import { computeDailyAllowance, type Allowance } from "@/lib/analytics/daily-allowance";
 import { buildMonthRecap, previousMonth } from "@/lib/analytics/month-recap";
+import { findLeaks, unusualFor, type WatchRow } from "@/lib/analytics/watchdog";
+import { buildWeekRecap } from "@/lib/analytics/week-recap";
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
@@ -224,6 +226,8 @@ type LocalState = SheetState & {
        * saved by older versions still validate.
        */
       lastTransactionId?: string;
+      /** Пробный период до (YYYY-MM-DD) — сторож напомнит за три дня. */
+      trialEndsOn?: string | null;
     }
   >;
   investments: InvestmentData;
@@ -795,6 +799,37 @@ export class LocalApiClient implements ApiClient {
       ) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
     if (pathname === "/sheet") return readSheet(state) as T;
+    if (pathname === "/watchdog") {
+      const counted = this.countingState(this.inBase(state), false);
+      return {
+        findings: findLeaks({
+          rows: this.watchRows(counted),
+          trials: state.recurringTransactions
+            .filter((item) => item.isActive && item.trialEndsOn)
+            .map((item) => ({
+              id: item.id,
+              name: item.description || item.category.label,
+              trialEndsOn: String(item.trialEndsOn),
+              amount: item.amount
+            })),
+          today: isoDay(new Date())
+        })
+      } as T;
+    }
+    if (pathname === "/week-recap") {
+      const counted = this.countingState(this.inBase(state), false);
+      return buildWeekRecap({
+        today: new Date(),
+        perDay: this.allowance(counted).perDay,
+        rows: counted.transactions.map((row) => ({
+          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label
+        }))
+      }) as T;
+    }
     if (pathname === "/sheet/facts")
       return this.sheetFacts(
         this.countingState(this.inBase(state), false),
@@ -941,7 +976,19 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/transactions") {
       const tx = this.upsertTransaction(state, body, method);
       const budgetWarning = this.budgetWarningFor(state, tx);
-      return this.saveAndReturn<TResponse>(state, { ...tx, budgetWarning });
+      // Сторож: трата втрое больше обычной для категории — «это верно?».
+      const usual =
+        tx.type === "EXPENSE" && method === "POST"
+          ? unusualFor(
+              { amount: tx.amount, categoryId: tx.category.id, date: tx.date },
+              this.watchRows(state).filter((row) => row.id !== tx.id)
+            )
+          : null;
+      return this.saveAndReturn<TResponse>(state, {
+        ...tx,
+        budgetWarning,
+        ...(usual !== null ? { unusual: { usual } } : {})
+      });
     }
     if (pathname === "/transactions/transfer")
       return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
@@ -1726,6 +1773,10 @@ export class LocalApiClient implements ApiClient {
     const amount = Number(input.amount);
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
     const description = input.description?.trim() || null;
+    // Пробный период до — сторож напомнит за три дня, пока он не стал платным.
+    const trialEndsOn = /^\d{4}-\d{2}-\d{2}$/.test(String(input.trialEndsOn ?? ""))
+      ? String(input.trialEndsOn)
+      : null;
     const accountRef = { id: account.id, label: account.name };
     const categoryRef = { id: category.id, label: category.label, color: category.color };
     const nextDateInput = new Date(input.nextDate);
@@ -1762,7 +1813,8 @@ export class LocalApiClient implements ApiClient {
         daysUntilNext: status.daysUntilNext,
         isDue: status.isDue,
         account: accountRef,
-        category: categoryRef
+        category: categoryRef,
+        ...(trialEndsOn ? { trialEndsOn } : {})
       };
       state.recurringTransactions = state.recurringTransactions.map((item) =>
         item.id === row.id ? row : item
@@ -1792,7 +1844,8 @@ export class LocalApiClient implements ApiClient {
       daysUntilNext: status.daysUntilNext,
       isDue: status.isDue,
       account: accountRef,
-      category: categoryRef
+      category: categoryRef,
+      ...(trialEndsOn ? { trialEndsOn } : {})
     };
     state.recurringTransactions = [...state.recurringTransactions, row];
     return row;
@@ -4056,6 +4109,27 @@ export class LocalApiClient implements ApiClient {
         this.upsertCategory(state, { name: column.name, kind: column.createCategory }, "POST").id;
     }
     return importSheet(state, payload, () => id("col"), new Date().toISOString());
+  }
+
+  /** Операции для сторожа: подписка ли категория — из справочника. */
+  private watchRows(state: LocalState): WatchRow[] {
+    const subscription = new Set(
+      state.categories.filter((category) => category.isSubscription).map((category) => category.id)
+    );
+    return state.transactions.map((row) => ({
+      id: row.id,
+      type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+      date: row.date,
+      amount: row.amount,
+      description: row.description,
+      categoryId: row.category.id,
+      category: row.category.label,
+      accountId: row.account.id,
+      isSubscription: subscription.has(row.category.id),
+      recurringId: row.recurringId ?? null,
+      transferId: row.transferId ?? null,
+      splitGroupId: row.splitGroupId ?? null
+    }));
   }
 
   /** Факт из учёта по категориям и месяцам — для «Сравнить с учётом» в таблице. */
