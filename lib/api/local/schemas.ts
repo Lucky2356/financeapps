@@ -99,7 +99,10 @@ export const transactionRowSchema = z.object({
   // where it was — the capital chart has to know not to count it as spending.
   liabilityId: z.string().optional(),
   // Когда операцию записали — порядок внутри одного дня.
-  createdAt: z.string().optional()
+  createdAt: z.string().optional(),
+  // Где фото чека: уезжает на другие устройства или лежит только здесь.
+  // Само фото — отдельной записью (lib/photos/receipt-photo.ts).
+  photo: z.enum(["synced", "device"]).optional()
 });
 export const budgetRowSchema = z.object({
   updatedAt,

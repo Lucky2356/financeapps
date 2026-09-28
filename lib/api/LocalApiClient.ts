@@ -42,6 +42,15 @@ import {
   RESCUE_SUFFIX
 } from "@/lib/storage/SyncingStorageAdapter";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import {
+  isPhotoData,
+  orphanedPhotos,
+  PHOTO_MAX_CHARS,
+  PHOTO_PREFIX,
+  photoKey,
+  type PhotoPlace,
+  type StoredPhoto
+} from "@/lib/photos/receipt-photo";
 import { futureDated, storedTransactionDate, todayDay } from "@/lib/transactions/date";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
@@ -830,6 +839,8 @@ export class LocalApiClient implements ApiClient {
         }))
       }) as T;
     }
+    if (pathname === "/photos")
+      return (await this.readPhoto(state, searchParams.get("id") ?? "")) as T;
     if (pathname === "/sheet/facts")
       return this.sheetFacts(
         this.countingState(this.inBase(state), false),
@@ -870,6 +881,15 @@ export class LocalApiClient implements ApiClient {
       }
     } else if (pathname === "/transactions" && itemId) {
       this.deleteTransaction(state, itemId);
+    } else if (pathname === "/photos" && itemId) {
+      const row = state.transactions.find((item) => item.id === itemId);
+      if (row?.photo) await this.dropPhoto(itemId, row.photo);
+      state.transactions = state.transactions.map((item) => {
+        if (item.id !== itemId) return item;
+        const { photo: _dropped, ...rest } = item;
+        void _dropped;
+        return rest;
+      });
     } else if (pathname === "/goals" && itemId) {
       // Deleting a goal that still holds money used to make that money vanish:
       // capital fell by the amount, no account got it back, and the record of
@@ -1044,6 +1064,7 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertCategory(state, body, method));
     if (pathname === "/plan")
       return this.saveAndReturn<TResponse>(state, this.savePlan(state, body));
+    if (pathname === "/photos") return this.attachPhoto<TResponse>(state, body);
     if (pathname === "/sheet") {
       const input = (body ?? {}) as Record<string, unknown>;
       if (input.action === "import")
@@ -1340,6 +1361,8 @@ export class LocalApiClient implements ApiClient {
         ? { splitGroupId: String(input.splitGroupId || previous?.splitGroupId) }
         : {}),
       ...(input.transferId ? { transferId: String(input.transferId) } : {}),
+      // Фото чека живёт отдельно (lib/photos) — правка операции его не теряет.
+      ...(previous?.photo ? { photo: previous.photo } : {}),
       // Когда операцию записали. Операций одного дня бывает много, и порядок
       // между ними держался только на месте строки в массиве — а синхронизация
       // кладёт пришедшую строку туда, где она оказалась при слиянии. Только
@@ -4516,6 +4539,71 @@ export class LocalApiClient implements ApiClient {
         : trackDeletions(stampRows(state, previous, now), previous, now);
     await this.storage.setItem(key, next);
     this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
+    // Операции не стало — не стало и её фото. Сличаем записанное с прежним,
+    // а не ловим каждое место, где операцию удаляют: их много (одна, чек
+    // целиком, выбранные, перевод), и одно забытое оставило бы фото навсегда.
+    for (const gone of orphanedPhotos(
+      (previous?.transactions as Array<{ id: string; photo?: PhotoPlace }> | undefined) ?? [],
+      next.transactions
+    )) {
+      await this.dropPhoto(gone.id, gone.place);
+    }
+  }
+
+  // ——— фото чеков ————————————————————————————————————————————————
+
+  private async readPhoto(state: LocalState, transactionId: string) {
+    const row = state.transactions.find((item) => item.id === transactionId);
+    if (!row?.photo) return { photo: null, place: null, missing: false };
+    const stored = await this.storage.getItem<StoredPhoto>(photoKey(transactionId, row.photo));
+    return isPhotoData(stored)
+      ? { photo: stored.data, place: row.photo, missing: false }
+      : // Отметка есть, а фото нет: его сняли «только на этом устройстве» на
+        // другом, или оно ещё едет с сервера.
+        { photo: null, place: row.photo, missing: true };
+  }
+
+  private async attachPhoto<TResponse>(state: LocalState, body: unknown) {
+    const input = (body ?? {}) as Record<string, unknown>;
+    const transactionId = String(input.transactionId ?? "");
+    const row = state.transactions.find((item) => item.id === transactionId);
+    if (!row) throw new Error("Операция не найдена — возможно, её уже удалили.");
+    const data = String(input.data ?? "");
+    if (!data.startsWith("data:image/") || data.length > PHOTO_MAX_CHARS)
+      throw new Error("Не получилось прочитать фото. Попробуйте снять ещё раз.");
+    const place: PhotoPlace = input.place === "device" ? "device" : "synced";
+    // Было фото в другом месте — убрать, чтобы не лежало два.
+    if (row.photo && row.photo !== place) await this.dropPhoto(transactionId, row.photo);
+    const stored: StoredPhoto = {
+      data,
+      width: Number(input.width) || 0,
+      height: Number(input.height) || 0,
+      createdAt: new Date().toISOString()
+    };
+    await this.storage.setItem(photoKey(transactionId, place), stored);
+    state.transactions = state.transactions.map((item) =>
+      item.id === transactionId ? { ...item, photo: place } : item
+    );
+    return this.saveAndReturn<TResponse>(state, { transactionId, place });
+  }
+
+  /**
+   * Убрать фото. Синхронизируемое — следом «удалено», а не стиранием: стёртое
+   * здесь осталось бы на сервере и на других устройствах (слой синхронизации
+   * нарочно не передаёт удаление ключа, см. SyncingStorageAdapter.removeItem).
+   */
+  private async dropPhoto(transactionId: string, place: PhotoPlace) {
+    const key = photoKey(transactionId, place);
+    try {
+      if (place === "device") await this.storage.removeItem(key);
+      else if (await this.storage.getItem<unknown>(key))
+        await this.storage.setItem<StoredPhoto>(key, {
+          removed: true,
+          at: new Date().toISOString()
+        });
+    } catch {
+      /* фото не главное — книга уже записана */
+    }
   }
 
   /**
@@ -4642,6 +4730,14 @@ export class LocalApiClient implements ApiClient {
     // держит книгу ЦЕЛИКОМ, и «удалить всё», оставив их, значило бы удалить
     // не всё. На службу они не ездят, так что убрать их с диска и есть удалить.
     for (const key of await this.storage.keys()) {
+      // Фото чеков — тоже данные человека. Синхронизируемые гасятся следом,
+      // чтобы исчезли и на других устройствах.
+      if (key.startsWith(PHOTO_PREFIX)) {
+        const [, rest] = key.split(PHOTO_PREFIX);
+        const place: PhotoPlace = rest.endsWith(":device") ? "device" : "synced";
+        await this.dropPhoto(rest.replace(/:device$/, ""), place);
+        continue;
+      }
       if (
         key === LEGACY_STATE_KEY ||
         key.endsWith(PRE_UPGRADE_SUFFIX) ||

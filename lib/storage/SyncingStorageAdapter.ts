@@ -145,6 +145,12 @@ export const RESCUE_SUFFIX = ":rescue";
  */
 export const BEFORE_CLEAR_SUFFIX = ":before-clear";
 
+/**
+ * То, что человек сам попросил держать только здесь, — например, фото чеков
+ * при включённом «Фото чеков — только на этом устройстве».
+ */
+export const DEVICE_ONLY_SUFFIX = ":device";
+
 function syncableKey(key: string): boolean {
   return (
     !LOCAL_ONLY_KEYS.includes(key) &&
@@ -156,7 +162,8 @@ function syncableKey(key: string): boolean {
     // её копиями, которые нужны только здесь, незачем.
     !key.endsWith(PRE_UPGRADE_SUFFIX) &&
     !key.endsWith(RESCUE_SUFFIX) &&
-    !key.endsWith(BEFORE_CLEAR_SUFFIX)
+    !key.endsWith(BEFORE_CLEAR_SUFFIX) &&
+    !key.endsWith(DEVICE_ONLY_SUFFIX)
   );
 }
 

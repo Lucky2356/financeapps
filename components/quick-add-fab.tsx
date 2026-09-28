@@ -18,6 +18,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
+import { ReceiptPhotoDialog } from "@/components/transactions/receipt-photo-dialog";
 import { cameraPossible, scanQr, waitForNoModal } from "@/lib/sync/scan-qr";
 import {
   QUICK_ADD_OPEN,
@@ -121,6 +122,9 @@ export function QuickAddFab({
   // Описание, очищенное от суммы, даты, тегов и слова счёта, — то, что уйдёт в
   // журнал. Показывается человеку, потому что расходится с набранным.
   const [cleanedDescription, setCleanedDescription] = useState<string | null>(null);
+  // Сумма пришла с QR чека — после записи предложим сфотографировать сам чек.
+  const [fromReceipt, setFromReceipt] = useState(false);
+  const [photoFor, setPhotoFor] = useState<string | null>(null);
 
   // The server props are empty on the desktop static build — the real accounts
   // and categories live in the client API (LocalApiClient/IndexedDB).
@@ -190,6 +194,7 @@ export function QuickAddFab({
     // — сегодняшняя. Записываем их сюда же, иначе разбор счёл бы их чужими и
     // «1200 продукты картой» не переставило бы счёт с подставленного.
     setFilledIn({ amount: "", accountId: preselectedAccount, date: openedOn, tags: "" });
+    setFromReceipt(false);
     setCleanedDescription(null);
     setCategoryId(previous?.category.id ?? "");
     setSplitParts([]);
@@ -241,6 +246,7 @@ export function QuickAddFab({
 
     try {
       const result = await apiClient.post<{
+        id?: string;
         budgetWarning?: BudgetWarning;
         unusual?: { usual: number };
       }>("/transactions", {
@@ -254,7 +260,16 @@ export function QuickAddFab({
       } catch {
         /* ignore */
       }
-      toast.success(t("tx.toast.added"));
+      const savedId = result?.id;
+      if (fromReceipt && savedId) {
+        toast.success(t("tx.toast.added"), {
+          description: t("photo.offer"),
+          duration: 10_000,
+          action: { label: t("photo.offerAction"), onClick: () => setPhotoFor(savedId) }
+        });
+      } else {
+        toast.success(t("tx.toast.added"));
+      }
       if (result?.budgetWarning) {
         toast.warning(
           t("tx.toast.budgetWarning", {
@@ -373,6 +388,7 @@ export function QuickAddFab({
     setAmount(written);
     setDate(receipt.date);
     setFilledIn((was) => ({ ...was, amount: written, date: receipt.date }));
+    setFromReceipt(true);
     toast.success(
       t("qa.receipt.done", {
         amount: formatCurrency(receipt.amount, "RUB"),
@@ -795,6 +811,7 @@ export function QuickAddFab({
           setAccountId(id);
         }}
       />
+      <ReceiptPhotoDialog transactionId={photoFor} onClose={() => setPhotoFor(null)} />
       <NewCategoryDialog
         open={showNewCategory}
         onOpenChange={setShowNewCategory}

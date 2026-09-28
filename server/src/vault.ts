@@ -156,7 +156,7 @@ function tooMuch(
   const mine = usageOf(db, personId);
   const existing = db.prepare(SIZE_OF_ONE).get<{ bytes: number }>(personId, slot);
 
-  if (limits.slots !== null && !existing && mine.slots >= limits.slots) {
+  if (limits.slots !== null && !existing && !isAttachment(slot) && mine.slots >= limits.slots) {
     return `На этой службе разрешено ${limits.slots} книг(и) на человека, а у вас уже ${mine.slots}.`;
   }
 
@@ -198,13 +198,26 @@ function megabytes(bytes: number): string {
 const SIZE_OF_ONE =
   "select length(cast(body as blob)) as bytes from books where person_id = ? and slot = ?";
 
+/**
+ * Фото чеков — каждое своей ячейкой (приложение, lib/photos/receipt-photo.ts).
+ * Предел «сколько книг» про тетрадки, а не про чеки: пять фото не должны
+ * запирать шестую книгу. Место они при этом занимают честно и в предел по
+ * мегабайтам входят.
+ */
+export const ATTACHMENT_MARK = "receiptPhoto_";
+
+export function isAttachment(slot: string): boolean {
+  return slot.includes(ATTACHMENT_MARK);
+}
+
 /** Сколько места занимают книги человека — для страницы управления. */
 export function usageOf(db: DatabaseSync, personId: string): { slots: number; bytes: number } {
   const row = db
     .prepare(
-      "select count(*) as slots, coalesce(sum(length(cast(body as blob))), 0) as bytes" +
+      "select coalesce(sum(case when instr(slot, ?) > 0 then 0 else 1 end), 0) as slots," +
+        " coalesce(sum(length(cast(body as blob))), 0) as bytes" +
         " from books where person_id = ?"
     )
-    .get<{ slots: number; bytes: number }>(personId);
+    .get<{ slots: number; bytes: number }>(ATTACHMENT_MARK, personId);
   return { slots: row?.slots ?? 0, bytes: row?.bytes ?? 0 };
 }

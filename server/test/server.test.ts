@@ -976,6 +976,32 @@ describe("служба", () => {
       assert.match(String((second.body as { error: string }).error), /разрешено 1/);
     });
 
+    it("фото чеков в предел книг не входят", async () => {
+      await restart({ limits: { slots: 1, bytes: null } });
+      const { token } = await signUp("петя");
+      const book = await call("/vault/первая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: BOOK }
+      });
+      const photos = await Promise.all(
+        ["receiptPhoto_tx-1", "receiptPhoto_tx-2"].map((slot) =>
+          call(`/vault/${slot}`, { method: "PUT", token, body: { baseVersion: 0, body: BOOK } })
+        )
+      );
+      const second = await call("/vault/вторая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: BOOK }
+      });
+      assert.equal(book.status, 200);
+      assert.deepEqual(
+        photos.map((put) => put.status),
+        [200, 200]
+      );
+      assert.equal(second.status, 507);
+    });
+
     it("уже заведённая книга правится и тогда, когда предел книг исчерпан", async () => {
       // Предел на ЧИСЛО книг — не предел на работу в них. Считай он и правки,
       // человек с одной разрешённой книгой не смог бы записать в неё ни одной

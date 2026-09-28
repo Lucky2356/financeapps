@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, ReceiptText, Sparkles, Trash2 } from "lucide-react";
+import { Edit2, Paperclip, ReceiptText, Sparkles, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryOptionLabel } from "@/components/category-option";
 import Link from "next/link";
@@ -15,6 +15,7 @@ import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { TransactionFilterBar } from "@/components/transactions/filter-bar";
+import { ReceiptPhotoDialog } from "@/components/transactions/receipt-photo-dialog";
 import type { AiProvider } from "@/lib/ai/models";
 import { useAiSettings } from "@/hooks/use-ai-settings";
 import { useI18n } from "@/lib/i18n/context";
@@ -78,6 +79,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const [editingTransaction, setEditingTransaction] = useState<
     TransactionsPageData["transactions"][number] | null
   >(null);
+  const [photoFor, setPhotoFor] = useState<string | null>(null);
   // Bulk selection: ids of transactions ticked for a batch action.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkCategory, setBulkCategory] = useState("");
@@ -572,7 +574,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                       <TableHead>{t("tx.account")}</TableHead>
                       <TableHead>{t("tx.col.description")}</TableHead>
                       <TableHead className="text-right">{t("common.amount")}</TableHead>
-                      <TableHead className="w-[4.5rem] text-right">{t("common.actions")}</TableHead>
+                      <TableHead className="w-[6.5rem] text-right">{t("common.actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -641,6 +643,21 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8"
+                              title={transaction.photo ? t("photo.has") : t("photo.attach")}
+                              aria-label={transaction.photo ? t("photo.has") : t("photo.attach")}
+                              data-testid="tx-photo"
+                              onClick={() => setPhotoFor(transaction.id)}
+                            >
+                              <Paperclip
+                                className={
+                                  transaction.photo ? "size-4 text-primary" : "size-4 opacity-40"
+                                }
+                              />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -741,6 +758,19 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                         </p>
                         <button
                           type="button"
+                          aria-label={transaction.photo ? t("photo.has") : t("photo.attach")}
+                          data-testid="tx-photo-mobile"
+                          onClick={() => setPhotoFor(transaction.id)}
+                          className={
+                            transaction.photo
+                              ? "tap-target inline-flex items-center justify-center rounded p-1 text-primary"
+                              : "tap-target inline-flex items-center justify-center rounded p-1 text-muted-foreground/60"
+                          }
+                        >
+                          <Paperclip className="size-4" />
+                        </button>
+                        <button
+                          type="button"
                           aria-label={t("common.delete")}
                           disabled={isMutating}
                           onClick={() => void removeTransaction(transaction)}
@@ -758,6 +788,12 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
           )}
         </CardContent>
       </Card>
+
+      <ReceiptPhotoDialog
+        transactionId={photoFor}
+        onClose={() => setPhotoFor(null)}
+        onChanged={() => void refresh()}
+      />
 
       {/* Single controlled dialog for editing any transaction */}
       <Dialog
