@@ -1899,6 +1899,23 @@ const ru: Messages = {
   "set.beforeClear.text": "Данные очищены {when}. Вернуть всё, как было, можно до {until}.",
   "set.beforeClear.restore": "Вернуть",
   "set.beforeClear.done": "Данные возвращены",
+  "set.localCopies.title": "Копии на этом устройстве",
+  "set.localCopies.main":
+    "Это главное устройство: оно синхронизируется и каждый день само сохраняет у себя копию всех данных. Хранятся {keep} последних. Если синхронизация однажды привезёт что-то не то — верните копию отсюда.",
+  "set.localCopies.other":
+    "Каждый день копии сами делаются на главном устройстве. Здесь — только по кнопке.",
+  "set.localCopies.take": "Сделать копию сейчас",
+  "set.localCopies.taken": "Копия сохранена на этом устройстве",
+  "set.localCopies.none": "Копий пока нет.",
+  "set.localCopies.ops": "{count} операций",
+  "set.localCopies.daily": "ежедневная",
+  "set.localCopies.manual": "по кнопке",
+  "set.localCopies.beforeRestore": "перед возвратом",
+  "set.localCopies.restore": "Вернуть",
+  "set.localCopies.confirm": "Вернуть данные на {when}?",
+  "set.localCopies.confirmHint":
+    "Всё, что сейчас, заменится этой копией — здесь и на других устройствах. Нынешнее перед этим сохранится ещё одной копией, так что передумать можно.",
+  "set.localCopies.restored": "Данные возвращены из копии",
   "set.data.clear": "Очистить все данные",
   "set.data.clearConfirm": "Очистить все данные?",
   "set.data.clearConfirmDesc":
@@ -2218,6 +2235,7 @@ const ru: Messages = {
   // --- Синхронизация с сервером ---
   "sync.status.synced": "Всё на сервере",
   "sync.status.settings": "Настройки синхронизации",
+  "sync.status.now": "Синхронизировать сейчас",
   "sync.status.sending": "Отправляем…",
   "sync.status.offline": "Нет связи — накопленное отправится, когда появится",
   "sync.status.error": "Сервер не принимает. Данные на устройстве целы.",
@@ -4326,6 +4344,22 @@ const en: Messages = {
   "set.beforeClear.text": "Data cleared on {when}. You can bring everything back until {until}.",
   "set.beforeClear.restore": "Restore",
   "set.beforeClear.done": "Data restored",
+  "set.localCopies.title": "Copies on this device",
+  "set.localCopies.main":
+    "This is the main device: it syncs and also keeps a copy of all data here every day. The last {keep} are kept. If sync ever brings something wrong, restore a copy from here.",
+  "set.localCopies.other": "Daily copies are made on the main device. Here — only with the button.",
+  "set.localCopies.take": "Make a copy now",
+  "set.localCopies.taken": "Copy saved on this device",
+  "set.localCopies.none": "No copies yet.",
+  "set.localCopies.ops": "{count} transactions",
+  "set.localCopies.daily": "daily",
+  "set.localCopies.manual": "manual",
+  "set.localCopies.beforeRestore": "before restore",
+  "set.localCopies.restore": "Restore",
+  "set.localCopies.confirm": "Restore data as of {when}?",
+  "set.localCopies.confirmHint":
+    "Everything now will be replaced with this copy — here and on other devices. The current data is saved as another copy first, so you can change your mind.",
+  "set.localCopies.restored": "Data restored from the copy",
   "set.data.clear": "Clear all data",
   "set.data.clearConfirm": "Clear all data?",
   "set.data.clearConfirmDesc":
@@ -4641,6 +4675,7 @@ const en: Messages = {
   // --- Sync with the server ---
   "sync.status.synced": "Everything is on the server",
   "sync.status.settings": "Sync settings",
+  "sync.status.now": "Sync now",
   "sync.status.sending": "Sending…",
   "sync.status.offline": "No connection — queued changes will go out when it returns",
   "sync.status.error": "The server is refusing. Your data on this device is intact.",

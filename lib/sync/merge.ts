@@ -204,6 +204,40 @@ function sumDeltas(collection: string, was: Row, here: Row, there: Row): Row | n
   return sameRow(bare(here), bare(there)) ? result : null;
 }
 
+/**
+ * Слитые строки — В ПОРЯДКЕ ЧУЖОЙ КНИГИ, свои новые — рядом с соседом по своей.
+ *
+ * Порядок строк ничего не значит для денег, но значит для вопроса «есть ли что
+ * отправить обратно»: книги сравниваются целиком, и список из тех же строк в
+ * другом порядке считается другим. Раньше слитое шло в порядке основы, и
+ * операция, добавленная на другом устройстве В НАЧАЛО, у этого оказывалась в
+ * конце — «отличается», отправляем. То устройство сливало обратно в порядке
+ * своей основы — снова «отличается», и так без конца. Вживую это пачки
+ * PUT → 409 в журнале службы от четырёх устройств разом и синхронизация, которая
+ * в какой-то момент сдаётся. Взяв порядок чужой книги, слияние без своих правок
+ * возвращает ровно чужую книгу, и перекидываться становится нечем.
+ */
+function inTheirOrder(
+  merged: Map<string, Row>,
+  mineRows: Map<string, Row>,
+  theirsRows: Map<string, Row>
+): Row[] {
+  const order: string[] = [...theirsRows.keys()].filter((key) => merged.has(key));
+  const placed = new Set(order);
+  let previous: string | null = null;
+  for (const key of mineRows.keys()) {
+    if (merged.has(key) && !placed.has(key)) {
+      const at = previous === null ? 0 : order.indexOf(previous) + 1;
+      order.splice(at, 0, key);
+      placed.add(key);
+    }
+    if (placed.has(key)) previous = key;
+  }
+  // Остальное (строка из основы, уцелевшая при споре) — в конец, как было.
+  for (const key of merged.keys()) if (!placed.has(key)) order.push(key);
+  return order.map((key) => merged.get(key)!);
+}
+
 /** Слияние одного раздела. Дописывает спорные строки в `conflicts`. */
 function mergeCollection(
   collection: string,
@@ -219,7 +253,7 @@ function mergeCollection(
   const mineRows = indexRows(mine[collection], identify);
   const theirsRows = indexRows(theirs[collection], identify);
 
-  const merged: Row[] = [];
+  const merged = new Map<string, Row>();
   const keys = new Set([...baseRows.keys(), ...mineRows.keys(), ...theirsRows.keys()]);
 
   for (const key of keys) {
@@ -233,11 +267,11 @@ function mergeCollection(
 
     // Тронуто с одной стороны — берём тронутое. Спрашивать не о чем.
     if (!changedHere) {
-      if (there.kind === "present") merged.push(there.row);
+      if (there.kind === "present") merged.set(key, there.row);
       continue;
     }
     if (!changedThere) {
-      if (here.kind === "present") merged.push(here.row);
+      if (here.kind === "present") merged.set(key, here.row);
       continue;
     }
 
@@ -246,7 +280,7 @@ function mergeCollection(
 
     // Тронуто с обеих — но одинаково. Это не спор.
     if (rowHere && rowThere && sameRow(rowHere, rowThere)) {
-      merged.push(stampOf(rowHere) >= stampOf(rowThere) ? rowHere : rowThere);
+      merged.set(key, stampOf(rowHere) >= stampOf(rowThere) ? rowHere : rowThere);
       continue;
     }
 
@@ -256,7 +290,7 @@ function mergeCollection(
       const summed = sumDeltas(collection, was, rowHere, rowThere);
 
       if (summed) {
-        merged.push(summed);
+        merged.set(key, summed);
         continue;
       }
     }
@@ -284,10 +318,10 @@ function mergeCollection(
 
     conflicts.push({ collection, key, mine: rowHere, theirs: rowThere, chosen });
     const winner = chosen === "mine" ? rowHere : rowThere;
-    if (winner) merged.push(winner);
+    if (winner) merged.set(key, winner);
   }
 
-  return merged;
+  return inTheirOrder(merged, mineRows, theirsRows);
 }
 
 function mergeNested(base: Book | null, mine: Book, theirs: Book): Book {
