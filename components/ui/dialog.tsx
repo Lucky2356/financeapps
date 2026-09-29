@@ -80,7 +80,7 @@ function CenteringLayer({ children }: { children: React.ReactNode }) {
       className={cn(
         "pointer-events-none fixed inset-0 z-50 flex justify-center p-4",
         keyboard
-          ? "items-start pt-[max(1rem,env(safe-area-inset-top))]"
+          ? "items-start pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]"
           : "items-center pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]"
       )}
     >
@@ -119,7 +119,12 @@ const DialogContent = React.forwardRef<
             // нельзя: cn() — это twMerge, и любой свой max-h-* или overflow-*
             // СТИРАЕТ написанное здесь. Так командная строка осталась без
             // прокрутки и обрезала 75 px наглухо. Стережёт tests/dialog-fits.test.ts.
-            "pointer-events-auto relative grid max-h-[calc(100svh-2rem)] w-full max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-lg bg-card p-6 shadow-soft-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            //
+            // Сам предел — `dialog-max-h` (app/globals.css): экран минус поля
+            // слоя, а поля не меньше системных панелей телефона. С пределом
+            // «экран минус 2rem» окно у верха уходило низом под кнопки
+            // навигации Android, и «Отмену» было не нажать.
+            "dialog-max-h pointer-events-auto relative grid w-full max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-lg bg-card p-6 shadow-soft-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             className
           )}
           {...props}

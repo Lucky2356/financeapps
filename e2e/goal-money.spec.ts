@@ -66,3 +66,16 @@ test("лимит, заданный в одном месяце, не трогае
   // The month strip is on the screen and the limit follows it.
   await expect(page.getByRole("combobox").first()).toBeVisible();
 });
+
+// Под полем лимита — остаток, уже посчитанный, а не «по средним».
+test("под лимитом — сколько осталось, и сразу при вводе", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/budgets");
+  const field = page.locator('input[name="limitAmount"]:visible').first();
+  await expect(field).toBeVisible({ timeout: 20_000 });
+  await field.fill("1000000");
+  const left = page.getByTestId("limit-left").filter({ visible: true }).first();
+  await expect(left).toContainText("осталось");
+  await field.fill("1");
+  await expect(left).toContainText("перерасход");
+});

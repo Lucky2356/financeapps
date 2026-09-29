@@ -384,6 +384,16 @@
 }
 
 @layer utilities {
+  /* Предел высоты окна: экран минус поля слоя, который его центрирует
+     (components/ui/dialog.tsx). Поля — не меньше системных панелей телефона:
+     окно высотой «экран минус 2rem» уходило низом под кнопки навигации
+     Android, и «Отмену» внизу было не нажать. */
+  .dialog-max-h {
+    max-height: calc(
+      100svh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom))
+    );
+  }
+
   /* Safe padding for mobile bottom nav */
   .pb-safe-nav {
     padding-bottom: max(5rem, calc(4rem + env(safe-area-inset-bottom)));
