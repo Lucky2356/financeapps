@@ -21,6 +21,8 @@ export type CategoryOption = Option & {
   icon?: string;
   isEssential?: boolean;
   isSubscription?: boolean;
+  /** Траты категории идут в налоговый вычет. */
+  deduction?: import("@/lib/tax/deductions").DeductionKind;
 };
 
 export type DemoTransaction = TransactionRow & {

@@ -545,6 +545,95 @@ describe("служба", () => {
       assert.equal(his.devices[0].name, "проверка");
     });
 
+    /** Ещё одно устройство того же человека — как при втором входе. */
+    async function secondDevice(login: string, name: string) {
+      const entered = await call("/auth/login", {
+        method: "POST",
+        body: { login, secret: "секрет-входа", device: name }
+      });
+      return entered.body as { token: string; deviceId: string };
+    }
+
+    it("чужое устройство выкидывает только главное; себя — любое", async () => {
+      const first = await signUp("петя");
+      const phone = await secondDevice("петя", "Телефон");
+
+      const list = (await call("/devices", { token: phone.token })).body as {
+        primary: string;
+        devices: Array<{ id: string; created_at: string }>;
+      };
+      // Главное — подключённое первым.
+      assert.equal(list.primary, first.deviceId);
+      assert.ok(list.devices.every((device) => device.created_at));
+
+      const refused = await call(`/devices/${first.deviceId}`, {
+        method: "DELETE",
+        token: phone.token
+      });
+      assert.equal(refused.status, 403);
+      assert.match((refused.body as { error: string }).error, /главного — «проверка»/);
+      // Компьютер по-прежнему на связи.
+      assert.notEqual((await call("/vault/книга", { token: first.token })).status, 401);
+
+      // Себя — можно.
+      assert.equal(
+        (await call(`/devices/${phone.deviceId}`, { method: "DELETE", token: phone.token })).status,
+        204
+      );
+    });
+
+    it("главное выкидывает другое и передаёт главенство", async () => {
+      const first = await signUp("петя");
+      const phone = await secondDevice("петя", "Телефон");
+      const laptop = await secondDevice("петя", "Ноутбук");
+
+      // Назначать может только главное.
+      const early = await call(`/devices/${phone.deviceId}/primary`, {
+        method: "POST",
+        token: phone.token
+      });
+      assert.equal(early.status, 403);
+
+      assert.equal(
+        (await call(`/devices/${phone.deviceId}/primary`, { method: "POST", token: first.token }))
+          .status,
+        204
+      );
+      // Теперь компьютер не главный — выкинуть ноутбук не может, а телефон может.
+      assert.equal(
+        (await call(`/devices/${laptop.deviceId}`, { method: "DELETE", token: first.token }))
+          .status,
+        403
+      );
+      assert.equal(
+        (await call(`/devices/${laptop.deviceId}`, { method: "DELETE", token: phone.token }))
+          .status,
+        204
+      );
+      assert.equal((await call("/vault/книга", { token: laptop.token })).status, 401);
+    });
+
+    it("главное, молчащее больше месяца, главенство теряет — иначе оно заперло бы всех", async () => {
+      const first = await signUp("петя");
+      const phone = await secondDevice("петя", "Телефон");
+      const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+      app.db.prepare("update devices set last_seen_at = ? where id = ?").run(old, first.deviceId);
+
+      const list = (await call("/devices", { token: phone.token })).body as { primary: string };
+      assert.equal(list.primary, phone.deviceId);
+    });
+
+    it("второе устройство с тем же именем получает номер", async () => {
+      const first = await signUp("петя");
+      await secondDevice("петя", "проверка");
+      const names = (
+        (await call("/devices", { token: first.token })).body as {
+          devices: Array<{ name: string }>;
+        }
+      ).devices.map((device) => device.name);
+      assert.deepEqual(names.sort(), ["проверка", "проверка 2"]);
+    });
+
     it("пустое имя — отказ, а не устройство без имени", async () => {
       const { token, deviceId } = await signUp("петя");
       const response = await call(`/devices/${deviceId}`, {
@@ -885,6 +974,32 @@ describe("служба", () => {
       assert.equal(first.status, 200);
       assert.equal(second.status, 507);
       assert.match(String((second.body as { error: string }).error), /разрешено 1/);
+    });
+
+    it("фото чеков в предел книг не входят", async () => {
+      await restart({ limits: { slots: 1, bytes: null } });
+      const { token } = await signUp("петя");
+      const book = await call("/vault/первая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: BOOK }
+      });
+      const photos = await Promise.all(
+        ["receiptPhoto_tx-1", "receiptPhoto_tx-2"].map((slot) =>
+          call(`/vault/${slot}`, { method: "PUT", token, body: { baseVersion: 0, body: BOOK } })
+        )
+      );
+      const second = await call("/vault/вторая", {
+        method: "PUT",
+        token,
+        body: { baseVersion: 0, body: BOOK }
+      });
+      assert.equal(book.status, 200);
+      assert.deepEqual(
+        photos.map((put) => put.status),
+        [200, 200]
+      );
+      assert.equal(second.status, 507);
     });
 
     it("уже заведённая книга правится и тогда, когда предел книг исчерпан", async () => {

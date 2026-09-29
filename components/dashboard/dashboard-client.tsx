@@ -9,6 +9,8 @@ import { DashboardOverview } from "@/components/dashboard-overview";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { DailyAllowanceCard } from "@/components/dashboard/daily-allowance-card";
 import { MonthRecapButton, MonthRecapCard } from "@/components/dashboard/month-recap-card";
+import { WatchdogCard } from "@/components/dashboard/watchdog-card";
+import { WeekRecapCard } from "@/components/dashboard/week-recap-card";
 import { EmergencyFundCard } from "@/components/dashboard/emergency-fund-card";
 import { NetWorthBreakdownCard } from "@/components/dashboard/net-worth-breakdown";
 import { MetricCard } from "@/components/metric-card";
@@ -96,6 +98,7 @@ export function DashboardClient({
   const widgets = useMemo<Record<DashboardWidget, ReactNode>>(
     () => ({
       allowance: <DailyAllowanceCard currency={data.currency} />,
+      watchdog: <WatchdogCard currency={data.currency} />,
       overview: <DashboardOverview data={data} />,
       forecast: <DashboardForecastStrip forecast={forecast} />,
       emergencyFund: <EmergencyFundCard fund={data.emergencyFund} currency={data.currency} />,
@@ -165,6 +168,7 @@ export function DashboardClient({
       {/* Итоги прошлого месяца — в его первые дни, один раз. В любой день —
           кнопкой «Итоги месяца». */}
       <MonthRecapCard currency={data.currency} />
+      <WeekRecapCard currency={data.currency} />
       <div className="flex justify-end">
         <MonthRecapButton currency={data.currency} />
       </div>

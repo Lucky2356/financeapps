@@ -197,6 +197,8 @@ export type TransactionRow = {
    * the capital chart leaves it out of its flow reconstruction.
    */
   liabilityId?: string;
+  /** Есть фото чека: уезжает на другие устройства или лежит только здесь. */
+  photo?: "synced" | "device";
   /**
    * What `amount` is worth in the base currency, when the account keeps another
    * one. Derived on read and never stored: totals use it, while the row itself
@@ -237,6 +239,8 @@ export type AccountRow = {
   interestRate?: number;
   /** How often that interest is added to the balance. */
   interestCompounding?: "MONTHLY" | "QUARTERLY" | "YEARLY";
+  /** Вклад до этой даты (YYYY-MM-DD); нет — счёт без срока. */
+  depositEndsOn?: string;
 };
 
 export type LiabilityKind = "CREDIT_CARD" | "LOAN" | "MORTGAGE" | "INSTALLMENT" | "OTHER";

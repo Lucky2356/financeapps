@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { RISK_PROFILE_LABELS } from "@/lib/constants";
 import { CURRENCY_CODES, DEFAULT_CURRENCY_RATES } from "@/lib/currency";
+import { DEDUCTION_KINDS } from "@/lib/tax/deductions";
 
 // Zod schemas for the desktop LocalState document and its sub-entities,
 // extracted from LocalApiClient to keep the client a thinner router (plan A1).
@@ -27,7 +28,12 @@ export const accountSchema = z.object({
   // Savings terms (v8): annual rate in percent and how often it is capitalised.
   // Optional — an account without a rate simply earns nothing.
   interestRate: z.coerce.number().finite().min(0).max(1000).optional(),
-  interestCompounding: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]).optional()
+  interestCompounding: z.enum(["MONTHLY", "QUARTERLY", "YEARLY"]).optional(),
+  // Вклад до этой даты; нет — накопительный счёт без срока (lib/accounts/deposits).
+  depositEndsOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
 });
 export const liabilitySchema = z.object({
   updatedAt,
@@ -67,7 +73,9 @@ export const categorySchema = z.object({
   // category would lose its icon on the next read without this line.
   icon: z.string().trim().max(64).optional(),
   isEssential: z.boolean().optional(),
-  isSubscription: z.boolean().optional()
+  isSubscription: z.boolean().optional(),
+  // Траты этой категории идут в налоговый вычет (lib/tax/deductions).
+  deduction: z.enum(DEDUCTION_KINDS).optional()
 });
 export const optionSchema = z.object({
   id: z.string().min(1),
@@ -99,7 +107,10 @@ export const transactionRowSchema = z.object({
   // where it was — the capital chart has to know not to count it as spending.
   liabilityId: z.string().optional(),
   // Когда операцию записали — порядок внутри одного дня.
-  createdAt: z.string().optional()
+  createdAt: z.string().optional(),
+  // Где фото чека: уезжает на другие устройства или лежит только здесь.
+  // Само фото — отдельной записью (lib/photos/receipt-photo.ts).
+  photo: z.enum(["synced", "device"]).optional()
 });
 export const budgetRowSchema = z.object({
   updatedAt,
@@ -157,7 +168,9 @@ export const recurringRowSchema = z.object({
     icon: z.string().trim().max(64).optional()
   }),
   // Id of the transaction this template last created — kept in sync on edit/delete
-  lastTransactionId: z.string().optional()
+  lastTransactionId: z.string().optional(),
+  // Пробный период до — сторож лишних трат напоминает за три дня.
+  trialEndsOn: z.string().nullable().optional()
 });
 export const watchlistRowSchema = z.object({
   ticker: z
@@ -357,6 +370,70 @@ export const planNoteSchema = z.object({
   factNote: z.string().trim().max(500).default("")
 });
 
+// Таблица бюджета (lib/sheet): столбцы, ячейки, месяцы-строки и цели.
+const sheetMonth = z.string().regex(/^\d{4}-\d{2}$/);
+export const sheetColumnSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
+  kind: z.enum([
+    "opening",
+    "income",
+    "expense",
+    "toSavings",
+    "fromSavings",
+    "savingsOpening",
+    "savingsIncome"
+  ]),
+  categoryId: z.string().nullable().optional(),
+  order: z.coerce.number().finite(),
+  hidden: z.boolean().optional()
+});
+export const sheetCellSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  month: sheetMonth,
+  columnId: z.string().min(1),
+  input: z.string().max(500)
+});
+export const sheetMonthSchema = z.object({ updatedAt, id: sheetMonth });
+export const sheetTargetSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  label: z.string().trim().min(1).max(80),
+  date: z.string().max(10),
+  amount: z.coerce.number().finite()
+});
+
+// Кэшбэк: условия карты на месяц (lib/cashback). categoryId «*» — на всё прочее.
+export const cashbackRuleSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  accountId: z.string().min(1),
+  month: sheetMonth,
+  categoryId: z.string().min(1),
+  percent: z.coerce.number().finite().min(0).max(100),
+  limit: z.coerce.number().finite().min(0).optional()
+});
+// Поездка (lib/trips): даты, бюджет в своей валюте и метка для операций.
+export const tripSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  budget: z.coerce.number().finite().min(0).default(0),
+  currency: z.enum(CURRENCY_CODES).default("RUB"),
+  tag: z.string().trim().min(1).max(40)
+});
+// Вычеты по году: уплаченный НДФЛ (если человек знает точно) и сколько детей учится.
+export const deductionYearSchema = z.object({
+  updatedAt,
+  id: z.string().regex(/^\d{4}$/),
+  taxPaid: z.coerce.number().finite().min(0).optional(),
+  children: z.coerce.number().int().min(1).max(20).optional()
+});
+
 export const goalMovementSchema = z.object({
   updatedAt,
   id: z.string().min(1),
@@ -456,6 +533,25 @@ export const localStateSchema = z.object({
   // through the operations — needs the movement written down to stay right about
   // the months before it.
   goalMovements: z.array(goalMovementSchema).default([]),
+  sheetColumns: z.array(sheetColumnSchema).default([]),
+  sheetCells: z.array(sheetCellSchema).default([]),
+  sheetMonths: z.array(sheetMonthSchema).default([]),
+  sheetTargets: z.array(sheetTargetSchema).default([]),
+  cashbackRules: z.array(cashbackRuleSchema).default([]),
+  trips: z.array(tripSchema).default([]),
+  deductionYears: z.array(deductionYearSchema).default([]),
+  // Таблица до переноса из Excel — ради «Отменить перенос». Не строки:
+  // одна копия на устройство, в слияние не идёт.
+  sheetBackup: z
+    .object({
+      takenAt: z.string(),
+      columns: z.array(sheetColumnSchema),
+      cells: z.array(sheetCellSchema),
+      months: z.array(sheetMonth),
+      targets: z.array(sheetTargetSchema)
+    })
+    .nullable()
+    .optional(),
   transactions: z.array(transactionRowSchema).default([]),
   budgets: z.array(budgetRowSchema).default([]),
   goals: z.array(goalRowSchema).default([]),
@@ -509,7 +605,10 @@ const SALVAGEABLE = {
   realizedInvestmentEvents: realizedEventSchema,
   expectedDividends: expectedDividendSchema,
   targetAllocations: targetAllocationSchema,
-  marketAlerts: marketAlertSchema
+  marketAlerts: marketAlertSchema,
+  cashbackRules: cashbackRuleSchema,
+  trips: tripSchema,
+  deductionYears: deductionYearSchema
 } as const;
 
 /**

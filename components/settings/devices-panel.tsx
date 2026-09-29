@@ -27,7 +27,7 @@
 // по-прежнему, и это по-прежнему единственный путь, если камера занята,
 // запрещена или её нет вовсе.
 
-import { Laptop, Trash2 } from "lucide-react";
+import { Crown, Laptop, LogOut, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { SERVER_LINK_CHANGED } from "@/components/settings/server-panel";
@@ -35,10 +35,18 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
-import { serverAccount } from "@/lib/vault/runtime";
+import { accountService, serverAccount } from "@/lib/vault/runtime";
 import type { LinkedDevice } from "@/lib/vault/server-account";
 
 /** «ABCDEFGH» → «ABCD-EFGH»: восемь знаков подряд глаз теряет. */
@@ -50,6 +58,16 @@ export function DevicesPanel() {
   const { t, locale } = useI18n();
   const [devices, setDevices] = useState<LinkedDevice[] | null>(null);
   const [current, setCurrent] = useState<string | null>(null);
+  // Главное устройство: только с него выкидывают другие. undefined — служба
+  // старше 2.3.0, главного не знает, и всё можно, как раньше.
+  const [primary, setPrimary] = useState<string | null | undefined>(undefined);
+  // Что подтверждаем: выкинуть устройство или сделать его главным.
+  const [confirm, setConfirm] = useState<{
+    kind: "forget" | "primary";
+    device: LinkedDevice;
+  } | null>(null);
+  const [needsPassword, setNeedsPassword] = useState(false);
+  const [password, setPassword] = useState("");
   const [linked, setLinked] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,7 +84,43 @@ export function DevicesPanel() {
     const list = await serverAccount.devices();
     setDevices(list.devices);
     setCurrent(list.current);
+    setPrimary(list.primary);
   }, []);
+
+  async function ask(kind: "forget" | "primary", device: LinkedDevice) {
+    setPassword("");
+    setNeedsPassword(await accountService.hasPassword().catch(() => false));
+    setConfirm({ kind, device });
+  }
+
+  /** Подтверждено: пароль сверен здесь же, служба его не знает. */
+  function confirmed() {
+    if (!confirm) return;
+    const { kind, device } = confirm;
+    void work(
+      async () => {
+        if (needsPassword && !(await accountService.checkPassword(password))) {
+          throw new Error(t("dev.badPassword"));
+        }
+        if (kind === "primary") {
+          await serverAccount.makePrimary(device.id);
+          setConfirm(null);
+          await refresh();
+          return;
+        }
+        await serverAccount.forgetDevice(device.id);
+        setConfirm(null);
+        if (device.id === current) {
+          // Отключили само себя — связи больше нет, и экран должен это знать.
+          await serverAccount.forgetHere();
+          window.dispatchEvent(new Event(SERVER_LINK_CHANGED));
+          return;
+        }
+        await refresh();
+      },
+      kind === "primary" ? t("dev.primaryDone") : t("dev.forgotten")
+    );
+  }
 
   useEffect(() => {
     let alive = true;
@@ -111,6 +165,11 @@ export function DevicesPanel() {
   if (linked === false) {
     return null;
   }
+
+  // Выкидывать другие — только с главного. Служба старше 2.3.0 главного не
+  // знает (undefined) — тогда как раньше.
+  const mayManage = primary === undefined || primary === null || primary === current;
+  const primaryName = devices?.find((device) => device.id === primary)?.name ?? null;
 
   return (
     <Card id="set-devices" className="scroll-mt-24">
@@ -176,6 +235,12 @@ export function DevicesPanel() {
                             {t("dev.current")}
                           </span>
                         ) : null}
+                        {device.id === primary ? (
+                          <span className="ml-2 inline-flex items-center gap-1 rounded bg-primary/12 px-1.5 py-0.5 text-xs font-normal text-primary">
+                            <Crown className="size-3" />
+                            {t("dev.primary")}
+                          </span>
+                        ) : null}
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {seen(device.last_seen_at)}
@@ -194,21 +259,44 @@ export function DevicesPanel() {
                       >
                         {t("dev.rename")}
                       </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() =>
-                          void work(async () => {
-                            await serverAccount.forgetDevice(device.id);
-                            await refresh();
-                          }, t("dev.forgotten"))
-                        }
-                      >
-                        <Trash2 className="size-4" />
-                        {t("dev.forget")}
-                      </Button>
+                      {device.id !== current &&
+                      mayManage &&
+                      device.id !== primary &&
+                      primary !== undefined ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => void ask("primary", device)}
+                        >
+                          <Crown className="size-4" />
+                          {t("dev.makePrimary")}
+                        </Button>
+                      ) : null}
+                      {device.id === current ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => void ask("forget", device)}
+                        >
+                          <LogOut className="size-4" />
+                          {t("dev.forgetSelf")}
+                        </Button>
+                      ) : mayManage ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => void ask("forget", device)}
+                        >
+                          <Trash2 className="size-4" />
+                          {t("dev.forget")}
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -217,8 +305,71 @@ export function DevicesPanel() {
           </ul>
         )}
 
+        {!mayManage && primaryName ? (
+          <p className="text-sm text-muted-foreground" data-testid="dev-not-primary">
+            {t("dev.onlyPrimary", { name: primaryName })}
+          </p>
+        ) : null}
         <p className="rounded-lg border bg-muted/40 p-3 text-sm">{t("dev.forgetNote")}</p>
       </CardContent>
+
+      <Dialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirm?.kind === "primary"
+                ? t("dev.confirmPrimary", { name: confirm.device.name })
+                : confirm?.device.id === current
+                  ? t("dev.confirmSelf")
+                  : t("dev.confirmForget", { name: confirm?.device.name ?? "" })}
+            </DialogTitle>
+            <DialogDescription>
+              {confirm?.kind === "primary"
+                ? t("dev.confirmPrimaryHint")
+                : confirm?.device.id === current
+                  ? t("dev.confirmSelfHint")
+                  : t("dev.confirmForgetHint")}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              confirmed();
+            }}
+          >
+            {needsPassword ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="dev-password">{t("dev.password")}</Label>
+                <Input
+                  id="dev-password"
+                  type="password"
+                  autoComplete="current-password"
+                  autoFocus
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </div>
+            ) : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setConfirm(null)}>
+                {t("dev.cancel")}
+              </Button>
+              <Button
+                type="submit"
+                variant={confirm?.kind === "primary" ? "default" : "destructive"}
+                disabled={busy || (needsPassword && !password)}
+              >
+                {confirm?.kind === "primary"
+                  ? t("dev.makePrimary")
+                  : confirm?.device.id === current
+                    ? t("dev.forgetSelf")
+                    : t("dev.forget")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

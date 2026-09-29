@@ -724,6 +724,18 @@ function RecurringDialog({
               required
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="rec-trial">{t("rec.dialog.trial")}</Label>
+            <Input
+              id="rec-trial"
+              name="trialEndsOn"
+              type="date"
+              defaultValue={
+                (recurring as { trialEndsOn?: string | null } | null)?.trialEndsOn ?? ""
+              }
+            />
+            <p className="text-xs text-muted-foreground">{t("rec.dialog.trialHint")}</p>
+          </div>
           <label className="flex items-center gap-2 rounded-md border p-3 text-sm sm:col-span-2">
             <input
               name="isActive"

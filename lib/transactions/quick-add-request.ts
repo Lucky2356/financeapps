@@ -32,3 +32,14 @@ export function readShortcutLink(link: string): QuickAddRequest | null {
   if (add) return { type: (add[1] as "EXPENSE" | "INCOME" | undefined) ?? "EXPENSE" };
   return null;
 }
+
+/**
+ * Нажатие на напоминание: financeapps://open?path=/budgets → «/budgets».
+ * Только путь внутри приложения — никаких чужих адресов.
+ */
+export function readOpenLink(link: string): string | null {
+  const match = /^financeapps:\/\/open\?path=([^&#]*)/.exec(link);
+  if (!match) return null;
+  const path = decodeURIComponent(match[1]);
+  return /^\/(?!\/)[\w\-/?=&.%]*$/.test(path) ? path : null;
+}

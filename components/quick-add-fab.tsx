@@ -2,6 +2,7 @@
 
 import { Plus, ScanLine, X } from "lucide-react";
 
+import { FavoriteChips } from "@/components/transactions/favorite-chips";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -17,6 +18,10 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
+import { ReceiptPhotoDialog } from "@/components/transactions/receipt-photo-dialog";
+import { bestCard, rateFor, type CashbackRule } from "@/lib/cashback/cashback";
+import type { CashbackPageData, TripsPageData } from "@/lib/api/local/extras";
+import type { TripView } from "@/lib/trips/trips";
 import { cameraPossible, scanQr, waitForNoModal } from "@/lib/sync/scan-qr";
 import {
   QUICK_ADD_OPEN,
@@ -120,6 +125,13 @@ export function QuickAddFab({
   // Описание, очищенное от суммы, даты, тегов и слова счёта, — то, что уйдёт в
   // журнал. Показывается человеку, потому что расходится с набранным.
   const [cleanedDescription, setCleanedDescription] = useState<string | null>(null);
+  // Сумма пришла с QR чека — после записи предложим сфотографировать сам чек.
+  const [fromReceipt, setFromReceipt] = useState(false);
+  const [photoFor, setPhotoFor] = useState<string | null>(null);
+  // Условия кэшбэка этого месяца и идущая поездка — подсказки под полями.
+  const [cashback, setCashback] = useState<CashbackRule[]>([]);
+  const [trip, setTrip] = useState<TripView | null>(null);
+  const [skipTrip, setSkipTrip] = useState(false);
 
   // The server props are empty on the desktop static build — the real accounts
   // and categories live in the client API (LocalApiClient/IndexedDB).
@@ -140,6 +152,15 @@ export function QuickAddFab({
       .get<TransactionsPageData>("/transactions?limit=100")
       .catch(() => null);
     setLedger(recent);
+    void apiClient
+      .get<CashbackPageData>("/cashback")
+      .then((result) => setCashback(result?.rules ?? []))
+      .catch(() => setCashback([]));
+    void apiClient
+      .get<TripsPageData>("/trips")
+      .then((result) => setTrip(result?.active ?? null))
+      .catch(() => setTrip(null));
+    setSkipTrip(false);
     // Pre-select the last account the operation was added to. On a device that
     // has never added one there is nothing to remember, and the field stayed
     // empty — the form then refused to save with only a toast to explain
@@ -189,6 +210,7 @@ export function QuickAddFab({
     // — сегодняшняя. Записываем их сюда же, иначе разбор счёл бы их чужими и
     // «1200 продукты картой» не переставило бы счёт с подставленного.
     setFilledIn({ amount: "", accountId: preselectedAccount, date: openedOn, tags: "" });
+    setFromReceipt(false);
     setCleanedDescription(null);
     setCategoryId(previous?.category.id ?? "");
     setSplitParts([]);
@@ -223,6 +245,25 @@ export function QuickAddFab({
   );
   const filteredCategories = refs.categories.filter((c) => c.kind === type);
 
+  // Какой картой выгоднее — по условиям кэшбэка месяца операции.
+  const operationMonth = (date || formatInputDate(new Date())).slice(0, 7);
+  const best =
+    type === "EXPENSE" && categoryId ? bestCard(cashback, categoryId, operationMonth) : null;
+  const currentRate =
+    accountId && categoryId
+      ? (rateFor(cashback, accountId, categoryId, operationMonth)?.percent ?? 0)
+      : 0;
+  const bestAccount = best ? activeAccounts.find((a) => a.id === best.accountId) : undefined;
+  const betterCard =
+    best && bestAccount && best.accountId !== accountId && best.percent > currentRate
+      ? { id: bestAccount.id, name: bestAccount.name, percent: best.percent }
+      : null;
+  const operationDay = date || formatInputDate(new Date());
+  const tripHere =
+    type === "EXPENSE" && trip && trip.from <= operationDay && operationDay <= trip.to
+      ? trip
+      : null;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -239,7 +280,11 @@ export function QuickAddFab({
     if (splitParts.length > 0) return submitSplit(payload);
 
     try {
-      const result = await apiClient.post<{ budgetWarning?: BudgetWarning }>("/transactions", {
+      const result = await apiClient.post<{
+        id?: string;
+        budgetWarning?: BudgetWarning;
+        unusual?: { usual: number };
+      }>("/transactions", {
         ...payload,
         type,
         accountId,
@@ -250,7 +295,16 @@ export function QuickAddFab({
       } catch {
         /* ignore */
       }
-      toast.success(t("tx.toast.added"));
+      const savedId = result?.id;
+      if (fromReceipt && savedId) {
+        toast.success(t("tx.toast.added"), {
+          description: t("photo.offer"),
+          duration: 10_000,
+          action: { label: t("photo.offerAction"), onClick: () => setPhotoFor(savedId) }
+        });
+      } else {
+        toast.success(t("tx.toast.added"));
+      }
       if (result?.budgetWarning) {
         toast.warning(
           t("tx.toast.budgetWarning", {
@@ -258,6 +312,16 @@ export function QuickAddFab({
             spent: formatCurrency(result.budgetWarning.spent),
             limit: formatCurrency(result.budgetWarning.limit)
           })
+        );
+      }
+      // Сторож: втрое больше обычного — не лишний ли ноль?
+      if (result?.unusual) {
+        toast.warning(
+          t("watch.unusualNow", {
+            amount: formatCurrency(toNumber(amount)),
+            usual: formatCurrency(result.unusual.usual)
+          }),
+          { duration: 10_000 }
         );
       }
       setOpen(false);
@@ -359,6 +423,7 @@ export function QuickAddFab({
     setAmount(written);
     setDate(receipt.date);
     setFilledIn((was) => ({ ...was, amount: written, date: receipt.date }));
+    setFromReceipt(true);
     toast.success(
       t("qa.receipt.done", {
         amount: formatCurrency(receipt.amount, "RUB"),
@@ -501,6 +566,16 @@ export function QuickAddFab({
               <ScanLine className="size-4" />
               {t("qa.receipt.scan")}
             </Button>
+          ) : null}
+          {type !== "TRANSFER" ? (
+            <FavoriteChips
+              key={type}
+              type={type}
+              onRecorded={() => {
+                setOpen(false);
+                router.refresh();
+              }}
+            />
           ) : null}
           <div className="grid gap-4">
             <div className="space-y-2">
@@ -675,7 +750,44 @@ export function QuickAddFab({
                     ))}
                   </SelectContent>
                 </Select>
+                {betterCard ? (
+                  <p
+                    className="flex flex-wrap items-center gap-x-2 text-xs text-success"
+                    data-testid="cashback-hint"
+                  >
+                    {t("cashback.better", {
+                      card: betterCard.name,
+                      percent: betterCard.percent
+                    })}
+                    <button
+                      type="button"
+                      className="font-medium underline"
+                      onClick={() => setAccountId(betterCard.id)}
+                    >
+                      {t("cashback.switch")}
+                    </button>
+                  </p>
+                ) : null}
               </div>
+
+              {tripHere ? (
+                <label
+                  className="flex items-center justify-between gap-2 rounded-md bg-primary/10 px-3 py-2 text-xs"
+                  data-testid="trip-hint"
+                >
+                  <span>{t("trip.on", { name: tripHere.name, tag: tripHere.tag })}</span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[hsl(var(--primary))]"
+                      checked={skipTrip}
+                      onChange={(event) => setSkipTrip(event.target.checked)}
+                    />
+                    {t("trip.skip")}
+                  </span>
+                  {skipTrip ? <input type="hidden" name="noTrip" value="1" /> : null}
+                </label>
+              ) : null}
 
               {type === "TRANSFER" ? (
                 <div className="space-y-2">
@@ -771,6 +883,7 @@ export function QuickAddFab({
           setAccountId(id);
         }}
       />
+      <ReceiptPhotoDialog transactionId={photoFor} onClose={() => setPhotoFor(null)} />
       <NewCategoryDialog
         open={showNewCategory}
         onOpenChange={setShowNewCategory}

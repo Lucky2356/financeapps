@@ -13,6 +13,11 @@
          разрешения Android не откроет экран установки скачанного APK. Первый
          раз система сама спросит, можно ли этому приложению ставить файлы. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Напоминания (Reminders.kt): показать уведомление — на Android 13+ это
+         разрешение спрашивается у человека; вернуть будильники после
+         перезагрузки телефона — иначе они пропадают до следующего запуска. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <!-- AndroidTV support -->
@@ -63,6 +68,29 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Напоминания: будильник будит его, он показывает уведомление. -->
+        <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Виджет «Можно тратить сегодня». -->
+        <receiver
+            android:name=".SpendWidget"
+            android:label="@string/widget_title"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_spend_info" />
+        </receiver>
 
         <provider
           android:name="androidx.core.content.FileProvider"

@@ -7,4 +7,7 @@
     <string name="shortcut_income_long">Записать доход</string>
     <string name="shortcut_receipt">Чек</string>
     <string name="shortcut_receipt_long">Сканировать чек</string>
+    <string name="widget_title">Можно тратить сегодня</string>
+    <string name="widget_description">Сколько можно тратить сегодня и кнопка «+»</string>
+    <string name="widget_open_app">Откройте приложение, чтобы посчитать</string>
 </resources>

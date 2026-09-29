@@ -284,12 +284,9 @@ export function openSession(
   let deviceId: string | null = null;
   if (device) {
     deviceId = id("device");
-    db.prepare("insert into devices (id, person_id, name, last_seen_at) values (?,?,?,?)").run(
-      deviceId,
-      personId,
-      device.slice(0, 80),
-      now
-    );
+    db.prepare(
+      "insert into devices (id, person_id, name, last_seen_at, created_at) values (?,?,?,?,?)"
+    ).run(deviceId, personId, uniqueName(db, personId, device.slice(0, 80)), now, now);
   }
 
   db.prepare(
@@ -356,10 +353,103 @@ export function renameDevice(
   if (changed.changes === 0) throw new AuthError(404, "Такого устройства у вас нет.");
 }
 
-/** Выкинуть устройство — вместе со всеми его билетами. */
-export function forgetDevice(db: DatabaseSync, personId: string, deviceId: string): void {
-  db.prepare("delete from sessions where person_id = ? and device_id = ?").run(personId, deviceId);
-  db.prepare("delete from devices where person_id = ? and id = ?").run(personId, deviceId);
+/**
+ * Имя без двойников: второй «Компьютер (Windows)» становится
+ * «Компьютер (Windows) 2». Иначе в списке два одинаковых имени, и непонятно,
+ * какое из них выкидывать.
+ */
+function uniqueName(db: DatabaseSync, personId: string, name: string): string {
+  const taken = new Set(
+    db
+      .prepare("select name from devices where person_id = ?")
+      .all<{ name: string }>(personId)
+      .map((row) => row.name)
+  );
+  if (!taken.has(name)) return name;
+  for (let n = 2; ; n += 1) {
+    const candidate = `${name} ${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/** Сколько главное устройство может молчать, прежде чем главным станет другое. */
+export const PRIMARY_SILENCE_DAYS = 30;
+
+/**
+ * Главное устройство — только с него можно выкидывать другие.
+ *
+ * Иначе любой подключённый телефон — в том числе потерянный, с сохранённым
+ * входом, — выкидывает хозяйский компьютер, и хозяин остаётся без связи.
+ *
+ * Главным назначено устройство — оно и главное, пока выходит на связь. Молчит
+ * дольше месяца (потеряно, сломано) — главным становится самое давнее из
+ * живых: иначе потерянное главное заперло бы все остальные навсегда.
+ */
+export function primaryDevice(db: DatabaseSync, personId: string, now: string): string | null {
+  const chosen = db
+    .prepare("select primary_device_id from people where id = ?")
+    .get<{ primary_device_id: string | null }>(personId)?.primary_device_id;
+  const devices = db
+    .prepare(
+      "select id, last_seen_at from devices where person_id = ? order by coalesce(created_at, last_seen_at), id"
+    )
+    .all<{ id: string; last_seen_at: string }>(personId);
+  const alive = new Date(Date.parse(now) - PRIMARY_SILENCE_DAYS * DAY_MS).toISOString();
+  const living = devices.filter((device) => device.last_seen_at >= alive);
+  if (chosen && living.some((device) => device.id === chosen)) return chosen;
+  return (living[0] ?? devices[0])?.id ?? null;
+}
+
+/**
+ * Выкинуть устройство — вместе со всеми его билетами.
+ *
+ * Себя — можно всегда. Другое — только с главного устройства.
+ */
+export function forgetDevice(
+  db: DatabaseSync,
+  who: { personId: string; deviceId: string | null },
+  deviceId: string,
+  now: string
+): void {
+  if (deviceId !== who.deviceId) {
+    const primary = primaryDevice(db, who.personId, now);
+    if (!primary || primary !== who.deviceId) {
+      const name = primary
+        ? db.prepare("select name from devices where id = ?").get<{ name: string }>(primary)?.name
+        : null;
+      throw new AuthError(
+        403,
+        name
+          ? `Выкидывать другие устройства можно только с главного — «${name}».`
+          : "Выкидывать другие устройства можно только с главного."
+      );
+    }
+  }
+  db.prepare("delete from sessions where person_id = ? and device_id = ?").run(
+    who.personId,
+    deviceId
+  );
+  db.prepare("delete from devices where person_id = ? and id = ?").run(who.personId, deviceId);
+  db.prepare(
+    "update people set primary_device_id = null where id = ? and primary_device_id = ?"
+  ).run(who.personId, deviceId);
+}
+
+/** Сделать главным другое устройство. Может только нынешнее главное. */
+export function makePrimary(
+  db: DatabaseSync,
+  who: { personId: string; deviceId: string | null },
+  deviceId: string,
+  now: string
+): void {
+  if (primaryDevice(db, who.personId, now) !== who.deviceId) {
+    throw new AuthError(403, "Главным назначает только нынешнее главное устройство.");
+  }
+  const own = db
+    .prepare("select id from devices where id = ? and person_id = ?")
+    .get<{ id: string }>(deviceId, who.personId);
+  if (!own) throw new AuthError(404, "Такого устройства у вас нет.");
+  db.prepare("update people set primary_device_id = ? where id = ?").run(deviceId, who.personId);
 }
 
 export function issueInvitation(db: DatabaseSync, now: string): string {

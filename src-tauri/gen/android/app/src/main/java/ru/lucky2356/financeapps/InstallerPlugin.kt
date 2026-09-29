@@ -15,8 +15,11 @@ package ru.lucky2356.financeapps
 // Скачиваются только файлы выпусков этого проекта: адрес сверяется с началом
 // ссылки, и чужой адрес отвергается до всякого соединения.
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
@@ -24,6 +27,8 @@ import android.util.Base64
 import android.webkit.WebView
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
@@ -46,6 +51,18 @@ import javax.crypto.spec.GCMParameterSpec
 @InvokeArg
 class SlotArgs {
   var slot: String = "main"
+}
+
+@InvokeArg
+class ScheduleArgs {
+  /** Массив {id, at, title, body, link} — строкой: так его разбирает org.json. */
+  var items: String = "[]"
+}
+
+@InvokeArg
+class WidgetArgs {
+  var amount: String = "—"
+  var note: String = ""
 }
 
 @InvokeArg
@@ -79,7 +96,13 @@ private const val RELEASES = "https://github.com/Lucky2356/financeapps/releases/
  * Ссылки, которыми открывают приложение: связка из QR-кода (её открывает
  * обычная камера) и ярлыки на значке — «Расход», «Доход», «Сканировать чек».
  */
-private val LINKS = listOf("financeapps://pair", "financeapps://add", "financeapps://receipt")
+private val LINKS = listOf(
+  "financeapps://pair",
+  "financeapps://add",
+  "financeapps://receipt",
+  // Нажатие на напоминание: открыть нужный экран (Reminders.kt).
+  "financeapps://open"
+)
 
 /** Ключ в хранилище Android, которым запечатан ключ данных под отпечаток. */
 private fun biometricAlias(slot: String) =
@@ -117,6 +140,55 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
     // Один раз: иначе каждое возвращение на экран подключало бы заново.
     pendingLink = null
     invoke.resolve(answer)
+  }
+
+  // ——— напоминания и виджет ————————————————————————————————————————————————
+  //
+  // Расписание и цифру для виджета готовит страница; здесь — только отдать их
+  // Android (Reminders.kt, SpendWidget.kt).
+
+  @Command
+  fun notifyPermission(invoke: Invoke) {
+    val answer = JSObject()
+    val enabled = NotificationManagerCompat.from(activity).areNotificationsEnabled()
+    if (!enabled && Build.VERSION.SDK_INT >= 33 &&
+      ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) !=
+        PackageManager.PERMISSION_GRANTED
+    ) {
+      // Системный вопрос «Разрешить уведомления?». Ответ придёт позже —
+      // страница спросит ещё раз при следующем запуске.
+      ActivityCompat.requestPermissions(
+        activity,
+        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+        7301
+      )
+    }
+    answer.put("granted", enabled)
+    invoke.resolve(answer)
+  }
+
+  @Command
+  fun notifySchedule(invoke: Invoke) {
+    val args = invoke.parseArgs(ScheduleArgs::class.java)
+    try {
+      Reminders.schedule(activity, args.items)
+      invoke.resolve()
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Не получилось поставить напоминания.")
+    }
+  }
+
+  @Command
+  fun notifyCancelAll(invoke: Invoke) {
+    Reminders.cancelAll(activity)
+    invoke.resolve()
+  }
+
+  @Command
+  fun widgetUpdate(invoke: Invoke) {
+    val args = invoke.parseArgs(WidgetArgs::class.java)
+    SpendWidget.store(activity, args.amount, args.note)
+    invoke.resolve()
   }
 
   // ——— вход по отпечатку —————————————————————————————————————————————————

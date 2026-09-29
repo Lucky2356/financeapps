@@ -32,6 +32,11 @@ import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AutoBackupPanel, CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
 import { PeoplePanel } from "@/components/settings/people-panel";
+import {
+  EVENING_REMINDER_KEY,
+  eveningReminderOn,
+  refreshPhoneReminders
+} from "@/components/phone-reminders";
 import { SyncPanel } from "@/components/sync/sync-panel";
 import { VaultPanel } from "@/components/settings/vault-panel";
 import { ImportExportPanel } from "@/components/import/import-export-panel";
@@ -195,6 +200,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   const [textSize, setTextSizeState] = useState<TextSize>(readTextSize);
   const [startScreen, setStartScreenState] = useState<StartScreen>(readStartScreen);
   const [defaultAccount, setDefaultAccount] = useState(() => readMine(DEFAULT_ACCOUNT_KEY) ?? "");
+  // Вечернее напоминание — только на телефоне и только на этом телефоне.
+  const [onPhone] = useState(isAndroidShell);
+  const [evening, setEvening] = useState(eveningReminderOn);
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
   useEffect(() => {
     let alive = true;
@@ -567,8 +575,22 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               description={t("set.reminders.desc")}
               help={t("set.help.reminders")}
               checked={settings.paymentReminders}
-              onChange={(v) => void persist({ paymentReminders: v })}
+              onChange={(v) =>
+                void persist({ paymentReminders: v }).then(() => refreshPhoneReminders())
+              }
             />
+            {onPhone ? (
+              <ToggleRow
+                title={t("set.evening.title")}
+                description={t("set.evening.desc")}
+                checked={evening}
+                onChange={(v) => {
+                  writeMine(EVENING_REMINDER_KEY, v ? "1" : "0");
+                  setEvening(v);
+                  void refreshPhoneReminders();
+                }}
+              />
+            ) : null}
           </Group>
           <Group title={t("set.group.goals")}>
             <SelectField

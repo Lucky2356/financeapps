@@ -20,6 +20,25 @@ import type {
   TransactionsPageData
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
+import {
+  importSheet,
+  readSheet,
+  writeSheet,
+  type SheetImport,
+  type SheetState
+} from "@/lib/api/local/sheet";
+import {
+  deductionKindOf,
+  readCashback,
+  readDeductions,
+  readTrips,
+  tripTagFor,
+  writeCashback,
+  writeDeductionYear,
+  writeTrips,
+  type ExtrasState
+} from "@/lib/api/local/extras";
+import { depositsEndingSoon } from "@/lib/accounts/deposits";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
 import {
   STAMPED,
@@ -35,6 +54,15 @@ import {
   RESCUE_SUFFIX
 } from "@/lib/storage/SyncingStorageAdapter";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import {
+  isPhotoData,
+  orphanedPhotos,
+  PHOTO_MAX_CHARS,
+  PHOTO_PREFIX,
+  photoKey,
+  type PhotoPlace,
+  type StoredPhoto
+} from "@/lib/photos/receipt-photo";
 import { futureDated, storedTransactionDate, todayDay } from "@/lib/transactions/date";
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
@@ -100,6 +128,8 @@ import { recordPortfolioSnapshot, type PortfolioSnapshot } from "@/lib/investmen
 import { sellGain } from "@/services/InvestmentTaxReportService";
 import { computeDailyAllowance, type Allowance } from "@/lib/analytics/daily-allowance";
 import { buildMonthRecap, previousMonth } from "@/lib/analytics/month-recap";
+import { findLeaks, unusualFor, type WatchRow } from "@/lib/analytics/watchdog";
+import { buildWeekRecap } from "@/lib/analytics/week-recap";
 import {
   SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
@@ -160,74 +190,77 @@ function profileStateKey(profileId: string): string {
 const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
-type LocalState = {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
-  /** Следы удалённых строк — см. lib/sync/row-stamps. */
-  deletions?: Tombstone[];
-  currency: CurrencyCode;
-  demoMode: boolean;
-  emergencyFundMonthsTarget: number;
-  riskProfileCode: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE";
-  theme: "light" | "dark" | "system";
-  density: "comfortable" | "compact";
-  defaultTransactionType: "INCOME" | "EXPENSE";
-  lastBackupAt: string | null;
-  accounts: Array<Stamped<AccountRow & { isArchived?: boolean }>>;
-  liabilities: Array<Stamped<Omit<LiabilityRow, "progress">>>;
-  rules: Array<Stamped<CategorizationRule>>;
-  autoMaterializeRecurring: boolean;
-  paymentReminders: boolean;
-  aiEnabled: boolean;
-  aiProvider: string;
-  aiEffort: string;
-  aiApiKey: string;
-  aiModel: string;
-  currencyRates: CurrencyRates;
-  currencyRatesUpdatedAt: string | null;
-  netWorthSnapshots: NetWorthSnapshot[];
-  /** Раз в день: стоимость портфеля и вложенное — см. lib/investments/snapshots.ts. */
-  portfolioSnapshots?: PortfolioSnapshot[];
-  realizedInvestmentEvents: Array<Stamped<RealizedInvestmentEvent>>;
-  expectedDividends: Array<Stamped<ExpectedDividend>>;
-  targetAllocations: Array<Stamped<TargetAllocation>>;
-  marketAlerts: Array<Stamped<MarketAlert>>;
-  categories: Array<Stamped<CategoryOption>>;
-  plans: Array<Stamped<{ month: string; categoryId: string; amount: number }>>;
-  planNotes: Array<Stamped<{ month: string; note: string; factNote: string }>>;
-  /** Months pinned into the plan/fact grid by hand (see savePlan/addMonth). */
-  planMonths?: string[];
-  /** Top-ups of saving goals — a balance change with no operation behind it. */
-  goalMovements?: Array<
-    Stamped<{
-      id: string;
-      goalId: string;
-      accountId: string;
-      amount: number;
-      date: string;
-    }>
-  >;
-  transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
-  budgets: Array<Stamped<BudgetsPageData["budgets"][number]>>;
-  goals: Array<Stamped<GoalsPageData["goals"][number]>>;
-  recurringTransactions: Array<
-    Stamped<RecurringTransactionsPageData["recurringTransactions"][number]> & {
-      /**
-       * Legacy: up to 1.4.0 a template posted its first operation immediately and
-       * kept the link here. Nothing writes or reads it any more — kept so states
-       * saved by older versions still validate.
-       */
-      lastTransactionId?: string;
-    }
-  >;
-  investments: InvestmentData;
-  importBatches?: Array<
-    Stamped<{
-      id: string;
-      importedAt: string;
-      transactionIds: string[];
-    }>
-  >;
-};
+type LocalState = SheetState &
+  ExtrasState & {
+    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+    /** Следы удалённых строк — см. lib/sync/row-stamps. */
+    deletions?: Tombstone[];
+    currency: CurrencyCode;
+    demoMode: boolean;
+    emergencyFundMonthsTarget: number;
+    riskProfileCode: "CONSERVATIVE" | "MODERATE" | "AGGRESSIVE";
+    theme: "light" | "dark" | "system";
+    density: "comfortable" | "compact";
+    defaultTransactionType: "INCOME" | "EXPENSE";
+    lastBackupAt: string | null;
+    accounts: Array<Stamped<AccountRow & { isArchived?: boolean }>>;
+    liabilities: Array<Stamped<Omit<LiabilityRow, "progress">>>;
+    rules: Array<Stamped<CategorizationRule>>;
+    autoMaterializeRecurring: boolean;
+    paymentReminders: boolean;
+    aiEnabled: boolean;
+    aiProvider: string;
+    aiEffort: string;
+    aiApiKey: string;
+    aiModel: string;
+    currencyRates: CurrencyRates;
+    currencyRatesUpdatedAt: string | null;
+    netWorthSnapshots: NetWorthSnapshot[];
+    /** Раз в день: стоимость портфеля и вложенное — см. lib/investments/snapshots.ts. */
+    portfolioSnapshots?: PortfolioSnapshot[];
+    realizedInvestmentEvents: Array<Stamped<RealizedInvestmentEvent>>;
+    expectedDividends: Array<Stamped<ExpectedDividend>>;
+    targetAllocations: Array<Stamped<TargetAllocation>>;
+    marketAlerts: Array<Stamped<MarketAlert>>;
+    categories: Array<Stamped<CategoryOption>>;
+    plans: Array<Stamped<{ month: string; categoryId: string; amount: number }>>;
+    planNotes: Array<Stamped<{ month: string; note: string; factNote: string }>>;
+    /** Months pinned into the plan/fact grid by hand (see savePlan/addMonth). */
+    planMonths?: string[];
+    /** Top-ups of saving goals — a balance change with no operation behind it. */
+    goalMovements?: Array<
+      Stamped<{
+        id: string;
+        goalId: string;
+        accountId: string;
+        amount: number;
+        date: string;
+      }>
+    >;
+    transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
+    budgets: Array<Stamped<BudgetsPageData["budgets"][number]>>;
+    goals: Array<Stamped<GoalsPageData["goals"][number]>>;
+    recurringTransactions: Array<
+      Stamped<RecurringTransactionsPageData["recurringTransactions"][number]> & {
+        /**
+         * Legacy: up to 1.4.0 a template posted its first operation immediately and
+         * kept the link here. Nothing writes or reads it any more — kept so states
+         * saved by older versions still validate.
+         */
+        lastTransactionId?: string;
+        /** Пробный период до (YYYY-MM-DD) — сторож напомнит за три дня. */
+        trialEndsOn?: string | null;
+      }
+    >;
+    investments: InvestmentData;
+    importBatches?: Array<
+      Stamped<{
+        id: string;
+        importedAt: string;
+        transactionIds: string[];
+      }>
+    >;
+  };
 
 const defaultCategories: CategoryOption[] = [
   { id: "cat-salary", label: "Зарплата", kind: "INCOME", color: "#7ed6b7", icon: "Banknote" },
@@ -464,7 +497,10 @@ function createInitialState(): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: []
+    importBatches: [],
+    cashbackRules: [],
+    trips: [],
+    deductionYears: []
   };
 }
 
@@ -507,7 +543,10 @@ function createBlankState(categories: CategoryOption[]): LocalState {
     goals: [],
     recurringTransactions: [],
     investments: emptyInvestmentData(),
-    importBatches: []
+    importBatches: [],
+    cashbackRules: [],
+    trips: [],
+    deductionYears: []
   };
 }
 
@@ -787,6 +826,119 @@ export class LocalApiClient implements ApiClient {
         searchParams.get("transfers") === "1"
       ) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
+    if (pathname === "/sheet") return readSheet(state) as T;
+    if (pathname === "/watchdog") {
+      const counted = this.countingState(this.inBase(state), false);
+      return {
+        findings: findLeaks({
+          rows: this.watchRows(counted),
+          trials: state.recurringTransactions
+            .filter((item) => item.isActive && item.trialEndsOn)
+            .map((item) => ({
+              id: item.id,
+              name: item.description || item.category.label,
+              trialEndsOn: String(item.trialEndsOn),
+              amount: item.amount
+            })),
+          today: isoDay(new Date())
+        })
+      } as T;
+    }
+    if (pathname === "/week-recap") {
+      const counted = this.countingState(this.inBase(state), false);
+      return buildWeekRecap({
+        today: new Date(),
+        perDay: this.allowance(counted).perDay,
+        rows: counted.transactions.map((row) => ({
+          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label
+        }))
+      }) as T;
+    }
+    if (pathname === "/photos")
+      return (await this.readPhoto(state, searchParams.get("id") ?? "")) as T;
+    if (pathname === "/cashback") {
+      const month = /^\d{4}-\d{2}$/.test(searchParams.get("month") ?? "")
+        ? String(searchParams.get("month"))
+        : isoDay(new Date()).slice(0, 7);
+      return readCashback(
+        state,
+        month,
+        this.countingState(state, false)
+          .transactions.filter((row) => row.type === "EXPENSE")
+          .map((row) => ({
+            id: row.id,
+            date: row.date,
+            amount: row.amount,
+            accountId: row.account.id,
+            categoryId: row.category.id,
+            category: row.category.label
+          }))
+      ) as T;
+    }
+    if (pathname === "/trips") {
+      const based = this.countingState(this.inBase(state), false);
+      const rates = this.rates(state);
+      return readTrips(
+        state,
+        (tripCurrency) =>
+          based.transactions
+            .filter((row) => row.type === "EXPENSE" && row.tags?.length)
+            .map((row) => ({
+              date: row.date,
+              amount: convert(row.amount, state.currency, tripCurrency, rates),
+              categoryId: row.category.id,
+              category: row.category.label,
+              color: row.category.color,
+              tags: row.tags
+            })),
+        isoDay(new Date())
+      ) as T;
+    }
+    if (pathname === "/deductions") {
+      const year = Number(searchParams.get("year")) || new Date().getFullYear();
+      const based = this.countingState(this.inBase(state), false);
+      const kinds = new Map(
+        state.categories.flatMap((c) => (c.deduction ? [[c.id, c.deduction] as const] : []))
+      );
+      const salaryWords = /зарплат|зп\b|аванс|преми|оклад|salary|wage/i;
+      return readDeductions(state, {
+        year,
+        spends: based.transactions.flatMap((row) => {
+          const kind = row.type === "EXPENSE" ? kinds.get(row.category.id) : undefined;
+          return kind
+            ? [
+                {
+                  id: row.id,
+                  date: row.date,
+                  amount: row.amount,
+                  kind,
+                  description: row.description,
+                  category: row.category.label
+                }
+              ]
+            : [];
+        }),
+        netSalary: based.transactions
+          .filter(
+            (row) =>
+              row.type === "INCOME" &&
+              row.date.startsWith(String(year)) &&
+              salaryWords.test(row.category.label)
+          )
+          .reduce((sum, row) => sum + row.amount, 0),
+        marked: [...kinds.entries()].map(([categoryId, kind]) => ({ categoryId, kind }))
+      }) as T;
+    }
+    if (pathname === "/sheet/facts")
+      return this.sheetFacts(
+        this.countingState(this.inBase(state), false),
+        searchParams.get("from") ?? "",
+        searchParams.get("to") ?? ""
+      ) as T;
 
     throw new Error(`Local API route is not implemented: ${pathname}`);
   }
@@ -821,6 +973,15 @@ export class LocalApiClient implements ApiClient {
       }
     } else if (pathname === "/transactions" && itemId) {
       this.deleteTransaction(state, itemId);
+    } else if (pathname === "/photos" && itemId) {
+      const row = state.transactions.find((item) => item.id === itemId);
+      if (row?.photo) await this.dropPhoto(itemId, row.photo);
+      state.transactions = state.transactions.map((item) => {
+        if (item.id !== itemId) return item;
+        const { photo: _dropped, ...rest } = item;
+        void _dropped;
+        return rest;
+      });
     } else if (pathname === "/goals" && itemId) {
       // Deleting a goal that still holds money used to make that money vanish:
       // capital fell by the amount, no account got it back, and the record of
@@ -927,7 +1088,19 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/transactions") {
       const tx = this.upsertTransaction(state, body, method);
       const budgetWarning = this.budgetWarningFor(state, tx);
-      return this.saveAndReturn<TResponse>(state, { ...tx, budgetWarning });
+      // Сторож: трата втрое больше обычной для категории — «это верно?».
+      const usual =
+        tx.type === "EXPENSE" && method === "POST"
+          ? unusualFor(
+              { amount: tx.amount, categoryId: tx.category.id, date: tx.date },
+              this.watchRows(state).filter((row) => row.id !== tx.id)
+            )
+          : null;
+      return this.saveAndReturn<TResponse>(state, {
+        ...tx,
+        budgetWarning,
+        ...(usual !== null ? { unusual: { usual } } : {})
+      });
     }
     if (pathname === "/transactions/transfer")
       return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
@@ -983,6 +1156,44 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertCategory(state, body, method));
     if (pathname === "/plan")
       return this.saveAndReturn<TResponse>(state, this.savePlan(state, body));
+    if (pathname === "/photos") return this.attachPhoto<TResponse>(state, body);
+    if (pathname === "/cashback")
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeCashback(state, (body ?? {}) as Record<string, unknown>, () => id("cb"), {
+          account: (accountId) =>
+            state.accounts.some((item) => item.id === accountId && !item.isArchived),
+          category: (categoryId) => state.categories.some((item) => item.id === categoryId)
+        })
+      );
+    if (pathname === "/trips")
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeTrips(state, (body ?? {}) as Record<string, unknown>, () => id("trip"))
+      );
+    if (pathname === "/deductions") {
+      const input = (body ?? {}) as Record<string, unknown>;
+      if (input.action === "mark") {
+        const kind = deductionKindOf(input.kind);
+        state.categories = state.categories.map((category) => {
+          if (category.id !== input.categoryId) return category;
+          const { deduction: _was, ...rest } = category;
+          void _was;
+          return kind ? { ...rest, deduction: kind } : rest;
+        });
+        return this.saveAndReturn<TResponse>(state, { categoryId: input.categoryId, kind });
+      }
+      return this.saveAndReturn<TResponse>(state, writeDeductionYear(state, input));
+    }
+    if (pathname === "/sheet") {
+      const input = (body ?? {}) as Record<string, unknown>;
+      if (input.action === "import")
+        return this.saveAndReturn<TResponse>(state, this.importSheet(state, input.payload));
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeSheet(state, input, () => id("col"))
+      );
+    }
     if (pathname === "/profiles/create") {
       const input = toFormObject(body);
       const profile = await this.createProfile(input.name ?? "Профиль", input.color ?? "#0d9488");
@@ -1197,7 +1408,13 @@ export class LocalApiClient implements ApiClient {
         const compounding: AccountRow["interestCompounding"] =
           period === "QUARTERLY" || period === "YEARLY" ? period : "MONTHLY";
         return { interestRate: rate, interestCompounding: compounding };
-      })()
+      })(),
+      // Срок вклада — только у сберегательного счёта; пусто — накопительный.
+      depositEndsOn:
+        (input.type || "DEBIT_CARD") === "SAVINGS" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(String(input.depositEndsOn ?? ""))
+          ? String(input.depositEndsOn)
+          : undefined
     };
 
     state.accounts =
@@ -1246,6 +1463,12 @@ export class LocalApiClient implements ApiClient {
       .map((value) => value.trim())
       .filter(Boolean)
       .slice(0, 12);
+    // Идёт поездка — новая трата получает её метку сама (lib/trips). Плановые
+    // платежи (аренда, подписки) — не поездка, и «не отмечать» тоже уважается.
+    if (method === "POST" && !recurringId && input.noTrip !== "1" && type === "EXPENSE") {
+      const tripTag = tripTagFor(state, storedTransactionDate(input.date).slice(0, 10));
+      if (tripTag && !tags.includes(tripTag)) tags.push(tripTag);
+    }
     const transaction: TransactionRow & { recurringId?: string } = {
       id: method === "PUT" && input.id ? input.id : id("tx"),
       amount,
@@ -1270,6 +1493,8 @@ export class LocalApiClient implements ApiClient {
         ? { splitGroupId: String(input.splitGroupId || previous?.splitGroupId) }
         : {}),
       ...(input.transferId ? { transferId: String(input.transferId) } : {}),
+      // Фото чека живёт отдельно (lib/photos) — правка операции его не теряет.
+      ...(previous?.photo ? { photo: previous.photo } : {}),
       // Когда операцию записали. Операций одного дня бывает много, и порядок
       // между ними держался только на месте строки в массиве — а синхронизация
       // кладёт пришедшую строку туда, где она оказалась при слиянии. Только
@@ -1703,6 +1928,10 @@ export class LocalApiClient implements ApiClient {
     const amount = Number(input.amount);
     const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
     const description = input.description?.trim() || null;
+    // Пробный период до — сторож напомнит за три дня, пока он не стал платным.
+    const trialEndsOn = /^\d{4}-\d{2}-\d{2}$/.test(String(input.trialEndsOn ?? ""))
+      ? String(input.trialEndsOn)
+      : null;
     const accountRef = { id: account.id, label: account.name };
     const categoryRef = { id: category.id, label: category.label, color: category.color };
     const nextDateInput = new Date(input.nextDate);
@@ -1739,7 +1968,8 @@ export class LocalApiClient implements ApiClient {
         daysUntilNext: status.daysUntilNext,
         isDue: status.isDue,
         account: accountRef,
-        category: categoryRef
+        category: categoryRef,
+        ...(trialEndsOn ? { trialEndsOn } : {})
       };
       state.recurringTransactions = state.recurringTransactions.map((item) =>
         item.id === row.id ? row : item
@@ -1769,7 +1999,8 @@ export class LocalApiClient implements ApiClient {
       daysUntilNext: status.daysUntilNext,
       isDue: status.isDue,
       account: accountRef,
-      category: categoryRef
+      category: categoryRef,
+      ...(trialEndsOn ? { trialEndsOn } : {})
     };
     state.recurringTransactions = [...state.recurringTransactions, row];
     return row;
@@ -2860,7 +3091,7 @@ export class LocalApiClient implements ApiClient {
 
   private forecast(state: LocalState): ForecastPageData {
     const rates = this.rates(state);
-    return new CashflowForecastService().build(
+    const result = new CashflowForecastService().build(
       {
         source: "database",
         currency: state.currency,
@@ -2877,6 +3108,28 @@ export class LocalApiClient implements ApiClient {
       },
       getClientLocale()
     );
+    // Вклад кончается на этой неделе — в колокольчик и в уведомления: решить,
+    // куда деньги, пока банк не продлил их под меньший процент.
+    const locale = getClientLocale();
+    const ending = depositsEndingSoon(state.accounts.filter((account) => !account.isArchived)).map(
+      ({ account, daysLeft }) => ({
+        id: `deposit-${account.id}-${account.depositEndsOn}`,
+        title: translate(locale, "deposit.endingTitle", {
+          name: account.name,
+          when:
+            daysLeft === 0
+              ? translate(locale, "notif.due.today")
+              : daysLeft === 1
+                ? translate(locale, "notif.due.tomorrow")
+                : translate(locale, "notif.due.inDays", { days: daysLeft })
+        }),
+        description: translate(locale, "deposit.endingDesc", {
+          amount: formatCurrency(account.balance, account.currency)
+        }),
+        severity: "WARNING" as const
+      })
+    );
+    return ending.length ? { ...result, warnings: [...ending, ...result.warnings] } : result;
   }
 
   /**
@@ -4010,6 +4263,64 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
+  /**
+   * Перенос таблицы из Excel. Столбцам «создать категорию» категории
+   * заводятся здесь же (или берутся уже существующие с тем же именем), чтобы
+   * «Продукты» из таблицы сразу открывали операции.
+   */
+  private importSheet(state: LocalState, raw: unknown) {
+    const payload = raw as SheetImport & {
+      columns: Array<SheetImport["columns"][number] & { createCategory?: "INCOME" | "EXPENSE" }>;
+    };
+    if (!payload || !Array.isArray(payload.columns) || !Array.isArray(payload.rows))
+      throw new Error("Нечего переносить.");
+    for (const column of payload.columns) {
+      if (!column.createCategory || column.categoryId) continue;
+      const same = state.categories.find(
+        (category) =>
+          category.kind === column.createCategory &&
+          category.label.trim().toLowerCase() === column.name.trim().toLowerCase()
+      );
+      column.categoryId =
+        same?.id ??
+        this.upsertCategory(state, { name: column.name, kind: column.createCategory }, "POST").id;
+    }
+    return importSheet(state, payload, () => id("col"), new Date().toISOString());
+  }
+
+  /** Операции для сторожа: подписка ли категория — из справочника. */
+  private watchRows(state: LocalState): WatchRow[] {
+    const subscription = new Set(
+      state.categories.filter((category) => category.isSubscription).map((category) => category.id)
+    );
+    return state.transactions.map((row) => ({
+      id: row.id,
+      type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+      date: row.date,
+      amount: row.amount,
+      description: row.description,
+      categoryId: row.category.id,
+      category: row.category.label,
+      accountId: row.account.id,
+      isSubscription: subscription.has(row.category.id),
+      recurringId: row.recurringId ?? null,
+      transferId: row.transferId ?? null,
+      splitGroupId: row.splitGroupId ?? null
+    }));
+  }
+
+  /** Факт из учёта по категориям и месяцам — для «Сравнить с учётом» в таблице. */
+  private sheetFacts(state: LocalState, from: string, to: string) {
+    const months: Record<string, Record<string, number>> = {};
+    for (const row of state.transactions) {
+      const month = row.date.slice(0, 7);
+      if ((from && month < from) || (to && month > to)) continue;
+      const bucket = (months[month] ??= {});
+      bucket[row.category.id] = roundMoney((bucket[row.category.id] ?? 0) + row.amount);
+    }
+    return { months };
+  }
+
   private upsertCategory(state: LocalState, body: unknown, method: "POST" | "PUT") {
     const input = toFormObject(body);
     const name = (input.name ?? "").trim();
@@ -4382,6 +4693,71 @@ export class LocalApiClient implements ApiClient {
         : trackDeletions(stampRows(state, previous, now), previous, now);
     await this.storage.setItem(key, next);
     this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
+    // Операции не стало — не стало и её фото. Сличаем записанное с прежним,
+    // а не ловим каждое место, где операцию удаляют: их много (одна, чек
+    // целиком, выбранные, перевод), и одно забытое оставило бы фото навсегда.
+    for (const gone of orphanedPhotos(
+      (previous?.transactions as Array<{ id: string; photo?: PhotoPlace }> | undefined) ?? [],
+      next.transactions
+    )) {
+      await this.dropPhoto(gone.id, gone.place);
+    }
+  }
+
+  // ——— фото чеков ————————————————————————————————————————————————
+
+  private async readPhoto(state: LocalState, transactionId: string) {
+    const row = state.transactions.find((item) => item.id === transactionId);
+    if (!row?.photo) return { photo: null, place: null, missing: false };
+    const stored = await this.storage.getItem<StoredPhoto>(photoKey(transactionId, row.photo));
+    return isPhotoData(stored)
+      ? { photo: stored.data, place: row.photo, missing: false }
+      : // Отметка есть, а фото нет: его сняли «только на этом устройстве» на
+        // другом, или оно ещё едет с сервера.
+        { photo: null, place: row.photo, missing: true };
+  }
+
+  private async attachPhoto<TResponse>(state: LocalState, body: unknown) {
+    const input = (body ?? {}) as Record<string, unknown>;
+    const transactionId = String(input.transactionId ?? "");
+    const row = state.transactions.find((item) => item.id === transactionId);
+    if (!row) throw new Error("Операция не найдена — возможно, её уже удалили.");
+    const data = String(input.data ?? "");
+    if (!data.startsWith("data:image/") || data.length > PHOTO_MAX_CHARS)
+      throw new Error("Не получилось прочитать фото. Попробуйте снять ещё раз.");
+    const place: PhotoPlace = input.place === "device" ? "device" : "synced";
+    // Было фото в другом месте — убрать, чтобы не лежало два.
+    if (row.photo && row.photo !== place) await this.dropPhoto(transactionId, row.photo);
+    const stored: StoredPhoto = {
+      data,
+      width: Number(input.width) || 0,
+      height: Number(input.height) || 0,
+      createdAt: new Date().toISOString()
+    };
+    await this.storage.setItem(photoKey(transactionId, place), stored);
+    state.transactions = state.transactions.map((item) =>
+      item.id === transactionId ? { ...item, photo: place } : item
+    );
+    return this.saveAndReturn<TResponse>(state, { transactionId, place });
+  }
+
+  /**
+   * Убрать фото. Синхронизируемое — следом «удалено», а не стиранием: стёртое
+   * здесь осталось бы на сервере и на других устройствах (слой синхронизации
+   * нарочно не передаёт удаление ключа, см. SyncingStorageAdapter.removeItem).
+   */
+  private async dropPhoto(transactionId: string, place: PhotoPlace) {
+    const key = photoKey(transactionId, place);
+    try {
+      if (place === "device") await this.storage.removeItem(key);
+      else if (await this.storage.getItem<unknown>(key))
+        await this.storage.setItem<StoredPhoto>(key, {
+          removed: true,
+          at: new Date().toISOString()
+        });
+    } catch {
+      /* фото не главное — книга уже записана */
+    }
   }
 
   /**
@@ -4508,6 +4884,14 @@ export class LocalApiClient implements ApiClient {
     // держит книгу ЦЕЛИКОМ, и «удалить всё», оставив их, значило бы удалить
     // не всё. На службу они не ездят, так что убрать их с диска и есть удалить.
     for (const key of await this.storage.keys()) {
+      // Фото чеков — тоже данные человека. Синхронизируемые гасятся следом,
+      // чтобы исчезли и на других устройствах.
+      if (key.startsWith(PHOTO_PREFIX)) {
+        const [, rest] = key.split(PHOTO_PREFIX);
+        const place: PhotoPlace = rest.endsWith(":device") ? "device" : "synced";
+        await this.dropPhoto(rest.replace(/:device$/, ""), place);
+        continue;
+      }
       if (
         key === LEGACY_STATE_KEY ||
         key.endsWith(PRE_UPGRADE_SUFFIX) ||

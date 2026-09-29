@@ -2,7 +2,8 @@ fn main() {
   // «installer» — свой маленький плагин Android (gen/android/.../InstallerPlugin.kt):
   // скачать APK обновления и открыть экран установки, а ещё отдать ссылку
   // financeapps://pair…, которой приложение открыли из QR-кода, и вход по
-  // отпечатку (ключ данных под ключом хранилища Android). Права на его
+  // отпечатку (ключ данных под ключом хранилища Android), напоминания и
+  // виджет на рабочем столе. Права на его
   // команды выводятся здесь, как у настоящих плагинов.
   tauri_build::try_build(tauri_build::Attributes::new().plugin(
     "installer",
@@ -14,6 +15,10 @@ fn main() {
         "biometric_seal",
         "biometric_open",
         "biometric_forget",
+        "notify_permission",
+        "notify_schedule",
+        "notify_cancel_all",
+        "widget_update",
       ])
       .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
   ))

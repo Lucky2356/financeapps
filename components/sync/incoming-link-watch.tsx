@@ -12,7 +12,11 @@ import { useEffect } from "react";
 
 import { takeIncomingLink } from "@/lib/sync/incoming-link";
 import { readPairing } from "@/lib/sync/pairing-link";
-import { readShortcutLink, requestQuickAdd } from "@/lib/transactions/quick-add-request";
+import {
+  readOpenLink,
+  readShortcutLink,
+  requestQuickAdd
+} from "@/lib/transactions/quick-add-request";
 
 export function IncomingLinkWatch() {
   const router = useRouter();
@@ -24,6 +28,12 @@ export function IncomingLinkWatch() {
       const shortcut = link ? readShortcutLink(link) : null;
       if (shortcut) {
         requestQuickAdd(shortcut);
+        return;
+      }
+      // Нажали на напоминание — на тот экран, о котором оно.
+      const open = link ? readOpenLink(link) : null;
+      if (open) {
+        router.push(open);
         return;
       }
       const parsed = link ? readPairing(link) : null;
