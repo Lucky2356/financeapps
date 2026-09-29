@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 // GUARD: диалог обязан помещаться в экран, и держится это одним пределом в
-// примитиве — `max-h-[calc(100svh-2rem)]` с прокруткой внутри
+// примитиве — `dialog-max-h` (экран минус поля и системные панели) с прокруткой внутри
 // (components/ui/dialog.tsx). Слой, который центрирует диалог, сам не
 // прокручивается, поэтому всё, что вылезло за этот предел, недостижимо: ни
 // колесом, ни пальцем.
@@ -93,7 +93,11 @@ describe("диалоги не переопределяют то, что держ
     // vh — «большой» вьюпорт, при видимой панели браузера он больше видимой
     // части экрана на 50–110 px. Диалог, посчитанный в vh, на телефоне выходит
     // за края в обе стороны, и верх становится недостижим.
-    expect(primitive).toContain("max-h-[calc(100svh-2rem)]");
+    expect(primitive).toContain("dialog-max-h");
     expect(primitive).not.toMatch(/max-h-\[[^\]]*\dvh/);
+    // И вычитает системные панели телефона: иначе низ окна уходит под кнопки
+    // навигации Android, и «Отмену» не нажать.
+    const css = readFileSync(path.join("app", "globals.css"), "utf8");
+    expect(css).toMatch(/\.dialog-max-h\s*\{[^}]*100svh[^}]*env\(safe-area-inset-bottom\)/);
   });
 });

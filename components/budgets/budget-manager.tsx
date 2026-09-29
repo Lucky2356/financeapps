@@ -417,7 +417,15 @@ function BudgetForm({
     setValue(budget.limitAmount ? String(budget.limitAmount) : "");
   }
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showSuggestion = budget.suggestedLimit > 0 && budget.suggestedLimit !== budget.limitAmount;
+  // Под полем — сколько осталось, уже посчитанное: лимит (как набран сейчас)
+  // плюс перенос минус потрачено. «По средним» — только пока лимита нет:
+  // тогда остатка нет, а подсказка помогает его задать.
+  const typed = Number(String(value).replace(",", ".").replace(/\s/g, ""));
+  const hasLimit = Number.isFinite(typed) && typed > 0;
+  const left = hasLimit
+    ? Math.round((typed + budget.rolloverAmount - budget.spent) * 100) / 100
+    : null;
+  const showSuggestion = !hasLimit && budget.suggestedLimit > 0;
 
   function commit(next: string) {
     const num = Number(next || 0);
@@ -498,7 +506,19 @@ function BudgetForm({
           <X className="size-4" />
         </Button>
       </div>
-      {showSuggestion ? (
+      {left !== null ? (
+        <p
+          className={cn(
+            "text-[11px] tabular-nums",
+            left < 0 ? "font-medium text-destructive" : "text-muted-foreground"
+          )}
+          data-testid="limit-left"
+        >
+          {left < 0
+            ? t("bud.overBy", { amount: formatCurrency(-left, currency) })
+            : t("bud.leftAmount", { amount: formatCurrency(left, currency) })}
+        </p>
+      ) : showSuggestion ? (
         <button
           type="button"
           onClick={applySuggestion}

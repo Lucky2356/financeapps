@@ -76,6 +76,25 @@ describe("камера", () => {
     expect(plugin.scan).not.toHaveBeenCalled();
   });
 
+  it("«Отмена» выходит, даже если плагин так и не ответил на scan", async () => {
+    // На телефоне владельца плагин после cancel() не отвечал на ждущий scan —
+    // и видоискатель не снимался ничем.
+    plugin.scan.mockReturnValue(new Promise(() => {}));
+    const outcome = scanQr();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-testid="qr-viewfinder"] button')).not.toBeNull()
+    );
+    const button = document.querySelector<HTMLButtonElement>(
+      '[data-testid="qr-viewfinder"] button'
+    );
+    button?.click();
+
+    expect(await outcome).toEqual({ ok: false, why: "cancelled" });
+    expect(document.querySelector('[data-testid="qr-viewfinder"]')).toBeNull();
+    expect(document.documentElement.classList.contains("qr-scanning")).toBe(false);
+    expect(plugin.cancel).toHaveBeenCalled();
+  });
+
   it("закрытый видоискатель — не ошибка и молчит", async () => {
     // Человек передумал. Ругаться на это нечем.
     plugin.scan.mockResolvedValue({ content: "" });

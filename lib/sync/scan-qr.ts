@@ -72,12 +72,26 @@ export function showViewfinder(onCancel: () => void, ownHint?: string): () => vo
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = cancel;
-  button.addEventListener("click", onCancel);
+  // Один раз, чем бы ни нажали: на части телефонов поверх камеры до click
+  // дело не доходило, а pointerup приходит всегда.
+  let done = false;
+  const press = () => {
+    if (done) return;
+    done = true;
+    onCancel();
+  };
+  button.addEventListener("click", press);
+  button.addEventListener("pointerup", press);
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === "Escape" || event.key === "GoBack") press();
+  };
+  document.addEventListener("keydown", onKey);
   layer.append(top, frame, button);
   document.body.appendChild(layer);
   document.documentElement.classList.add(SCANNING);
 
   return () => {
+    document.removeEventListener("keydown", onKey);
     document.documentElement.classList.remove(SCANNING);
     layer.remove();
     style.remove();
@@ -150,10 +164,21 @@ export async function scanQr(options: { hint?: string } = {}): Promise<ScanOutco
     if (granted !== "granted") granted = await scanner.requestPermissions();
     if (granted !== "granted") return { ok: false, why: "denied" };
 
-    // «Отмена» гасит видоискатель, и плагин отвечает на ждущий `scan` отказом
-    // «cancelled» — его разбирает catch ниже, как и прежде.
-    hide = showViewfinder(() => void scanner.cancel().catch(() => {}), options.hint);
-    const found = await scanner.scan({
+    // «ОТМЕНА» НЕ ЖДЁТ ПЛАГИН. Прежде она просила плагин погасить камеру и
+    // ждала, что тот ответит на `scan` отказом. На телефоне владельца ответ не
+    // приходил вовсе: `scan` так и висел, видоискатель не снимался, и выйти из
+    // него было нечем. Теперь нажатие само заканчивает съёмку — страница
+    // возвращается сразу, а камеру плагин гасит, как успеет (и ещё раз — в
+    // finally).
+    let stop: () => void = () => {};
+    const stopped = new Promise<null>((resolve) => {
+      stop = () => resolve(null);
+    });
+    hide = showViewfinder(() => {
+      stop();
+      void scanner.cancel().catch(() => {});
+    }, options.hint);
+    const scanning = scanner.scan({
       // Только QR: сканер, хватающий штрихкод с пачки молока, будет хватать
       // его и здесь — а понять такое всё равно нечем.
       formats: [scanner.Format.QRCode],
@@ -162,6 +187,11 @@ export async function scanQr(options: { hint?: string } = {}): Promise<ScanOutco
       // целиком, и выйти, не сняв ничего, было бы нечем.
       windowed: true
     });
+    // Брошенный после «Отмены» `scan` может потом завершиться отказом — это
+    // уже никого не касается.
+    scanning.catch(() => {});
+    const found = await Promise.race([scanning, stopped]);
+    if (found === null) return { ok: false, why: "cancelled" };
 
     const text = found?.content?.trim() ?? "";
     // Пустое — это закрытый видоискатель: плагин отвечает так же, как на
