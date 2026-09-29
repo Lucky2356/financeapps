@@ -109,22 +109,23 @@ export function writeCashback(
     throw new Error("Лимит — сумма в рублях или пусто.");
 
   // Та же карта и категория в том же месяце — правка, а не второе правило.
-  const same = state.cashbackRules.find(
-    (rule) =>
-      rule.id === body.id ||
-      (rule.month === month && rule.accountId === accountId && rule.categoryId === categoryId)
+  // Правили условие и поставили карту/категорию, у которой условие уже есть, —
+  // остаётся одно: иначе в месяце жили бы два правила на одно и то же.
+  const edited = body.id ? state.cashbackRules.find((rule) => rule.id === body.id) : undefined;
+  const clash = state.cashbackRules.find(
+    (rule) => rule.month === month && rule.accountId === accountId && rule.categoryId === categoryId
   );
   const rule: CashbackRule = {
-    id: same?.id ?? makeId(),
+    id: edited?.id ?? clash?.id ?? makeId(),
     accountId,
     month,
     categoryId,
     percent,
     ...(limit !== undefined ? { limit } : {})
   };
-  state.cashbackRules = same
-    ? state.cashbackRules.map((item) => (item.id === same.id ? rule : item))
-    : [...state.cashbackRules, rule];
+  const at = state.cashbackRules.findIndex((item) => item.id === rule.id);
+  const rest = state.cashbackRules.filter((item) => item.id !== rule.id && item.id !== clash?.id);
+  state.cashbackRules = at >= 0 ? [...rest.slice(0, at), rule, ...rest.slice(at)] : [...rest, rule];
   return rule;
 }
 

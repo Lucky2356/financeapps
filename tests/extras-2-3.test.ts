@@ -329,3 +329,41 @@ describe("через приложение", () => {
     expect(forecast.warnings.some((warning) => warning.id.startsWith("deposit-"))).toBe(true);
   });
 });
+
+describe("кэшбэк: правка условия", () => {
+  it("правка на уже занятую категорию оставляет одно условие", async () => {
+    const client = new LocalApiClient(new MemoryStorageAdapter());
+    const card = await client.post<{ id: string }>("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "0"
+    });
+    const { categories } = await client.get<{
+      categories: Array<{ id: string; name: string; kind: string }>;
+    }>("/categories");
+    const expense = categories.filter((category) => category.kind === "EXPENSE");
+    const month = "2026-09";
+    await client.post("/cashback", {
+      month,
+      accountId: card.id,
+      categoryId: expense[0].id,
+      percent: "5"
+    });
+    const second = await client.post<{ id: string }>("/cashback", {
+      month,
+      accountId: card.id,
+      categoryId: expense[1].id,
+      percent: "3"
+    });
+    await client.post("/cashback", {
+      id: second.id,
+      month,
+      accountId: card.id,
+      categoryId: expense[0].id,
+      percent: "7"
+    });
+    const page = await client.get<CashbackPageData>(`/cashback?month=${month}`);
+    expect(page.rules).toHaveLength(1);
+    expect(page.rules[0]).toMatchObject({ categoryId: expense[0].id, percent: 7 });
+  });
+});

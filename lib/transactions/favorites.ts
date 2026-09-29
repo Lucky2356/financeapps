@@ -3,8 +3,14 @@
 // Мелкие ежедневные траты бросают записывать первыми: открыть форму,
 // набрать сумму, выбрать категорию — ради 70 рублей. Здесь приложение само
 // замечает, что человек повторяет одно и то же, и выносит это в кнопку.
-// Повтором считается одинаковое описание, сумма, категория и счёт — три раза
-// за два месяца. Закрепить можно и то, что повторялось реже; убрать — любое.
+// Повтором считается одинаковое описание, сумма и категория — три раза за два
+// месяца. Закрепить можно и то, что повторялось реже; убрать — любое.
+//
+// СЧЁТ В ПОВТОР НЕ ВХОДИТ. Кофе с карты и кофе наличными — одна привычка, а
+// не две кнопки; а записывается кнопка на тот счёт, что выбран в форме сейчас
+// (accountId здесь — лишь последний использованный, на случай, если в форме
+// счёта нет). Прежде счёт входил в повтор, и кнопка упрямо писала на «свой»
+// счёт, даже когда в форме стоял другой.
 
 export type FavoriteSource = {
   type: "INCOME" | "EXPENSE";
@@ -51,15 +57,27 @@ export function favoriteKey(item: {
   description: string | null;
   amount: number;
   categoryId: string;
-  accountId: string;
 }): string {
   return JSON.stringify([
     item.type,
     clean(item.description).toLowerCase(),
     Math.round(item.amount * 100),
-    item.categoryId,
-    item.accountId
+    item.categoryId
   ]);
+}
+
+/**
+ * Ключ, сохранённый до 2.3.2, нёс ещё и счёт пятым элементом. Закреплённое и
+ * убранное тогда живёт по-прежнему: иначе закреплённая кнопка задвоилась бы, а
+ * убранная — вернулась.
+ */
+export function sameKey(stored: string): string {
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    return Array.isArray(parsed) && parsed.length > 4 ? JSON.stringify(parsed.slice(0, 4)) : stored;
+  } catch {
+    return stored;
+  }
 }
 
 export function suggestFavorites(
@@ -68,7 +86,7 @@ export function suggestFavorites(
   today: Date = new Date()
 ): Favorite[] {
   const since = new Date(today.getTime() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
-  const hidden = new Set(prefs.hidden);
+  const hidden = new Set(prefs.hidden.map(sameKey));
   const groups = new Map<string, { item: FavoriteSource; count: number; last: string }>();
   for (const row of rows) {
     if (row.transferId || row.splitGroupId) continue;
@@ -77,17 +95,23 @@ export function suggestFavorites(
     const group = groups.get(key);
     if (group) {
       group.count += 1;
-      if (row.date > group.last) group.last = row.date;
+      // Запасной счёт — последний, с которого так платили.
+      if (row.date >= group.last) {
+        group.last = row.date;
+        group.item = row;
+      }
     } else {
       groups.set(key, { item: row, count: 1, last: row.date });
     }
   }
 
-  const pinned: Favorite[] = prefs.pinned.map((item) => ({
-    ...item,
-    count: groups.get(item.key)?.count ?? 0,
-    pinned: true
-  }));
+  const seen = new Set<string>();
+  const pinned: Favorite[] = prefs.pinned.flatMap((item) => {
+    const key = sameKey(item.key);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ ...item, key, count: groups.get(key)?.count ?? 0, pinned: true }];
+  });
   const pinnedKeys = new Set(pinned.map((item) => item.key));
 
   const frequent = [...groups.entries()]

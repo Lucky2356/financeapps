@@ -23,7 +23,12 @@ import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { readMine, writeMine } from "@/lib/storage/mine";
-import { suggestFavorites, type Favorite, type FavoritePrefs } from "@/lib/transactions/favorites";
+import {
+  sameKey,
+  suggestFavorites,
+  type Favorite,
+  type FavoritePrefs
+} from "@/lib/transactions/favorites";
 
 export const FAVORITES_KEY = "quick-favorites";
 
@@ -50,9 +55,12 @@ export function writeFavoritePrefs(prefs: FavoritePrefs) {
 
 export function FavoriteChips({
   type,
+  accountId,
   onRecorded
 }: {
   type: "INCOME" | "EXPENSE";
+  /** Счёт, выбранный в форме: кнопка пишет на него, а не на «свой». */
+  accountId?: string;
   onRecorded: () => void;
 }) {
   const { t } = useI18n();
@@ -98,7 +106,7 @@ export function FavoriteChips({
     try {
       const created = await apiClient.post<{ id: string }>("/transactions", {
         type: item.type,
-        accountId: item.accountId,
+        accountId: accountId || item.accountId,
         categoryId: item.categoryId,
         amount: String(item.amount),
         date: formatInputDate(new Date()),
@@ -178,7 +186,7 @@ export function FavoriteChips({
                   onClick={() =>
                     change((prefs) => ({
                       ...prefs,
-                      pinned: prefs.pinned.filter((item) => item.key !== menu.key)
+                      pinned: prefs.pinned.filter((item) => sameKey(item.key) !== menu.key)
                     }))
                   }
                 >
@@ -217,7 +225,7 @@ export function FavoriteChips({
                 variant="ghost"
                 onClick={() =>
                   change((prefs) => ({
-                    pinned: prefs.pinned.filter((item) => item.key !== menu.key),
+                    pinned: prefs.pinned.filter((item) => sameKey(item.key) !== menu.key),
                     hidden: [...prefs.hidden, menu.key]
                   }))
                 }

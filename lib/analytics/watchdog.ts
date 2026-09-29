@@ -91,6 +91,9 @@ export function findLeaks(input: {
   const subscriptions = new Map<string, WatchRow[]>();
   for (const row of expenses) {
     if (!row.isSubscription && !row.recurringId) continue;
+    // Без плана и без описания не понять, одна это подписка или две разные:
+    // Кинопоиск 299 и Яндекс 399 в «Подписках» читались как подорожание.
+    if (!row.recurringId && !merchant(row.description)) continue;
     const key = row.recurringId ?? `${row.categoryId}|${merchant(row.description)}`;
     subscriptions.set(key, [...(subscriptions.get(key) ?? []), row]);
   }
