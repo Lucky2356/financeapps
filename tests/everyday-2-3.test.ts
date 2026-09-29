@@ -24,6 +24,44 @@ describe("избранные траты", () => {
     expect(favorites[0]).toMatchObject({ description: "Кофе", amount: 250, count: 3 });
   });
 
+  it("один и тот же кофе с разных счетов — одна кнопка, счёт — последний", () => {
+    const rows = [
+      coffee("2026-09-01"),
+      { ...coffee("2026-09-10"), accountId: "cash" },
+      coffee("2026-09-20"),
+      { ...coffee("2026-09-25"), accountId: "cash" }
+    ];
+    const favorites = suggestFavorites(rows, { pinned: [], hidden: [] }, today);
+    expect(favorites).toHaveLength(1);
+    expect(favorites[0]).toMatchObject({ count: 4, accountId: "cash" });
+  });
+
+  it("закреплённое и убранное по старому ключу (со счётом) — работает", () => {
+    const rows = [coffee("2026-09-01"), coffee("2026-09-10"), coffee("2026-09-20")];
+    const legacy = JSON.stringify(["EXPENSE", "кофе", 25000, "cafe", "card"]);
+    expect(suggestFavorites(rows, { pinned: [], hidden: [legacy] }, today)).toEqual([]);
+    const pinned = suggestFavorites(
+      rows,
+      {
+        pinned: [
+          {
+            key: legacy,
+            type: "EXPENSE",
+            description: "Кофе",
+            amount: 250,
+            categoryId: "cafe",
+            categoryLabel: "Кафе",
+            accountId: "card"
+          }
+        ],
+        hidden: []
+      },
+      today
+    );
+    expect(pinned).toHaveLength(1);
+    expect(pinned[0]).toMatchObject({ pinned: true, count: 3 });
+  });
+
   it("дважды — ещё не привычка; старше двух месяцев — уже нет", () => {
     expect(
       suggestFavorites(
@@ -158,6 +196,21 @@ describe("сторож лишних трат", () => {
       rows: [at("a", "2026-08-10", 299, sub), at("b", "2026-09-10", 399, sub)]
     });
     expect(findings).toEqual([expect.objectContaining({ kind: "priceUp", before: 299, now: 399 })]);
+  });
+
+  it("две разные подписки без описания — не «подорожала»", () => {
+    const sub = {
+      description: null,
+      categoryId: "subs",
+      category: "Подписки",
+      isSubscription: true
+    };
+    expect(
+      findLeaks({
+        today: "2026-09-28",
+        rows: [at("a", "2026-09-05", 299, sub), at("b", "2026-09-10", 399, sub)]
+      })
+    ).toEqual([]);
   });
 
   it("пробный период кончается через два дня", () => {

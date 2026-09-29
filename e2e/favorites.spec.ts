@@ -50,3 +50,21 @@ test("двойное списание — на главной «Стоит пр�
   await card.getByRole("button", { name: "Всё верно" }).first().click();
   await expect(card).toBeHidden();
 });
+
+test("частая трата пишется на счёт, выбранный в форме", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/transactions");
+  for (let i = 0; i < 3; i += 1) await addCoffee(page);
+
+  await page.evaluate(() => window.dispatchEvent(new Event("quick-add-open")));
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("#fab-account").click();
+  await page.getByRole("option", { name: "Наличные" }).click();
+  const chips = page.getByTestId("favorite-chips");
+  await expect(chips).toBeVisible({ timeout: 10_000 });
+  await chips.getByRole("button", { name: /Кофе у метро/ }).click();
+  await expect(page.getByText(/Записано: Кофе у метро/)).toBeVisible();
+
+  await openSettled(page, "/transactions?accountId=sample-cash&q=Кофе у метро");
+  await expect(page.getByText("Кофе у метро").first()).toBeVisible();
+});

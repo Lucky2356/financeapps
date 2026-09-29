@@ -571,6 +571,7 @@ export function QuickAddFab({
             <FavoriteChips
               key={type}
               type={type}
+              accountId={accountId}
               onRecorded={() => {
                 setOpen(false);
                 router.refresh();
