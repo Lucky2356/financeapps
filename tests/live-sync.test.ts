@@ -134,17 +134,33 @@ describe("живая синхронизация", () => {
     expect(heard).toContain("перечитать");
   });
 
-  it("возвращение к приложению толкает очередь, а не ждёт подписку", async () => {
+  it("возвращение к приложению сверяется со службой, а не ждёт подписку", async () => {
     // Подписка переподключается сама, но с паузой до минуты, и на телефоне она
     // успевает вырасти: соединение рвётся каждый уход в фон. Эта минута — ровно
     // то время, за которое человек решит, что синхронизация не работает.
-    const flush = vi.fn().mockResolvedValue(undefined);
-    teardown.push(flushWhenAppReturns({ flush }));
+    const catchUp = vi.fn().mockResolvedValue(undefined);
+    teardown.push(flushWhenAppReturns({ catchUp }));
 
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(flush).toHaveBeenCalledTimes(1);
+    expect(catchUp).toHaveBeenCalledTimes(1);
 
     window.dispatchEvent(new Event("online"));
-    expect(flush).toHaveBeenCalledTimes(2);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+  });
+
+  it("раз в две минуты сверяется сам, даже если поток событий молчит", async () => {
+    // Мёртвый поток снаружи не отличить от тихого: «подключено», а чужие правки
+    // не приходят. Сверка по часам не зависит от него вовсе.
+    vi.useFakeTimers();
+    try {
+      const catchUp = vi.fn().mockResolvedValue(undefined);
+      teardown.push(flushWhenAppReturns({ catchUp }));
+      vi.advanceTimersByTime(2 * 60_000);
+      expect(catchUp).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(2 * 60_000);
+      expect(catchUp).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

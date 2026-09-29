@@ -1,6 +1,7 @@
 "use client";
 
 import { BeforeClearCard } from "@/components/settings/before-clear-card";
+import { LocalCopiesCard } from "@/components/settings/local-copies-card";
 import {
   AlertTriangle,
   Check,
@@ -787,7 +788,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       lead: t("set.nav.data.lead"),
       icon: Database,
       keywords:
-        "данные data импорт import csv выгрузка экспорт export загрузить restore демо demo пример очистить clear удалить backup резервная копия snapshot",
+        "данные data импорт import csv выгрузка экспорт export загрузить restore демо demo пример очистить clear удалить backup резервная копия snapshot копии на устройстве главное устройство local copies",
       node: (
         <>
           {/* Everything that moves data in or out of the app: the copy of it,
@@ -797,6 +798,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             transactions={[]}
             afterBackup={android ? null : <AutoBackupPanel />}
           />
+          <Group title={t("set.localCopies.title")}>
+            <LocalCopiesCard />
+          </Group>
           <Group title={t("set.group.sample")}>
             <SettingRow
               label={t("set.data.loadSample")}

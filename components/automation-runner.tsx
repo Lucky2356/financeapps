@@ -37,6 +37,21 @@ export function AutomationRunner() {
     void runAutomation();
   }, []);
 
+  // Ежедневная копия на главном устройстве — и при запуске, и раз в час:
+  // компьютер с открытым приложением неделями не перезапускают.
+  useEffect(() => {
+    const keep = () => {
+      void import("@/lib/backup/local-copies")
+        .then(({ keepDailyCopy }) => keepDailyCopy())
+        .catch(() => {
+          // Копия — страховка; её неудача не должна мешать работе.
+        });
+    };
+    keep();
+    const every = window.setInterval(keep, 60 * 60 * 1000);
+    return () => window.clearInterval(every);
+  }, []);
+
   return null;
 }
 

@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "financial-assistant"
-version = "2.3.2"
+version = "2.3.3"
 dependencies = [
  "serde",
  "serde_json",

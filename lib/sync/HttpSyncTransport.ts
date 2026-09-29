@@ -48,6 +48,9 @@ export class ServerRefused extends Error {
   }
 }
 
+/** Сколько тишины в потоке событий терпеть, прежде чем счесть его мёртвым. */
+const SILENCE_LIMIT_MS = 70_000;
+
 export function isRefused(error: unknown): boolean {
   return error instanceof ServerRefused;
 }
@@ -112,9 +115,11 @@ async function ask(
 
 export class HttpSyncTransport implements SyncTransport {
   private credentials: Credentials;
+  private readonly silenceMs: number;
 
-  constructor(credentials: Credentials) {
+  constructor(credentials: Credentials, options: { silenceMs?: number } = {}) {
     this.credentials = credentials;
+    this.silenceMs = options.silenceMs ?? SILENCE_LIMIT_MS;
   }
 
   async list(): Promise<SlotSummary[]> {
@@ -159,7 +164,7 @@ export class HttpSyncTransport implements SyncTransport {
    * сойдётся на следующем чтении или записи. Поэтому здесь нет ни разбора
    * пропущенного, ни подтверждений.
    */
-  watch(onChange: (event: SlotChanged) => void): () => void {
+  watch(onChange: (event: SlotChanged) => void, onOpen?: () => void): () => void {
     // Негодный билет здесь просто не подписывает: синхронизация обязана
     // сходиться и без подписки, а вечно стучаться с заведомо плохим билетом —
     // это шум и в журнале службы, и в батарее телефона.
@@ -170,23 +175,46 @@ export class HttpSyncTransport implements SyncTransport {
 
     const read = async (): Promise<void> => {
       while (!control.signal.aborted) {
+        // Своя отмена на каждое соединение: сторож ниже рвёт ЭТО соединение, а
+        // не подписку целиком.
+        const connection = new AbortController();
+        let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+        // И отмена запроса, и закрытие чтения: запрос через Rust (телефон,
+        // Windows) отмену запроса может и не донести до уже идущего чтения.
+        const stopConnection = () => {
+          connection.abort();
+          void reader?.cancel().catch(() => {});
+        };
+        control.signal.addEventListener("abort", stopConnection);
+        let silence: ReturnType<typeof setTimeout> | undefined;
+        // Служба стучит раз в 25 секунд. Тишина дольше — соединение мертво, хотя
+        // с виду открыто: телефон уснул, сменилась сеть, посредник его бросил.
+        // Такой поток не рвётся сам НИКОГДА, и устройство до перезапуска ждало
+        // событий, которые не придут, — «подключено», а чужих правок нет.
+        const listen = () => {
+          if (silence !== undefined) clearTimeout(silence);
+          silence = setTimeout(stopConnection, this.silenceMs);
+        };
         try {
+          listen();
           const response = await shellFetch(
             `${this.credentials.base.replace(/\/+$/, "")}${ROUTES.events}`,
             {
               headers: { authorization: `Bearer ${this.credentials.token}` },
-              signal: control.signal
+              signal: connection.signal
             }
           );
           if (!response.ok || !response.body)
             throw new Error(`поток не открылся: ${response.status}`);
 
           attempt = 0;
-          const reader = response.body.getReader();
+          onOpen?.();
+          reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
 
           for (;;) {
+            listen();
             const chunk = await reader.read();
             if (chunk.done) break;
             buffer += decoder.decode(chunk.value, { stream: true });
@@ -212,6 +240,10 @@ export class HttpSyncTransport implements SyncTransport {
           }
         } catch {
           if (control.signal.aborted) return;
+        } finally {
+          if (silence !== undefined) clearTimeout(silence);
+          control.signal.removeEventListener("abort", stopConnection);
+          connection.abort();
         }
 
         // Пауза перед новой попыткой, растущая до минуты: соединение рвётся

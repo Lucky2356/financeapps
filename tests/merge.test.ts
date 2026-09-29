@@ -161,6 +161,67 @@ describe("слияние книг", () => {
 
       expect(mergeBooks(base, mine, theirs).differs).toBe(true);
     });
+
+    it("чужая строка в НАЧАЛЕ списка — всё равно отправлять нечего", () => {
+      // Приложение кладёт новую операцию первой. Слитое раньше шло в порядке
+      // основы — новая оказывалась последней, книга «отличалась» от чужой одним
+      // порядком и ехала обратно; там сливалась в порядке своей основы и ехала
+      // снова. Вживую — пачки PUT → 409 от всех устройств и синхронизация,
+      // которая в какой-то момент сдаётся.
+      const base: Book = { transactions: [tx("a"), tx("b")] };
+      const theirs: Book = { transactions: [tx("новая"), tx("a"), tx("b")] };
+
+      const report = mergeBooks(base, base, theirs);
+      expect(report.differs).toBe(false);
+      expect(report.state).toEqual(theirs);
+    });
+
+    it("своя новая строка встаёт рядом со своим соседом, чужой порядок цел", () => {
+      const base: Book = { transactions: [tx("a"), tx("b")] };
+      const mine: Book = { transactions: [tx("моя"), tx("a"), tx("b")] };
+      const theirs: Book = { transactions: [tx("их"), tx("a"), tx("b")] };
+
+      const ids = (book: Book) => (book.transactions as Array<{ id: string }>).map((row) => row.id);
+      expect(ids(mergeBooks(base, mine, theirs).state)).toEqual(["моя", "их", "a", "b"]);
+    });
+
+    it("четыре устройства сходятся, а не перекидываются без конца", () => {
+      // Сервер и четыре устройства; каждое кладёт свою операцию в начало, потом
+      // все по кругу забирают свежее и отправляют, только если «отличается».
+      type Device = { book: Book; base: Book | null };
+      let server: Book = { transactions: [tx("a")] };
+      const devices: Device[] = Array.from({ length: 4 }, () => ({
+        book: structuredClone(server),
+        base: structuredClone(server)
+      }));
+      devices.forEach((device, index) => {
+        device.book = {
+          transactions: [tx(`с ${index}`), ...(device.book.transactions as unknown[])]
+        };
+      });
+
+      let sends = 0;
+      for (let round = 0; round < 20; round += 1) {
+        let quiet = true;
+        for (const device of devices) {
+          const report = mergeBooks(device.base, device.book, server);
+          device.book = report.state;
+          device.base = server;
+          if (report.differs) {
+            server = report.state;
+            device.base = server;
+            sends += 1;
+            quiet = false;
+          }
+        }
+        if (quiet) break;
+      }
+
+      expect(rows(server)).toEqual(["a", "с 0", "с 1", "с 2", "с 3"]);
+      for (const device of devices) expect(device.book).toEqual(server);
+      // Каждое отправляет своё один раз — и всё.
+      expect(sends).toBe(4);
+    });
   });
 
   describe("не строки", () => {

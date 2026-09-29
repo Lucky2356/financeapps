@@ -50,6 +50,7 @@ import {
 import { localStateSchema } from "@/lib/api/local/schemas";
 import {
   BEFORE_CLEAR_SUFFIX,
+  LOCAL_COPY_SUFFIX,
   PRE_UPGRADE_SUFFIX,
   RESCUE_SUFFIX
 } from "@/lib/storage/SyncingStorageAdapter";
@@ -174,9 +175,38 @@ export type PreUpgradeBackup = {
 /** Что отдаёт `/backup/before-clear`: когда очистили и до какого числа можно вернуть. */
 export type BeforeClearCopy = { savedAt: string; until: string };
 
+function localCopyKey(id: string): string {
+  return `${LOCAL_COPY_PREFIX}${id}${LOCAL_COPY_SUFFIX}`;
+}
+
 /** Копия всего, что было до «Очистить все данные». Живёт неделю. */
 const BEFORE_CLEAR_KEY = `financeProfiles${BEFORE_CLEAR_SUFFIX}`;
 const BEFORE_CLEAR_DAYS = 7;
+
+/**
+ * Копия всех данных на этом устройстве — что отдаёт `/backup/local-copies`.
+ *
+ * `daily` — сама, раз в день на главном устройстве; `manual` — по кнопке;
+ * `before-restore` — отложенная перед «Вернуть», чтобы и возврат можно было
+ * отменить.
+ */
+export type LocalCopy = {
+  id: string;
+  savedAt: string;
+  reason: "daily" | "manual" | "before-restore";
+  operations: number;
+};
+
+const LOCAL_COPY_INDEX_KEY = `financeCopies${LOCAL_COPY_SUFFIX}`;
+const LOCAL_COPY_PREFIX = "financeCopy_";
+/** Две недели ежедневных копий — и ещё место для ручных. */
+export const LOCAL_COPIES_KEEP = 14;
+
+type LocalCopyStored = {
+  savedAt: string;
+  list: ProfileList;
+  states: Record<string, unknown>;
+};
 
 type BeforeClearStored = {
   savedAt: string;
@@ -715,6 +745,7 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/settings") return this.settings(state) as T;
     if (pathname === "/backup/before-upgrade") return (await this.preUpgradeBackup()) as T;
     if (pathname === "/backup/before-clear") return (await this.beforeClearCopy()) as T;
+    if (pathname === "/backup/local-copies") return (await this.localCopies()) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") {
       // The exported file records when it was made, so the stamp goes into the
@@ -1148,6 +1179,15 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/backup/before-clear") {
       await this.undoClear();
       return { restored: true } as TResponse;
+    }
+    if (pathname === "/backup/local-copies") {
+      const input = (body ?? {}) as { action?: unknown; id?: unknown };
+      if (input.action === "restore") {
+        await this.restoreLocalCopy(String(input.id ?? ""));
+        return { restored: true } as TResponse;
+      }
+      if (input.action === "daily") return (await this.dailyLocalCopy()) as TResponse;
+      return (await this.takeLocalCopy("manual")) as TResponse;
     }
     if (pathname === "/backup/merge") return this.mergeBackup<TResponse>(body);
     if (pathname === "/investments")
@@ -4895,7 +4935,10 @@ export class LocalApiClient implements ApiClient {
       if (
         key === LEGACY_STATE_KEY ||
         key.endsWith(PRE_UPGRADE_SUFFIX) ||
-        key.endsWith(RESCUE_SUFFIX)
+        key.endsWith(RESCUE_SUFFIX) ||
+        // Ежедневные копии — тоже данные целиком. Отменить очистку можно и
+        // без них: для этого откладывается своя копия, выше.
+        key.endsWith(LOCAL_COPY_SUFFIX)
       ) {
         await this.storage.removeItem(key);
       }
@@ -4937,6 +4980,91 @@ export class LocalApiClient implements ApiClient {
     }
     await this.storage.setItem(PROFILE_LIST_KEY, stored.list);
     await this.storage.removeItem(BEFORE_CLEAR_KEY);
+    this.invalidateStateCache();
+  }
+
+  /** Копии на этом устройстве, свежие первыми. */
+  private async localCopies(): Promise<LocalCopy[]> {
+    const index = await this.storage.getItem<LocalCopy[]>(LOCAL_COPY_INDEX_KEY);
+    return Array.isArray(index)
+      ? [...index].sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+      : [];
+  }
+
+  /**
+   * Отложить копию всего, что сейчас есть, — все тетрадки целиком.
+   *
+   * Перечень хранится отдельно от самих копий: чтобы показать список, не надо
+   * открывать четырнадцать полных копий книги.
+   */
+  private async takeLocalCopy(reason: LocalCopy["reason"]): Promise<LocalCopy> {
+    const list = await this.profileList();
+    const ids = new Set([...list.profiles.map((profile) => profile.id), DEFAULT_PROFILE.id]);
+    const states: Record<string, unknown> = {};
+    let operations = 0;
+    for (const id of ids) {
+      const existing = await this.storage.getItem<unknown>(profileStateKey(id));
+      if (!existing) continue;
+      states[id] = existing;
+      const rows = (existing as { transactions?: unknown }).transactions;
+      if (Array.isArray(rows)) operations += rows.length;
+    }
+
+    const now = new Date();
+    const copy: LocalCopy = {
+      id: `${now.getTime()}`,
+      savedAt: now.toISOString(),
+      reason,
+      operations
+    };
+    await this.storage.setItem<LocalCopyStored>(localCopyKey(copy.id), {
+      savedAt: copy.savedAt,
+      list,
+      states
+    });
+
+    const kept = [copy, ...(await this.localCopies())];
+    for (const stale of kept.slice(LOCAL_COPIES_KEEP)) {
+      await this.storage.removeItem(localCopyKey(stale.id));
+    }
+    await this.storage.setItem(LOCAL_COPY_INDEX_KEY, kept.slice(0, LOCAL_COPIES_KEEP));
+    return copy;
+  }
+
+  /** Раз в день: если сегодня копии ещё не было — сделать. */
+  private async dailyLocalCopy(): Promise<LocalCopy | null> {
+    const today = todayDay();
+    const copies = await this.localCopies();
+    if (
+      copies.some((copy) => copy.reason === "daily" && todayDay(new Date(copy.savedAt)) === today)
+    ) {
+      return null;
+    }
+    return this.takeLocalCopy("daily");
+  }
+
+  /**
+   * «Вернуть» копию — тем же путём, что и возврат после очистки: каждая
+   * тетрадка записывается как обычная правка и уезжает на другие устройства.
+   * Нынешнее перед этим откладывается ещё одной копией — передумать можно.
+   */
+  private async restoreLocalCopy(id: string): Promise<void> {
+    const stored = await this.storage.getItem<LocalCopyStored>(localCopyKey(id));
+    if (!stored?.states) throw new Error("Такой копии на этом устройстве нет.");
+    await this.takeLocalCopy("before-restore");
+    for (const [profileId, raw] of Object.entries(stored.states)) {
+      const parsed = localStateSchema.safeParse(raw);
+      if (!parsed.success) continue;
+      await this.storage.setItem(PROFILE_LIST_KEY, {
+        ...stored.list,
+        activeProfileId: profileId
+      } satisfies ProfileList);
+      this.invalidateStateCache();
+      // С новой отметкой: возвращённое — это правка, сделанная сейчас, и на
+      // других устройствах она обязана перевесить то, что было после копии.
+      await this.save(migrateLocalState(parsed.data));
+    }
+    await this.storage.setItem(PROFILE_LIST_KEY, stored.list);
     this.invalidateStateCache();
   }
 

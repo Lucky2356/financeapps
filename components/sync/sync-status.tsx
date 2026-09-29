@@ -198,9 +198,24 @@ export function SyncStatusIndicator() {
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">{label}</p>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/settings?section=sync">{t("sync.status.settings")}</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {status !== "off" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={status === "sending"}
+                data-testid="sync-now"
+                onClick={() => void syncStorage.catchUp()}
+              >
+                <RefreshCw className={cn("size-4", status === "sending" && "animate-spin")} />
+                {t("sync.status.now")}
+              </Button>
+            ) : null}
+            <Button asChild size="sm" variant="outline">
+              <Link href="/settings?section=sync">{t("sync.status.settings")}</Link>
+            </Button>
+          </div>
         </div>
 
         {conflicts.length === 0 ? (

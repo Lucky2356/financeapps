@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -550,6 +551,54 @@ describe("приложение через службу", () => {
     unwatch();
 
     expect(heard).toContainEqual({ slot: "книга", version: 1 });
+  });
+
+  it("поток говорит, что открылся, и открывается снова после обрыва", async () => {
+    // По этому сигналу устройство сверяется со службой: всё, что записали, пока
+    // потока не было, пришло без событий.
+    const { token } = await signUp("петя");
+    const listener = new HttpSyncTransport({ base, token });
+    let opened = 0;
+    const unwatch = listener.watch(
+      () => {},
+      () => (opened += 1)
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(opened).toBe(1);
+
+    // Служба рвёт все потоки — как при перезапуске или смене сети.
+    app.server.closeAllConnections();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    unwatch();
+
+    expect(opened).toBe(2);
+  });
+});
+
+describe("поток, который молчит", () => {
+  it("мёртвое соединение рвётся сторожем и открывается заново", async () => {
+    // Телефон уснул или посредник бросил соединение: с виду оно открыто, но по
+    // нему ничего не идёт, и само оно не порвётся никогда. Служба стучит раз в
+    // 25 секунд — тишина дольше значит, что соединение мертво.
+    let opened = 0;
+    const mute = createServer((_req, res) => {
+      opened += 1;
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.write(": здравствуйте\n\n");
+      // …и дальше ни звука.
+    });
+    await new Promise<void>((resolve) => mute.listen(0, "127.0.0.1", resolve));
+    const at = `http://127.0.0.1:${(mute.address() as AddressInfo).port}`;
+
+    const unwatch = new HttpSyncTransport({ base: at, token: "ticket" }, { silenceMs: 200 }).watch(
+      () => {}
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    unwatch();
+    mute.closeAllConnections();
+    await new Promise((resolve) => mute.close(resolve));
+
+    expect(opened).toBeGreaterThanOrEqual(2);
   });
 });
 

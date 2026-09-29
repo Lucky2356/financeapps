@@ -488,7 +488,102 @@ describe("синхронизирующее хранилище", () => {
       await storage.setItem(SLOT, box("а"));
       await storage.flush();
       expect(storage.status).toBe("error");
-      expect(timers).toHaveLength(0);
+      // Не «вечно подряд», как при обрыве связи, но и не «никогда»: раньше
+      // после ошибки синхронизация вставала до перезапуска приложения.
+      expect(timers.map((timer) => timer.delayMs)).toEqual([60_000]);
+    });
+
+    it("после ошибки пробует снова и досылает несостоявшееся", async () => {
+      let broken = true;
+      const flaky: SyncTransport = {
+        list: () => (broken ? Promise.reject(new Error("служба перезапускается")) : server.list()),
+        pull: (slot) => server.pull(slot),
+        push: (slot, request) =>
+          broken ? Promise.reject(new Error("служба перезапускается")) : server.push(slot, request),
+        watch: () => () => {}
+      };
+      await storage.start(flaky, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+      expect(storage.status).toBe("error");
+
+      broken = false;
+      timers.shift()!.run();
+      await storage.flush();
+      expect(storage.status).toBe("synced");
+      expect((await server.pull(SLOT)).body).toEqual(box("а"));
+    });
+
+    it("вечная гонка не выпускает запись из очереди", async () => {
+      // Три отказа «вас обогнали» подряд раньше только меняли значок, а
+      // прогонка снимала ячейку с отправки как отправленную: на устройстве
+      // запись есть, на сервере нет, и никто больше за ней не придёт.
+      let races = 10;
+      const crowded: SyncTransport = {
+        list: () => server.list(),
+        pull: (slot) => server.pull(slot),
+        push: async (slot, request) => {
+          if (races-- > 0) {
+            const current = await server.pull(slot);
+            return {
+              ok: false,
+              reason: "stale",
+              current: {
+                ...current,
+                version: current.version + races + 1,
+                body: box(`чужое${races}`)
+              }
+            };
+          }
+          return server.push(slot, request);
+        },
+        watch: () => () => {}
+      };
+      await storage.start(crowded, glue);
+      await storage.setItem(SLOT, box("моё"));
+      await storage.flush();
+      expect(storage.status).toBe("error");
+
+      races = 0;
+      await storage.catchUp();
+      timers.forEach((timer) => timer.run());
+      await storage.flush();
+      const onServer = (await server.pull(SLOT)).body as SealedBook | null;
+      expect(onServer?.ct).toContain("моё");
+    });
+  });
+
+  describe("сверка со службой", () => {
+    it("поток открылся заново — забрать пропущенное без единого события", async () => {
+      let reopen: (() => void) | undefined;
+      const silent: SyncTransport = {
+        list: () => server.list(),
+        pull: (slot) => server.pull(slot),
+        push: (slot, request) => server.push(slot, request),
+        watch: (_onChange, onOpen) => {
+          reopen = onOpen;
+          return () => {};
+        }
+      };
+      await storage.start(silent, glue);
+      await storage.flush();
+
+      // Другое устройство записало, пока потока не было: события не было.
+      await server.push(SLOT, { baseVersion: 0, body: box("с телефона") });
+      expect(await device.getItem(SLOT)).toBeNull();
+
+      reopen?.();
+      await storage.flush();
+      expect(await device.getItem(SLOT)).toEqual(box("с телефона"));
+    });
+
+    it("сверка не ходит за тем, что уже видела", async () => {
+      await server.push(SLOT, { baseVersion: 0, body: box("а") });
+      await storage.start(server, glue);
+      await storage.flush();
+      const pull = vi.spyOn(server, "pull");
+      await storage.catchUp();
+      expect(pull).not.toHaveBeenCalled();
     });
   });
 });

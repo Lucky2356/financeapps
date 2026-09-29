@@ -122,21 +122,30 @@ export function refreshWhenBooksArrive(
  * Это ускорение, а не путь: сойтись всё обязано и без единого события — на
  * ближайшем чтении или записи.
  */
-export function flushWhenAppReturns(sync: { flush(): Promise<void> }): () => void {
+export function flushWhenAppReturns(sync: { catchUp(): Promise<void> }): () => void {
   if (typeof window === "undefined") return () => {};
 
+  // Сверка, а не только отправка своего: пока приложение было в фоне, поток
+  // событий спал вместе с ним, и чужие правки прошли мимо.
   const wake = () => {
-    if (document.visibilityState === "visible") void sync.flush();
+    if (document.visibilityState === "visible") void sync.catchUp();
   };
-  const online = () => void sync.flush();
+  const online = () => void sync.catchUp();
+  // И просто раз в пару минут, пока приложение на экране: поток событий может
+  // умереть так, что этого не видно ни ему, ни нам, — а сверка стоит одну
+  // короткую просьбу к службе.
+  const every = window.setInterval(wake, CATCH_UP_EVERY_MS);
 
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("online", online);
   return () => {
+    window.clearInterval(every);
     document.removeEventListener("visibilitychange", wake);
     window.removeEventListener("online", online);
   };
 }
+
+const CATCH_UP_EVERY_MS = 2 * 60_000;
 
 const local = new LocalApiClient();
 

@@ -94,6 +94,9 @@ const BACKOFF_MS = [2000, 4000, 8000, 16000, 30000];
  */
 const MAX_RACES = 3;
 
+/** Повтор после ошибки, которая не про связь. */
+const ERROR_RETRY_MS = 60_000;
+
 function sealed(value: unknown): value is SealedBook {
   if (value === null || typeof value !== "object") return false;
   const candidate = value as Partial<SealedBook>;
@@ -151,6 +154,13 @@ export const BEFORE_CLEAR_SUFFIX = ":before-clear";
  */
 export const DEVICE_ONLY_SUFFIX = ":device";
 
+/**
+ * Ежедневные копии всех данных на главном устройстве. Это страховка ИМЕННО
+ * этой машины: на случай, если синхронизация однажды привезёт что-то не то,
+ * вернуть можно отсюда, без службы и без других устройств.
+ */
+export const LOCAL_COPY_SUFFIX = ":local-copy";
+
 function syncableKey(key: string): boolean {
   return (
     !LOCAL_ONLY_KEYS.includes(key) &&
@@ -163,7 +173,8 @@ function syncableKey(key: string): boolean {
     !key.endsWith(PRE_UPGRADE_SUFFIX) &&
     !key.endsWith(RESCUE_SUFFIX) &&
     !key.endsWith(BEFORE_CLEAR_SUFFIX) &&
-    !key.endsWith(DEVICE_ONLY_SUFFIX)
+    !key.endsWith(DEVICE_ONLY_SUFFIX) &&
+    !key.endsWith(LOCAL_COPY_SUFFIX)
   );
 }
 
@@ -380,11 +391,19 @@ export class SyncingStorageAdapter implements StorageAdapter {
 
     // Событие говорит «сходи посмотри», а не «вот данные»: соединение рвётся,
     // события теряются, и сходиться всё обязано и без них.
-    this.unwatch = transport.watch(({ slot, version }) => {
-      if (!syncableKey(slot) || (this.versions[slot] ?? 0) >= version) return;
-      this.inbox.add(slot);
-      void this.pump();
-    });
+    this.unwatch = transport.watch(
+      ({ slot, version }) => {
+        if (!syncableKey(slot) || (this.versions[slot] ?? 0) >= version) return;
+        this.inbox.add(slot);
+        void this.pump();
+      },
+      // Поток открылся заново — значит, какое-то время его не было, и всё, что
+      // другие устройства записали за это время, прошло мимо. Без этого
+      // устройство после первого же обрыва (телефон уснул, сменилась сеть)
+      // показывало «подключено» и не видело чужих правок, пока человек сам
+      // что-нибудь не запишет.
+      () => this.catchUp()
+    );
 
     // Первым делом — забрать всё, что уже лежит на сервере по знакомым ячейкам,
     // и отправить всё, что успели написать без связи.
@@ -430,6 +449,20 @@ export class SyncingStorageAdapter implements StorageAdapter {
    */
   async flush(): Promise<void> {
     await this.pump();
+  }
+
+  /**
+   * Сверить с сервером всё: спросить перечень ячеек и забрать те, что ушли
+   * вперёд. Одна короткая просьба, если ничего не менялось, — поэтому её не
+   * жалко делать при каждом возвращении в приложение и раз в пару минут.
+   *
+   * Это то, что делает синхронизацию независимой от потока событий. Поток —
+   * ускорение: он рвётся, засыпает вместе с телефоном, а посредник по дороге
+   * может держать его «открытым», хотя по нему давно ничего не идёт.
+   */
+  catchUp(): Promise<void> {
+    this.askForSlots = true;
+    return this.pump();
   }
 
   private set(status: SyncStatus): void {
@@ -495,6 +528,12 @@ export class SyncingStorageAdapter implements StorageAdapter {
     if (!this.transport || !this.merge) return Promise.resolve();
     this.running = this.drain().finally(() => {
       this.running = null;
+      // Событие или запись, пришедшие в самом конце прогонки — после того как
+      // очередь сочли пустой, но до того как прогонка закончилась, — иначе
+      // ждали бы следующего повода, которого может и не быть.
+      if (this.state === "synced" && (this.inbox.size > 0 || this.outbox.size > 0)) {
+        void this.pump();
+      }
     });
     return this.running;
   }
@@ -503,7 +542,11 @@ export class SyncingStorageAdapter implements StorageAdapter {
     try {
       if (this.askForSlots && this.transport) {
         for (const summary of await this.transport.list()) {
-          if (syncableKey(summary.slot)) this.inbox.add(summary.slot);
+          // Только то, что ушло вперёд: забирать заново уже виденное незачем, а
+          // ячеек с фото чеков у человека могут быть сотни.
+          if (!syncableKey(summary.slot)) continue;
+          if (this.versions[summary.slot] === summary.version) continue;
+          this.inbox.add(summary.slot);
         }
         // Спрошено. Не вышло — флаг остаётся, и следующий заход спросит снова.
         this.askForSlots = false;
@@ -537,6 +580,11 @@ export class SyncingStorageAdapter implements StorageAdapter {
         this.arm();
       } else {
         this.set("error");
+        // Раньше после ошибки повтора не было вовсе: синхронизация вставала до
+        // перезапуска приложения, а значок так и висел. Ошибка сервера чаще
+        // всего проходит сама (служба перезапускалась, гонка устройств), и
+        // пробовать снова надо — но не часто.
+        this.arm(ERROR_RETRY_MS);
       }
     }
   }
@@ -547,10 +595,10 @@ export class SyncingStorageAdapter implements StorageAdapter {
   }
 
   /** Ставит повтор. Задержка растёт, но не бесконечно. */
-  private arm(): void {
+  private arm(fixed?: number): void {
     if (this.retryArmed) return;
     this.retryArmed = true;
-    const delay = BACKOFF_MS[Math.min(this.attempt, BACKOFF_MS.length - 1)];
+    const delay = fixed ?? BACKOFF_MS[Math.min(this.attempt, BACKOFF_MS.length - 1)];
     this.attempt += 1;
     this.timer(() => {
       this.retryArmed = false;
@@ -656,7 +704,10 @@ export class SyncingStorageAdapter implements StorageAdapter {
       if (!merged.differs) return;
     }
 
-    // Три подряд — это уже не гонка, а круг. Лучше сказать вслух.
-    this.set("error");
+    // Три подряд — это уже не гонка, а круг. Лучше сказать вслух — и НЕ
+    // выпускать ячейку из очереди. Раньше здесь только менялся значок, а
+    // прогонка шла дальше и снимала ячейку с отправки как отправленную: на
+    // устройстве запись есть, на сервере нет, и никто больше за ней не придёт.
+    throw new Error("Не удалось отправить: другие устройства пишут одновременно.");
   }
 }
