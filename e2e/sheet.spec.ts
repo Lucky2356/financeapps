@@ -13,7 +13,10 @@ async function importOwnerSheet(page: Page) {
   await dialog.getByLabel("Вставьте таблицу сюда").fill(OWNER_SHEET_TSV);
   await expect(dialog.getByTestId("sheet-import-ok")).toContainText("во всех 11 мес.");
   await dialog.getByRole("button", { name: "Перенести", exact: true }).click();
-  await expect(page.getByTestId("sheet-grid")).toBeVisible();
+  // На телефоне таблица открывается «По месяцам», на ПК — сеткой.
+  await expect(
+    page.locator('[data-testid="sheet-grid"]:visible, [data-testid="sheet-month-view"]:visible')
+  ).toBeVisible();
 }
 
 /** Ячейка: строка месяца и столбец по названию. */
@@ -77,6 +80,9 @@ test.describe("телефон", () => {
 
   test("ячейка правится в окне, таблица листается вбок", async ({ page }) => {
     await importOwnerSheet(page);
+    // Сетка — второй вид; первый на телефоне — «По месяцам».
+    await page.getByTestId("budget-sheet").getByText("Таблица", { exact: true }).click();
+    await expect(page.getByTestId("sheet-grid")).toBeVisible();
     await cell(page, "2026-10", "Продукты").tap();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Продукты")).toBeVisible();

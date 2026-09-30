@@ -112,6 +112,90 @@ function setCell(state: SheetState, cell: { month: string; columnId: string; inp
 
 type Body = Record<string, unknown>;
 
+/** Что человек выбрал в мастере создания таблицы. */
+type Wizard = {
+  months: number;
+  opening: number | null;
+  income: number | null;
+  savings: boolean;
+  savingsOpening: number | null;
+  articles: Array<{ name: string; categoryId: string | null; monthly: number | null }>;
+};
+
+function optionalAmount(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const amount = Number(String(value).replace(/\s/g, "").replace(",", "."));
+  return Number.isFinite(amount) ? amount : null;
+}
+
+/** Есть ли в запросе выбор мастера. Без него `start` работает как раньше. */
+function readWizard(body: Body): Wizard | null {
+  if (!Array.isArray(body.articles)) return null;
+  const months = Math.round(Number(body.months) || 12);
+  return {
+    months: Math.max(1, Math.min(60, months)),
+    opening: optionalAmount(body.opening),
+    income: optionalAmount(body.income),
+    savings: body.savings !== false,
+    savingsOpening: optionalAmount(body.savingsOpening),
+    articles: (body.articles as Body[])
+      .slice(0, 40)
+      .map((raw) => ({
+        name: String(raw.name ?? "")
+          .trim()
+          .slice(0, 80),
+        categoryId: raw.categoryId ? String(raw.categoryId) : null,
+        monthly: optionalAmount(raw.monthly)
+      }))
+      .filter((article) => article.name)
+  };
+}
+
+/** Столбцы мастера: Остаток, Доходы, выбранные статьи, а в сбережениях — подушка и перевод. */
+function wizardColumns(wizard: Wizard, makeId: () => string): SheetColumn[] {
+  const columns: SheetColumn[] = [
+    { id: makeId(), name: "Остаток", kind: "opening", order: 0 },
+    { id: makeId(), name: "Доходы", kind: "income", order: 1 }
+  ];
+  wizard.articles.forEach((article, index) =>
+    columns.push({
+      id: makeId(),
+      name: article.name,
+      kind: "expense",
+      categoryId: article.categoryId,
+      order: 2 + index
+    })
+  );
+  if (wizard.savings) {
+    columns.push({ id: makeId(), name: "Подушка на начало", kind: "savingsOpening", order: 1000 });
+    columns.push({ id: makeId(), name: "В сбережения", kind: "toSavings", order: 1001 });
+  }
+  return columns;
+}
+
+/** Суммы мастера по клеткам: остаток и подушка — в первый месяц, остальное — в каждый. */
+function fillWizard(state: SheetState, wizard: Wizard, months: string[]) {
+  const columns = state.sheetColumns ?? [];
+  const byKind = (kind: SheetColumnKind) => columns.find((column) => column.kind === kind);
+  const put = (column: SheetColumn | undefined, month: string, amount: number | null) => {
+    if (column && amount !== null && amount !== 0) {
+      setCell(state, { month, columnId: column.id, input: String(amount) });
+    }
+  };
+  put(byKind("opening"), months[0], wizard.opening);
+  put(byKind("savingsOpening"), months[0], wizard.savingsOpening);
+  for (const month of months) {
+    put(byKind("income"), month, wizard.income);
+    for (const article of wizard.articles) {
+      put(
+        columns.find((column) => column.kind === "expense" && column.name === article.name),
+        month,
+        article.monthly
+      );
+    }
+  }
+}
+
 /**
  * Правка таблицы. `makeId` — от вызывающего: у книги свой способ выдавать
  * имена строкам. Категории для переноса из Excel заводит тоже вызывающий — у
@@ -123,15 +207,25 @@ export function writeSheet(state: SheetState, body: Body, makeId: () => string):
 
   switch (action) {
     case "start": {
-      // Пустой лист: Остаток, Доходы, подушка — и год вперёд с этого месяца.
-      if (columns.length === 0) state.sheetColumns = renumber(starterColumns(makeId));
-      let at = month(body.from);
-      for (let index = 0; index < 12; index += 1) {
+      // Пустой лист: Остаток, Доходы, подушка — и год вперёд с этого месяца. С
+      // мастером (статьи, суммы, число месяцев) — то, что человек выбрал.
+      const wizard = readWizard(body);
+      if (columns.length === 0) {
+        const made = wizard ? wizardColumns(wizard, makeId) : starterColumns(makeId);
+        state.sheetColumns = renumber(made);
+      }
+      const from = month(body.from);
+      let at = from;
+      const filled = wizard ? wizard.months : 12;
+      const months: string[] = [];
+      for (let index = 0; index < filled; index += 1) {
         ensureMonth(state, at);
+        months.push(at);
         const [year, m] = at.split("-").map(Number);
         const next = new Date(year, m, 1);
         at = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
       }
+      if (wizard && columns.length === 0) fillWizard(state, wizard, months);
       return readSheet(state);
     }
 

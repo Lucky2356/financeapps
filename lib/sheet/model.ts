@@ -20,7 +20,9 @@ export const SHEET_COLUMN_KINDS = [
   "toSavings",
   "fromSavings",
   "savingsOpening",
-  "savingsIncome"
+  "savingsIncome",
+  // Текст, а не деньги: «Комментарии», «За что». Ничего не считает.
+  "note"
 ] as const;
 
 export type SheetColumnKind = (typeof SHEET_COLUMN_KINDS)[number];
@@ -54,6 +56,8 @@ export type ComputedCell = {
   error?: string;
   /** Посчитано таблицей, а не вписано: Остаток из прошлого Итога. */
   auto?: boolean;
+  /** Клетка текстового столбца: `input` — сам текст, числа в ней нет. */
+  text?: boolean;
 };
 
 export type ComputedRow = {
@@ -128,6 +132,11 @@ export function computeSheet(input: {
     for (const column of columns) {
       const cell = byKey.get(cellKey(month, column.id));
       const raw = cell?.input ?? "";
+      if (column.kind === "note") {
+        // Текст не разбирается как формула — иначе «купили торт» была бы ошибкой.
+        cells[column.id] = { input: raw, value: null, text: true };
+        continue;
+      }
       const result = evaluate(raw);
       const computed: ComputedCell = {
         input: raw,
@@ -187,6 +196,7 @@ export function computeSheet(input: {
 
   const totals: ColumnTotals = {};
   for (const column of columns) {
+    if (column.kind === "note") continue;
     let sum = 0;
     let filled = 0;
     for (const row of rows) {
