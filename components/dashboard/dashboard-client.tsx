@@ -272,7 +272,7 @@ function CategoryBreakdownCard({
                         item.categoryId &&
                         onDrill({ title: item.name, categoryIds: [item.categoryId] })
                       }
-                      className="flex w-full items-center justify-between gap-3 rounded px-1 text-left text-sm transition-colors enabled:hover:bg-muted/60 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex w-full items-center justify-between gap-3 rounded px-1 py-1.5 text-left text-sm transition-colors enabled:hover:bg-muted/60 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <span

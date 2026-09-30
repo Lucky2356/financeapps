@@ -522,7 +522,7 @@ function BudgetForm({
         <button
           type="button"
           onClick={applySuggestion}
-          className="text-[11px] text-primary hover:underline"
+          className="py-2 text-[11px] text-primary hover:underline"
           title={t("bud.bySuggestTitle")}
         >
           {t("bud.bySuggest", { amount: formatCurrency(budget.suggestedLimit, currency) })}

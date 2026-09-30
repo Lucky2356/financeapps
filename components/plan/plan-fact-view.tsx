@@ -645,7 +645,7 @@ function DrillFigure({
       type="button"
       onClick={onOpen}
       title={t("drill.open")}
-      className="rounded underline decoration-dotted underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="tap-target rounded underline decoration-dotted underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Figure value={value} money={money} />
     </button>
