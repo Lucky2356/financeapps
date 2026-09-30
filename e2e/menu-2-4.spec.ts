@@ -2,6 +2,12 @@ import { expect, test } from "@playwright/test";
 
 import { openSettled, seedExampleData } from "./helpers";
 
+// Переключатели свёрнуты, чтобы не удлинять «Основные».
+async function openMenuSections(page: import("@playwright/test").Page) {
+  const toggle = page.getByTestId("menu-sections-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+
 // 2.4: разделы меню, горячие клавиши и платёж по долгу.
 
 test.describe("ПК", () => {
@@ -14,6 +20,7 @@ test.describe("ПК", () => {
     const sidebar = page.locator("aside");
     await expect(sidebar.getByRole("link", { name: "Инвестиции" })).toBeVisible();
 
+    await openMenuSections(page);
     await page.getByRole("switch", { name: "Инвестиции" }).click();
     await expect(sidebar.getByRole("link", { name: "Инвестиции" })).toHaveCount(0);
     // Соседние на месте.
@@ -22,6 +29,7 @@ test.describe("ПК", () => {
     await openSettled(page, "/settings?section=general");
     await expect(sidebar.getByRole("link", { name: "Инвестиции" })).toHaveCount(0);
 
+    await openMenuSections(page);
     await page.getByRole("switch", { name: "Инвестиции" }).click();
     await expect(sidebar.getByRole("link", { name: "Инвестиции" })).toBeVisible();
   });
@@ -76,6 +84,7 @@ test.describe("телефон", () => {
     const bar = page.getByRole("navigation").last();
     await expect(bar.getByRole("link", { name: "Инвест." })).toBeVisible();
 
+    await openMenuSections(page);
     await page.getByRole("switch", { name: "Инвестиции" }).click();
     await expect(bar.getByRole("link", { name: "Инвест." })).toHaveCount(0);
     await expect(bar.getByRole("link", { name: "Настройки" })).toBeVisible();

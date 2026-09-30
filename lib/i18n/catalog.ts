@@ -1765,6 +1765,7 @@ const ru: Messages = {
   "set.group.menu": "Разделы меню",
   "set.menu.lead":
     "Уберите то, чем не пользуетесь: раздел исчезнет из меню и поиска, а ваши записи останутся. Вернуть его можно здесь же.",
+  "set.menu.hiddenCount": "Скрыто разделов: {count}. Нажмите, чтобы изменить.",
   "set.group.look": "Оформление",
   "set.group.recurring": "Регулярные платежи",
   "set.group.goals": "Цели и риск",
@@ -4246,6 +4247,7 @@ const en: Messages = {
   "set.group.menu": "Menu sections",
   "set.menu.lead":
     "Hide what you do not use: the section disappears from the menu and search, but your records stay. You can bring it back here.",
+  "set.menu.hiddenCount": "Hidden sections: {count}. Tap to change.",
   "set.group.look": "Appearance",
   "set.group.recurring": "Recurring payments",
   "set.group.goals": "Goals and risk",
