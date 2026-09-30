@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, CreditCard, Edit2, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, CreditCard, Edit2, HandCoins, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { PayDebtDialog } from "@/components/debts/pay-debt-dialog";
 import { DebtPayoffService } from "@/services/DebtPayoffService";
 import { cn } from "@/lib/utils";
 
@@ -78,6 +79,7 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
   const confirm = useConfirm();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<LiabilitiesPageData["liabilities"][number] | null>(null);
+  const [paying, setPaying] = useState<LiabilitiesPageData["liabilities"][number] | null>(null);
 
   async function refresh() {
     await reload();
@@ -264,6 +266,18 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
                   ) : null}
                   {liability.settledAt ? (
                     <p className="mt-1 text-xs text-success">{t("debt.settled.note")}</p>
+                  ) : liability.balance > 0 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      data-testid="debt-pay"
+                      onClick={() => setPaying(liability)}
+                    >
+                      <HandCoins className="size-4" />
+                      {t("debt.pay")}
+                    </Button>
                   ) : null}
                 </CardContent>
               </Card>
@@ -271,6 +285,8 @@ export function DebtManager({ data }: { data: LiabilitiesPageData }) {
           )}
         </div>
       )}
+
+      <PayDebtDialog debt={paying} onClose={() => setPaying(null)} onDone={refresh} />
 
       <Dialog
         open={editing !== null}

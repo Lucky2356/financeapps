@@ -2,6 +2,7 @@
 
 import { BeforeClearCard } from "@/components/settings/before-clear-card";
 import { LocalCopiesCard } from "@/components/settings/local-copies-card";
+import { MenuSectionRows } from "@/components/settings/menu-sections";
 import {
   AlertTriangle,
   Check,
@@ -412,7 +413,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
       lead: t("set.nav.general.lead"),
       icon: SlidersHorizontal,
       keywords:
-        "основные general валюта currency язык language русский english тема theme светлая light тёмная dark системная system плотность density внешний вид appearance копейки kopecks крупный текст шрифт large text font запуск start экран screen счёт account по умолчанию default скрыть суммы hide amounts privacy",
+        "основные general валюта currency язык language русский english тема theme светлая light тёмная dark системная system плотность density внешний вид appearance копейки kopecks крупный текст шрифт large text font запуск start экран screen счёт account по умолчанию default скрыть суммы hide amounts privacy разделы меню скрыть убрать инвестиции кэшбэк поездки вычеты menu sections hide",
       node: (
         <>
           <Group title={t("set.group.display")}>
@@ -447,6 +448,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
               checked={areKopecksShown()}
               onChange={setKopecksShown}
             />
+          </Group>
+          <Group title={t("set.group.menu")}>
+            <MenuSectionRows />
           </Group>
           <Group title={t("set.group.look")}>
             <SettingRow label={t("set.theme")} help={t("set.help.theme")}>

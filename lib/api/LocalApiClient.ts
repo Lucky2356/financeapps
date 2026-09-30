@@ -69,7 +69,7 @@ import { futureDated, storedTransactionDate, todayDay } from "@/lib/transactions
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
-import { activeDebts } from "@/lib/debts/settled";
+import { activeDebts, isSettledDebt } from "@/lib/debts/settled";
 import { isUsableLot, parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildAssetKindStructure, buildSectorStructure } from "@/lib/data/derive";
@@ -1158,6 +1158,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
     if (pathname === "/recurring/materialize-all")
       return this.saveAndReturn<TResponse>(state, this.materializeAllDue(state));
+    if (pathname === "/debts/pay")
+      return this.saveAndReturn<TResponse>(state, this.payDebt(state, body));
     if (pathname === "/debts/auto-pay")
       return this.saveAndReturn<TResponse>(state, this.autoPayDebts(state));
     if (pathname === "/networth/snapshot")
@@ -2180,6 +2182,65 @@ export class LocalApiClient implements ApiClient {
   // rules). Each posting creates a normal EXPENSE transaction — so budgets and
   // analytics see it like any other spending — and reduces the outstanding
   // balance. Idempotent: `lastPaidMonth` stops a second run in the same month.
+  /**
+   * Платёж по долгу руками: трата со счёта и такое же уменьшение долга — как
+   * автоплатёж, только на ту сумму и в тот день, которые назвал человек.
+   *
+   * Сумма — в валюте ДОЛГА, со счёта уходит её пересчёт в валюту счёта: платить
+   * доллары по кредиту с рублёвой карты — обычное дело. Заплатили больше, чем
+   * осталось, — долг просто станет нулевым; лишнее — те же проценты и комиссия,
+   * и со счёта оно ушло на самом деле.
+   */
+  private payDebt(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const liability = state.liabilities.find((item) => item.id === input.id);
+    if (!liability) throw new Error("Такого долга нет.");
+    if (isSettledDebt(liability)) throw new Error("Этот долг уже закрыт.");
+    const amount = Number(
+      String(input.amount ?? "")
+        .replace(/[\s\u00a0]/g, "")
+        .replace(",", ".")
+    );
+    if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
+    const account =
+      state.accounts.find((item) => item.id === input.accountId && !item.isArchived) ??
+      state.accounts.find((item) => item.id === liability.paymentAccountId && !item.isArchived);
+    if (!account) throw new Error("Выберите счёт, с которого платите.");
+    const category =
+      state.categories.find(
+        (item) => item.id === liability.paymentCategoryId && item.kind === "EXPENSE"
+      ) ?? state.categories.find((item) => item.kind === "EXPENSE");
+    if (!category) throw new Error("Нет категории расходов, под которую записать платёж.");
+
+    const date = input.date ? String(input.date) : new Date().toISOString();
+    const spent = roundMoney(
+      convert(amount, liability.currency, account.currency, this.rates(state))
+    );
+    const tx = this.upsertTransaction(
+      state,
+      {
+        amount: String(spent),
+        type: "EXPENSE",
+        accountId: account.id,
+        categoryId: category.id,
+        date,
+        description: liability.name,
+        liabilityId: liability.id
+      },
+      "POST"
+    );
+
+    const balance = Math.max(0, roundMoney(liability.balance - amount));
+    // Заплатили в этом месяце — автоплатёж второй раз не спишет.
+    const month = tx.date.slice(0, 7);
+    state.liabilities = state.liabilities.map((item) =>
+      item.id === liability.id
+        ? { ...item, balance, ...(month === monthKey(new Date()) ? { lastPaidMonth: month } : {}) }
+        : item
+    );
+    return { paid: amount, balance, closed: balance === 0, transactionId: tx.id };
+  }
+
   private autoPayDebts(state: LocalState) {
     const today = new Date();
     const due = dueLiabilities(state.liabilities, today);
