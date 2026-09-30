@@ -218,6 +218,7 @@ export function DevicesPanel() {
                         type="button"
                         size="sm"
                         variant="ghost"
+                        className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 text-left"
                         onClick={() => setRenaming(null)}
                         disabled={busy}
                       >
@@ -246,7 +247,7 @@ export function DevicesPanel() {
                         {seen(device.last_seen_at)}
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
+                    <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
                       <Button
                         type="button"
                         size="sm"
@@ -267,6 +268,7 @@ export function DevicesPanel() {
                           type="button"
                           size="sm"
                           variant="ghost"
+                          className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 text-left"
                           disabled={busy}
                           onClick={() => void ask("primary", device)}
                         >
@@ -279,6 +281,7 @@ export function DevicesPanel() {
                           type="button"
                           size="sm"
                           variant="ghost"
+                          className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 text-left"
                           disabled={busy}
                           onClick={() => void ask("forget", device)}
                         >
@@ -290,6 +293,7 @@ export function DevicesPanel() {
                           type="button"
                           size="sm"
                           variant="ghost"
+                          className="h-auto min-h-8 max-w-full whitespace-normal py-1.5 text-left"
                           disabled={busy}
                           onClick={() => void ask("forget", device)}
                         >

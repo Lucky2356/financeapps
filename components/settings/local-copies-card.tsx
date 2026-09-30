@@ -78,7 +78,7 @@ export function LocalCopiesCard() {
   }
 
   return (
-    <div className="space-y-3" data-testid="local-copies">
+    <div className="space-y-3 px-4 py-4 sm:px-5" data-testid="local-copies">
       <p className="text-sm text-muted-foreground">
         {main === false
           ? t("set.localCopies.other")
