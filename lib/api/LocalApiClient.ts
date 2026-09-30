@@ -47,7 +47,7 @@ import {
   type Stamped,
   type Tombstone
 } from "@/lib/sync/row-stamps";
-import { localStateSchema } from "@/lib/api/local/schemas";
+import { localStateSchema, transactionRowSchema } from "@/lib/api/local/schemas";
 import {
   BEFORE_CLEAR_SUFFIX,
   LOCAL_COPY_SUFFIX,
@@ -55,6 +55,7 @@ import {
   RESCUE_SUFFIX
 } from "@/lib/storage/SyncingStorageAdapter";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import { parseSort, sortTransactions } from "@/lib/transactions/sort";
 import {
   isPhotoData,
   orphanedPhotos,
@@ -1114,6 +1115,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
       return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
+    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "restore")
+      return this.saveAndReturn<TResponse>(state, this.restoreTransaction(state, body));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "split")
       return this.saveAndReturn<TResponse>(state, this.createSplit(state, body));
     if (pathname === "/transactions") {
@@ -1690,6 +1693,34 @@ export class LocalApiClient implements ApiClient {
     );
 
     return { transferId, transactions: [expense, income] };
+  }
+
+  /**
+   * Вернуть только что удалённую операцию — той же строкой, с тем же номером,
+   * временем записи и метками, — и вернуть её деньги на счёт. Это «Отменить»
+   * после удаления: раньше удаление спрашивало подтверждение, а теперь просто
+   * удаляет, и отменить его должно быть можно.
+   *
+   * Фото чека здесь не возвращается: оно удаляется отдельно, и экран кладёт его
+   * обратно своим запросом. Повторный возврат ничего не делает — второе нажатие
+   * не удвоит деньги.
+   */
+  private restoreTransaction(state: LocalState, body: unknown): TransactionRow {
+    const raw = (body as { transaction?: unknown })?.transaction;
+    const parsed = transactionRowSchema
+      .omit({ updatedAt: true })
+      .safeParse(typeof raw === "string" ? JSON.parse(raw) : raw);
+    if (!parsed.success) throw new Error("Не получилось вернуть операцию.");
+    const { photo: _photo, ...row } = parsed.data as TransactionRow;
+    void _photo;
+    const account = state.accounts.find((item) => item.id === row.account.id && !item.isArchived);
+    const category = state.categories.find((item) => item.id === row.category.id);
+    if (!account || !category)
+      throw new Error("Счёт или категория этой операции уже удалены — вернуть её нельзя.");
+    if (state.transactions.some((item) => item.id === row.id)) return row;
+    state.transactions = [row, ...state.transactions];
+    this.applyBalance(state, account.id, row.type === "INCOME" ? row.amount : -row.amount);
+    return row;
   }
 
   private deleteTransaction(state: LocalState, transactionId: string) {
@@ -2856,21 +2887,19 @@ export class LocalApiClient implements ApiClient {
       page,
       limit
     };
-    const filtered = [...state.transactions]
-      .filter((transaction) => matchesCriteria(transaction, criteria))
-      .sort(
-        (left, right) =>
-          new Date(right.date).getTime() - new Date(left.date).getTime() ||
-          // В пределах дня — сначала записанные позже. У старых строк отметки
-          // нет, и свежая встаёт над ними.
-          (right.createdAt ?? "").localeCompare(left.createdAt ?? "")
-      );
-    const start = (page - 1) * limit;
-
     // The rows keep the amount as it was recorded — a dollar operation reads
     // as dollars — and carry what it is worth in the base currency beside it,
     // so the totals above the list add up like every other total in the app.
     const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
+    // Порядок — по выбору (`sort`), а «крупные сверху» сравнивают в основной
+    // валюте: доллары нельзя ставить рядом с рублями «как есть».
+    const filtered = sortTransactions(
+      state.transactions.filter((transaction) => matchesCriteria(transaction, criteria)),
+      parseSort(searchParams.get("sort")),
+      (row) => baseAmountOf(row, context)
+    );
+    const start = (page - 1) * limit;
+
     const rows = filtered.slice(start, start + limit).map((row) => {
       const base = baseAmountOf(row, context);
       return base === row.amount ? row : { ...row, baseAmount: base };

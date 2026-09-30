@@ -6,7 +6,7 @@ import { FavoriteChips } from "@/components/transactions/favorite-chips";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -15,7 +15,16 @@ import { suggestCategoryId } from "@/lib/category-suggest";
 import { parseEntry, type ParsedEntry } from "@/lib/transactions/parse-entry";
 import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
-import type { ImportPageData, SettingsPageData } from "@/lib/data";
+import type { BudgetsPageData, ImportPageData, SettingsPageData } from "@/lib/data";
+import { limitHint } from "@/lib/budget-limit-hint";
+import { quickDates } from "@/lib/transactions/quick-dates";
+import {
+  draftDate,
+  DRAFT_KEY,
+  encodeDraft,
+  hasContent,
+  readDraft
+} from "@/lib/transactions/quick-draft";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
 import { ReceiptPhotoDialog } from "@/components/transactions/receipt-photo-dialog";
@@ -57,7 +66,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
-import { DEFAULT_ACCOUNT_KEY, LAST_ACCOUNT_KEY, readMine, writeMine } from "@/lib/storage/mine";
+import {
+  DEFAULT_ACCOUNT_KEY,
+  LAST_ACCOUNT_KEY,
+  readMine,
+  removeMine,
+  writeMine
+} from "@/lib/storage/mine";
 
 type AccountOption = ImportPageData["accounts"][number];
 type CategoryOption = ImportPageData["categories"][number];
@@ -132,6 +147,16 @@ export function QuickAddFab({
   const [cashback, setCashback] = useState<CashbackRule[]>([]);
   const [trip, setTrip] = useState<TripView | null>(null);
   const [skipTrip, setSkipTrip] = useState(false);
+  // Лимиты месяца операции — для подсказки «осталось в лимите» под категорией.
+  const [limits, setLimits] = useState<{
+    month: string;
+    rows: BudgetsPageData["budgets"];
+  } | null>(null);
+  // Форму заполнил черновик: недописанное с прошлого раза.
+  const [restored, setRestored] = useState(false);
+  // Окно закрыто записью, а не «передумал» — черновика не остаётся.
+  const recorded = useRef(false);
+  const wasOpen = useRef(false);
 
   // The server props are empty on the desktop static build — the real accounts
   // and categories live in the client API (LocalApiClient/IndexedDB).
@@ -216,6 +241,29 @@ export function QuickAddFab({
     setSplitParts([]);
     setManualCategory(false);
     setAutoSuggested(false);
+    setRestored(false);
+    // Недописанное с прошлого раза: закрыли окно случайно — набранное на месте.
+    // Ярлык другого типа («Доход») и съёмка чека начинают с чистого.
+    const draft = request.scanReceipt ? null : readDraft(readMine(DRAFT_KEY), Date.now());
+    if (draft && (!request.type || request.type === draft.type)) {
+      setType(draft.type);
+      setAmount(draft.amount);
+      setDescription(draft.description);
+      setTags(draft.tags);
+      const known = (fresh ?? refs).categories.some(
+        (category) => category.id === draft.categoryId && category.kind === draft.type
+      );
+      if (known) {
+        setCategoryId(draft.categoryId);
+        setManualCategory(true);
+      } else if (draft.type !== openedType) {
+        setCategoryId(lastOfType(recent, draft.type)?.category.id ?? "");
+      }
+      if (usable(draft.accountId)) setAccountId(draft.accountId);
+      const keptDate = draftDate(draft, Date.now());
+      if (keptDate) setDate(keptDate);
+      setRestored(true);
+    }
     // Ярлык «Сканировать чек»: сначала камера, окно — уже с суммой. Не
     // наоборот: поверх открытого окна камера вешает телефон (см. scanReceipt).
     if (request.scanReceipt && cameraPossible()) {
@@ -263,6 +311,82 @@ export function QuickAddFab({
     type === "EXPENSE" && trip && trip.from <= operationDay && operationDay <= trip.to
       ? trip
       : null;
+
+  // Лимиты читаются, пока окно открыто и это расход: за месяц операции — она
+  // может быть и вчерашней, из прошлого месяца.
+  useEffect(() => {
+    if (!open || type !== "EXPENSE") return;
+    let alive = true;
+    void apiClient
+      .get<BudgetsPageData>(`/budgets?month=${operationMonth}`)
+      .then((result) => {
+        if (alive) setLimits({ month: operationMonth, rows: result.budgets });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [open, type, operationMonth]);
+
+  // Окно закрыли не записью — набранное откладывается. Записью — стирается.
+  useEffect(() => {
+    if (open) {
+      wasOpen.current = true;
+      return;
+    }
+    if (!wasOpen.current) return;
+    wasOpen.current = false;
+    if (recorded.current) {
+      recorded.current = false;
+      removeMine(DRAFT_KEY);
+      return;
+    }
+    const draft = {
+      v: 1 as const,
+      savedAt: Date.now(),
+      type,
+      amount,
+      categoryId,
+      accountId,
+      description,
+      tags,
+      date
+    };
+    try {
+      if (hasContent(draft)) writeMine(DRAFT_KEY, encodeDraft(draft));
+    } catch {
+      /* черновик — удобство, а не данные */
+    }
+    // Только момент закрытия: остальное читается из этого же рендера.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Сколько осталось в лимите категории — до траты, с уже набранной суммой.
+  const limitRow =
+    limits?.month === operationMonth
+      ? limits.rows.find((row) => row.categoryId === categoryId)
+      : undefined;
+  const limitNote =
+    type === "EXPENSE" && categoryId
+      ? limitHint(
+          limitRow,
+          splitParts.length > 0 ? Math.max(splitRemainder(amount, splitParts), 0) : toNumber(amount)
+        )
+      : null;
+
+  /** «Начать заново»: убрать восстановленное и вернуться к пустой форме. */
+  function startOver() {
+    setAmount("");
+    setDescription("");
+    setTags("");
+    setSplitParts([]);
+    setCleanedDescription(null);
+    setManualCategory(false);
+    setAutoSuggested(false);
+    setCategoryId(lastOfType(ledger, type)?.category.id ?? "");
+    setRestored(false);
+    removeMine(DRAFT_KEY);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -324,6 +448,7 @@ export function QuickAddFab({
           { duration: 10_000 }
         );
       }
+      recorded.current = true;
       setOpen(false);
       router.refresh();
     } catch (error) {
@@ -354,6 +479,7 @@ export function QuickAddFab({
         /* ignore */
       }
       toast.success(t("qa.split.added", { count: extras.length + 1 }));
+      recorded.current = true;
       setOpen(false);
       router.refresh();
     } catch (error) {
@@ -377,6 +503,7 @@ export function QuickAddFab({
         toAccountId
       });
       toast.success(t("tx.toast.transferCreated"));
+      recorded.current = true;
       setOpen(false);
       router.refresh();
     } catch (error) {
@@ -573,12 +700,28 @@ export function QuickAddFab({
               type={type}
               accountId={accountId}
               onRecorded={() => {
+                recorded.current = true;
                 setOpen(false);
                 router.refresh();
               }}
             />
           ) : null}
           <div className="grid gap-4">
+            {restored ? (
+              <div
+                className="flex items-center justify-between gap-2 rounded-md bg-primary/10 px-3 py-2 text-xs"
+                data-testid="qa-draft"
+              >
+                <span>{t("qa.draft.restored")}</span>
+                <button
+                  type="button"
+                  className="shrink-0 font-medium underline"
+                  onClick={startOver}
+                >
+                  {t("qa.draft.discard")}
+                </button>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label>{t("tx.type")}</Label>
               {/* Three ways to record something, one row. */}
@@ -656,6 +799,31 @@ export function QuickAddFab({
                 </Select>
                 {autoSuggested ? (
                   <p className="text-xs text-primary">{t("tx.dialog.autoSuggested")}</p>
+                ) : null}
+                {limitNote ? (
+                  <p
+                    className={cn(
+                      "text-xs",
+                      limitNote.kind === "over" ? "text-destructive" : "text-muted-foreground"
+                    )}
+                    data-testid="limit-hint"
+                    data-kind={limitNote.kind}
+                  >
+                    {t(
+                      limitNote.kind === "over"
+                        ? limitNote.typed
+                          ? "limit.willExceed"
+                          : "limit.exceeded"
+                        : limitNote.typed
+                          ? "limit.willLeave"
+                          : "limit.left",
+                      {
+                        category: limitNote.category,
+                        amount: formatCurrency(limitNote.amount),
+                        limit: formatCurrency(limitNote.limit)
+                      }
+                    )}
+                  </p>
                 ) : null}
                 {splitParts.length > 0 ? (
                   <div className="space-y-2 rounded-lg border p-2" data-testid="split-parts">
@@ -816,16 +984,31 @@ export function QuickAddFab({
               <div className="space-y-2">
                 <Label htmlFor="fab-date">{t("common.date")}</Label>
                 {/* Дата — десять знаков; на всю ширину диалога поле было
-                    почти пустым. */}
-                <Input
-                  id="fab-date"
-                  name="date"
-                  type="date"
-                  className="w-44"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  required
-                />
+                    почти пустым. Рядом — три даты, нужные почти всегда: вчерашнюю
+                    трату через календарь телефона записывали пятью касаниями. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    id="fab-date"
+                    name="date"
+                    type="date"
+                    className="w-44"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                    required
+                  />
+                  {quickDates().map((quick) => (
+                    <Button
+                      key={quick.id}
+                      type="button"
+                      size="sm"
+                      variant={date === quick.iso ? "secondary" : "outline"}
+                      data-testid={`qa-date-${quick.id}`}
+                      onClick={() => setDate(quick.iso)}
+                    >
+                      {t(`qa.date.${quick.id}`)}
+                    </Button>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-2">

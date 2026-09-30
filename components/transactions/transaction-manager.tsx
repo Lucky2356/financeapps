@@ -6,7 +6,7 @@ import { CategoryOptionLabel } from "@/components/category-option";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -40,6 +40,10 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { countableAmount } from "@/lib/transactions/base-amount";
+import { groupByDay } from "@/lib/transactions/day-groups";
+import { isTransfer } from "@/lib/transactions/transfers";
+import { isDateSort, parseSort, TX_SORTS, type TxSort } from "@/lib/transactions/sort";
+import { withFilter } from "@/lib/transactions/filter-chips";
 import {
   keepChoice,
   NewAccountDialog,
@@ -150,6 +154,32 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     return `${own} (${formatCurrency(transaction.baseAmount)})`;
   };
 
+  // Порядок списка живёт в адресе (`sort`), как и фильтры: его можно отправить
+  // ссылкой, и он переживает обновление страницы.
+  const sort = parseSort(searchParams.get("sort"));
+  const sortLabel: Record<TxSort, string> = {
+    "date-desc": t("tx.sort.dateDesc"),
+    "date-asc": t("tx.sort.dateAsc"),
+    "amount-desc": t("tx.sort.amountDesc"),
+    "amount-asc": t("tx.sort.amountAsc")
+  };
+  function changeSort(next: TxSort) {
+    const params = withFilter(
+      new URLSearchParams(paramsString),
+      "sort",
+      next === "date-desc" ? "" : next
+    );
+    const query = params.toString();
+    router.push(query ? `/transactions?${query}` : "/transactions");
+  }
+
+  // Заголовки дней — только при порядке по дате: при «крупные сверху» дни
+  // перемешаны, и заголовки над каждой карточкой были бы шумом.
+  const dayGroups = isDateSort(sort)
+    ? groupByDay(visibleTransactions, new Date(), countableAmount)
+    : null;
+  const dayStarts = new Map((dayGroups ?? []).map((group) => [group.items[0].id, group]));
+
   const totals = visibleTransactions.reduce(
     (acc, transaction) => {
       // A dollar operation contributes what it is worth in the base currency,
@@ -222,6 +252,17 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
       confirmLabel: t("common.delete")
     });
     if (!ok) return;
+    // Подтвердили — и всё равно можно передумать: обычная операция удаляется с
+    // кнопкой «Отменить» в уведомлении. Переводы и части разделённой покупки
+    // затрагивают несколько строк — их возвращать по одной нельзя.
+    if (
+      !group &&
+      !transaction.transferId &&
+      !isTransfer({ description: transaction.description ?? null, transferId: undefined })
+    ) {
+      await deleteWithUndo(transaction);
+      return;
+    }
     const path = group
       ? `/transactions?splitGroupId=${encodeURIComponent(group)}`
       : `/transactions?id=${encodeURIComponent(transaction.id)}`;
@@ -230,6 +271,55 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
       error: t("tx.toast.deleteError"),
       onSuccess: refresh
     });
+  }
+
+  async function deleteWithUndo(transaction: TransactionsPageData["transactions"][number]) {
+    // Фото удаляется вместе с операцией, поэтому читается заранее: чтобы «Отменить»
+    // вернуло и его.
+    let photo: { data: string; place: "synced" | "device" } | null = null;
+    if (transaction.photo) {
+      const answer = await apiClient
+        .get<{
+          photo: string | null;
+          place: "synced" | "device" | null;
+        }>(`/photos?id=${encodeURIComponent(transaction.id)}`)
+        .catch(() => null);
+      if (answer?.photo && answer.place) photo = { data: answer.photo, place: answer.place };
+    }
+    await run(() => apiClient.delete(`/transactions?id=${encodeURIComponent(transaction.id)}`), {
+      error: t("tx.toast.deleteError"),
+      onSuccess: async () => {
+        await refresh();
+        toast(t("tx.toast.deleted"), {
+          duration: 8000,
+          action: { label: t("fav.undo"), onClick: () => void undoDelete(transaction, photo) }
+        });
+      }
+    });
+  }
+
+  async function undoDelete(
+    transaction: TransactionsPageData["transactions"][number],
+    photo: { data: string; place: "synced" | "device" } | null
+  ) {
+    try {
+      await apiClient.post("/transactions", { action: "restore", transaction });
+      if (photo) {
+        await apiClient
+          .post("/photos", {
+            transactionId: transaction.id,
+            data: photo.data,
+            width: 0,
+            height: 0,
+            place: photo.place
+          })
+          .catch(() => undefined);
+      }
+      toast.success(t("tx.toast.restored"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("tx.toast.saveError"));
+    }
+    await refresh();
   }
 
   // Bulk selection helpers.
@@ -443,18 +533,38 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
 
           {/* The totals belong to the rows below them: they follow the filter,
               unlike the month tiles at the top of the screen. */}
-          <p className="num flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="text-muted-foreground">
-              {t("tx.shown", { count: visibleTransactions.length })}
-            </span>
-            <span className="text-success">+{formatCurrency(totals.income)}</span>
-            <span className="text-destructive">-{formatCurrency(totals.expense)}</span>
-            <span
-              className={net >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}
-            >
-              {t("tx.sumNet")}: {formatCurrency(net)}
-            </span>
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="num flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="text-muted-foreground">
+                {t("tx.shown", { count: visibleTransactions.length })}
+              </span>
+              <span className="text-success">+{formatCurrency(totals.income)}</span>
+              <span className="text-destructive">-{formatCurrency(totals.expense)}</span>
+              <span
+                className={
+                  net >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"
+                }
+              >
+                {t("tx.sumNet")}: {formatCurrency(net)}
+              </span>
+            </p>
+            <Select value={sort} onValueChange={(value) => changeSort(value as TxSort)}>
+              <SelectTrigger
+                className="h-8 w-44 text-xs"
+                aria-label={t("tx.sort.label")}
+                data-testid="tx-sort"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TX_SORTS.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {sortLabel[value]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Money that has already left the balance for a day that has not
               arrived. Counted over the whole ledger rather than the rows below:
@@ -696,91 +806,96 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
 
               <div className="space-y-2 md:hidden">
                 {visibleTransactions.map((transaction) => (
-                  <div key={transaction.id} className="rounded-lg border p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <input
-                        type="checkbox"
-                        className="mt-1 size-4 shrink-0 accent-[hsl(var(--primary))]"
-                        checked={selectedIds.has(transaction.id)}
-                        onChange={() => toggleSelect(transaction.id)}
-                        aria-label={t("tx.bulk.selectRow")}
-                      />
-                      {/* The body of the row opens the editor — correcting an
+                  <Fragment key={transaction.id}>
+                    {dayStarts.has(transaction.id) ? (
+                      <DayHeader group={dayStarts.get(transaction.id)!} />
+                    ) : null}
+                    <div className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 size-4 shrink-0 accent-[hsl(var(--primary))]"
+                          checked={selectedIds.has(transaction.id)}
+                          onChange={() => toggleSelect(transaction.id)}
+                          aria-label={t("tx.bulk.selectRow")}
+                        />
+                        {/* The body of the row opens the editor — correcting an
                           amount is the most common thing done here, and hunting
                           for a pencil on a phone is a poor way to start it. */}
-                      <button
-                        type="button"
-                        onClick={() => setEditingTransaction(transaction)}
-                        aria-label={t("common.edit")}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="text-sm font-semibold">{transaction.category.label}</p>
-                        {/* Обрезается название счёта, а не дата: одной строкой
+                        <button
+                          type="button"
+                          onClick={() => setEditingTransaction(transaction)}
+                          aria-label={t("common.edit")}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="text-sm font-semibold">{transaction.category.label}</p>
+                          {/* Обрезается название счёта, а не дата: одной строкой
                             на телефоне пропадало и то и другое сразу —
                             «05 сент. 2026 · Дебетовая ка…». Дата короткая и
                             всегда одной длины, ей место есть. */}
-                        <p className="mt-0.5 flex min-w-0 gap-1 text-xs text-muted-foreground">
-                          <span className="shrink-0">{formatDate(transaction.date)}</span>
-                          <span aria-hidden>·</span>
-                          <span className="truncate">{transaction.account.label}</span>
-                        </p>
-                        <p className="mt-1 truncate text-[13px] text-muted-foreground">
-                          {transaction.description ?? t("tx.noDescription")}
-                        </p>
-                        {(transaction.tags?.length || transaction.splitGroupId) && (
-                          <span className="mt-2 flex flex-wrap gap-1">
-                            {transaction.splitGroupId ? (
-                              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
-                                {t("tx.split.badge")}
-                              </span>
-                            ) : null}
-                            {transaction.tags?.map((tag) => (
-                              <span
-                                key={tag}
-                                className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
-                              >
-                                #{tag}
-                              </span>
-                            ))}
-                          </span>
-                        )}
-                      </button>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <p
-                          className={
-                            transaction.type === "INCOME"
-                              ? "font-semibold text-success"
-                              : "font-semibold"
-                          }
-                        >
-                          {transaction.type === "INCOME" ? "+" : "-"}
-                          {rowAmount(transaction)}
-                        </p>
-                        <button
-                          type="button"
-                          aria-label={transaction.photo ? t("photo.has") : t("photo.attach")}
-                          data-testid="tx-photo-mobile"
-                          onClick={() => setPhotoFor(transaction.id)}
-                          className={
-                            transaction.photo
-                              ? "tap-target inline-flex items-center justify-center rounded p-1 text-primary"
-                              : "tap-target inline-flex items-center justify-center rounded p-1 text-muted-foreground/60"
-                          }
-                        >
-                          <Paperclip className="size-4" />
+                          <p className="mt-0.5 flex min-w-0 gap-1 text-xs text-muted-foreground">
+                            <span className="shrink-0">{formatDate(transaction.date)}</span>
+                            <span aria-hidden>·</span>
+                            <span className="truncate">{transaction.account.label}</span>
+                          </p>
+                          <p className="mt-1 truncate text-[13px] text-muted-foreground">
+                            {transaction.description ?? t("tx.noDescription")}
+                          </p>
+                          {(transaction.tags?.length || transaction.splitGroupId) && (
+                            <span className="mt-2 flex flex-wrap gap-1">
+                              {transaction.splitGroupId ? (
+                                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                                  {t("tx.split.badge")}
+                                </span>
+                              ) : null}
+                              {transaction.tags?.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </span>
+                          )}
                         </button>
-                        <button
-                          type="button"
-                          aria-label={t("common.delete")}
-                          disabled={isMutating}
-                          onClick={() => void removeTransaction(transaction)}
-                          className="tap-target inline-flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-destructive"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <p
+                            className={
+                              transaction.type === "INCOME"
+                                ? "font-semibold text-success"
+                                : "font-semibold"
+                            }
+                          >
+                            {transaction.type === "INCOME" ? "+" : "-"}
+                            {rowAmount(transaction)}
+                          </p>
+                          <button
+                            type="button"
+                            aria-label={transaction.photo ? t("photo.has") : t("photo.attach")}
+                            data-testid="tx-photo-mobile"
+                            onClick={() => setPhotoFor(transaction.id)}
+                            className={
+                              transaction.photo
+                                ? "tap-target inline-flex items-center justify-center rounded p-1 text-primary"
+                                : "tap-target inline-flex items-center justify-center rounded p-1 text-muted-foreground/60"
+                            }
+                          >
+                            <Paperclip className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={t("common.delete")}
+                            disabled={isMutating}
+                            onClick={() => void removeTransaction(transaction)}
+                            className="tap-target inline-flex items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:text-destructive"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </Fragment>
                 ))}
               </div>
               <TransactionPagination data={pageData} searchParams={searchParams} />
@@ -1100,6 +1215,36 @@ function TransactionPagination({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** «Сегодня · 2 340 ₽» над карточками одного дня. */
+function DayHeader({ group }: { group: ReturnType<typeof groupByDay>[number] }) {
+  const { t } = useI18n();
+  const label =
+    group.when === "today"
+      ? t("tx.day.today")
+      : group.when === "yesterday"
+        ? t("tx.day.yesterday")
+        : formatDate(group.day);
+  return (
+    <div
+      data-testid="day-header"
+      className="flex items-baseline justify-between gap-2 px-1 pt-2 text-xs font-semibold text-muted-foreground first:pt-0"
+    >
+      <span>
+        {label}
+        {group.when !== "other" ? (
+          <span className="ml-1.5 font-normal">{formatDate(group.day)}</span>
+        ) : null}
+      </span>
+      <span className="num flex gap-2">
+        {group.income > 0 ? (
+          <span className="text-success">+{formatCurrency(group.income)}</span>
+        ) : null}
+        {group.expense > 0 ? <span>-{formatCurrency(group.expense)}</span> : null}
+      </span>
     </div>
   );
 }
