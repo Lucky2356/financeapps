@@ -27,7 +27,7 @@ export function SectionCard({
         {action && actionHref ? (
           <Link
             href={actionHref}
-            className="shrink-0 text-sm font-medium text-primary transition-opacity hover:opacity-80"
+            className="hit-area shrink-0 text-sm font-medium text-primary transition-opacity hover:opacity-80"
           >
             {action}
           </Link>

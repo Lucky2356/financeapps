@@ -62,7 +62,7 @@ export function Segmented<T extends string>({
           <label
             key={option.value}
             className={cn(
-              "relative z-10 flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 text-sm transition-colors",
+              "relative z-10 flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md px-1 text-[13px] transition-colors sm:px-2 sm:text-sm",
               "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
               checked
                 ? "font-medium text-foreground"

@@ -669,17 +669,27 @@ export function BudgetSheet() {
               ))}
             </ol>
             <div className="flex flex-col justify-center gap-2 sm:flex-row">
-              <Button type="button" onClick={() => setWizardOpen(true)}>
+              <Button
+                type="button"
+                className="h-auto min-h-10 w-full whitespace-normal py-2 sm:w-auto"
+                onClick={() => setWizardOpen(true)}
+              >
                 <Sparkles className="size-4" />
                 {words.emptyCreate}
               </Button>
-              <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-auto min-h-10 w-full whitespace-normal py-2 sm:w-auto"
+                onClick={() => setImportOpen(true)}
+              >
                 <FileUp className="size-4" />
                 {words.emptyImport}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
+                className="h-auto min-h-10 w-full whitespace-normal py-2 sm:w-auto"
                 onClick={() => void act({ action: "start", from: current })}
               >
                 {words.emptyStart}

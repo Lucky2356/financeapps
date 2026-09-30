@@ -229,15 +229,15 @@ export function DevicesPanel() {
                 ) : (
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium [overflow-wrap:anywhere]">
                         {device.name}
                         {device.id === current ? (
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                          <span className="whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
                             {t("dev.current")}
                           </span>
                         ) : null}
                         {device.id === primary ? (
-                          <span className="ml-2 inline-flex items-center gap-1 rounded bg-primary/12 px-1.5 py-0.5 text-xs font-normal text-primary">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-primary/12 px-1.5 py-0.5 text-xs font-normal text-primary">
                             <Crown className="size-3" />
                             {t("dev.primary")}
                           </span>
