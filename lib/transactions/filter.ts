@@ -4,6 +4,7 @@
 // date/type/category/account/text filters with an amount range and multiple
 // categories.
 
+import { matchesSearch } from "@/lib/transactions/search";
 import { isTransfer } from "@/lib/transactions/transfers";
 
 export type TxFilterCriteria = {
@@ -101,10 +102,10 @@ export function matchesCriteria(
     if (!tags.includes(wanted)) return false;
   }
   if (criteria.q) {
-    const query = criteria.q.toLowerCase();
     const haystack =
       `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label} ${(transaction.tags ?? []).join(" ")}`.toLowerCase();
-    if (!haystack.includes(query)) return false;
+    // Слова и суммы: «кофе >300», «1000-3000», «5к» — см. search.ts.
+    if (!matchesSearch(criteria.q, haystack, transaction.amount)) return false;
   }
   return true;
 }

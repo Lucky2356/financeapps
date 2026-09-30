@@ -7,11 +7,28 @@ import { useI18n } from "@/lib/i18n/context";
 
 const shortcuts = [
   { keys: "Alt+N", descKey: "set.shortcut.add" },
+  { keys: "/", descKey: "set.shortcut.search" },
+  { keys: "Ctrl+K", descKey: "set.shortcut.palette" },
   { keys: "Alt+T", descKey: "set.shortcut.transactions" },
   { keys: "Alt+D", descKey: "set.shortcut.home" },
+  { keys: "Alt+C", descKey: "set.shortcut.accounts" },
+  { keys: "Alt+B", descKey: "set.shortcut.budgets" },
+  { keys: "Alt+G", descKey: "set.shortcut.goals" },
+  { keys: "Alt+S", descKey: "set.shortcut.sheet" },
   { keys: "Alt+A", descKey: "set.shortcut.analytics" },
   { keys: "?", descKey: "set.shortcut.help" }
 ];
+
+/** Alt + физическая клавиша → куда перейти. Физическая — чтобы работало на русской раскладке. */
+const GO: Record<string, string> = {
+  KeyT: "/transactions",
+  KeyD: "/",
+  KeyA: "/analytics",
+  KeyC: "/accounts",
+  KeyB: "/budgets",
+  KeyG: "/goals",
+  KeyS: "/sheet"
+};
 
 export function KeyboardShortcuts() {
   const router = useRouter();
@@ -34,15 +51,22 @@ export function KeyboardShortcuts() {
       if (event.altKey && event.code === "KeyN") {
         event.preventDefault();
         window.dispatchEvent(new CustomEvent("quick-add-open"));
-      } else if (event.altKey && event.code === "KeyT") {
+      } else if (event.altKey && !event.ctrlKey && !event.metaKey && GO[event.code]) {
         event.preventDefault();
-        router.push("/transactions");
-      } else if (event.altKey && event.code === "KeyD") {
+        router.push(GO[event.code]);
+      } else if (
+        // «/» — как в почте и на GitHub: сразу в поиск. В «Учёте» это поле
+        // фильтра, на остальных экранах — общий поиск (Ctrl+K).
+        event.code === "Slash" &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
         event.preventDefault();
-        router.push("/");
-      } else if (event.altKey && event.code === "KeyA") {
-        event.preventDefault();
-        router.push("/analytics");
+        const field = document.getElementById("tx-search");
+        if (field instanceof HTMLInputElement) field.focus();
+        else window.dispatchEvent(new Event("command-palette-open"));
       } else if (
         (event.key === "?" || (event.code === "Slash" && event.shiftKey)) &&
         !event.ctrlKey &&

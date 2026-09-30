@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData, CategoriesPageData, TransactionsPageData } from "@/lib/data";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
+import { useHiddenSections } from "@/hooks/use-hidden-sections";
 import { useI18n } from "@/lib/i18n/context";
 import { formatCurrency } from "@/lib/format";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -100,6 +101,7 @@ const navCommands: Command[] = [
 export function CommandPalette() {
   const router = useRouter();
   const { t } = useI18n();
+  const { hidden } = useHiddenSections();
   const labelOf = useCallback(
     (command: Command) => (command.labelKey ? t(command.labelKey) : (command.label ?? "")),
     [t]
@@ -216,7 +218,9 @@ export function CommandPalette() {
   );
 
   const filtered = useMemo(() => {
-    const base = [...actionCommands, ...navCommands, ...dynamic];
+    // Скрытые в настройках разделы в поиске не показываются.
+    const shown = navCommands.filter((command) => !command.href || !hidden.has(command.href));
+    const base = [...actionCommands, ...shown, ...dynamic];
     const q = query.trim().toLowerCase();
     if (!q) return base;
     // Transaction results are already matched server-side; append them after the
@@ -224,7 +228,7 @@ export function CommandPalette() {
     const matchedBase = base.filter((command) => labelOf(command).toLowerCase().includes(q));
     // Transaction results only apply once the search is long enough to fetch them.
     return q.length >= 2 ? [...matchedBase, ...txResults] : matchedBase;
-  }, [actionCommands, dynamic, query, txResults, labelOf]);
+  }, [actionCommands, dynamic, hidden, query, txResults, labelOf]);
 
   function run(command: Command) {
     setOpen(false);

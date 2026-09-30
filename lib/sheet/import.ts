@@ -17,6 +17,7 @@
 
 import Papa from "papaparse";
 
+import { evaluate } from "@/lib/sheet/formula";
 import { computeSheet, type SheetColumn, type SheetColumnKind } from "@/lib/sheet/model";
 
 export type Grid = string[][];
@@ -156,11 +157,24 @@ export function guessRole(name: string): ImportRole {
   if (/^(месяц|дата|month|период)/.test(text)) return "month";
   if (/^(итог|итого|остаток на конец|на конец|total)/.test(text)) return "total";
   if (/^(остаток|на начало|начало|opening)/.test(text)) return "opening";
+  if (/(комментар|коммент|заметк|примечан|пометк|описан|note|comment|memo)/.test(text))
+    return "note";
   if (/(снят|с вклада|из сбереж|из подушк)/.test(text)) return "fromSavings";
   if (/(процент.*вклад|вклад.*процент|кешбэк на остаток)/.test(text)) return "savingsIncome";
   if (/(вклад|сбереж|подушк|накоп|копилк|отложить|инвест)/.test(text)) return "toSavings";
   if (/(доход|зарплат|^зп|аванс|премия|income|salary)/.test(text)) return "income";
   return "expense";
+}
+
+/** В столбце в основном слова, а не суммы: больше половины непустых клеток не числа. */
+function mostlyText(values: readonly string[]): boolean {
+  const filled = values.map((value) => value.trim()).filter(Boolean);
+  if (filled.length === 0) return false;
+  const words = filled.filter((value) => {
+    const result = evaluate(value);
+    return !result || !result.ok;
+  });
+  return words.length * 2 > filled.length;
 }
 
 /** Категория учёта по имени столбца: точное совпадение, потом по началу слов. */
@@ -220,6 +234,9 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
     const name = (names[index] ?? "").trim();
     let role: ImportRole = index === monthIndex ? "month" : guessRole(name);
     const empty = rows.every((row) => !(row.cells[index] ?? "").trim());
+    // Столбец с неизвестным названием, где сплошной текст, — заметки, а не
+    // расход: иначе каждая строка превратилась бы в ошибку формулы.
+    if (role === "expense" && mostlyText(rows.map((row) => row.cells[index] ?? ""))) role = "note";
     if (!name && empty) continue;
     if (!name) role = "skip";
     const categoryKind = role === "income" ? "INCOME" : role === "expense" ? "EXPENSE" : null;

@@ -27,10 +27,11 @@ test.describe("телефон", () => {
     await expect(nav).toBeHidden();
 
     // Раздел короткий: два экрана телефона, не десять. Предел с запасом на
-    // строку-другую — каждая новая настройка не должна ронять проверку, а
+    // строку-другую (в 2.4 добавилась свёрнутая группа «Разделы меню») — каждая
+    // новая настройка не должна ронять проверку, а
     // лента на весь список, как было до разделов, — должна.
     const height = await page.evaluate(() => document.documentElement.scrollHeight);
-    expect(height).toBeLessThan(1800);
+    expect(height).toBeLessThan(2000);
 
     await page.getByRole("button", { name: "Все настройки" }).click();
     await expect(nav).toBeVisible();

@@ -47,7 +47,7 @@ import {
   type Stamped,
   type Tombstone
 } from "@/lib/sync/row-stamps";
-import { localStateSchema } from "@/lib/api/local/schemas";
+import { localStateSchema, transactionRowSchema } from "@/lib/api/local/schemas";
 import {
   BEFORE_CLEAR_SUFFIX,
   LOCAL_COPY_SUFFIX,
@@ -55,6 +55,7 @@ import {
   RESCUE_SUFFIX
 } from "@/lib/storage/SyncingStorageAdapter";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import { parseSort, sortTransactions } from "@/lib/transactions/sort";
 import {
   isPhotoData,
   orphanedPhotos,
@@ -68,7 +69,7 @@ import { futureDated, storedTransactionDate, todayDay } from "@/lib/transactions
 import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
-import { activeDebts } from "@/lib/debts/settled";
+import { activeDebts, isSettledDebt } from "@/lib/debts/settled";
 import { isUsableLot, parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildAssetKindStructure, buildSectorStructure } from "@/lib/data/derive";
@@ -1114,6 +1115,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
       return this.saveAndReturn<TResponse>(state, this.createTransfer(state, body));
+    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "restore")
+      return this.saveAndReturn<TResponse>(state, this.restoreTransaction(state, body));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "split")
       return this.saveAndReturn<TResponse>(state, this.createSplit(state, body));
     if (pathname === "/transactions") {
@@ -1155,6 +1158,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.materializeRecurring(state, body));
     if (pathname === "/recurring/materialize-all")
       return this.saveAndReturn<TResponse>(state, this.materializeAllDue(state));
+    if (pathname === "/debts/pay")
+      return this.saveAndReturn<TResponse>(state, this.payDebt(state, body));
     if (pathname === "/debts/auto-pay")
       return this.saveAndReturn<TResponse>(state, this.autoPayDebts(state));
     if (pathname === "/networth/snapshot")
@@ -1692,6 +1697,34 @@ export class LocalApiClient implements ApiClient {
     return { transferId, transactions: [expense, income] };
   }
 
+  /**
+   * Вернуть только что удалённую операцию — той же строкой, с тем же номером,
+   * временем записи и метками, — и вернуть её деньги на счёт. Это «Отменить»
+   * после удаления: раньше удаление спрашивало подтверждение, а теперь просто
+   * удаляет, и отменить его должно быть можно.
+   *
+   * Фото чека здесь не возвращается: оно удаляется отдельно, и экран кладёт его
+   * обратно своим запросом. Повторный возврат ничего не делает — второе нажатие
+   * не удвоит деньги.
+   */
+  private restoreTransaction(state: LocalState, body: unknown): TransactionRow {
+    const raw = (body as { transaction?: unknown })?.transaction;
+    const parsed = transactionRowSchema
+      .omit({ updatedAt: true })
+      .safeParse(typeof raw === "string" ? JSON.parse(raw) : raw);
+    if (!parsed.success) throw new Error("Не получилось вернуть операцию.");
+    const { photo: _photo, ...row } = parsed.data as TransactionRow;
+    void _photo;
+    const account = state.accounts.find((item) => item.id === row.account.id && !item.isArchived);
+    const category = state.categories.find((item) => item.id === row.category.id);
+    if (!account || !category)
+      throw new Error("Счёт или категория этой операции уже удалены — вернуть её нельзя.");
+    if (state.transactions.some((item) => item.id === row.id)) return row;
+    state.transactions = [row, ...state.transactions];
+    this.applyBalance(state, account.id, row.type === "INCOME" ? row.amount : -row.amount);
+    return row;
+  }
+
   private deleteTransaction(state: LocalState, transactionId: string) {
     const existing = state.transactions.find((item) => item.id === transactionId);
     if (!existing) return;
@@ -2149,6 +2182,65 @@ export class LocalApiClient implements ApiClient {
   // rules). Each posting creates a normal EXPENSE transaction — so budgets and
   // analytics see it like any other spending — and reduces the outstanding
   // balance. Idempotent: `lastPaidMonth` stops a second run in the same month.
+  /**
+   * Платёж по долгу руками: трата со счёта и такое же уменьшение долга — как
+   * автоплатёж, только на ту сумму и в тот день, которые назвал человек.
+   *
+   * Сумма — в валюте ДОЛГА, со счёта уходит её пересчёт в валюту счёта: платить
+   * доллары по кредиту с рублёвой карты — обычное дело. Заплатили больше, чем
+   * осталось, — долг просто станет нулевым; лишнее — те же проценты и комиссия,
+   * и со счёта оно ушло на самом деле.
+   */
+  private payDebt(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const liability = state.liabilities.find((item) => item.id === input.id);
+    if (!liability) throw new Error("Такого долга нет.");
+    if (isSettledDebt(liability)) throw new Error("Этот долг уже закрыт.");
+    const amount = Number(
+      String(input.amount ?? "")
+        .replace(/[\s\u00a0]/g, "")
+        .replace(",", ".")
+    );
+    if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
+    const account =
+      state.accounts.find((item) => item.id === input.accountId && !item.isArchived) ??
+      state.accounts.find((item) => item.id === liability.paymentAccountId && !item.isArchived);
+    if (!account) throw new Error("Выберите счёт, с которого платите.");
+    const category =
+      state.categories.find(
+        (item) => item.id === liability.paymentCategoryId && item.kind === "EXPENSE"
+      ) ?? state.categories.find((item) => item.kind === "EXPENSE");
+    if (!category) throw new Error("Нет категории расходов, под которую записать платёж.");
+
+    const date = input.date ? String(input.date) : new Date().toISOString();
+    const spent = roundMoney(
+      convert(amount, liability.currency, account.currency, this.rates(state))
+    );
+    const tx = this.upsertTransaction(
+      state,
+      {
+        amount: String(spent),
+        type: "EXPENSE",
+        accountId: account.id,
+        categoryId: category.id,
+        date,
+        description: liability.name,
+        liabilityId: liability.id
+      },
+      "POST"
+    );
+
+    const balance = Math.max(0, roundMoney(liability.balance - amount));
+    // Заплатили в этом месяце — автоплатёж второй раз не спишет.
+    const month = tx.date.slice(0, 7);
+    state.liabilities = state.liabilities.map((item) =>
+      item.id === liability.id
+        ? { ...item, balance, ...(month === monthKey(new Date()) ? { lastPaidMonth: month } : {}) }
+        : item
+    );
+    return { paid: amount, balance, closed: balance === 0, transactionId: tx.id };
+  }
+
   private autoPayDebts(state: LocalState) {
     const today = new Date();
     const due = dueLiabilities(state.liabilities, today);
@@ -2856,21 +2948,19 @@ export class LocalApiClient implements ApiClient {
       page,
       limit
     };
-    const filtered = [...state.transactions]
-      .filter((transaction) => matchesCriteria(transaction, criteria))
-      .sort(
-        (left, right) =>
-          new Date(right.date).getTime() - new Date(left.date).getTime() ||
-          // В пределах дня — сначала записанные позже. У старых строк отметки
-          // нет, и свежая встаёт над ними.
-          (right.createdAt ?? "").localeCompare(left.createdAt ?? "")
-      );
-    const start = (page - 1) * limit;
-
     // The rows keep the amount as it was recorded — a dollar operation reads
     // as dollars — and carry what it is worth in the base currency beside it,
     // so the totals above the list add up like every other total in the app.
     const context = baseAmountContext(state.accounts, this.rates(state), state.currency);
+    // Порядок — по выбору (`sort`), а «крупные сверху» сравнивают в основной
+    // валюте: доллары нельзя ставить рядом с рублями «как есть».
+    const filtered = sortTransactions(
+      state.transactions.filter((transaction) => matchesCriteria(transaction, criteria)),
+      parseSort(searchParams.get("sort")),
+      (row) => baseAmountOf(row, context)
+    );
+    const start = (page - 1) * limit;
+
     const rows = filtered.slice(start, start + limit).map((row) => {
       const base = baseAmountOf(row, context);
       return base === row.amount ? row : { ...row, baseAmount: base };

@@ -383,7 +383,8 @@ export const sheetColumnSchema = z.object({
     "toSavings",
     "fromSavings",
     "savingsOpening",
-    "savingsIncome"
+    "savingsIncome",
+    "note"
   ]),
   categoryId: z.string().nullable().optional(),
   order: z.coerce.number().finite(),

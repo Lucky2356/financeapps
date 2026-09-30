@@ -11,7 +11,9 @@ import { SyncStatusIndicator } from "@/components/sync/sync-status";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useI18n } from "@/lib/i18n/context";
+import { useHiddenSections } from "@/hooks/use-hidden-sections";
 import { activeNavHref, DESKTOP_NAV } from "@/lib/navigation";
+import { visibleItems } from "@/lib/nav-visibility";
 import { cn } from "@/lib/utils";
 
 const COLLAPSED_KEY = "sidebar-collapsed";
@@ -24,6 +26,7 @@ export function AppSidebar() {
   // plans, the reading — is still grouped, and those groups show their tabs
   // above the page (see HubTabs).
   const activeHref = activeNavHref(pathname, "desktop");
+  const { hidden } = useHiddenSections();
 
   // Collapsed to icons: the wide tables (plan/fact above all) want every pixel
   // of the window. Starts expanded so the server shell and the first paint
@@ -107,7 +110,7 @@ export function AppSidebar() {
 
       {/* Nav */}
       <nav className={cn("flex-1 space-y-0.5 overflow-y-auto py-3", collapsed ? "px-2" : "px-3")}>
-        {DESKTOP_NAV.map((item) => {
+        {visibleItems(DESKTOP_NAV, hidden).map((item) => {
           const active = activeHref === item.href;
           const Icon = item.icon;
           const label = t(item.labelKey);

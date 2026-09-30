@@ -6,12 +6,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useI18n } from "@/lib/i18n/context";
+import { useHiddenSections } from "@/hooks/use-hidden-sections";
 import { activeNavHref, findHub, MAIN_NAV, MOBILE_PRIMARY } from "@/lib/navigation";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
 import { AmountsToggle } from "@/components/amounts-toggle";
 
-const primaryItems = MOBILE_PRIMARY;
+/**
+ * Что ставить на место скрытого пункта. Без замены слева от круглой кнопки
+ * оставалось бы два пункта, справа — один, и панель выглядела бы перекошенной.
+ */
+const FALLBACK_ITEM = MAIN_NAV.find((item) => item.href === "/settings")!;
 
 /** The label of the screen the user is on — the header's only title. */
 function useScreenTitle(pathname: string): string {
@@ -69,6 +74,8 @@ export function MobileBottomNav() {
   const pathname = usePathname();
   const { t } = useI18n();
   const activeHref = activeNavHref(pathname);
+  const { hidden } = useHiddenSections();
+  const primaryItems = MOBILE_PRIMARY.map((item) => (hidden.has(item.href) ? FALLBACK_ITEM : item));
 
   function navItem(item: (typeof primaryItems)[number]) {
     const active = activeHref === item.href;

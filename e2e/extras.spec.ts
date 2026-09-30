@@ -56,7 +56,9 @@ test("вычеты: отметили «Здоровье» — посчитан �
   await openSettled(page, "/deductions");
   await page.getByTestId("deduction-kind-Здоровье").click();
   await page.getByRole("option", { name: "Лечение и лекарства" }).click();
-  await expect(page.getByText("Лечение, обучение, спорт")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Лечение, обучение, спорт", { exact: true })).toBeVisible({
+    timeout: 10_000
+  });
   await expect(page.getByTestId("deduction-refund")).not.toHaveText(/^0/);
 });
 

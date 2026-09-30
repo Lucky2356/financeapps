@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useHiddenSections } from "@/hooks/use-hidden-sections";
 import { useI18n } from "@/lib/i18n/context";
 import { findHub, type NavSurface } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -27,8 +28,12 @@ export function HubTabs() {
 function Strip({ surface, className }: { surface: NavSurface; className: string }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const { hidden } = useHiddenSections();
   const hub = findHub(pathname, surface);
   if (!hub) return null;
+  // Скрытая вкладка исчезает, а та, на которой сейчас человек, остаётся: иначе
+  // экран, открытый по ссылке, выглядел бы потерянным.
+  const tabs = hub.tabs.filter((tab) => tab.href === pathname || !hidden.has(tab.href));
 
   return (
     <div
@@ -39,7 +44,7 @@ function Strip({ surface, className }: { surface: NavSurface; className: string 
       // this over the wrapping rows the app had.
       className={cn("fa-hubstrip -mx-1 mb-3 gap-1.5 overflow-x-auto px-1 pb-1", className)}
     >
-      {hub.tabs.map((tab) => {
+      {tabs.map((tab) => {
         const active = pathname === tab.href;
         return (
           <Link

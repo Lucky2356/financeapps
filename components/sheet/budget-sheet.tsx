@@ -17,11 +17,14 @@
 
 import {
   ArrowUpRight,
+  CalendarDays,
   ChevronDown,
+  CircleHelp,
   Eye,
   FileDown,
   FileUp,
   Plus,
+  Sparkles,
   Target,
   Undo2,
   X
@@ -38,8 +41,14 @@ import {
 import { toast } from "sonner";
 
 import { ColumnDialog, type ColumnDraft } from "@/components/sheet/column-dialog";
+import { SheetCellBar, type CellBarInfo } from "@/components/sheet/sheet-cell-bar";
+import { SheetHelp } from "@/components/sheet/sheet-help";
 import { SheetImportDialog } from "@/components/sheet/sheet-import-dialog";
+import { SheetMonthView } from "@/components/sheet/sheet-month-view";
+import { SheetSummary } from "@/components/sheet/sheet-summary";
 import { monthLabel, useSheetText } from "@/components/sheet/sheet-text";
+import type { DisplayColumn, Position } from "@/components/sheet/sheet-types";
+import { SheetWizard } from "@/components/sheet/sheet-wizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -52,6 +61,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { apiClient } from "@/lib/api/client";
@@ -59,8 +69,10 @@ import type { SheetPageData } from "@/lib/api/local/sheet";
 import type { ImportPageData } from "@/lib/data";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { formatCurrency } from "@/lib/format";
-import { evaluate } from "@/lib/sheet/formula";
+import { clearMonth, copyMonth, factFill } from "@/lib/sheet/fill";
+import { evaluate, isFormula } from "@/lib/sheet/formula";
 import { gridFromText } from "@/lib/sheet/import";
+import { firstShortfall, focusRow, monthsAhead } from "@/lib/sheet/insights";
 import {
   computeSheet,
   isSavingsKind,
@@ -84,14 +96,37 @@ const EMPTY_REFS = {
   categories: []
 } as unknown as ImportPageData;
 const COMPARE_KEY = "sheet-compare";
+const DENSITY_KEY = "sheet-density";
+const VIEW_KEY = "sheet-view";
+const HELP_KEY = "sheet-help-seen";
 
-/** Столбец таблицы на экране: настоящий или посчитанный итог. */
-type DisplayColumn =
-  | { type: "column"; column: SheetColumn }
-  | { type: "total" }
-  | { type: "savingsTotal" };
+/**
+ * Оттенок ПОВЕРХ непрозрачной основы, а не прозрачный фон.
+ *
+ * Шапка и столбец «Месяц» липкие: под ними при прокрутке едут числа. Фон
+ * `bg-primary/15` пропускает их насквозь — цифры остатка проступали поверх
+ * названия месяца, и строка выглядела сломанной. Основа `bg-card` (или
+ * `bg-muted`) закрывает то, что под ней, а оттенок — это картинка-градиент на
+ * той же основе.
+ */
+const TINT = {
+  primary15:
+    "bg-card [background-image:linear-gradient(hsl(var(--primary)/0.15),hsl(var(--primary)/0.15))]",
+  primary20:
+    "bg-card [background-image:linear-gradient(hsl(var(--primary)/0.2),hsl(var(--primary)/0.2))]",
+  primary25:
+    "bg-card [background-image:linear-gradient(hsl(var(--primary)/0.25),hsl(var(--primary)/0.25))]",
+  success10:
+    "bg-card [background-image:linear-gradient(hsl(var(--success)/0.1),hsl(var(--success)/0.1))]",
+  success15:
+    "bg-card [background-image:linear-gradient(hsl(var(--success)/0.15),hsl(var(--success)/0.15))]",
+  warning25:
+    "bg-card [background-image:linear-gradient(hsl(var(--warning)/0.25),hsl(var(--warning)/0.25))]"
+} as const;
 
-type Position = { row: number; col: number };
+type Density = "comfort" | "compact";
+type PhoneView = "table" | "months";
+
 type CellChange = { month: string; columnId: string; input: string };
 
 function thisMonth(): string {
@@ -125,7 +160,12 @@ export function BudgetSheet() {
   }, [loaded]);
 
   const [selected, setSelected] = useState<Position | null>(null);
-  const [editing, setEditing] = useState<{ position: Position; draft: string } | null>(null);
+  // Откуда вводят: из самой клетки или из строки выбранной клетки над таблицей.
+  const [editing, setEditing] = useState<{
+    position: Position;
+    draft: string;
+    source: "cell" | "bar";
+  } | null>(null);
   const [undo, setUndo] = useState<CellChange[][]>([]);
   const [showHidden, setShowHidden] = useState(false);
   const [compare, setCompare] = useState(false);
@@ -138,16 +178,39 @@ export function BudgetSheet() {
   // На телефоне редкие действия — под «Ещё»: иначе панель занимала полэкрана,
   // а таблица начиналась ниже сгиба.
   const [more, setMore] = useState(false);
+  const [density, setDensity] = useState<Density>("comfort");
+  const [view, setView] = useState<PhoneView>("months");
+  const [monthIndex, setMonthIndex] = useState<number | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
+  const barInput = useRef<HTMLInputElement>(null);
+  const scrolledToNow = useRef(false);
 
   useEffect(() => {
     try {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      /* eslint-disable react-hooks/set-state-in-effect */
       setCompare(localStorage.getItem(COMPARE_KEY) === "1");
+      if (localStorage.getItem(DENSITY_KEY) === "compact") setDensity("compact");
+      if (localStorage.getItem(VIEW_KEY) === "table") setView("table");
+      // Справка открыта, пока человек не закрыл её в первый раз. На телефоне —
+      // закрыта: она занимала первый экран целиком, и таблица уезжала под сгиб.
+      setHelpOpen(
+        localStorage.getItem(HELP_KEY) !== "1" && !window.matchMedia("(max-width: 767px)").matches
+      );
+      /* eslint-enable react-hooks/set-state-in-effect */
     } catch {
       /* ignore */
     }
   }, []);
+
+  function remember(key: string, value: string) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* ignore */
+    }
+  }
 
   const computed = useMemo(() => computeSheet(sheet), [sheet]);
   const categories = refs.categories;
@@ -173,19 +236,24 @@ export function BudgetSheet() {
   const hiddenCount = sheet.columns.filter((column) => column.hidden).length;
   const current = thisMonth();
 
+  // Факт из учёта нужен всегда: строка выбранной клетки сверяет с ним план, не
+  // только режим «Сравнить». Читается на весь размах таблицы и заново — только
+  // когда размах изменился, а не на каждую правку клетки.
+  const rangeFrom = computed.rows[0]?.month ?? "";
+  const rangeTo = computed.rows[computed.rows.length - 1]?.month ?? "";
   useEffect(() => {
-    if (!compare || computed.rows.length === 0) return;
-    const from = computed.rows[0].month;
-    const to = computed.rows[computed.rows.length - 1].month;
+    if (!rangeFrom) return;
     let alive = true;
     apiClient
-      .get<{ months: Record<string, Record<string, number>> }>(`/sheet/facts?from=${from}&to=${to}`)
+      .get<{
+        months: Record<string, Record<string, number>>;
+      }>(`/sheet/facts?from=${rangeFrom}&to=${rangeTo}`)
       .then((result) => alive && setFacts(result.months))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [compare, computed.rows]);
+  }, [rangeFrom, rangeTo]);
 
   const money = (value: number) => formatCurrency(Math.round(value), "RUB");
   const plain = (value: number) =>
@@ -261,7 +329,7 @@ export function BudgetSheet() {
       return;
     }
     setSelected(position);
-    setEditing({ position, draft: draft ?? inputAt(position) });
+    setEditing({ position, draft: draft ?? inputAt(position), source: "cell" });
   }
 
   function commit(next?: Position) {
@@ -376,8 +444,20 @@ export function BudgetSheet() {
       if (column && row) void save([{ month: row.month, columnId: column.id, input: "" }]);
       return;
     }
-    // Начали печатать — ввод с этой буквы, как в Excel.
-    if (!ctrl && !event.altKey && event.key.length === 1 && /[\d=+\-.,(]/.test(event.key)) {
+    if (ctrl && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      fillDown(selected);
+      return;
+    }
+    // Начали печатать — ввод с этой буквы, как в Excel. В текстовом столбце
+    // начинать можно с любого знака: там не числа, а слова.
+    const wordy = columnAt(selected.col)?.kind === "note";
+    if (
+      !ctrl &&
+      !event.altKey &&
+      event.key.length === 1 &&
+      (wordy ? event.key.trim() !== "" : /[\d=+\-.,(]/.test(event.key))
+    ) {
       event.preventDefault();
       startEdit(selected, event.key);
     }
@@ -389,6 +469,135 @@ export function BudgetSheet() {
     if (!text) return;
     event.preventDefault();
     void paste(text, selected);
+  }
+
+  // ── Прокрутка ───────────────────────────────────────────────────────────
+
+  /**
+   * Показать выбранную клетку целиком.
+   *
+   * Клетка, которую выбрали стрелкой или ввели с клавиатуры, могла уехать под
+   * липкий столбец «Месяц» или за край: поле ввода тогда рисовалось поверх
+   * названия месяца, а самой клетки не было видно. Слева и сверху вычитается то,
+   * что перекрывает таблицу постоянно — столбец с месяцами и шапка, снизу —
+   * строки «Всего» и «В среднем».
+   */
+  const reveal = useCallback((position: Position) => {
+    const box = tableRef.current;
+    const cell = box?.querySelector<HTMLElement>(`[data-pos="${position.row}:${position.col}"]`);
+    if (!box || !cell) return;
+    const frame = box.getBoundingClientRect();
+    const at = cell.getBoundingClientRect();
+    const left = box.querySelector("tbody th")?.getBoundingClientRect().width ?? 0;
+    const top = box.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+    const bottom = box.querySelector("tfoot")?.getBoundingClientRect().height ?? 0;
+    const gap = 8;
+    if (at.left < frame.left + left) box.scrollLeft -= frame.left + left - at.left + gap;
+    else if (at.right > frame.right) box.scrollLeft += at.right - frame.right + gap;
+    if (at.top < frame.top + top) box.scrollTop -= frame.top + top - at.top + gap;
+    else if (at.bottom > frame.bottom - bottom)
+      box.scrollTop += at.bottom - (frame.bottom - bottom) + gap;
+  }, []);
+
+  useEffect(() => {
+    if (selected) reveal(selected);
+  }, [selected, reveal]);
+
+  // Открыли таблицу — она стоит на нынешнем месяце, а не на августе прошлого года.
+  useEffect(() => {
+    if (scrolledToNow.current || computed.rows.length === 0) return;
+    const box = tableRef.current;
+    const row = box?.querySelector<HTMLElement>(`tr[data-month="${current}"]`);
+    if (!box || !row) return;
+    scrolledToNow.current = true;
+    const head = box.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+    box.scrollTop =
+      row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - head - 48;
+  }, [computed.rows.length, current, view, phone]);
+
+  /** К месяцу: строка таблицы выделяется и показывается, в «По месяцам» — открывается карточка. */
+  function goToMonth(month: string) {
+    const row = computed.rows.findIndex((item) => item.month === month);
+    if (row < 0) return;
+    setMonthIndex(row);
+    if (!phone || view === "table") {
+      const col = Math.max(
+        0,
+        display.findIndex((item) => item.type === "column")
+      );
+      setSelected({ row, col: selected?.col ?? col });
+    }
+  }
+
+  // ── Массовые правки ─────────────────────────────────────────────────────
+
+  async function addMonthsAfter(count: number) {
+    let at = sheet.months[sheet.months.length - 1] ?? current;
+    try {
+      for (let index = 0; index < count; index += 1) {
+        at = nextMonth(at);
+        await apiClient.post("/sheet", { action: "addMonth", month: at });
+      }
+      await reload();
+      toast.success(format(words.monthsAdded, { count }));
+    } catch (cause) {
+      toast.error((cause as Error).message);
+    }
+  }
+
+  function copyFromPrevious(month: string) {
+    const index = computed.rows.findIndex((row) => row.month === month);
+    if (index < 1) return;
+    const changes = copyMonth(computed.rows, sheet.columns, computed.rows[index - 1].month, month);
+    if (changes.length === 0) {
+      toast(words.copyNothing);
+      return;
+    }
+    void save(changes).then(() => toast.success(format(words.copied, { count: changes.length })));
+  }
+
+  function clearWholeMonth(month: string) {
+    const changes = clearMonth(computed.rows, sheet.columns, month);
+    if (changes.length === 0) return;
+    void save(changes).then(() => toast.success(format(words.cleared, { count: changes.length })));
+  }
+
+  async function fillFromLedger() {
+    if (computed.rows.length === 0) return;
+    try {
+      const result = await apiClient.get<{ months: Record<string, Record<string, number>> }>(
+        `/sheet/facts?from=${rangeFrom}&to=${rangeTo}`
+      );
+      const changes = factFill(computed.rows, sheet.columns, result.months, {
+        before: current,
+        incomeCategoryIds: new Set(
+          categories.filter((category) => category.kind === "INCOME").map((category) => category.id)
+        )
+      });
+      if (changes.length === 0) {
+        toast(words.fillFromLedgerNothing);
+        return;
+      }
+      await save(changes);
+      toast.success(format(words.fillFromLedgerDone, { count: changes.length }));
+    } catch (cause) {
+      toast.error((cause as Error).message);
+    }
+  }
+
+  /** То же число — в клетку следующего месяца, и выбор переезжает туда. */
+  function copyToNextMonth(position: Position) {
+    const column = columnAt(position.col);
+    const next = computed.rows[position.row + 1];
+    if (!column || !next) return;
+    void save([{ month: next.month, columnId: column.id, input: inputAt(position) }]);
+    setSelected({ row: position.row + 1, col: position.col });
+  }
+
+  function clearSelected(position: Position) {
+    const column = columnAt(position.col);
+    const row = computed.rows[position.row];
+    if (column && row) void save([{ month: row.month, columnId: column.id, input: "" }]);
   }
 
   // ── Выгрузка ────────────────────────────────────────────────────────────
@@ -407,6 +616,10 @@ export function BudgetSheet() {
     const lines = computed.rows.map((row) => [
       `01.${row.month.slice(5, 7)}.${row.month.slice(0, 4)}`,
       ...display.map((item) => {
+        if (item.type === "column" && item.column.kind === "note") {
+          // Текст в CSV — в кавычках, а то «;» и перевод строки внутри развалили бы строку.
+          return `"${(row.cells[item.column.id]?.input ?? "").replace(/"/g, '""')}"`;
+        }
         const value =
           item.type === "total"
             ? row.total
@@ -428,20 +641,45 @@ export function BudgetSheet() {
   // ── Вид ─────────────────────────────────────────────────────────────────
 
   if (sheet.columns.length === 0) {
+    const steps = [
+      { n: 1, title: words.emptyStep1, text: words.emptyStep1Text },
+      { n: 2, title: words.emptyStep2, text: words.emptyStep2Text },
+      { n: 3, title: words.emptyStep3, text: words.emptyStep3Text }
+    ];
     return (
       <>
         <Card data-testid="sheet-empty">
-          <CardContent className="space-y-4 p-6 text-center">
-            <h2 className="text-lg font-semibold">{words.emptyTitle}</h2>
-            <p className="mx-auto max-w-xl text-sm text-muted-foreground">{words.emptyLead}</p>
+          <CardContent className="space-y-6 p-6">
+            <div className="mx-auto max-w-xl space-y-2 text-center">
+              <h2 className="text-lg font-semibold">{words.emptyTitle}</h2>
+              <p className="text-sm text-muted-foreground">{words.emptyLead}</p>
+            </div>
+            {/* Настоящая последовательность — поэтому с цифрами. */}
+            <ol className="grid gap-3 sm:grid-cols-3">
+              {steps.map((step) => (
+                <li key={step.n} className="flex gap-3 rounded-lg border bg-card p-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
+                    {step.n}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-medium">{step.title}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{step.text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
             <div className="flex flex-col justify-center gap-2 sm:flex-row">
-              <Button type="button" onClick={() => setImportOpen(true)}>
+              <Button type="button" onClick={() => setWizardOpen(true)}>
+                <Sparkles className="size-4" />
+                {words.emptyCreate}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setImportOpen(true)}>
                 <FileUp className="size-4" />
                 {words.emptyImport}
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => void act({ action: "start", from: current })}
               >
                 {words.emptyStart}
@@ -449,6 +687,17 @@ export function BudgetSheet() {
             </div>
           </CardContent>
         </Card>
+        <SheetWizard
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          categories={categories}
+          current={current}
+          words={words}
+          format={format}
+          onCreated={async () => {
+            await Promise.all([reload(), reloadRefs()]);
+          }}
+        />
         <SheetImportDialog
           open={importOpen}
           onOpenChange={setImportOpen}
@@ -462,8 +711,14 @@ export function BudgetSheet() {
     );
   }
 
-  const selectedColumn = selected ? columnAt(selected.col) : null;
   const selectedRow = selected ? computed.rows[selected.row] : null;
+  const focus = focusRow(computed.rows, current);
+  const shortfall = firstShortfall(computed.rows, current);
+  const hasSavings = sheet.columns.some((column) => isSavingsKind(column.kind));
+  const pad = density === "comfort" ? "px-3 py-2.5 text-[15px]" : "px-2 py-1.5 text-sm";
+  const focusIndex = focus ? computed.rows.findIndex((row) => row.month === focus.month) : 0;
+  const shownIndex = Math.max(0, Math.min(computed.rows.length - 1, monthIndex ?? focusIndex));
+  const showTable = !phone || view === "table";
 
   function cellValue(row: ComputedRow, item: DisplayColumn) {
     if (item.type === "total") return row.total;
@@ -484,11 +739,102 @@ export function BudgetSheet() {
   const phoneColumn = phoneCell ? columnAt(phoneCell.col) : null;
   const phoneRow = phoneCell ? computed.rows[phoneCell.row] : null;
 
+  /** Что показать в строке выбранной клетки. */
+  function barInfo(): CellBarInfo | null {
+    if (phone || !selected || !selectedRow) return null;
+    const item = display[selected.col];
+    if (!item) return null;
+    const when = monthLabel(selectedRow.month, locale);
+    if (item.type !== "column") {
+      const value = item.type === "total" ? selectedRow.total : selectedRow.savingsTotal;
+      return {
+        title: `${item.type === "total" ? words.total : words.savingsTotal} · ${when}`,
+        editable: false,
+        value: "",
+        auto: null,
+        error: null,
+        preview: null,
+        fact: null,
+        href: null,
+        totalValue: plain(value),
+        text: false
+      };
+    }
+    const { column } = item;
+    const cell = selectedRow.cells[column.id];
+    const typed =
+      editing && editing.position.row === selected.row && editing.position.col === selected.col
+        ? editing.draft
+        : (cell?.input ?? "");
+    const text = column.kind === "note";
+    const result = text ? null : evaluate(typed);
+    const fact = column.categoryId ? facts[selectedRow.month]?.[column.categoryId] : undefined;
+    let factInfo: CellBarInfo["fact"] = null;
+    if (fact !== undefined && (column.kind === "expense" || column.kind === "income")) {
+      let delta: string | null = null;
+      let bad = false;
+      const plan = cell?.value ?? null;
+      if (plan !== null && !cell?.auto) {
+        const diff = Math.round((fact - plan) * 100) / 100;
+        if (diff !== 0) {
+          delta = format(diff > 0 ? words.barOver : words.barUnder, {
+            amount: money(Math.abs(diff))
+          });
+          // Расход больше плана — плохо; доход меньше плана — тоже.
+          bad = column.kind === "expense" ? diff > 0 : diff < 0;
+        }
+      }
+      factInfo = { text: money(fact), delta, over: bad };
+    }
+    return {
+      title: format(words.barCell, { column: column.name, month: when }),
+      editable: true,
+      value: cell?.input ?? "",
+      auto: cell?.auto && cell.value !== null ? plain(cell.value) : null,
+      error: result && !result.ok ? result.error : null,
+      preview: result && result.ok && isFormula(typed) ? `= ${plain(result.value)}` : null,
+      fact: factInfo,
+      href: operationsHref(column, selectedRow.month),
+      totalValue: null,
+      text
+    };
+  }
+
+  /** Клавиши поля ввода — одни и те же в клетке и в строке над таблицей. */
+  function onEditKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (!editing) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit(move(editing.position, 1, 0));
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      commit(move(editing.position, 0, event.shiftKey ? -1 : 1));
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setEditing(null);
+      requestAnimationFrame(() => tableRef.current?.focus());
+    }
+  }
+
+  const barDraft =
+    editing &&
+    selected &&
+    editing.position.row === selected.row &&
+    editing.position.col === selected.col
+      ? editing.draft
+      : null;
+
   return (
     <div className="space-y-3" data-testid="budget-sheet">
       {/* Панель: то, что делают с таблицей целиком. */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={() => setColumnDialog({})}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          title={words.addColumnTitle}
+          onClick={() => setColumnDialog({})}
+        >
           <Plus className="size-4" />
           {words.addColumn}
         </Button>
@@ -506,59 +852,105 @@ export function BudgetSheet() {
           <Plus className="size-4" />
           {words.addMonth}
         </Button>
-        {phone ? (
-          <Button
-            type="button"
-            size="sm"
-            variant={more ? "secondary" : "ghost"}
-            aria-expanded={more}
-            onClick={() => setMore((was) => !was)}
-          >
-            <ChevronDown className={cn("size-4 transition-transform", more && "rotate-180")} />
-            {words.more}
-          </Button>
+        {!phone ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              title={words.fillFromLedgerHint}
+              onClick={() => void fillFromLedger()}
+            >
+              <Sparkles className="size-4" />
+              {words.fillFromLedger}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => focus && goToMonth(focus.month)}
+            >
+              <CalendarDays className="size-4" />
+              {words.today}
+            </Button>
+          </>
         ) : null}
-        {!phone || more ? (
+        <Button
+          type="button"
+          size="sm"
+          variant={helpOpen ? "secondary" : "ghost"}
+          aria-pressed={helpOpen}
+          onClick={() => {
+            setHelpOpen((was) => {
+              if (was) remember(HELP_KEY, "1");
+              return !was;
+            });
+          }}
+        >
+          <CircleHelp className="size-4" />
+          {words.help}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={more ? "secondary" : "ghost"}
+          aria-expanded={more}
+          onClick={() => setMore((was) => !was)}
+        >
+          <ChevronDown className={cn("size-4 transition-transform", more && "rotate-180")} />
+          {words.more}
+        </Button>
+        {!phone ? (
+          <Segmented<Density>
+            ariaLabel={words.density}
+            className="ml-auto w-56"
+            value={density}
+            options={[
+              { value: "comfort", label: words.densityComfort },
+              { value: "compact", label: words.densityCompact }
+            ]}
+            onChange={(next) => {
+              setDensity(next);
+              remember(DENSITY_KEY, next);
+            }}
+          />
+        ) : null}
+      </div>
+      <div className={cn("flex-wrap items-center gap-2", more ? "flex" : "hidden")}>
+        {phone ? (
           <>
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() =>
-                void act({ action: "addMonth", month: previousMonth(sheet.months[0] ?? current) })
-              }
+              title={words.fillFromLedgerHint}
+              onClick={() => void fillFromLedger()}
             >
-              {words.addMonthBefore}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setTargetOpen(true)}>
-              <Target className="size-4" />
-              {words.addTarget}
+              <Sparkles className="size-4" />
+              {words.fillFromLedger}
             </Button>
           </>
         ) : null}
-        <label
-          className={cn(
-            "ml-auto items-center gap-2 text-sm",
-            !phone || more ? "flex cursor-pointer" : "hidden"
-          )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() =>
+            void act({ action: "addMonth", month: previousMonth(sheet.months[0] ?? current) })
+          }
         >
-          <input
-            type="checkbox"
-            className="size-4 accent-primary"
-            checked={compare}
-            onChange={(event) => {
-              setCompare(event.target.checked);
-              try {
-                localStorage.setItem(COMPARE_KEY, event.target.checked ? "1" : "0");
-              } catch {
-                /* ignore */
-              }
-            }}
-          />
-          {words.compare}
-        </label>
-      </div>
-      <div className={cn("flex-wrap items-center gap-2", !phone || more ? "flex" : "hidden")}>
+          {words.addMonthBefore}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => void addMonthsAfter(3)}>
+          {words.addThree}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => void addMonthsAfter(12)}>
+          {words.addYear}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setTargetOpen(true)}>
+          <Target className="size-4" />
+          {words.addTarget}
+        </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => setImportOpen(true)}>
           <FileUp className="size-4" />
           {words.import}
@@ -589,13 +981,45 @@ export function BudgetSheet() {
             {words.showHidden} · {hiddenCount}
           </Button>
         ) : null}
-        {!phone && selectedColumn && selectedRow ? (
-          <Button type="button" size="sm" variant="ghost" onClick={() => fillDown(selected!)}>
-            <ChevronDown className="size-4" />
-            {words.fillDown}
-          </Button>
-        ) : null}
+        <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="size-4 accent-primary"
+            checked={compare}
+            onChange={(event) => {
+              setCompare(event.target.checked);
+              remember(COMPARE_KEY, event.target.checked ? "1" : "0");
+            }}
+          />
+          {words.compare}
+        </label>
       </div>
+
+      {helpOpen ? (
+        <SheetHelp
+          words={words}
+          showKeys={!phone}
+          onClose={() => {
+            setHelpOpen(false);
+            remember(HELP_KEY, "1");
+          }}
+        />
+      ) : null}
+
+      {focus ? (
+        <SheetSummary
+          row={focus}
+          words={words}
+          format={format}
+          locale={locale}
+          money={money}
+          hasSavings={hasSavings}
+          shortfall={shortfall}
+          monthsLeft={monthsAhead(computed.rows, current)}
+          onShowMonth={goToMonth}
+          onAddYear={() => void addMonthsAfter(12)}
+        />
+      ) : null}
 
       <SheetTargets
         rows={computed.rows}
@@ -603,6 +1027,62 @@ export function BudgetSheet() {
         money={money}
         onRemove={(id) => void act({ action: "removeTarget", id })}
       />
+
+      {phone ? (
+        <Segmented<PhoneView>
+          ariaLabel={words.viewTable}
+          className="w-full max-w-xs"
+          value={view}
+          options={[
+            { value: "months", label: words.viewMonths },
+            { value: "table", label: words.viewTable }
+          ]}
+          onChange={(next) => {
+            setView(next);
+            remember(VIEW_KEY, next);
+          }}
+        />
+      ) : (
+        <SheetCellBar
+          words={words}
+          format={format}
+          info={barInfo()}
+          draft={barDraft}
+          inputRef={barInput}
+          onFocus={() => {
+            if (!editing && selected) {
+              setEditing({ position: selected, draft: inputAt(selected), source: "bar" });
+            }
+          }}
+          onChange={(value) => {
+            if (!selected) return;
+            setEditing((was) => ({
+              position: was?.position ?? selected,
+              draft: value,
+              source: was?.source ?? "bar"
+            }));
+          }}
+          onKeyDown={onEditKeyDown}
+          onBlur={() => commit()}
+          onFillDown={() => selected && fillDown(selected)}
+          onNextMonth={() => selected && copyToNextMonth(selected)}
+          onClear={() => selected && clearSelected(selected)}
+        />
+      )}
+
+      {phone && view === "months" ? (
+        <SheetMonthView
+          rows={computed.rows}
+          display={display}
+          index={shownIndex}
+          current={current}
+          words={words}
+          locale={locale}
+          plain={plain}
+          onIndex={setMonthIndex}
+          onEdit={setPhoneCell}
+        />
+      ) : null}
 
       {/* Сама таблица. Шапка и месяц липкие; прокрутка — внутри. */}
       <div
@@ -612,10 +1092,13 @@ export function BudgetSheet() {
         aria-label={words.emptyTitle}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
-        className="relative max-h-[calc(100svh-15rem)] overflow-auto rounded-lg border bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "relative max-h-[calc(100svh-15rem)] overflow-auto rounded-lg border bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          !showTable && "hidden"
+        )}
         data-testid="sheet-grid"
       >
-        <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
+        <table className="w-max min-w-full border-separate border-spacing-0">
           <thead className="sticky top-0 z-20">
             <tr>
               <th
@@ -626,13 +1109,19 @@ export function BudgetSheet() {
               </th>
               <th
                 colSpan={mainSpan}
-                className="border-b border-r bg-primary/10 px-2 py-1 text-left text-xs font-semibold text-primary"
+                className={cn(
+                  "border-b border-r px-2 py-1.5 text-left text-xs font-semibold text-primary",
+                  TINT.primary15
+                )}
               >
                 {words.main}
               </th>
               <th
                 colSpan={savingsSpan}
-                className="border-b bg-success/10 px-2 py-1 text-left text-xs font-semibold text-success"
+                className={cn(
+                  "border-b px-2 py-1.5 text-left text-xs font-semibold text-success",
+                  TINT.success15
+                )}
               >
                 {words.savings}
               </th>
@@ -643,6 +1132,7 @@ export function BudgetSheet() {
                   key={item.type === "column" ? item.column.id : item.type}
                   item={item}
                   last={index === display.length - 1}
+                  active={selected?.col === index}
                   words={words}
                   href={item.type === "column" ? operationsHref(item.column) : null}
                   categoryName={
@@ -669,29 +1159,40 @@ export function BudgetSheet() {
               const past = row.month < current;
               const now = row.month === current;
               return (
-                <tr key={row.month} data-month={row.month}>
+                <tr key={row.month} data-month={row.month} className="hover:bg-muted/40">
                   <th
                     scope="row"
                     className={cn(
-                      "sticky left-0 z-10 whitespace-nowrap border-b border-r px-3 py-1.5 text-left text-xs font-medium",
-                      now ? "bg-primary/15 text-primary" : "bg-card",
-                      past && "text-muted-foreground"
+                      "sticky left-0 z-10 whitespace-nowrap border-b border-r px-3 text-left text-[13px] font-semibold",
+                      density === "comfort" ? "py-2.5" : "py-1.5",
+                      now ? cn(TINT.primary15, "text-primary") : "bg-card",
+                      past && "text-foreground/70",
+                      selected?.row === rowIndex && cn(TINT.primary20, "text-primary")
                     )}
                   >
                     <button
                       type="button"
-                      className="hover:underline"
+                      className="inline-flex items-center gap-1.5 hover:underline"
                       onClick={() => setMonthMenu(row.month)}
                     >
                       {monthLabel(row.month, locale)}
+                      {now ? (
+                        <span
+                          className="inline-block size-1.5 rounded-full bg-primary"
+                          title={words.legendNow}
+                        />
+                      ) : null}
                     </button>
                   </th>
                   {display.map((item, col) => {
                     const isSelected = selected?.row === rowIndex && selected.col === col;
                     const isEditing =
-                      editing?.position.row === rowIndex && editing.position.col === col;
+                      editing?.source === "cell" &&
+                      editing.position.row === rowIndex &&
+                      editing.position.col === col;
                     const value = cellValue(row, item);
                     const cell = item.type === "column" ? row.cells[item.column.id] : null;
+                    const wordy = item.type === "column" && item.column.kind === "note";
                     const fact =
                       compare && item.type === "column" && item.column.categoryId
                         ? facts[row.month]?.[item.column.categoryId]
@@ -701,18 +1202,30 @@ export function BudgetSheet() {
                       isSelected && item.type === "column"
                         ? operationsHref(item.column, row.month)
                         : null;
+                    const crosshair =
+                      !isSelected && (selected?.row === rowIndex || selected?.col === col);
                     return (
                       <td
                         key={item.type === "column" ? item.column.id : item.type}
                         role="gridcell"
                         aria-selected={isSelected}
+                        data-pos={`${rowIndex}:${col}`}
                         data-col={item.type === "column" ? item.column.name : item.type}
                         className={cn(
-                          "relative min-w-[6.5rem] border-b border-r px-2 py-1.5 text-right tabular-nums",
+                          "relative min-w-[6.5rem] border-b border-r tabular-nums",
+                          pad,
+                          wordy ? "min-w-[11rem] max-w-[16rem] text-left" : "text-right",
+                          !isTotal && "cursor-cell",
                           isTotal && "bg-warning/10 font-semibold",
                           item.type === "column" && item.column.hidden && "opacity-50",
                           now && !isTotal && "bg-primary/5",
-                          past && "text-muted-foreground",
+                          crosshair && !isTotal && "bg-primary/10",
+                          item.type === "column" &&
+                            item.column.kind === "income" &&
+                            value !== null &&
+                            "font-medium text-success",
+                          value === 0 && !isTotal && "text-muted-foreground/50",
+                          isTotal && value !== null && value < 0 && "text-destructive",
                           isSelected && "outline outline-2 -outline-offset-2 outline-primary",
                           cell?.error && "text-destructive"
                         )}
@@ -721,9 +1234,11 @@ export function BudgetSheet() {
                             ? format(words.cellError, { error: cell.error })
                             : cell?.auto
                               ? words.auto
-                              : cell?.input && cell.input !== String(value)
+                              : wordy && cell?.input
                                 ? cell.input
-                                : undefined
+                                : cell?.input && cell.input !== String(value)
+                                  ? cell.input
+                                  : undefined
                         }
                         onClick={() => {
                           if (phone) {
@@ -739,26 +1254,19 @@ export function BudgetSheet() {
                           <input
                             autoFocus
                             aria-label={words.input}
-                            className="absolute inset-0 w-full bg-background px-2 text-right outline-none"
+                            className={cn(
+                              "absolute inset-0 z-[5] w-full bg-background px-2 outline-none",
+                              wordy ? "text-left" : "text-right"
+                            )}
                             value={editing.draft}
                             onChange={(event) =>
                               setEditing({ ...editing, draft: event.target.value })
                             }
                             onBlur={() => commit()}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                commit(move(editing.position, 1, 0));
-                              } else if (event.key === "Tab") {
-                                event.preventDefault();
-                                commit(move(editing.position, 0, event.shiftKey ? -1 : 1));
-                              } else if (event.key === "Escape") {
-                                event.preventDefault();
-                                setEditing(null);
-                                requestAnimationFrame(() => tableRef.current?.focus());
-                              }
-                            }}
+                            onKeyDown={onEditKeyDown}
                           />
+                        ) : wordy ? (
+                          <span className="block truncate">{cell?.input}</span>
                         ) : (
                           <>
                             <span className={cn(cell?.auto && "italic text-muted-foreground")}>
@@ -809,7 +1317,7 @@ export function BudgetSheet() {
                 {display.map((item) => (
                   <td
                     key={item.type === "column" ? item.column.id : item.type}
-                    className="border-r border-t bg-muted px-2 py-1.5 text-right text-xs font-medium tabular-nums"
+                    className="border-r border-t bg-muted px-2 py-1.5 text-right text-xs font-semibold tabular-nums"
                   >
                     {item.type === "column" && computed.totals[item.column.id]?.filled
                       ? plain(computed.totals[item.column.id][kind])
@@ -821,7 +1329,6 @@ export function BudgetSheet() {
           </tfoot>
         </table>
       </div>
-      {!phone ? <p className="text-xs text-muted-foreground">{words.hint}</p> : null}
 
       <ColumnDialog
         draft={columnDialog}
@@ -834,7 +1341,7 @@ export function BudgetSheet() {
               id: draft.id,
               name: draft.name,
               kind: draft.kind,
-              categoryId: draft.categoryId ?? null,
+              categoryId: draft.kind === "note" ? null : (draft.categoryId ?? null),
               hidden: draft.hidden ?? false
             });
           } else {
@@ -842,7 +1349,7 @@ export function BudgetSheet() {
               action: "addColumn",
               name: draft.name,
               kind: draft.kind,
-              categoryId: draft.categoryId ?? null
+              categoryId: draft.kind === "note" ? null : (draft.categoryId ?? null)
             });
           }
           setColumnDialog(null);
@@ -896,34 +1403,78 @@ export function BudgetSheet() {
         </DialogContent>
       </Dialog>
 
-      {/* Месяц: удалить строку. */}
+      {/* Месяц: что с ним можно сделать. */}
       <Dialog open={monthMenu !== null} onOpenChange={(open) => !open && setMonthMenu(null)}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{monthMenu ? monthLabel(monthMenu, locale, "long") : ""}</DialogTitle>
-            <DialogDescription>
-              {monthMenu
-                ? format(words.deleteMonthConfirm, { month: monthLabel(monthMenu, locale, "long") })
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setMonthMenu(null)}>
-              {words.cancel}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={async () => {
-                const month = monthMenu;
-                setMonthMenu(null);
-                setSelected(null);
-                if (month) await act({ action: "removeMonth", month });
-              }}
-            >
-              {words.deleteMonth}
-            </Button>
-          </DialogFooter>
+          {monthMenu ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{monthLabel(monthMenu, locale, "long")}</DialogTitle>
+                <DialogDescription>{words.monthActions}</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2">
+                <Button asChild variant="outline" className="justify-start">
+                  <Link
+                    href={`/transactions?from=${monthMenu}-01&to=${lastDay(monthMenu)}`}
+                    onClick={() => setMonthMenu(null)}
+                  >
+                    <ArrowUpRight className="size-4" />
+                    {words.monthOperations}
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="justify-start"
+                  disabled={computed.rows.findIndex((row) => row.month === monthMenu) < 1}
+                  onClick={() => {
+                    copyFromPrevious(monthMenu);
+                    setMonthMenu(null);
+                  }}
+                >
+                  <ChevronDown className="size-4" />
+                  {words.copyFromPrev}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="justify-start"
+                  onClick={() => {
+                    clearWholeMonth(monthMenu);
+                    setMonthMenu(null);
+                  }}
+                >
+                  <X className="size-4" />
+                  {words.clearMonth}
+                </Button>
+              </div>
+              <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                <p className="text-sm">
+                  {format(words.deleteMonthConfirm, {
+                    month: monthLabel(monthMenu, locale, "long")
+                  })}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={async () => {
+                    const month = monthMenu;
+                    setMonthMenu(null);
+                    setSelected(null);
+                    if (month) await act({ action: "removeMonth", month });
+                  }}
+                >
+                  {words.deleteMonth}
+                </Button>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setMonthMenu(null)}>
+                  {words.close}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
 
@@ -943,6 +1494,7 @@ export function BudgetSheet() {
 function HeaderCell({
   item,
   last,
+  active,
   words,
   href,
   categoryName,
@@ -950,6 +1502,8 @@ function HeaderCell({
 }: {
   item: DisplayColumn;
   last: boolean;
+  /** В этом столбце выбрана клетка — шапка подсвечивается. */
+  active: boolean;
   words: ReturnType<typeof useSheetText>["words"];
   href: string | null;
   categoryName?: string;
@@ -959,7 +1513,8 @@ function HeaderCell({
     return (
       <th
         className={cn(
-          "border-b bg-warning/20 px-2 py-2 text-right text-xs font-semibold",
+          "border-b px-2 py-2.5 text-right text-[13px] font-bold",
+          active ? cn(TINT.primary25, "text-primary") : TINT.warning25,
           !last && "border-r"
         )}
       >
@@ -971,13 +1526,28 @@ function HeaderCell({
   return (
     <th
       className={cn(
-        "max-w-[10rem] border-b border-r px-2 py-2 text-right align-bottom text-xs font-semibold",
-        isSavingsKind(column.kind) ? "bg-success/10" : "bg-muted",
+        "max-w-[10rem] border-b border-r px-2 py-2.5 align-bottom text-[13px] font-semibold",
+        column.kind === "note" ? "min-w-[11rem] text-left" : "text-right",
+        // Полоска сверху говорит, что за столбец, раньше названия: доход — зелёная,
+        // сбережения — бирюзовая, текст — серая.
+        column.kind === "income" && "border-t-2 border-t-success",
+        column.kind === "note" && "border-t-2 border-t-muted-foreground/40",
+        isSavingsKind(column.kind) ? TINT.success10 : "bg-muted",
+        active && cn(TINT.primary20, "text-primary"),
         column.hidden && "opacity-50"
       )}
-      title={categoryName ? `${words.operations}: ${categoryName}` : words.kinds[column.kind]}
+      title={
+        categoryName
+          ? `${words.operations}: ${categoryName}`
+          : `${words.kinds[column.kind]} — ${words.kindHints[column.kind]}`
+      }
     >
-      <span className="flex items-end justify-end gap-1">
+      <span
+        className={cn(
+          "flex items-end gap-1",
+          column.kind === "note" ? "justify-start" : "justify-end"
+        )}
+      >
         {href ? (
           <Link href={href} className="line-clamp-2 text-primary hover:underline">
             {column.name}
@@ -1026,7 +1596,8 @@ function PhoneCellEditor({
 }) {
   const cell = row.cells[column.id];
   const [draft, setDraft] = useState(cell?.input ?? "");
-  const preview = evaluate(draft);
+  const wordy = column.kind === "note";
+  const preview = wordy ? null : evaluate(draft);
   return (
     <form
       className="grid gap-4"
@@ -1050,11 +1621,13 @@ function PhoneCellEditor({
           onChange={(event) => setDraft(event.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          {preview && !preview.ok
-            ? format(words.cellError, { error: preview.error })
-            : preview && preview.ok && draft.trim() !== String(preview.value)
-              ? `= ${preview.value.toLocaleString("ru-RU")}`
-              : words.inputHint}
+          {wordy
+            ? words.kindHints.note
+            : preview && !preview.ok
+              ? format(words.cellError, { error: preview.error })
+              : preview && preview.ok && draft.trim() !== String(preview.value)
+                ? `= ${preview.value.toLocaleString("ru-RU")}`
+                : words.inputHint}
         </p>
         {fact !== undefined ? (
           <p className="text-xs text-muted-foreground">

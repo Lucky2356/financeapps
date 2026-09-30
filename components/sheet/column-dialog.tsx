@@ -117,7 +117,7 @@ function ColumnForm({
     >
       <DialogHeader>
         <DialogTitle>{draft.id ? draft.name : words.columnNew}</DialogTitle>
-        <DialogDescription>{words.kinds[kind]}</DialogDescription>
+        <DialogDescription>{words.kindHints[kind]}</DialogDescription>
       </DialogHeader>
 
       <div className="space-y-1.5">
@@ -144,22 +144,24 @@ function ColumnForm({
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-1.5">
-        <Label>{words.columnCategory}</Label>
-        <Select value={categoryId} onValueChange={(value) => value && setCategoryId(value)}>
-          <SelectTrigger aria-label={words.columnCategory}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>{words.noCategory}</SelectItem>
-            {options.map((category) => (
-              <SelectItem key={category.id} value={category.id}>
-                {category.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {kind === "note" ? null : (
+        <div className="space-y-1.5">
+          <Label>{words.columnCategory}</Label>
+          <Select value={categoryId} onValueChange={(value) => value && setCategoryId(value)}>
+            <SelectTrigger aria-label={words.columnCategory}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>{words.noCategory}</SelectItem>
+              {options.map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {draft.id ? (
         <div className="flex flex-wrap gap-2">
