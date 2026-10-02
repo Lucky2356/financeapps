@@ -54,7 +54,7 @@ function Strip({ surface, className }: { surface: NavSurface; className: string 
             className={cn(
               "shrink-0 snap-start whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
               active
-                ? "bg-secondary text-primary"
+                ? "bg-secondary text-foreground"
                 : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
             )}
           >

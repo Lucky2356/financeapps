@@ -98,8 +98,13 @@ describe("значок состояния связи", () => {
 
     expect(await screen.findByText("Здесь")).toBeInTheDocument();
     expect(screen.getByText("На другом устройстве")).toBeInTheDocument();
-    expect(screen.getByText("700")).toBeInTheDocument();
-    expect(screen.getByText("900")).toBeInTheDocument();
+    // Суммы — деньгами, а не голым числом, и поле названо по-русски.
+    expect(screen.getByText(/^700\s₽$/)).toBeInTheDocument();
+    expect(screen.getByText(/^900\s₽$/)).toBeInTheDocument();
+    expect(screen.getByText("Сумма")).toBeInTheDocument();
+    // Что не сходится — подсвечено и сосчитано.
+    expect(screen.getByText("Сумма").closest("tr")).toHaveAttribute("data-differs", "true");
+    expect(screen.getByText("Не сходится: 1")).toBeInTheDocument();
     expect(screen.getAllByText("сейчас в данных")).toHaveLength(1);
   });
 
@@ -109,7 +114,7 @@ describe("значок состояния связи", () => {
     render(<SyncStatusIndicator />);
 
     await userEvent.click(await screen.findByRole("button", { name: /Правили в двух местах/ }));
-    const [keepMine] = await screen.findAllByRole("button", { name: "Оставить эту" });
+    const keepMine = await screen.findByRole("button", { name: "Оставить как здесь" });
     await userEvent.click(keepMine);
 
     await waitFor(() =>

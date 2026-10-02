@@ -1120,7 +1120,7 @@ export function BudgetSheet() {
               <th
                 colSpan={mainSpan}
                 className={cn(
-                  "border-b border-r px-2 py-1.5 text-left text-xs font-semibold text-primary",
+                  "border-b border-r px-2 py-1.5 text-left text-xs font-semibold text-foreground",
                   TINT.primary15
                 )}
               >
@@ -1175,9 +1175,9 @@ export function BudgetSheet() {
                     className={cn(
                       "sticky left-0 z-10 whitespace-nowrap border-b border-r px-3 text-left text-[13px] font-semibold",
                       density === "comfort" ? "py-2.5" : "py-1.5",
-                      now ? cn(TINT.primary15, "text-primary") : "bg-card",
+                      now ? cn(TINT.primary15, "text-foreground") : "bg-card",
                       past && "text-foreground/70",
-                      selected?.row === rowIndex && cn(TINT.primary20, "text-primary")
+                      selected?.row === rowIndex && cn(TINT.primary20, "text-foreground")
                     )}
                   >
                     <button
@@ -1524,7 +1524,7 @@ function HeaderCell({
       <th
         className={cn(
           "border-b px-2 py-2.5 text-right text-[13px] font-bold",
-          active ? cn(TINT.primary25, "text-primary") : TINT.warning25,
+          active ? cn(TINT.primary25, "text-foreground") : TINT.warning25,
           !last && "border-r"
         )}
       >
@@ -1543,7 +1543,7 @@ function HeaderCell({
         column.kind === "income" && "border-t-2 border-t-success",
         column.kind === "note" && "border-t-2 border-t-muted-foreground/40",
         isSavingsKind(column.kind) ? TINT.success10 : "bg-muted",
-        active && cn(TINT.primary20, "text-primary"),
+        active && cn(TINT.primary20, "text-foreground"),
         column.hidden && "opacity-50"
       )}
       title={
@@ -1559,7 +1559,10 @@ function HeaderCell({
         )}
       >
         {href ? (
-          <Link href={href} className="line-clamp-2 text-primary hover:underline">
+          <Link
+            href={href}
+            className="line-clamp-2 text-foreground underline decoration-primary/70 decoration-dotted underline-offset-4 hover:decoration-solid"
+          >
             {column.name}
           </Link>
         ) : (

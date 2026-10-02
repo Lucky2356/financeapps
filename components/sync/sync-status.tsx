@@ -22,8 +22,10 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api/client";
+import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { SyncStatus } from "@/lib/storage/SyncingStorageAdapter";
+import { describeValue, diffConflict, fieldLabel } from "@/lib/sync/conflict-diff";
 import type { StoredConflict } from "@/lib/vault/conflicts";
 import { conflictStore, syncStorage } from "@/lib/vault/runtime";
 import { cn } from "@/lib/utils";
@@ -60,60 +62,121 @@ function describe(row: Record<string, unknown> | null): string | null {
   return null;
 }
 
-function Version({
-  title,
-  row,
-  current,
-  onKeep,
-  busy
+/**
+ * Две версии одной записи бок о бок: что не сходится — сверху и подсвечено,
+ * совпадающее — свёрнуто. Выбирают версию целиком, поэтому кнопок две, по одной
+ * на столбец.
+ */
+function Comparison({
+  conflict,
+  busy,
+  onKeep
 }: {
-  title: string;
-  row: Record<string, unknown> | null;
-  current: boolean;
-  onKeep: () => void;
+  conflict: StoredConflict;
   busy: boolean;
+  onKeep: (side: "mine" | "theirs") => void;
 }) {
   const { t } = useI18n();
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-2 rounded-lg border p-3",
-        current && "border-primary/60 bg-primary/5"
+  const fields = diffConflict(conflict.mine, conflict.theirs);
+  const differing = fields.filter((item) => item.differs);
+  const same = fields.filter((item) => !item.differs);
+  const currency = (row: Record<string, unknown> | null) =>
+    typeof row?.currency === "string" ? row.currency : "RUB";
+  const show = (field: string, value: unknown, row: Record<string, unknown> | null) =>
+    describeValue(field, value, t, (amount) => formatCurrency(amount, currency(row)));
+
+  const head = (title: string, current: boolean, row: Record<string, unknown> | null) => (
+    <th scope="col" className="px-2 py-2 text-left align-top font-medium">
+      <span className="block">{title}</span>
+      {current ? (
+        <Badge variant="secondary" className="mt-1 font-normal">
+          {t("sync.conflicts.current")}
+        </Badge>
+      ) : null}
+      {row ? null : (
+        <span className="mt-1 block font-normal text-destructive">
+          {t("sync.conflicts.deleted")}
+        </span>
       )}
+    </th>
+  );
+
+  const line = (item: (typeof fields)[number]) => (
+    <tr
+      key={item.field}
+      className={cn("border-t", item.differs && "bg-warning/10")}
+      data-differs={item.differs ? "true" : undefined}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">{title}</span>
-        {current ? <Badge variant="secondary">{t("sync.conflicts.current")}</Badge> : null}
+      <th scope="row" className="px-2 py-1.5 text-left align-top font-normal text-muted-foreground">
+        {fieldLabel(item.field, t)}
+      </th>
+      {(["here", "there"] as const).map((side) => {
+        const row = side === "here" ? conflict.mine : conflict.theirs;
+        return (
+          <td
+            key={side}
+            className={cn(
+              "px-2 py-1.5 align-top tabular-nums [overflow-wrap:anywhere]",
+              item.differs && "font-semibold"
+            )}
+          >
+            {row ? show(item.field, item[side], row) : "—"}
+          </td>
+        );
+      })}
+    </tr>
+  );
+
+  return (
+    <div className="space-y-2" data-testid="conflict-compare">
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full min-w-[18rem] text-xs">
+          <thead className="bg-muted/40">
+            <tr>
+              <th
+                scope="col"
+                className="w-1/4 px-2 py-2 text-left align-top font-medium text-muted-foreground"
+              >
+                {t("sync.conflicts.field")}
+              </th>
+              {head(t("sync.conflicts.here"), conflict.chosen === "mine", conflict.mine)}
+              {head(t("sync.conflicts.there"), conflict.chosen === "theirs", conflict.theirs)}
+            </tr>
+          </thead>
+          <tbody>{differing.map(line)}</tbody>
+          {same.length > 0 ? (
+            <tbody>
+              <tr className="border-t">
+                <td colSpan={3} className="px-2 py-0">
+                  <details className="group">
+                    <summary className="cursor-pointer py-1.5 text-muted-foreground">
+                      {t("sync.conflicts.same", { count: same.length })}
+                    </summary>
+                    <table className="mb-1 w-full">
+                      <tbody>{same.map(line)}</tbody>
+                    </table>
+                  </details>
+                </td>
+              </tr>
+            </tbody>
+          ) : null}
+        </table>
       </div>
-
-      {row ? (
-        // Строка целиком, как она есть. Показывать «изменилось поле amount» было
-        // бы удобнее и опаснее: выбирают не поле, а версию записи, и человек
-        // должен видеть то, что выбирает.
-        <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
-          {Object.entries(row)
-            .filter(([field]) => field !== "updatedAt" && field !== "id")
-            .map(([field, value]) => (
-              <div key={field} className="contents">
-                <dt className="truncate text-muted-foreground">{field}</dt>
-                <dd className="text-right font-medium tabular-nums">{String(value)}</dd>
-              </div>
-            ))}
-        </dl>
-      ) : (
-        <p className="text-xs font-medium text-destructive">{t("sync.conflicts.deleted")}</p>
-      )}
-
-      <Button
-        type="button"
-        size="sm"
-        variant={current ? "secondary" : "default"}
-        onClick={onKeep}
-        disabled={busy}
-        className="h-auto w-full whitespace-normal py-2"
-      >
-        {t("sync.conflicts.keep")}
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        {(["mine", "theirs"] as const).map((side) => (
+          <Button
+            key={side}
+            type="button"
+            size="sm"
+            variant={conflict.chosen === side ? "secondary" : "default"}
+            onClick={() => onKeep(side)}
+            disabled={busy}
+            className="h-auto w-full whitespace-normal py-2"
+          >
+            {t(side === "mine" ? "sync.conflicts.keepHere" : "sync.conflicts.keepThere")}
+          </Button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -226,28 +289,24 @@ export function SyncStatusIndicator() {
             <ul className="flex flex-col gap-4">
               {conflicts.map((conflict) => (
                 <li key={`${conflict.slot}/${conflict.collection}/${conflict.key}`}>
-                  <p className="mb-2 text-sm font-medium">
+                  <p className="mb-1 text-sm font-medium">
                     {collectionLabel(conflict.collection, t)}
                     {describe(conflict.mine ?? conflict.theirs)
                       ? ` — ${describe(conflict.mine ?? conflict.theirs)}`
                       : ""}
                   </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Version
-                      title={t("sync.conflicts.here")}
-                      row={conflict.mine}
-                      current={conflict.chosen === "mine"}
-                      busy={busy}
-                      onKeep={() => void keep(conflict, "mine")}
-                    />
-                    <Version
-                      title={t("sync.conflicts.there")}
-                      row={conflict.theirs}
-                      current={conflict.chosen === "theirs"}
-                      busy={busy}
-                      onKeep={() => void keep(conflict, "theirs")}
-                    />
-                  </div>
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    {t("sync.conflicts.differs", {
+                      count: diffConflict(conflict.mine, conflict.theirs).filter(
+                        (item) => item.differs
+                      ).length
+                    })}
+                  </p>
+                  <Comparison
+                    conflict={conflict}
+                    busy={busy}
+                    onKeep={(side) => void keep(conflict, side)}
+                  />
                 </li>
               ))}
             </ul>
