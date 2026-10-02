@@ -9,6 +9,7 @@ import { ArrowRightToLine, ArrowUpRight, ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import type { KeyboardEvent, RefObject } from "react";
 
+import { QUIET_BUTTON } from "@/components/sheet/sheet-types";
 import type { SheetFormat, SheetWords } from "@/components/sheet/sheet-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,22 +120,40 @@ export function SheetCellBar({
           {info.editable ? (
             <div className="ml-auto flex flex-wrap gap-1">
               {info.href ? (
-                <Button asChild size="sm" variant="ghost">
+                <Button asChild size="sm" variant="ghost" className={QUIET_BUTTON}>
                   <Link href={info.href}>
                     <ArrowUpRight className="size-4" />
                     {words.operations}
                   </Link>
                 </Button>
               ) : null}
-              <Button type="button" size="sm" variant="ghost" onClick={onFillDown}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={QUIET_BUTTON}
+                onClick={onFillDown}
+              >
                 <ChevronDown className="size-4" />
                 {words.fillDown}
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={onNextMonth}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={QUIET_BUTTON}
+                onClick={onNextMonth}
+              >
                 <ArrowRightToLine className="size-4" />
                 {words.barNextMonth}
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={onClear}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={QUIET_BUTTON}
+                onClick={onClear}
+              >
                 <X className="size-4" />
                 {words.clear}
               </Button>

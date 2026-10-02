@@ -59,7 +59,7 @@ export function SheetMonthView({
             {monthLabel(row.month, locale, "long")}
           </p>
           {now ? (
-            <span className="rounded bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary">
+            <span className="rounded bg-foreground/10 px-1.5 py-0.5 text-xs font-bold text-foreground">
               {words.legendNow}
             </span>
           ) : null}
@@ -85,7 +85,7 @@ export function SheetMonthView({
                 key={`h-${savings ? "savings" : "main"}`}
                 className={cn(
                   "px-3 py-1.5 text-xs font-semibold uppercase tracking-wide",
-                  savings ? "bg-success/10 text-success" : "bg-primary/10 text-primary"
+                  savings ? "bg-success/10 text-success" : "bg-muted text-foreground"
                 )}
               >
                 {savings ? words.savings : words.main}

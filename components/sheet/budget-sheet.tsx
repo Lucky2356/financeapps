@@ -47,6 +47,7 @@ import { SheetImportDialog } from "@/components/sheet/sheet-import-dialog";
 import { SheetMonthView } from "@/components/sheet/sheet-month-view";
 import { SheetSummary } from "@/components/sheet/sheet-summary";
 import { monthLabel, useSheetText } from "@/components/sheet/sheet-text";
+import { QUIET_BUTTON } from "@/components/sheet/sheet-types";
 import type { DisplayColumn, Position } from "@/components/sheet/sheet-types";
 import { SheetWizard } from "@/components/sheet/sheet-wizard";
 import { Button } from "@/components/ui/button";
@@ -110,12 +111,16 @@ const HELP_KEY = "sheet-help-seen";
  * той же основе.
  */
 const TINT = {
-  primary15:
-    "bg-card [background-image:linear-gradient(hsl(var(--primary)/0.15),hsl(var(--primary)/0.15))]",
-  primary20:
-    "bg-card [background-image:linear-gradient(hsl(var(--primary)/0.2),hsl(var(--primary)/0.2))]",
-  primary25:
-    "bg-card [background-image:linear-gradient(hsl(var(--primary)/0.25),hsl(var(--primary)/0.25))]",
+  // Нейтральные подложки: цветом текста поверх карточки — на тёмной теме
+  // светлее, на светлой темнее. Фиолетовый в таблице владелец назвал тяжёлым
+  // на тёмном фоне; цвет в таблице теперь только смысловой (доход, сбережения,
+  // нехватка), а выделение и группы — серые.
+  ink06:
+    "bg-card [background-image:linear-gradient(hsl(var(--foreground)/0.06),hsl(var(--foreground)/0.06))]",
+  ink10:
+    "bg-card [background-image:linear-gradient(hsl(var(--foreground)/0.1),hsl(var(--foreground)/0.1))]",
+  ink14:
+    "bg-card [background-image:linear-gradient(hsl(var(--foreground)/0.14),hsl(var(--foreground)/0.14))]",
   success10:
     "bg-card [background-image:linear-gradient(hsl(var(--success)/0.1),hsl(var(--success)/0.1))]",
   success15:
@@ -658,7 +663,7 @@ export function BudgetSheet() {
             <ol className="grid gap-3 sm:grid-cols-3">
               {steps.map((step) => (
                 <li key={step.n} className="flex gap-3 rounded-lg border bg-card p-3">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
                     {step.n}
                   </span>
                   <span>
@@ -689,7 +694,10 @@ export function BudgetSheet() {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-auto min-h-10 w-full whitespace-normal py-2 sm:w-auto"
+                className={cn(
+                  "h-auto min-h-10 w-full whitespace-normal py-2 sm:w-auto",
+                  QUIET_BUTTON
+                )}
                 onClick={() => void act({ action: "start", from: current })}
               >
                 {words.emptyStart}
@@ -878,6 +886,7 @@ export function BudgetSheet() {
               type="button"
               size="sm"
               variant="ghost"
+              className={QUIET_BUTTON}
               onClick={() => focus && goToMonth(focus.month)}
             >
               <CalendarDays className="size-4" />
@@ -889,6 +898,7 @@ export function BudgetSheet() {
           type="button"
           size="sm"
           variant={helpOpen ? "secondary" : "ghost"}
+          className={QUIET_BUTTON}
           aria-pressed={helpOpen}
           onClick={() => {
             setHelpOpen((was) => {
@@ -904,6 +914,7 @@ export function BudgetSheet() {
           type="button"
           size="sm"
           variant={more ? "secondary" : "ghost"}
+          className={QUIET_BUTTON}
           aria-expanded={more}
           onClick={() => setMore((was) => !was)}
         >
@@ -933,6 +944,7 @@ export function BudgetSheet() {
               type="button"
               size="sm"
               variant="ghost"
+              className={QUIET_BUTTON}
               title={words.fillFromLedgerHint}
               onClick={() => void fillFromLedger()}
             >
@@ -945,27 +957,58 @@ export function BudgetSheet() {
           type="button"
           size="sm"
           variant="ghost"
+          className={QUIET_BUTTON}
           onClick={() =>
             void act({ action: "addMonth", month: previousMonth(sheet.months[0] ?? current) })
           }
         >
           {words.addMonthBefore}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => void addMonthsAfter(3)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={QUIET_BUTTON}
+          onClick={() => void addMonthsAfter(3)}
+        >
           {words.addThree}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => void addMonthsAfter(12)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={QUIET_BUTTON}
+          onClick={() => void addMonthsAfter(12)}
+        >
           {words.addYear}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setTargetOpen(true)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={QUIET_BUTTON}
+          onClick={() => setTargetOpen(true)}
+        >
           <Target className="size-4" />
           {words.addTarget}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setImportOpen(true)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={QUIET_BUTTON}
+          onClick={() => setImportOpen(true)}
+        >
           <FileUp className="size-4" />
           {words.import}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => void exportCsv()}>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className={QUIET_BUTTON}
+          onClick={() => void exportCsv()}
+        >
           <FileDown className="size-4" />
           {words.export}
         </Button>
@@ -974,6 +1017,7 @@ export function BudgetSheet() {
             type="button"
             size="sm"
             variant="ghost"
+            className={QUIET_BUTTON}
             onClick={() => void act({ action: "undoImport" }, words.undone)}
           >
             <Undo2 className="size-4" />
@@ -985,6 +1029,7 @@ export function BudgetSheet() {
             type="button"
             size="sm"
             variant={showHidden ? "secondary" : "ghost"}
+            className={QUIET_BUTTON}
             onClick={() => setShowHidden((was) => !was)}
           >
             <Eye className="size-4" />
@@ -1121,7 +1166,7 @@ export function BudgetSheet() {
                 colSpan={mainSpan}
                 className={cn(
                   "border-b border-r px-2 py-1.5 text-left text-xs font-semibold text-foreground",
-                  TINT.primary15
+                  TINT.ink06
                 )}
               >
                 {words.main}
@@ -1175,9 +1220,9 @@ export function BudgetSheet() {
                     className={cn(
                       "sticky left-0 z-10 whitespace-nowrap border-b border-r px-3 text-left text-[13px] font-semibold",
                       density === "comfort" ? "py-2.5" : "py-1.5",
-                      now ? cn(TINT.primary15, "text-foreground") : "bg-card",
+                      now ? cn(TINT.ink10, "font-bold text-foreground") : "bg-card",
                       past && "text-foreground/70",
-                      selected?.row === rowIndex && cn(TINT.primary20, "text-foreground")
+                      selected?.row === rowIndex && cn(TINT.ink14, "text-foreground")
                     )}
                   >
                     <button
@@ -1188,7 +1233,7 @@ export function BudgetSheet() {
                       {monthLabel(row.month, locale)}
                       {now ? (
                         <span
-                          className="inline-block size-1.5 rounded-full bg-primary"
+                          className="inline-block size-1.5 rounded-full bg-foreground"
                           title={words.legendNow}
                         />
                       ) : null}
@@ -1228,15 +1273,15 @@ export function BudgetSheet() {
                           !isTotal && "cursor-cell",
                           isTotal && "bg-warning/10 font-semibold",
                           item.type === "column" && item.column.hidden && "opacity-50",
-                          now && !isTotal && "bg-primary/5",
-                          crosshair && !isTotal && "bg-primary/10",
+                          now && !isTotal && "bg-foreground/[0.04]",
+                          crosshair && !isTotal && "bg-foreground/[0.07]",
                           item.type === "column" &&
                             item.column.kind === "income" &&
                             value !== null &&
                             "font-medium text-success",
                           value === 0 && !isTotal && "text-muted-foreground/50",
                           isTotal && value !== null && value < 0 && "text-destructive",
-                          isSelected && "outline outline-2 -outline-offset-2 outline-primary",
+                          isSelected && "outline outline-2 -outline-offset-2 outline-foreground",
                           cell?.error && "text-destructive"
                         )}
                         title={
@@ -1303,7 +1348,7 @@ export function BudgetSheet() {
                                 aria-label={format(words.operationsFor, {
                                   month: monthLabel(row.month, locale, "long")
                                 })}
-                                className="absolute left-0.5 top-0.5 rounded p-0.5 text-primary hover:bg-primary/10"
+                                className="absolute left-0.5 top-0.5 rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 <ArrowUpRight className="size-3" />
@@ -1524,7 +1569,7 @@ function HeaderCell({
       <th
         className={cn(
           "border-b px-2 py-2.5 text-right text-[13px] font-bold",
-          active ? cn(TINT.primary25, "text-foreground") : TINT.warning25,
+          active ? cn(TINT.ink14, "text-foreground") : TINT.warning25,
           !last && "border-r"
         )}
       >
@@ -1543,7 +1588,7 @@ function HeaderCell({
         column.kind === "income" && "border-t-2 border-t-success",
         column.kind === "note" && "border-t-2 border-t-muted-foreground/40",
         isSavingsKind(column.kind) ? TINT.success10 : "bg-muted",
-        active && cn(TINT.primary20, "text-foreground"),
+        active && cn(TINT.ink14, "text-foreground"),
         column.hidden && "opacity-50"
       )}
       title={
@@ -1561,7 +1606,7 @@ function HeaderCell({
         {href ? (
           <Link
             href={href}
-            className="line-clamp-2 text-foreground underline decoration-primary/70 decoration-dotted underline-offset-4 hover:decoration-solid"
+            className="line-clamp-2 text-foreground underline decoration-muted-foreground decoration-dotted underline-offset-4 hover:decoration-solid"
           >
             {column.name}
           </Link>
@@ -1577,7 +1622,10 @@ function HeaderCell({
           <ChevronDown className="size-3.5" />
         </button>
       </span>
-      {column.kind !== "expense" ? (
+      {/* Вид столбца — подписью, если название его не повторяет («Подушка на
+          начало» под «Подушкой на начало» читалась как опечатка). */}
+      {column.kind !== "expense" &&
+      words.kinds[column.kind].toLowerCase() !== column.name.trim().toLowerCase() ? (
         <span className="block text-[10px] font-normal text-muted-foreground">
           {words.kinds[column.kind]}
         </span>
@@ -1649,12 +1697,12 @@ function PhoneCellEditor({
         ) : null}
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="ghost" onClick={onFill}>
+        <Button type="button" size="sm" variant="ghost" className={QUIET_BUTTON} onClick={onFill}>
           <ChevronDown className="size-4" />
           {words.fillDown}
         </Button>
         {href ? (
-          <Button asChild size="sm" variant="ghost">
+          <Button asChild size="sm" variant="ghost" className={QUIET_BUTTON}>
             <Link href={href}>
               <ArrowUpRight className="size-4" />
               {words.operations}
