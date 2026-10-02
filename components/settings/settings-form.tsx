@@ -2,6 +2,7 @@
 
 import { BeforeClearCard } from "@/components/settings/before-clear-card";
 import { LocalCopiesCard } from "@/components/settings/local-copies-card";
+import { TrashCard } from "@/components/settings/trash-card";
 import { MenuSectionRows } from "@/components/settings/menu-sections";
 import {
   AlertTriangle,
@@ -802,6 +803,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             transactions={[]}
             afterBackup={android ? null : <AutoBackupPanel />}
           />
+          <Group title={t("trash.title")}>
+            <TrashCard />
+          </Group>
           <Group title={t("set.localCopies.title")}>
             <LocalCopiesCard />
           </Group>

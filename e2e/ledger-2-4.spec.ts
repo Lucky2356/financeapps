@@ -116,3 +116,38 @@ test.describe("телефон", () => {
     await expect(page.getByTestId("day-header")).toHaveCount(0);
   });
 });
+
+test.describe("корзина", () => {
+  test.use({ viewport: { width: 1280, height: 860 } });
+
+  test("удалённая операция лежит в корзине и возвращается оттуда", async ({ page }) => {
+    test.setTimeout(90_000);
+    await seedExampleData(page);
+    await openSettled(page, "/");
+    await page.getByRole("button", { name: "Быстрое добавление операции" }).first().click();
+    const form = page.getByRole("dialog");
+    await form.locator("#fab-amount").fill("7");
+    await form.locator("#fab-description").fill("в-корзину");
+    await form.getByRole("button", { name: "Добавить", exact: true }).click();
+    await expect(form).toBeHidden();
+
+    await openSettled(page, "/transactions?period=all&q=в-корзину");
+    const rows = page.locator("tbody tr");
+    await expect(rows).toHaveCount(1);
+    await rows.first().getByRole("button", { name: "Удалить операцию" }).click();
+    const dialog = page.getByRole("alertdialog").or(page.getByRole("dialog"));
+    await dialog.getByRole("button", { name: "Удалить", exact: true }).click();
+    await expect(rows).toHaveCount(0);
+
+    await openSettled(page, "/settings?section=data");
+    const trash = page.getByTestId("trash");
+    const group = trash.getByTestId("trash-group").filter({ hasText: "в-корзину" });
+    await expect(group).toBeVisible();
+    await expect(group).toContainText("удалено здесь");
+    await group.getByRole("button", { name: "Вернуть" }).click();
+    await expect(trash.getByTestId("trash-group").filter({ hasText: "в-корзину" })).toHaveCount(0);
+
+    await openSettled(page, "/transactions?period=all&q=в-корзину");
+    await expect(rows).toHaveCount(1);
+  });
+});

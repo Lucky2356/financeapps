@@ -14,6 +14,7 @@ import {
   Search,
   Settings,
   Tags,
+  Trash2,
   TrendingUp,
   Wallet
 } from "lucide-react";
@@ -94,6 +95,13 @@ const navCommands: Command[] = [
     href: "/settings?section=data",
     group: "nav",
     icon: Download
+  },
+  {
+    id: "nav-trash",
+    labelKey: "trash.title",
+    href: "/settings?section=data",
+    group: "nav",
+    icon: Trash2
   },
   { id: "nav-settings", labelKey: "nav.settings", href: "/settings", group: "nav", icon: Settings }
 ];

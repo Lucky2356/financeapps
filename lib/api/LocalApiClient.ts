@@ -51,6 +51,7 @@ import { localStateSchema, transactionRowSchema } from "@/lib/api/local/schemas"
 import {
   BEFORE_CLEAR_SUFFIX,
   LOCAL_COPY_SUFFIX,
+  TRASH_SUFFIX,
   PRE_UPGRADE_SUFFIX,
   RESCUE_SUFFIX
 } from "@/lib/storage/SyncingStorageAdapter";
@@ -161,6 +162,16 @@ import type {
   TransactionRow
 } from "@/types/finance";
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
+import {
+  addToTrash,
+  pruneTrash,
+  readTrash,
+  trashAmount,
+  trashTitle,
+  vanishedRows,
+  type TrashEntry,
+  type TrashOrigin
+} from "@/lib/trash/trash";
 
 const LEGACY_STATE_KEY = "localFinanceState";
 const PROFILE_LIST_KEY = "profileList";
@@ -649,6 +660,12 @@ export class LocalApiClient implements ApiClient {
   // storage on every request (plan A4).
   private stateCache: { key: string; state: LocalState } | null = null;
 
+  /**
+   * Книга, какой она была до того, как синхронизация подменила её снизу. Нужна
+   * корзине: сличив её со слитой, видно, что удалили на другом устройстве.
+   */
+  private remoteBaseline: { key: string; state: LocalState } | null = null;
+
   private invalidateStateCache() {
     this.stateCache = null;
   }
@@ -665,6 +682,9 @@ export class LocalApiClient implements ApiClient {
    * там, где книгу меняет сам клиент. Здесь случай другой — снаружи и без него.
    */
   forgetCachedState(): void {
+    // Первая подмена из нескольких подряд — та, с которой и сличать: книга до
+    // неё — последняя, которую видел человек.
+    if (!this.remoteBaseline && this.stateCache) this.remoteBaseline = this.stateCache;
     this.invalidateStateCache();
   }
 
@@ -747,6 +767,7 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/backup/before-upgrade") return (await this.preUpgradeBackup()) as T;
     if (pathname === "/backup/before-clear") return (await this.beforeClearCopy()) as T;
     if (pathname === "/backup/local-copies") return (await this.localCopies()) as T;
+    if (pathname === "/trash") return (await this.trashList()) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") {
       // The exported file records when it was made, so the stamp goes into the
@@ -1103,7 +1124,7 @@ export class LocalApiClient implements ApiClient {
       // открывается профиль «Пример», а вернуться к своим — одна кнопка.
       await this.openSampleProfile();
       const sample = this.buildSampleState();
-      await this.save(sample);
+      await this.save(sample, { trash: false });
       return { loaded: true } as TResponse;
     }
     if (pathname === "/sample/leave") {
@@ -1195,6 +1216,13 @@ export class LocalApiClient implements ApiClient {
       return (await this.takeLocalCopy("manual")) as TResponse;
     }
     if (pathname === "/backup/merge") return this.mergeBackup<TResponse>(body);
+    if (pathname === "/trash") {
+      const input = (body ?? {}) as { action?: unknown; ids?: unknown };
+      const ids = Array.isArray(input.ids) ? input.ids.map(String) : [];
+      if (input.action === "restore") return (await this.restoreFromTrash(state, ids)) as TResponse;
+      if (input.action === "empty") return (await this.purgeTrash("all")) as TResponse;
+      return (await this.purgeTrash(ids)) as TResponse;
+    }
     if (pathname === "/investments")
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
     if (pathname === "/categories")
@@ -4637,6 +4665,18 @@ export class LocalApiClient implements ApiClient {
         await this.storage.setItem(key, migrated);
       }
       this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(migrated)) };
+      const baseline = this.remoteBaseline;
+      this.remoteBaseline = null;
+      if (baseline?.key === key) {
+        await this.putInTrash(
+          key,
+          vanishedRows(
+            baseline.state as unknown as Record<string, unknown>,
+            migrated as unknown as Record<string, unknown>
+          ),
+          "elsewhere"
+        );
+      }
       return structuredClone(migrated);
     }
     // Nothing below may overwrite what is stored: the only reason we are here
@@ -4809,7 +4849,7 @@ export class LocalApiClient implements ApiClient {
     return { resolved: true } as TResponse;
   }
 
-  private async save(state: LocalState, options: { stamp?: boolean } = {}) {
+  private async save(state: LocalState, options: { stamp?: boolean; trash?: boolean } = {}) {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
     const previous = await this.storedState(key);
@@ -4823,6 +4863,16 @@ export class LocalApiClient implements ApiClient {
         : trackDeletions(stampRows(state, previous, now), previous, now);
     await this.storage.setItem(key, next);
     this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
+    // Удалённое — в корзину. Сличаем записанное с прежним, как и для фото ниже:
+    // мест, где что-то удаляют, слишком много, чтобы ловить каждое.
+    // Загрузка примера переписывает книгу целиком — это не удаление.
+    if (options.trash !== false) {
+      await this.putInTrash(
+        key,
+        vanishedRows(previous, next as unknown as Record<string, unknown>),
+        "here"
+      );
+    }
     // Операции не стало — не стало и её фото. Сличаем записанное с прежним,
     // а не ловим каждое место, где операцию удаляют: их много (одна, чек
     // целиком, выбранные, перевод), и одно забытое оставило бы фото навсегда.
@@ -4832,6 +4882,134 @@ export class LocalApiClient implements ApiClient {
     )) {
       await this.dropPhoto(gone.id, gone.place);
     }
+  }
+
+  // ——— корзина ————————————————————————————————————————————————————
+
+  private async putInTrash(
+    stateKey: string,
+    gone: ReturnType<typeof vanishedRows>,
+    origin: TrashOrigin
+  ): Promise<void> {
+    if (gone.length === 0) return;
+    try {
+      const key = `${stateKey}${TRASH_SUFFIX}`;
+      const trash = readTrash(await this.storage.getItem<unknown>(key));
+      await this.storage.setItem(key, {
+        v: 1,
+        entries: addToTrash(trash, gone, new Date().toISOString(), origin, () => id("trash"))
+      });
+    } catch {
+      /* корзина — страховка; книга уже записана, и падать из-за неё нельзя */
+    }
+  }
+
+  private async trashKey(): Promise<string> {
+    return `${profileStateKey(await this.getActiveProfileId())}${TRASH_SUFFIX}`;
+  }
+
+  private async trashEntries(): Promise<TrashEntry[]> {
+    const key = await this.trashKey();
+    return pruneTrash(
+      readTrash(await this.storage.getItem<unknown>(key)),
+      new Date().toISOString()
+    );
+  }
+
+  private async trashList() {
+    const entries = await this.trashEntries();
+    return {
+      entries: entries.map((entry) => ({
+        id: entry.id,
+        collection: entry.collection,
+        title: trashTitle(entry),
+        amount: trashAmount(entry),
+        currency: typeof entry.row.currency === "string" ? entry.row.currency : "RUB",
+        type: typeof entry.row.type === "string" ? entry.row.type : null,
+        date: typeof entry.row.date === "string" ? entry.row.date : null,
+        deletedAt: entry.deletedAt,
+        origin: entry.origin
+      }))
+    };
+  }
+
+  /**
+   * Вернуть из корзины. Сначала счета и категории, потом то, что на них
+   * ссылается: удалили счёт вместе с операциями — вернуть надо в том же порядке.
+   */
+  private async restoreFromTrash(state: LocalState, ids: string[]) {
+    const order = [
+      "accounts",
+      "categories",
+      "liabilities",
+      "goals",
+      "budgets",
+      "rules",
+      "recurringTransactions",
+      "cashbackRules",
+      "trips",
+      "sheetColumns",
+      "sheetTargets",
+      "transactions"
+    ];
+    const entries = (await this.trashEntries())
+      .filter((entry) => ids.includes(entry.id))
+      .sort((a, b) => order.indexOf(a.collection) - order.indexOf(b.collection));
+    if (entries.length === 0) throw new Error("В корзине этого уже нет.");
+    const holder = state as unknown as Record<string, unknown>;
+    const restored: string[] = [];
+    const failed: string[] = [];
+    // Счёт, возвращаемый вместе со своими операциями, уже несёт остаток с ними:
+    // провести операции по нему ещё раз значило бы удвоить деньги.
+    const accountsBack = new Set<string>();
+    for (const entry of entries) {
+      const { updatedAt: _stamp, ...row } = entry.row;
+      void _stamp;
+      try {
+        if (entry.collection === "transactions") {
+          const accountId = (row.account as { id?: unknown } | undefined)?.id;
+          if (typeof accountId === "string" && accountsBack.has(accountId)) {
+            if (!state.transactions.some((item) => item.id === row.id))
+              state.transactions = [
+                transactionRowSchema.omit({ updatedAt: true }).parse(row) as TransactionRow,
+                ...state.transactions
+              ];
+          } else {
+            this.restoreTransaction(state, { transaction: row });
+          }
+        } else {
+          const rows = Array.isArray(holder[entry.collection])
+            ? (holder[entry.collection] as Array<Record<string, unknown>>)
+            : [];
+          if (!rows.some((item) => item.id === row.id)) {
+            // Цель при удалении отдала деньги на счёт (см. remove, /goals): вернуть
+            // её с прежней суммой значило бы посчитать эти деньги дважды.
+            if (entry.collection === "goals") Object.assign(row, { currentAmount: 0, progress: 0 });
+            holder[entry.collection] = [...rows, row];
+            if (entry.collection === "accounts" && typeof row.id === "string")
+              accountsBack.add(row.id);
+          }
+        }
+        restored.push(entry.id);
+      } catch (error) {
+        failed.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    await this.save(state);
+    const key = await this.trashKey();
+    const left = readTrash(await this.storage.getItem<unknown>(key)).filter(
+      (entry) => !restored.includes(entry.id)
+    );
+    await this.storage.setItem(key, { v: 1, entries: left });
+    return { restored: restored.length, failed };
+  }
+
+  private async purgeTrash(ids: string[] | "all") {
+    const key = await this.trashKey();
+    const entries = readTrash(await this.storage.getItem<unknown>(key));
+    const left = ids === "all" ? [] : entries.filter((entry) => !ids.includes(entry.id));
+    await this.storage.setItem(key, { v: 1, entries: left });
+    return { removed: entries.length - left.length };
   }
 
   // ——— фото чеков ————————————————————————————————————————————————
@@ -5028,7 +5206,8 @@ export class LocalApiClient implements ApiClient {
         key.endsWith(RESCUE_SUFFIX) ||
         // Ежедневные копии — тоже данные целиком. Отменить очистку можно и
         // без них: для этого откладывается своя копия, выше.
-        key.endsWith(LOCAL_COPY_SUFFIX)
+        key.endsWith(LOCAL_COPY_SUFFIX) ||
+        key.endsWith(TRASH_SUFFIX)
       ) {
         await this.storage.removeItem(key);
       }
