@@ -192,17 +192,22 @@ export function SetupChecklist() {
           step.done ? null : (
             <div
               key={index}
-              className="flex items-center gap-3 rounded-lg border bg-card p-3 text-sm"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-card p-3 text-sm"
             >
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                 {index + 1}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-40">
                 <p className="font-medium">{step.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{step.desc}</p>
+                <p className="line-clamp-2 text-xs text-muted-foreground">{step.desc}</p>
               </div>
               {step.action === "accounts" ? (
-                <Button size="sm" variant="outline" onClick={() => setSettingUp(true)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-auto shrink-0"
+                  onClick={() => setSettingUp(true)}
+                >
                   <Plus className="size-3.5" />
                   {t("sc.s1.quick")}
                 </Button>
@@ -210,13 +215,14 @@ export function SetupChecklist() {
                 <Button
                   size="sm"
                   variant="outline"
+                  className="ml-auto shrink-0"
                   onClick={() => window.dispatchEvent(new Event("quick-add-open"))}
                 >
                   <Plus className="size-3.5" />
                   {t("common.add")}
                 </Button>
               ) : (
-                <Button asChild size="sm" variant="outline">
+                <Button asChild size="sm" variant="outline" className="ml-auto shrink-0">
                   <Link href={step.href ?? "/"}>
                     {step.cta}
                     <ArrowRight className="size-3.5" />

@@ -216,7 +216,10 @@ export function DeductionsScreen() {
         <CardContent>
           <ul className="grid gap-x-6 sm:grid-cols-2">
             {categories.map((category) => (
-              <li key={category.id} className="flex items-center justify-between gap-2 py-1.5">
+              <li
+                key={category.id}
+                className="flex flex-col gap-1.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:py-1.5"
+              >
                 <span className="flex min-w-0 items-center gap-2 text-sm">
                   <span
                     className="size-2 shrink-0 rounded-full"
@@ -229,7 +232,7 @@ export function DeductionsScreen() {
                   onValueChange={(value) => void mark(category.id, value)}
                 >
                   <SelectTrigger
-                    className="h-8 w-44 shrink-0 text-xs"
+                    className="h-8 w-full shrink-0 text-xs sm:w-44"
                     aria-label={category.name}
                     data-testid={`deduction-kind-${category.name}`}
                   >

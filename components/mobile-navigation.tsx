@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 
 import { useI18n } from "@/lib/i18n/context";
 import { useHiddenSections } from "@/hooks/use-hidden-sections";
+import { useSafeTop } from "@/hooks/use-safe-top";
 import { activeNavHref, findHub, MAIN_NAV, MOBILE_PRIMARY } from "@/lib/navigation";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
@@ -35,9 +36,10 @@ export function MobileTopBar() {
   const pathname = usePathname();
   const { t } = useI18n();
   const screenTitle = useScreenTitle(pathname);
+  useSafeTop();
 
   return (
-    <header className="sticky top-0 z-40 bg-background/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur md:hidden">
+    <header className="sticky top-0 z-40 bg-background/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),var(--fa-safe-top,0px),0.75rem)] backdrop-blur md:hidden">
       <div className="flex items-center justify-between gap-3">
         <h1 className="min-w-0 truncate text-lg font-semibold">{screenTitle}</h1>
         <div className="flex shrink-0 gap-2">

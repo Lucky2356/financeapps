@@ -39,7 +39,7 @@ export function BeforeClearCard() {
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 sm:flex-row sm:items-center"
+      className="m-3 flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 sm:mx-5 sm:flex-row sm:items-center"
       data-testid="before-clear"
     >
       <p className="flex-1 text-sm">

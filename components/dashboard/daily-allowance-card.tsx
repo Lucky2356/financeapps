@@ -65,8 +65,10 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
           <Wallet className="size-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{t("allow.title")}</span>
-          <span className="block truncate text-xs text-muted-foreground">
+          <span className="block text-sm font-medium [overflow-wrap:anywhere]">
+            {t("allow.title")}
+          </span>
+          <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]">
             {over
               ? t("allow.over")
               : data.spentToday > 0

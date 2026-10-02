@@ -323,7 +323,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
               type="button"
               onClick={() => selectTab(tab.id)}
               className={cn(
-                "flex min-w-0 grow basis-[calc(25%-0.1875rem)] items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs font-medium transition-colors",
+                "flex min-w-0 grow basis-[calc(50%-0.125rem)] items-center min-[400px]:basis-[calc(25%-0.1875rem)] justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs font-medium transition-colors",
                 "sm:basis-0 sm:gap-2 sm:px-3 sm:text-sm",
                 activeTab === tab.id
                   ? "bg-background text-foreground shadow-sm"

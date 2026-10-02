@@ -121,7 +121,7 @@ export function InfoHint({ text, className }: { text: string; className?: string
         ref={buttonRef}
         type="button"
         onClick={toggleHint}
-        className="text-muted-foreground transition-colors hover:text-foreground"
+        className="hit-area text-muted-foreground transition-colors hover:text-foreground"
         aria-label={t("hint.aria")}
         aria-describedby={open ? tooltipId : undefined}
         aria-expanded={open}
