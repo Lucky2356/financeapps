@@ -1957,6 +1957,7 @@ const ru: Messages = {
   "trash.kind.sheetTargets": "Цель таблицы",
   "trash.kind.cashbackRules": "Кэшбэк",
   "trash.kind.trips": "Поездка",
+  "trash.kind.sheets": "Лист таблицы",
   "set.localCopies.main":
     "Это главное устройство: оно синхронизируется и каждый день само сохраняет у себя копию всех данных. Хранятся {keep} последних. Если синхронизация однажды привезёт что-то не то — верните копию отсюда.",
   "set.localCopies.other":
@@ -4515,6 +4516,7 @@ const en: Messages = {
   "trash.kind.sheetTargets": "Sheet target",
   "trash.kind.cashbackRules": "Cashback",
   "trash.kind.trips": "Trip",
+  "trash.kind.sheets": "Sheet",
   "set.localCopies.main":
     "This is the main device: it syncs and also keeps a copy of all data here every day. The last {keep} are kept. If sync ever brings something wrong, restore a copy from here.",
   "set.localCopies.other": "Daily copies are made on the main device. Here — only with the button.",

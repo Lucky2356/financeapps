@@ -82,6 +82,8 @@ export const STAMPED: ReadonlyArray<readonly [string, Identity]> = [
   ["sheetCells", byId],
   ["sheetMonths", byId],
   ["sheetTargets", byId],
+  ["sheets", byId],
+  ["freeCells", byId],
   ["cashbackRules", byId],
   ["trips", byId],
   ["deductionYears", byId],

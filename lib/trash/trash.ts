@@ -38,7 +38,8 @@ export const TRASHED_COLLECTIONS = [
   "sheetColumns",
   "sheetTargets",
   "cashbackRules",
-  "trips"
+  "trips",
+  "sheets"
 ] as const;
 
 export type TrashedCollection = (typeof TRASHED_COLLECTIONS)[number];
@@ -74,8 +75,43 @@ export function vanishedRows(
       if (!now.has(key)) gone.push({ collection, key, row });
     }
   }
-  return gone;
+  // Удалённый лист — одна запись корзины со всем, что на нём было: столбцы,
+  // клетки, месяцы, цели. Вернуть лист без содержимого было бы насмешкой, а
+  // показывать его столбцы отдельными записями — шумом.
+  const sheets = new Set(
+    gone.filter((item) => item.collection === "sheets").map((item) => item.key)
+  );
+  if (sheets.size === 0) return gone;
+  const ofSheet = (row: unknown) =>
+    typeof (row as { sheetId?: unknown })?.sheetId === "string" &&
+    sheets.has((row as { sheetId: string }).sheetId);
+  const rowsOf = (collection: string) =>
+    Array.isArray(before[collection]) ? (before[collection] as Array<Record<string, unknown>>) : [];
+  return gone
+    .filter((item) => !(item.collection !== "sheets" && ofSheet(item.row)))
+    .map((item) => {
+      if (item.collection !== "sheets") return item;
+      const mine = (row: unknown) => (row as { sheetId?: unknown })?.sheetId === item.key;
+      const columns = rowsOf("sheetColumns").filter(mine);
+      const columnIds = new Set(columns.map((column) => column.id));
+      return {
+        ...item,
+        row: {
+          ...item.row,
+          [SHEET_ARCHIVE]: {
+            sheetColumns: columns,
+            sheetCells: rowsOf("sheetCells").filter((cell) => columnIds.has(cell.columnId)),
+            sheetMonths: rowsOf("sheetMonths").filter(mine),
+            sheetTargets: rowsOf("sheetTargets").filter(mine),
+            freeCells: rowsOf("freeCells").filter(mine)
+          }
+        }
+      };
+    });
 }
+
+/** Где в записи удалённого листа лежит его содержимое. */
+export const SHEET_ARCHIVE = "__sheetContent";
 
 /**
  * Положить исчезнувшее в корзину. Свежее — первым; старше 30 дней и сверх

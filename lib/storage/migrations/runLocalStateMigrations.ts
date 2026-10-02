@@ -18,7 +18,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 16;
+export const LATEST_LOCAL_STATE_VERSION = 17;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -236,6 +236,19 @@ export const localStateMigrations: LocalStateMigration[] = [
     // пустая отметка времени в v15 читается как «когда правили, неизвестно».
     // Дальше каждое удаление оставит след само, в точке сохранения.
     migrate: (state) => ({ ...state, deletions: [], schemaVersion: 16 })
+  },
+  {
+    from: 16,
+    to: 17,
+    // v17 завела листы таблиц (sheets, freeCells) и привязку столбцов, месяцев
+    // и целей к листу. Данные не меняются: всё прежнее — главная таблица.
+    //
+    // Номер поднят ради СТАРЫХ приложений, а не ради данных. Версия до 2.5 новых
+    // разделов не знает и при записи молча выбросила бы их — а синхронизация
+    // разнесла бы это как удаление листов на все устройства. Книгу формата
+    // новее своего старое приложение не трогает вовсе и просит обновиться
+    // (см. LocalApiClient.state), — это и есть защита.
+    migrate: (state) => ({ ...state, schemaVersion: 17 })
   }
 ];
 

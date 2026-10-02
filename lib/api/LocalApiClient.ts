@@ -20,13 +20,7 @@ import type {
   TransactionsPageData
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
-import {
-  importSheet,
-  readSheet,
-  writeSheet,
-  type SheetImport,
-  type SheetState
-} from "@/lib/api/local/sheet";
+import { readSheet, type SheetImport } from "@/lib/api/local/sheet";
 import {
   deductionKindOf,
   readCashback,
@@ -163,8 +157,20 @@ import type {
 } from "@/types/finance";
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
 import {
+  importIntoSheet,
+  importWorkbook,
+  MAIN_SHEET,
+  readWorkbook,
+  sheetScope,
+  writeSheets,
+  writeWorkbook,
+  type BookState,
+  type WorkbookImportSheet
+} from "@/lib/api/local/sheets";
+import {
   addToTrash,
   pruneTrash,
+  SHEET_ARCHIVE,
   readTrash,
   trashAmount,
   trashTitle,
@@ -232,9 +238,9 @@ function profileStateKey(profileId: string): string {
 const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
-type LocalState = SheetState &
+type LocalState = BookState &
   ExtrasState & {
-    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
     /** Следы удалённых строк — см. lib/sync/row-stamps. */
     deletions?: Tombstone[];
     currency: CurrencyCode;
@@ -879,7 +885,9 @@ export class LocalApiClient implements ApiClient {
         searchParams.get("transfers") === "1"
       ) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
-    if (pathname === "/sheet") return readSheet(state) as T;
+    if (pathname === "/sheet")
+      return readSheet(sheetScope(state, searchParams.get("sheet") || MAIN_SHEET)) as T;
+    if (pathname === "/workbook") return readWorkbook(state, searchParams.get("sheet")) as T;
     if (pathname === "/watchdog") {
       const counted = this.countingState(this.inBase(state), false);
       return {
@@ -1260,11 +1268,37 @@ export class LocalApiClient implements ApiClient {
     }
     if (pathname === "/sheet") {
       const input = (body ?? {}) as Record<string, unknown>;
+      const sheetId = input.sheetId ? String(input.sheetId) : MAIN_SHEET;
       if (input.action === "import")
-        return this.saveAndReturn<TResponse>(state, this.importSheet(state, input.payload));
+        return this.saveAndReturn<TResponse>(
+          state,
+          importIntoSheet(
+            state,
+            sheetId,
+            this.withSheetCategories(state, input.payload),
+            () => id("col"),
+            new Date().toISOString()
+          )
+        );
       return this.saveAndReturn<TResponse>(
         state,
-        writeSheet(state, input, () => id("col"))
+        writeWorkbook(state, input, () => id("col"))
+      );
+    }
+    if (pathname === "/sheets") {
+      const input = (body ?? {}) as Record<string, unknown>;
+      if (input.action === "importWorkbook") {
+        const sheets = (Array.isArray(input.sheets) ? input.sheets : []) as WorkbookImportSheet[];
+        for (const item of sheets)
+          if (item.kind === "budget") item.payload = this.withSheetCategories(state, item.payload);
+        return this.saveAndReturn<TResponse>(
+          state,
+          importWorkbook(state, sheets, () => id("sh"), new Date().toISOString())
+        );
+      }
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeSheets(state, input, () => id("sh"))
       );
     }
     if (pathname === "/profiles/create") {
@@ -4426,7 +4460,11 @@ export class LocalApiClient implements ApiClient {
    * заводятся здесь же (или берутся уже существующие с тем же именем), чтобы
    * «Продукты» из таблицы сразу открывали операции.
    */
-  private importSheet(state: LocalState, raw: unknown) {
+  /**
+   * Перенос из Excel: столбцы, которым человек велел «создать категорию»,
+   * получают её здесь — у листа нет доступа к справочнику категорий.
+   */
+  private withSheetCategories(state: LocalState, raw: unknown): SheetImport {
     const payload = raw as SheetImport & {
       columns: Array<SheetImport["columns"][number] & { createCategory?: "INCOME" | "EXPENSE" }>;
     };
@@ -4443,7 +4481,7 @@ export class LocalApiClient implements ApiClient {
         same?.id ??
         this.upsertCategory(state, { name: column.name, kind: column.createCategory }, "POST").id;
     }
-    return importSheet(state, payload, () => id("col"), new Date().toISOString());
+    return payload;
   }
 
   /** Операции для сторожа: подписка ли категория — из справочника. */
@@ -4939,6 +4977,7 @@ export class LocalApiClient implements ApiClient {
    */
   private async restoreFromTrash(state: LocalState, ids: string[]) {
     const order = [
+      "sheets",
       "accounts",
       "categories",
       "liabilities",
@@ -4978,6 +5017,23 @@ export class LocalApiClient implements ApiClient {
             this.restoreTransaction(state, { transaction: row });
           }
         } else {
+          // Лист возвращается вместе со всем, что на нём было.
+          const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
+          delete row[SHEET_ARCHIVE];
+          if (entry.collection === "sheets" && content) {
+            for (const [collection, list] of Object.entries(content)) {
+              const present = Array.isArray(holder[collection])
+                ? (holder[collection] as Array<Record<string, unknown>>)
+                : [];
+              const ids = new Set(present.map((item) => item.id));
+              holder[collection] = [
+                ...present,
+                ...(list as Array<Record<string, unknown>>)
+                  .filter((item) => !ids.has(item.id))
+                  .map(({ updatedAt: _at, ...rest }) => (void _at, rest))
+              ];
+            }
+          }
           const rows = Array.isArray(holder[entry.collection])
             ? (holder[entry.collection] as Array<Record<string, unknown>>)
             : [];
