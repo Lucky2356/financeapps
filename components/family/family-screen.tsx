@@ -93,8 +93,9 @@ export function FamilyScreen() {
     const member = await act({ action: "addMember", name: newName });
     if (!member) return;
     setNewName("");
-    // Первый участник на этом устройстве — скорее всего, сам человек.
-    if (!me) chooseMe(member.id);
+    // Первый участник на этом устройстве — скорее всего, сам человек. «Своего»
+    // могли и удалить (на другом устройстве) — тогда тоже выбрать заново.
+    if (!members.some((item) => item.id === me)) chooseMe(member.id);
   }
 
   function chooseMe(id: string) {
