@@ -18,7 +18,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 18;
+export const LATEST_LOCAL_STATE_VERSION = 19;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -261,6 +261,15 @@ export const localStateMigrations: LocalStateMigration[] = [
     // Номер поднят ради старых приложений: 2.5.0 поле не знает и при записи
     // выбросило бы его, а синхронизация разнесла бы это по всем устройствам.
     migrate: (state) => ({ ...state, schemaVersion: 18 })
+  },
+  {
+    from: 18,
+    to: 19,
+    // v19: совместные цели семьи — кто пополнил цель (goalMovements[].memberId)
+    // и доли участников (goals[].shares). Прежние пополнения — без участника,
+    // прежние цели — поровну. Номер поднят ради старых приложений: 2.5 эти поля
+    // не знает и, записывая, стёрла бы их на всех устройствах.
+    migrate: (state) => ({ ...state, schemaVersion: 19 })
   }
 ];
 

@@ -152,7 +152,12 @@ export const goalRowSchema = z.object({
   // Optional link to a funding account and a user-set planned monthly
   // contribution (distinct from the computed pace `monthlyContribution`).
   linkedAccountId: z.string().default(""),
-  plannedContribution: z.coerce.number().finite().min(0).default(0)
+  plannedContribution: z.coerce.number().finite().min(0).default(0),
+  /**
+   * Совместная цель семьи: доля каждого участника, % (lib/family/goal-shares).
+   * Нет — поровну на всех. С v19.
+   */
+  shares: z.record(z.string(), z.coerce.number().finite().min(0)).optional()
 });
 export const recurringRowSchema = z.object({
   updatedAt,
@@ -504,7 +509,9 @@ export const goalMovementSchema = z.object({
   goalId: z.string().min(1),
   accountId: z.string().min(1),
   amount: z.coerce.number().finite(),
-  date: z.string().min(1)
+  date: z.string().min(1),
+  /** Кто из семьи пополнил или снял. С v19. */
+  memberId: z.string().min(1).optional()
 });
 
 export const localStateSchema = z.object({
@@ -526,7 +533,8 @@ export const localStateSchema = z.object({
     z.literal(15),
     z.literal(16),
     z.literal(17),
-    z.literal(18)
+    z.literal(18),
+    z.literal(19)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Crown, Repeat, Sparkles } from "lucide-react";
+import { CalendarClock, Crown, PauseCircle, Repeat, Sparkles } from "lucide-react";
 import { addDays, addMonths, addYears } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,6 +8,8 @@ import { apiClient } from "@/lib/api/client";
 import type { RecurringTransactionsPageData, TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
 import { summarizeSubscriptions } from "@/lib/subscriptions";
+import { subscriptionHistory } from "@/lib/subscriptions/history";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   detectSubscriptions,
   normalizeMerchant,
@@ -42,6 +44,7 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
   const { run, pending } = useApiMutation();
   const [transactions, setTransactions] = useState<TransactionsPageData["transactions"]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const confirm = useConfirm();
 
   const summary = useMemo(
     () => summarizeSubscriptions(pageData.recurringTransactions),
@@ -114,6 +117,43 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
     );
   }
 
+  // Сколько заплачено за год и не подорожала ли — по операциям, уже загруженным
+  // для поиска новых подписок выше.
+  const histories = useMemo(() => {
+    const today = formatInputDate(new Date());
+    return new Map(
+      summary.items.map(
+        (item) => [item.id, subscriptionHistory(item, transactions, today)] as const
+      )
+    );
+  }, [summary.items, transactions]);
+
+  async function disable(item: (typeof summary.items)[number]) {
+    const ok = await confirm({
+      title: t("sub.off.title", { name: item.description || item.category.label }),
+      description: t("sub.off.desc", {
+        amount: formatCurrency(item.annualCost, pageData.currency)
+      }),
+      confirmLabel: t("sub.off.confirm")
+    });
+    if (!ok) return;
+    await run(
+      () =>
+        apiClient.put("/recurring", {
+          id: item.id,
+          amount: String(item.amount),
+          type: item.type,
+          accountId: item.account.id,
+          categoryId: item.category.id,
+          frequency: item.frequency,
+          nextDate: formatInputDate(new Date(item.nextDate)),
+          description: item.description ?? "",
+          isActive: "false"
+        }),
+      { success: t("sub.off.done"), error: t("sub.detect.createError"), onSuccess: reload }
+    );
+  }
+
   // The list is already sorted by monthly cost, so the first item is the one
   // that costs the most.
   const priciest = summary.items[0];
@@ -177,25 +217,58 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
             actionHref="/recurring"
           >
             <ListRows>
-              {summary.items.map((item) => (
-                <ListRow
-                  key={item.id}
-                  href="/recurring"
-                  icon={Repeat}
-                  title={item.description || item.category.label}
-                  subtitle={t("sub.metaLine", {
-                    freq: t(`freq.${item.frequency}`),
-                    category: item.category.label,
-                    date: formatDate(item.nextDate)
-                  })}
-                  value={t("sub.monthly", {
-                    amount: formatCurrency(item.monthlyEquivalent, pageData.currency)
-                  })}
-                  valueCaption={t("sub.annual", {
-                    amount: formatCurrency(item.annualCost, pageData.currency)
-                  })}
-                />
-              ))}
+              {summary.items.map((item) => {
+                const history = histories.get(item.id);
+                return (
+                  <ListRow
+                    key={item.id}
+                    icon={Repeat}
+                    title={item.description || item.category.label}
+                    subtitle={t("sub.metaLine", {
+                      freq: t(`freq.${item.frequency}`),
+                      category: item.category.label,
+                      date: formatDate(item.nextDate)
+                    })}
+                    value={t("sub.monthly", {
+                      amount: formatCurrency(item.monthlyEquivalent, pageData.currency)
+                    })}
+                    valueCaption={t("sub.annual", {
+                      amount: formatCurrency(item.annualCost, pageData.currency)
+                    })}
+                  >
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-12 text-xs">
+                      {history && history.charges > 0 ? (
+                        <span className="text-muted-foreground">
+                          {t("sub.paidYear", {
+                            amount: formatCurrency(history.paidYear, pageData.currency),
+                            count: history.charges
+                          })}
+                        </span>
+                      ) : null}
+                      {history?.increase ? (
+                        <span className="font-medium text-warning" data-testid="sub-increase">
+                          {t("sub.increase", {
+                            from: formatCurrency(history.increase.from, pageData.currency),
+                            to: formatCurrency(history.increase.to, pageData.currency)
+                          })}
+                        </span>
+                      ) : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto h-7 text-muted-foreground"
+                        disabled={pending}
+                        onClick={() => void disable(item)}
+                        data-testid="sub-disable"
+                      >
+                        <PauseCircle className="size-3.5" />
+                        {t("sub.off.button")}
+                      </Button>
+                    </div>
+                  </ListRow>
+                );
+              })}
             </ListRows>
           </SectionCard>
         </>

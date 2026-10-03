@@ -1,6 +1,12 @@
 "use client";
 
+import { FileText } from "lucide-react";
+import Link from "next/link";
+
 import { ReportView } from "@/components/reports/report-view";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/context";
+import { YearRecapCard } from "@/components/reports/year-recap-card";
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
@@ -19,6 +25,7 @@ export function ReportClient({
   analytics: AnalyticsData;
   dashboard: DashboardData;
 }) {
+  const { t } = useI18n();
   const [includeTransfers, setIncludeTransfers] = useIncludeTransfers();
   const { data: analyticsData } = useApiPageData(
     analytics,
@@ -30,9 +37,16 @@ export function ReportClient({
 
   return (
     <div className="space-y-4">
-      <div className="no-print flex justify-end">
+      <div className="no-print flex flex-wrap items-center justify-end gap-2">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/reports/month" data-testid="month-report-link">
+            <FileText className="size-4" />
+            {t("mr.open")}
+          </Link>
+        </Button>
         <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
       </div>
+      <YearRecapCard currency={analyticsData.currency} />
       <ReportView
         analytics={analyticsData}
         netWorth={dashboardData.netWorth}

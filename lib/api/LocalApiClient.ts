@@ -163,6 +163,12 @@ import type {
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
 import type { WhatIfBase } from "@/lib/whatif/simulate";
 import { familyPicture } from "@/lib/family/family";
+import { goalFamily } from "@/lib/family/goal-shares";
+import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
+import { balanceHistory, monthsBack } from "@/lib/accounts/balance-history";
+import { buildYearRecap } from "@/lib/analytics/year-recap";
+import { compareMonths } from "@/lib/analytics/compare-months";
+import { detectPayday, forecastToPayday } from "@/lib/analytics/payday";
 import {
   importIntoSheet,
   importWorkbook,
@@ -247,7 +253,26 @@ const currency = "RUB" as const;
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = BookState &
   ExtrasState & {
-    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
+    schemaVersion:
+      | 1
+      | 2
+      | 3
+      | 4
+      | 5
+      | 6
+      | 7
+      | 8
+      | 9
+      | 10
+      | 11
+      | 12
+      | 13
+      | 14
+      | 15
+      | 16
+      | 17
+      | 18
+      | 19;
     /** Следы удалённых строк — см. lib/sync/row-stamps. */
     deletions?: Tombstone[];
     currency: CurrencyCode;
@@ -669,6 +694,35 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 /** Цвета участников семьи по очереди — различимые и в светлой, и в тёмной теме. */
+/**
+ * Доли совместной цели из формы: JSON {участник: %}. Пустой объект — «поровну»
+ * (поле убирается); форма, которая о долях молчит, прежних не трогает.
+ */
+function goalSharesFrom(
+  raw: unknown,
+  previous: Record<string, number> | undefined
+): { shares?: Record<string, number> } {
+  if (raw === undefined) return previous ? { shares: previous } : {};
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw || "{}");
+    } catch {
+      parsed = {};
+    }
+  }
+  const shares: Record<string, number> = {};
+  if (parsed && typeof parsed === "object")
+    for (const [member, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const number = Number(value);
+      if (member && Number.isFinite(number) && number > 0) shares[member] = number;
+    }
+  return Object.keys(shares).length > 0 ? { shares } : {};
+}
+
+/** Статья для разницы, найденной сверкой с банком. */
+const RECONCILE_CATEGORY_LABEL = "Сверка с банком";
+
 const FAMILY_COLORS = ["#0ea5e9", "#f97316", "#22c55e", "#e11d48", "#a855f7", "#eab308"];
 
 /** Поля семьи для операции: из формы, а если форма о них молчит — прежние. */
@@ -947,6 +1001,103 @@ export class LocalApiClient implements ApiClient {
         )
       } as T;
     }
+    if (pathname === "/payday") {
+      const today = isoDay(new Date());
+      const counted = this.countingState(this.inBase(state), false);
+      const manual = Number(searchParams.get("day"));
+      const detected = detectPayday(
+        counted.transactions
+          .filter((row) => row.type === "INCOME" && row.date.slice(0, 10) <= today)
+          .map((row) => ({ date: row.date, amount: row.amount, category: row.category.label }))
+      );
+      const payday = manual >= 1 && manual <= 31 ? Math.trunc(manual) : detected;
+      if (!payday) return { forecast: null } as T;
+      const open = state.accounts.filter((account) => !account.isArchived);
+      // Обычная трата в день — за 90 дней, без плановых платежей и долгов: они
+      // стоят в списке платежей до зарплаты отдельно.
+      const since = isoDay(new Date(Date.now() - 90 * 86_400_000));
+      const everyday = counted.transactions
+        .filter(
+          (row) =>
+            row.type === "EXPENSE" &&
+            row.date.slice(0, 10) >= since &&
+            row.date.slice(0, 10) < today &&
+            !row.recurringId &&
+            !row.liabilityId
+        )
+        .reduce((sum, row) => sum + row.amount, 0);
+      return {
+        forecast: forecastToPayday({
+          today,
+          payday,
+          source: manual >= 1 && manual <= 31 ? "manual" : "history",
+          liquid: this.sumInBase(
+            state,
+            open.filter((account) => account.type === "CASH" || account.type === "DEBIT_CARD")
+          ),
+          payments: this.forecast(this.inBase(state))
+            .events.filter((event) => event.type === "EXPENSE")
+            .map((event) => ({ date: event.date, amount: event.amount, title: event.title })),
+          usualPerDay: everyday / 90
+        })
+      } as T;
+    }
+    if (pathname === "/compare-months") {
+      const today = isoDay(new Date());
+      const valid = (value: string | null) => (value && /^\d{4}-\d{2}$/.test(value) ? value : null);
+      const a = valid(searchParams.get("a")) ?? today.slice(0, 7);
+      const b = valid(searchParams.get("b")) ?? previousMonth(a);
+      const counted = this.countingState(this.inBase(state), false);
+      return compareMonths({
+        a,
+        b,
+        today,
+        rows: counted.transactions.map((row) => ({
+          type: row.type,
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label,
+          color: row.category.color
+        }))
+      }) as T;
+    }
+    if (pathname === "/balance-history") {
+      const count = Math.min(Math.max(Number(searchParams.get("months")) || 12, 2), 60);
+      return this.balanceHistoryPage(state, monthsBack(monthKeyOf(new Date()), count)) as T;
+    }
+    if (pathname === "/year-recap") {
+      const today = isoDay(new Date());
+      const year = Number(searchParams.get("year")) || Number(today.slice(0, 4));
+      const counted = this.countingState(this.inBase(state), false);
+      const history = this.balanceHistoryPage(state, [
+        `${year - 1}-12`,
+        today.startsWith(String(year)) ? today.slice(0, 7) : `${year}-12`
+      ]);
+      return buildYearRecap({
+        year,
+        today,
+        rows: counted.transactions.map((row) => ({
+          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label,
+          color: row.category.color,
+          description: row.description
+        })),
+        capital: { start: history.total[0], end: history.total[1] },
+        cushion: { start: history.cushion[0], end: history.cushion[1] }
+      }) as T;
+    }
+    if (pathname === "/transfer-pairs") {
+      // «Это перевод?»: отложенные человеком пары («нет, это не перевод») —
+      // по ключам, переданным страницей; помнит их само устройство.
+      const dismissed = new Set((searchParams.get("dismissed") ?? "").split(",").filter(Boolean));
+      const currencyOf = (accountId: string) =>
+        state.accounts.find((item) => item.id === accountId)?.currency ?? state.currency;
+      return { pairs: findTransferPairs(state.transactions, currencyOf, dismissed) } as T;
+    }
     if (pathname === "/watchdog") {
       const counted = this.countingState(this.inBase(state), false);
       return {
@@ -1211,6 +1362,8 @@ export class LocalApiClient implements ApiClient {
       return undefined as TResponse;
     }
     if (pathname === "/sync/resolve") return this.resolveConflict<TResponse>(state, body);
+    if (pathname === "/accounts" && (body as { action?: unknown })?.action === "reconcile")
+      return this.saveAndReturn<TResponse>(state, this.reconcileAccount(state, body));
     if (pathname === "/accounts")
       return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
@@ -1219,6 +1372,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.restoreTransaction(state, body));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "split")
       return this.saveAndReturn<TResponse>(state, this.createSplit(state, body));
+    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "linkTransfer")
+      return this.saveAndReturn<TResponse>(state, this.linkTransfer(state, body));
     if (pathname === "/transactions") {
       const tx = this.upsertTransaction(state, body, method);
       const budgetWarning = this.budgetWarningFor(state, tx);
@@ -1787,6 +1942,148 @@ export class LocalApiClient implements ApiClient {
     return null;
   }
 
+  /**
+   * История остатка (lib/accounts/balance-history.ts) — по счетам в их валюте
+   * и итогом в основной: все деньги и подушка (сбережения и цели).
+   */
+  private balanceHistoryPage(state: LocalState, months: string[]) {
+    const rates = this.rates(state);
+    const live = state.accounts.filter((account) => !account.isArchived);
+    const history = balanceHistory({
+      accounts: live.map((account) => ({
+        id: account.id,
+        name: account.name,
+        type: account.type,
+        currency: account.currency,
+        balance: account.balance
+      })),
+      flows: state.transactions.map((row) => ({
+        accountId: row.account.id,
+        date: row.date,
+        signed: row.type === "INCOME" ? row.amount : -row.amount
+      })),
+      goalsNow: state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0),
+      // Пополнение цели снимает деньги со счёта — в истории счёта это видно,
+      // а в целях деньги прибывают.
+      goalMovements: (state.goalMovements ?? []).map((item) => ({
+        date: item.date,
+        amount: item.amount
+      })),
+      months
+    });
+    // Пополнение цели — минус на счёте без операции: учесть его в счёте.
+    for (const movement of state.goalMovements ?? []) {
+      const account = history.accounts.find((item) => item.id === movement.accountId);
+      if (!account) continue;
+      account.values = account.values.map((value, index) =>
+        movement.date.slice(0, 7) > months[index] ? roundMoney(value + movement.amount) : value
+      );
+    }
+    const inBase = (amount: number, currency: string) =>
+      convert(amount, currency, state.currency, rates);
+    const total = months.map((_, index) =>
+      roundMoney(
+        history.accounts.reduce((sum, item) => sum + inBase(item.values[index], item.currency), 0) +
+          history.goals[index]
+      )
+    );
+    const cushion = months.map((_, index) =>
+      roundMoney(
+        history.accounts
+          .filter((item) => SAVINGS_ACCOUNT_TYPES.includes(item.type))
+          .reduce((sum, item) => sum + inBase(item.values[index], item.currency), 0) +
+          history.goals[index]
+      )
+    );
+    return { currency: state.currency, ...history, total, cushion };
+  }
+
+  /**
+   * Сверка с банком: остаток в банке другой — разница записывается одной
+   * операцией «Сверка с банком», и остаток счёта становится банковским. Не
+   * правкой остатка втихую: тогда деньги взялись бы ниоткуда, и ни итоги, ни
+   * история не знали бы, куда они делись.
+   */
+  private reconcileAccount(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const account = state.accounts.find((item) => item.id === input.id && !item.isArchived);
+    if (!account) throw new Error("Такого счёта нет.");
+    const bank = Number(
+      String(input.balance ?? "")
+        .replace(/[\s\u00a0]/g, "")
+        .replace(",", ".")
+    );
+    if (!Number.isFinite(bank)) throw new Error("Остаток в банке — число.");
+    const difference = roundMoney(bank - account.balance);
+    if (difference === 0) return { recorded: false };
+    const kind = difference > 0 ? "INCOME" : "EXPENSE";
+    const category = this.findOrCreateCategory(state, RECONCILE_CATEGORY_LABEL, kind);
+    const tx = this.upsertTransaction(
+      state,
+      {
+        type: kind,
+        amount: String(Math.abs(difference)),
+        accountId: account.id,
+        categoryId: category.id,
+        date: isoDay(new Date()),
+        description: "Сверка с банком",
+        noTrip: "1"
+      },
+      "POST"
+    );
+    return { recorded: true, id: tx.id, difference };
+  }
+
+  /**
+   * «Это перевод»: две готовые операции — трата с одного своего счёта и доход
+   * на другой — становятся одним переводом. Деньги на счетах не двигаются:
+   * обе строки уже провели их. Меняется только то, как их считают итоги.
+   */
+  private linkTransfer(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const expense = state.transactions.find((item) => item.id === input.expenseId);
+    const income = state.transactions.find((item) => item.id === input.incomeId);
+    if (!expense || !income) throw new Error("Одной из операций уже нет.");
+    if (expense.type !== "EXPENSE" || income.type !== "INCOME")
+      throw new Error("Перевод — это списание с одного счёта и поступление на другой.");
+    if (transferKeyOf(expense) || transferKeyOf(income))
+      throw new Error("Эта операция уже часть перевода.");
+    if (expense.account.id === income.account.id)
+      throw new Error("Перевод — между двумя разными счетами.");
+    if (Math.abs(expense.amount - income.amount) >= 0.005)
+      throw new Error("Суммы списания и поступления не совпадают.");
+    const transferId = id("transfer");
+    const out = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
+    const into = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
+    const asTransfer = (
+      row: TransactionRow,
+      category: { id: string; label: string; color: string; icon?: string }
+    ): TransactionRow => {
+      // Кто платил и «общая трата» — про траты; у перевода их нет.
+      const { memberId: _member, shared: _shared, ...rest } = row;
+      void _member;
+      void _shared;
+      return {
+        ...rest,
+        transferId,
+        category: {
+          id: category.id,
+          label: category.label,
+          color: category.color,
+          ...(category.icon ? { icon: category.icon } : {})
+        }
+      };
+    };
+    state.transactions = state.transactions.map((row) =>
+      row.id === expense.id
+        ? asTransfer(row, out)
+        : row.id === income.id
+          ? asTransfer(row, into)
+          : row
+    );
+    return { transferId };
+  }
+
   private createTransfer(state: LocalState, body: unknown) {
     const input = toFormObject(body);
     const fromAccount = state.accounts.find(
@@ -1972,7 +2269,8 @@ export class LocalApiClient implements ApiClient {
       currentAmount: held,
       deadline: new Date(input.deadline).toISOString(),
       linkedAccountId,
-      plannedContribution: Math.max(Number(input.plannedContribution ?? 0), 0)
+      plannedContribution: Math.max(Number(input.plannedContribution ?? 0), 0),
+      ...goalSharesFrom(input.shares, previous?.shares)
     });
     state.goals = previous
       ? state.goals.map((item) => (item.id === row.id ? row : item))
@@ -2059,10 +2357,16 @@ export class LocalApiClient implements ApiClient {
 
     // The amount is typed in the account's own currency — that is the money the
     // owner is looking at — and a goal is kept in the app's, like every total.
-    return this.applyGoalMovement(state, goal, account, {
-      accountDelta: -amount,
-      goalDelta: roundMoney(convert(amount, account.currency, state.currency, this.rates(state)))
-    });
+    return this.applyGoalMovement(
+      state,
+      goal,
+      account,
+      {
+        accountDelta: -amount,
+        goalDelta: roundMoney(convert(amount, account.currency, state.currency, this.rates(state)))
+      },
+      input.memberId
+    );
   }
 
   /** The other direction: money comes back out of a goal onto an account. */
@@ -2076,12 +2380,18 @@ export class LocalApiClient implements ApiClient {
     if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
     if (amount > goal.currentAmount) throw new Error("В цели меньше денег, чем вы снимаете.");
 
-    return this.applyGoalMovement(state, goal, account, {
-      accountDelta: roundMoney(
-        convert(amount, state.currency, account.currency, this.rates(state))
-      ),
-      goalDelta: -amount
-    });
+    return this.applyGoalMovement(
+      state,
+      goal,
+      account,
+      {
+        accountDelta: roundMoney(
+          convert(amount, state.currency, account.currency, this.rates(state))
+        ),
+        goalDelta: -amount
+      },
+      input.memberId
+    );
   }
 
   private goalById(state: LocalState, goalId: string | undefined) {
@@ -2115,16 +2425,23 @@ export class LocalApiClient implements ApiClient {
     state: LocalState,
     goal: GoalsPageData["goals"][number],
     account: { id: string; currency: string },
-    sides: { accountDelta: number; goalDelta: number }
+    sides: { accountDelta: number; goalDelta: number },
+    memberId?: unknown
   ) {
     this.applyBalance(state, account.id, sides.accountDelta);
+    // Кто из семьи пополнил или снял — для совместных целей (lib/family/goal-shares).
+    const member =
+      typeof memberId === "string" && (state.members ?? []).some((item) => item.id === memberId)
+        ? memberId
+        : undefined;
     state.goalMovements = [
       {
         id: id("goalmove"),
         goalId: goal.id,
         accountId: account.id,
         amount: sides.goalDelta,
-        date: storedTransactionDate(new Date())
+        date: storedTransactionDate(new Date()),
+        ...(member ? { memberId: member } : {})
       },
       ...(state.goalMovements ?? [])
     ].slice(0, 2000);
@@ -3227,7 +3544,24 @@ export class LocalApiClient implements ApiClient {
   }
 
   private goals(state: LocalState): GoalsPageData {
-    return { source: "database", goals: state.goals.map(recomputeGoal), currency: state.currency };
+    const members = (state.members ?? []).map(({ id: memberId, name, color }) => ({
+      id: memberId,
+      name,
+      color
+    }));
+    return {
+      source: "database",
+      goals: state.goals.map((goal) => ({
+        ...recomputeGoal(goal),
+        family: goalFamily({
+          goalId: goal.id,
+          members,
+          shares: goal.shares,
+          movements: state.goalMovements ?? []
+        })
+      })),
+      currency: state.currency
+    };
   }
 
   private debts(state: LocalState): LiabilitiesPageData {

@@ -32,7 +32,18 @@ const HIDDEN = new Set([
   "splitGroupId",
   "transferId",
   "recurringId",
-  "photo"
+  "photo",
+  // Где запись лежит в таблице — это её адрес, а не то, что человек вводил:
+  // лист, столбец, порядок, клетка свободного листа, размер листа.
+  "sheetId",
+  "columnId",
+  "order",
+  "r",
+  "c",
+  "rows",
+  "cols",
+  // Метка поездки выводится из её названия.
+  "tag"
 ]);
 
 /** Порядок, в котором поля читаются глазами: сначала то, по чему запись узнают. */
@@ -88,6 +99,16 @@ export function diffConflict(mine: Row | null, theirs: Row | null): FieldDiff[] 
     })
     .filter((item) => !(isEmpty(item.here) && isEmpty(item.there)))
     .sort((a, b) => Number(b.differs) - Number(a.differs) || rank(a.field) - rank(b.field));
+}
+
+/**
+ * Спор, в котором человеку нечего выбирать: обе версии расходятся только в
+ * служебном (отметки времени, посчитанное) — или это служебная запись без
+ * единого поля, которое человек вводил сам (месяц таблицы — один номер).
+ * Такой спор решается сам: в данных уже лежит версия без потерь (см. merge).
+ */
+export function isTrivialConflict(mine: Row | null, theirs: Row | null): boolean {
+  return diffConflict(mine, theirs).every((item) => !item.differs);
 }
 
 /** Пустое по смыслу: нет значения, пустая строка, пустой список. */

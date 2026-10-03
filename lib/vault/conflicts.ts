@@ -13,6 +13,7 @@
 // как всякая другая.
 
 import { LOCAL_ONLY_KEYS } from "@/lib/storage/SyncingStorageAdapter";
+import { isTrivialConflict } from "@/lib/sync/conflict-diff";
 import type { RowConflict } from "@/lib/sync/merge";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 
@@ -42,8 +43,13 @@ export class ConflictStore {
   async list(): Promise<StoredConflict[]> {
     if (this.cache) return this.cache;
     const stored = await this.storage.getItem<Stored>(CONFLICTS_KEY);
-    this.cache = stored?.v === 1 ? stored.conflicts : [];
-    return this.cache;
+    const all = stored?.v === 1 ? stored.conflicts : [];
+    // Споры без выбора, накопленные версиями до 2.5.3, уходят сами: в данных
+    // уже лежит версия без потерь, а показывать «Не сходится: 0» — мучить.
+    const real = all.filter((item) => !isTrivialConflict(item.mine, item.theirs));
+    if (real.length !== all.length) await this.write(real);
+    else this.cache = real;
+    return this.cache ?? real;
   }
 
   /**
@@ -54,9 +60,11 @@ export class ConflictStore {
    * бы предлагать ему выбрать из того, чего уже нет.
    */
   async add(slot: string, conflicts: RowConflict[], noticedAt: string): Promise<void> {
-    if (conflicts.length === 0) return;
+    if (conflicts.every((conflict) => isTrivialConflict(conflict.mine, conflict.theirs))) return;
     const byKey = new Map((await this.list()).map((item) => [keyOf(item), item]));
     for (const conflict of conflicts) {
+      // Человеку тут нечего выбирать — слияние уже положило версию без потерь.
+      if (isTrivialConflict(conflict.mine, conflict.theirs)) continue;
       const item: StoredConflict = { ...conflict, slot, noticedAt };
       byKey.set(keyOf(item), item);
     }

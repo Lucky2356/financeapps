@@ -8,6 +8,7 @@ import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { DailyAllowanceCard } from "@/components/dashboard/daily-allowance-card";
+import { PaydayCard } from "@/components/dashboard/payday-card";
 import { BankSuggestionsCard } from "@/components/bank/bank-suggestions-card";
 import { MonthRecapButton, MonthRecapCard } from "@/components/dashboard/month-recap-card";
 import { WatchdogCard } from "@/components/dashboard/watchdog-card";
@@ -98,7 +99,12 @@ export function DashboardClient({
   // Each widget's rendered content; null when its own precondition isn't met.
   const widgets = useMemo<Record<DashboardWidget, ReactNode>>(
     () => ({
-      allowance: <DailyAllowanceCard currency={data.currency} />,
+      allowance: (
+        <>
+          <DailyAllowanceCard currency={data.currency} />
+          <PaydayCard currency={data.currency} />
+        </>
+      ),
       watchdog: <WatchdogCard currency={data.currency} />,
       overview: <DashboardOverview data={data} />,
       forecast: <DashboardForecastStrip forecast={forecast} />,

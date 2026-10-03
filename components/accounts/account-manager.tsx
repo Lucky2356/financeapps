@@ -1,6 +1,6 @@
 "use client";
 
-import { Edit2, Plus, ReceiptText, Trash2, WalletCards } from "lucide-react";
+import { Edit2, Plus, ReceiptText, Scale, Trash2, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
@@ -46,6 +46,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { InfoHint } from "@/components/info-hint";
+import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
 import { todayDay } from "@/lib/transactions/date";
 
 export function AccountManager({ data }: { data: AccountsPageData }) {
@@ -57,6 +58,7 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
     AccountsPageData["accounts"][number] | null
   >(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [reconciling, setReconciling] = useState<AccountsPageData["accounts"][number] | null>(null);
   const [editingAccount, setEditingAccount] = useState<AccountsPageData["accounts"][number] | null>(
     null
   );
@@ -216,6 +218,16 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                             <Button
                               variant="ghost"
                               size="icon"
+                              title={t("recon.open")}
+                              aria-label={t("recon.open")}
+                              onClick={() => setReconciling(account)}
+                              data-testid="reconcile-open"
+                            >
+                              <Scale className="size-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               title={t("common.editAria")}
                               aria-label={t("acc.edit")}
                               onClick={() => setEditingAccount(account)}
@@ -268,6 +280,10 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
                           {t("common.transactions")}
                         </Link>
                       </Button>
+                      <Button variant="outline" size="sm" onClick={() => setReconciling(account)}>
+                        <Scale className="size-4" />
+                        {t("recon.short")}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -295,6 +311,12 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
           )}
         </CardContent>
       </Card>
+
+      <ReconcileDialog
+        account={reconciling}
+        onOpenChange={(open) => (open ? null : setReconciling(null))}
+        onDone={() => void reload()}
+      />
 
       {/* Single controlled dialog for editing any account */}
       <Dialog
