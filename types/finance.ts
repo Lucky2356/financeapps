@@ -474,6 +474,13 @@ export type PlanFactPageData = {
   columns: PlanFactColumn[];
   /** Grid rows, newest month first. */
   months: PlanFactMonth[];
+  /** Счета группы «Сбережения»; остальные — основные. Для расшифровки итогов. */
+  savingsAccountIds: string[];
+  /**
+   * Переводы между основными счетами и сбережениями. В доходы и расходы они
+   * не входят никогда — для них столбец «В сбережения».
+   */
+  crossPoolTransfers: string[];
 };
 
 export type InvestmentData = {

@@ -37,6 +37,7 @@ export function AmountDrilldown({
    * and a listed row the figure above does not count is worse than no list.
    */
   excludeTransfers = false,
+  keep,
   currency
 }: {
   open: boolean;
@@ -45,6 +46,8 @@ export function AmountDrilldown({
   subtitle?: string;
   query: string;
   excludeTransfers?: boolean;
+  /** Ещё одно условие поверх запроса — то, чего запрос сказать не умеет. */
+  keep?: (row: TransactionRow) => boolean;
   currency: string;
 }) {
   const { t } = useI18n();
@@ -63,7 +66,9 @@ export function AmountDrilldown({
         if (cancelled) return;
         setFailed(false);
         setRows(
-          excludeTransfers ? data.transactions.filter((row) => !row.transferId) : data.transactions
+          data.transactions.filter(
+            (row) => (!excludeTransfers || !row.transferId) && (!keep || keep(row))
+          )
         );
       } catch {
         if (!cancelled) setFailed(true);
@@ -77,7 +82,7 @@ export function AmountDrilldown({
       // than a moment of "загружаем".
       setRows(null);
     };
-  }, [open, query, excludeTransfers]);
+  }, [open, query, excludeTransfers, keep]);
 
   const total = (rows ?? []).reduce((sum, row) => sum + row.amount, 0);
 

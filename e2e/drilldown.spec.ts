@@ -49,9 +49,41 @@ test("итог расходов раскрывается так же, как о�
   await openSettled(page, "/plan");
 
   const dialog = await openDrilldown(page, factCell(page, "expense-total-main"));
-  await expect(dialog.getByRole("heading", { name: "Расходы" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Расходы · Основные" })).toBeVisible();
   await expect(dialog.getByText("Загружаем операции…")).toBeHidden({ timeout: 15_000 });
   expect(await dialog.locator("tbody tr").count()).toBeGreaterThan(0);
+});
+
+// «Основные» и «Сбережения» — разные итоги, и расшифровка у каждого своя:
+// сумма строк в окне равна той цифре, по которой нажали.
+test("итоги основных и сбережений расшифровываются раздельно", async ({ page }) => {
+  await seedExampleData(page);
+  await openSettled(page, "/plan");
+
+  let opened = 0;
+  for (const column of [
+    "income-total-main",
+    "income-total-savings",
+    "expense-total-main",
+    "expense-total-savings"
+  ]) {
+    const cell = factCell(page, column);
+    // Ноль — не кнопка: расшифровывать нечего.
+    if ((await cell.getByRole("button").count()) === 0) continue;
+    const shown = Number((await cell.innerText()).replace(/[^\d-]/g, ""));
+    const dialog = await openDrilldown(page, cell);
+    await expect
+      .poll(
+        async () =>
+          Number((await dialog.getByTestId("drill-total").innerText()).replace(/[^\d-]/g, "")),
+        { timeout: 15_000 }
+      )
+      .toBe(shown);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    opened += 1;
+  }
+  expect(opened).toBeGreaterThan(1);
 });
 
 test("строка легенды на главной раскрывается в операции", async ({ page }) => {

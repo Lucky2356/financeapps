@@ -100,7 +100,12 @@ import {
   toBaseRows
 } from "@/lib/transactions/base-amount";
 import { salvageLocalState } from "@/lib/api/local/schemas";
-import { countableRows, isTransfer, TRANSFER_CATEGORY_LABEL } from "@/lib/transactions/transfers";
+import {
+  countableRows,
+  isTransfer,
+  TRANSFER_CATEGORY_LABEL,
+  transferKeyOf
+} from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import {
@@ -4001,7 +4006,26 @@ export class LocalApiClient implements ApiClient {
     // Куда деньги каждой статьи ходят на самом деле, за всю историю. По этому
     // и делится её план: у плановой цифры счёта нет, а у статьи есть привычка.
     const categoryPools = new Map<string, PlanFactSplit>();
-    for (const transaction of countableRows(state.transactions, includeTransfers)) {
+    // Перевод между основными счетами и сбережениями — не доход и не расход ни
+    // для одной из групп, даже когда переводы велено считать: снять со вклада
+    // на отпуск и потратить на отпуск — одна трата, а не доход плюс две траты.
+    // Он и так виден в столбце «В сбережения» (с минусом — «из сбережений»).
+    const legPools = new Map<string, Set<boolean>>();
+    for (const transaction of state.transactions) {
+      const key = transferKeyOf(transaction);
+      if (!key) continue;
+      const seen = legPools.get(key) ?? new Set<boolean>();
+      seen.add(savingsAccounts.has(transaction.account.id));
+      legPools.set(key, seen);
+    }
+    const crossPool = new Set(
+      [...legPools].filter(([, seen]) => seen.size > 1).map(([key]) => key)
+    );
+    const counted = countableRows(state.transactions, includeTransfers).filter((transaction) => {
+      const key = transferKeyOf(transaction);
+      return !key || !crossPool.has(key);
+    });
+    for (const transaction of counted) {
       const month = transaction.date.slice(0, 7);
       const byCategory = fact.get(month) ?? new Map<string, number>();
       byCategory.set(
@@ -4236,7 +4260,14 @@ export class LocalApiClient implements ApiClient {
       };
     });
 
-    return { source: "database", currency: state.currency, columns, months };
+    return {
+      source: "database",
+      currency: state.currency,
+      columns,
+      months,
+      savingsAccountIds: [...savingsAccounts],
+      crossPoolTransfers: [...crossPool]
+    };
   }
 
   /**
