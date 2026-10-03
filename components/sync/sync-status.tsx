@@ -22,7 +22,9 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
+import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
+import type { ImportPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { SyncStatus } from "@/lib/storage/SyncingStorageAdapter";
@@ -40,27 +42,30 @@ const ICONS: Record<Exclude<SyncStatus, "off">, typeof CloudOff> = {
 
 /** Название раздела человеческим словом, а не именем поля из книги. */
 function collectionLabel(collection: string, t: (key: string) => string): string {
-  const known = [
-    "accounts",
-    "categories",
-    "transactions",
-    "budgets",
-    "goals",
-    "liabilities",
-    "plans",
-    "planNotes"
-  ];
-  return t(known.includes(collection) ? `sync.collection.${collection}` : "sync.collection.other");
+  const key = `sync.collection.${collection}`;
+  const word = t(key);
+  return word === key ? t("sync.collection.other") : word;
 }
 
 /** Короткое описание строки: то, по чему её узнают на экране. */
 function describe(row: Record<string, unknown> | null): string | null {
   if (!row) return null;
-  for (const field of ["description", "name", "label", "note", "month"]) {
+  for (const field of [
+    "description",
+    "name",
+    "title",
+    "label",
+    "note",
+    "match",
+    "month",
+    "input"
+  ]) {
     const value = row[field];
     if (typeof value === "string" && value.trim()) return value;
   }
-  return null;
+  // Месяц таблицы — это один номер «2026-09» (у листа — «лист|2026-09»).
+  const id = typeof row.id === "string" ? row.id.slice(row.id.indexOf("|") + 1) : "";
+  return /^\d{4}-\d{2}$/.test(id) ? id : null;
 }
 
 /**
@@ -84,10 +89,20 @@ function Comparison({
   const currency = (row: Record<string, unknown> | null) =>
     typeof row?.currency === "string" ? row.currency : "RUB";
   const members = useFamilyMembers();
+  const { data: refs } = useApiPageData<ImportPageData | null>(null, "/import");
+  // Ссылки — названиями, а не номерами: «Карта», а не acc-3f2…
+  const nameOf = (field: string, value: string): string | null => {
+    if (field === "memberId") return members.find((member) => member.id === value)?.name ?? null;
+    if (field === "accountId" || field === "linkedAccountId")
+      return refs?.accounts?.find((account) => account.id === value)?.name ?? null;
+    if (field === "categoryId")
+      return refs?.categories?.find((category) => category.id === value)?.label ?? null;
+    return null;
+  };
+  const REFERENCES = ["memberId", "accountId", "linkedAccountId", "categoryId"];
   const show = (field: string, value: unknown, row: Record<string, unknown> | null) =>
-    // «Кто платил» — имя, а не номер участника.
-    field === "memberId" && typeof value === "string"
-      ? (members.find((member) => member.id === value)?.name ?? "—")
+    REFERENCES.includes(field) && typeof value === "string"
+      ? (nameOf(field, value) ?? "—")
       : describeValue(field, value, t, (amount) => formatCurrency(amount, currency(row)));
 
   const head = (title: string, current: boolean, row: Record<string, unknown> | null) => (
@@ -265,7 +280,10 @@ export function SyncStatusIndicator() {
         </DialogHeader>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">{label}</p>
+          {/* Состояние связи — заголовок окна уже говорит о спорах. */}
+          <p className="text-sm text-muted-foreground">
+            {t(`sync.status.${status === "off" ? "offline" : status}`)}
+          </p>
           <div className="flex flex-wrap gap-2">
             {status !== "off" ? (
               <Button

@@ -51,6 +51,49 @@ describe("хранилище спорных строк", () => {
     expect(list[0].noticedAt).toBe(LATER);
   });
 
+  it("спор без выбора не показывается: служебная запись или разница только в служебном", async () => {
+    // Месяц таблицы — один номер. Удалили здесь, на другом устройстве он
+    // остался: человеку нечего сравнивать, а «Не сходится: 0» только пугает.
+    const month: RowConflict = {
+      collection: "sheetMonths",
+      key: "2026-09",
+      mine: null,
+      theirs: { id: "2026-09", updatedAt: LATER },
+      chosen: "theirs"
+    };
+    const stamps: RowConflict = {
+      collection: "goals",
+      key: "g1",
+      mine: { id: "g1", title: "Отпуск", progress: 10, updatedAt: NOW },
+      theirs: { id: "g1", title: "Отпуск", progress: 20, updatedAt: LATER },
+      chosen: "theirs"
+    };
+    await store.add("слот", [month, stamps, conflict("t1", 100)], NOW);
+    expect((await store.list()).map((item) => item.key)).toEqual(["t1"]);
+  });
+
+  it("пустые споры, сохранённые прежними версиями, уходят сами", async () => {
+    await storage.setItem(CONFLICTS_KEY, {
+      v: 1,
+      conflicts: [
+        {
+          collection: "sheetMonths",
+          key: "2026-09",
+          mine: null,
+          theirs: { id: "2026-09", updatedAt: LATER },
+          chosen: "theirs",
+          slot: "слот",
+          noticedAt: NOW
+        },
+        { ...conflict("t1", 100), slot: "слот", noticedAt: NOW }
+      ]
+    });
+    const fresh = new ConflictStore(storage);
+    expect((await fresh.list()).map((item) => item.key)).toEqual(["t1"]);
+    const kept = await storage.getItem<{ conflicts: unknown[] }>(CONFLICTS_KEY);
+    expect(kept?.conflicts).toHaveLength(1);
+  });
+
   it("одна и та же строка в разных ячейках — это два разных спора", async () => {
     await store.add("первый", [conflict("t1", 100)], NOW);
     await store.add("второй", [conflict("t1", 100)], NOW);
