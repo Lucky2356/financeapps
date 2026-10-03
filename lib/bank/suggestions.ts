@@ -74,17 +74,46 @@ export function mergeSuggestions(
 }
 
 type Ref = { id: string };
-type Recorded = { amount: number; date: string; type: string };
+type Recorded = { amount: number; date: string; type: string; id?: string };
+
+/** Операции, записанные кнопкой «Записать» из уведомления, — на этом телефоне. */
+export const BANK_RECORDED_KEY = "bank-recorded";
+
+function covers(row: Recorded, item: BankSuggestion): boolean {
+  const day = Date.parse(`${item.date}T12:00:00`);
+  return (
+    row.type === item.type &&
+    Math.abs(row.amount - item.amount) < 0.005 &&
+    Math.abs(Date.parse(`${row.date.slice(0, 10)}T12:00:00`) - day) <= 86_400_000
+  );
+}
 
 /** Уже записано руками: та же сумма, тот же тип, тот же или соседний день. */
 export function alreadyRecorded(item: BankSuggestion, ledger: readonly Recorded[]): boolean {
-  const day = Date.parse(`${item.date}T12:00:00`);
-  return ledger.some(
-    (row) =>
-      row.type === item.type &&
-      Math.abs(row.amount - item.amount) < 0.005 &&
-      Math.abs(Date.parse(`${row.date.slice(0, 10)}T12:00:00`) - day) <= 86_400_000
-  );
+  return ledger.some((row) => covers(row, item));
+}
+
+/**
+ * Что ещё ждёт решения. Одна операция в учёте закрывает ОДНО уведомление: два
+ * кофе по 200 ₽ за утро — две траты, и записанная первая не должна прятать
+ * вторую. Операции, записанные из самих уведомлений (`own`), ничего не
+ * закрывают — их уведомление уже убрано, а соседнее того же размера ещё ждёт.
+ */
+export function pendingSuggestions(
+  items: readonly BankSuggestion[],
+  ledger: readonly Recorded[],
+  own: ReadonlySet<string> = new Set()
+): BankSuggestion[] {
+  const free = ledger.filter((row) => !row.id || !own.has(row.id));
+  const used = new Set<number>();
+  const covered = new Set<string>();
+  for (const item of [...items].sort((a, b) => a.at - b.at)) {
+    const index = free.findIndex((row, at) => !used.has(at) && covers(row, item));
+    if (index === -1) continue;
+    used.add(index);
+    covered.add(item.id);
+  }
+  return items.filter((item) => !covered.has(item.id));
 }
 
 /**

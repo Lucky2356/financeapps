@@ -2815,6 +2815,24 @@ export class LocalApiClient implements ApiClient {
     let imported = 0;
     let skipped = 0;
     const transactionIds: string[] = [];
+    // Повтор — это строка, которая уже была в учёте ДО этого импорта, и ровно
+    // столько раз, сколько она там была. Сличать с учётом, в который файл уже
+    // пишется, значило бы отбросить второй кофе за 200 ₽ того же дня: две
+    // одинаковые покупки в выписке — обычное дело.
+    const keyOf = (parts: Array<string | number>) => parts.join("|");
+    const before = new Map<string, number>();
+    for (const transaction of state.transactions) {
+      const key = keyOf([
+        transaction.account.id,
+        transaction.category.id,
+        transaction.type,
+        transaction.amount,
+        transaction.date.slice(0, 10),
+        transaction.description ?? ""
+      ]);
+      before.set(key, (before.get(key) ?? 0) + 1);
+    }
+    const seen = new Map<string, number>();
     for (const row of rows) {
       const rawAmount = parseImportedAmount(row[input.amountColumn]);
       const date = parseImportedDate(row[input.dateColumn]);
@@ -2853,20 +2871,15 @@ export class LocalApiClient implements ApiClient {
             type
           );
       }
-      const duplicate = state.transactions.some((transaction) => {
-        return (
-          transaction.account.id === account.id &&
-          transaction.category.id === category.id &&
-          transaction.type === type &&
-          transaction.amount === Math.abs(rawAmount) &&
-          // День строки файла — тот, что будет записан, а не UTC-день местной
-          // полуночи: к востоку от Гринвича это вчера, и повторный импорт
-          // того же файла не узнавал ни одной строки и задваивал всё.
-          transaction.date.slice(0, 10) === storedTransactionDate(date).slice(0, 10) &&
-          (transaction.description ?? "") === description
-        );
-      });
-      if (duplicate) {
+      // День строки файла — тот, что будет записан, а не UTC-день местной
+      // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же
+      // файла не узнавал ни одной строки и задваивал всё.
+      const day = storedTransactionDate(date).slice(0, 10);
+      const key = keyOf([account.id, category.id, type, Math.abs(rawAmount), day, description]);
+      const already = before.get(key) ?? 0;
+      const count = seen.get(key) ?? 0;
+      seen.set(key, count + 1);
+      if (count < already) {
         skipped += 1;
         continue;
       }

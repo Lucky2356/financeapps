@@ -18,12 +18,13 @@ import { onDataChanged } from "@/lib/api/data-events";
 import type { BankSuggestion } from "@/lib/bank/notification-parse";
 import {
   addHandled,
-  alreadyRecorded,
   BANK_EVENT,
   BANK_HANDLED_KEY,
+  BANK_RECORDED_KEY,
   BANK_SUGGESTIONS_KEY,
   parseHandled,
   parseStored,
+  pendingSuggestions,
   resolveTarget
 } from "@/lib/bank/suggestions";
 import type { ImportPageData, TransactionsPageData } from "@/lib/data";
@@ -79,16 +80,15 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
     setItems(next);
   }
 
-  const pending = items.filter(
-    (item) =>
-      !alreadyRecorded(
-        item,
-        (ledger?.transactions ?? []).map((row) => ({
-          amount: row.amount,
-          date: row.date,
-          type: row.type
-        }))
-      )
+  const pending = pendingSuggestions(
+    items,
+    (ledger?.transactions ?? []).map((row) => ({
+      id: row.id,
+      amount: row.amount,
+      date: row.date,
+      type: row.type
+    })),
+    new Set(parseHandled(readMine(BANK_RECORDED_KEY)))
   );
   if (pending.length === 0) return null;
 
@@ -150,6 +150,10 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
         ...deviceMember(item.type)
       });
       writeMine(LAST_ACCOUNT_KEY, accountId);
+      writeMine(
+        BANK_RECORDED_KEY,
+        JSON.stringify(addHandled(parseHandled(readMine(BANK_RECORDED_KEY)), created.id))
+      );
       forget(item.id);
       const category = refs?.categories.find((entry) => entry.id === categoryId)?.label ?? "";
       toast.success(t("bank.recorded", { amount: money(item.amount), category }), {
