@@ -1,17 +1,18 @@
 import {
   ArrowDownUp,
   BarChart3,
+  Calculator,
   CalendarClock,
   CreditCard,
-  Percent,
-  Plane,
-  Landmark,
   Download,
   FileText,
   Flag,
   Gauge,
+  Landmark,
   LayoutDashboard,
   LineChart,
+  Percent,
+  Plane,
   Repeat,
   Scale,
   Settings,
@@ -71,6 +72,8 @@ const TAB = {
   budgets: { href: "/budgets", label: "Лимиты", labelKey: "nav.limits", icon: Gauge },
   cashback: { href: "/cashback", label: "Кэшбэк", labelKey: "nav.cashback", icon: Percent },
   trips: { href: "/trips", label: "Поездки", labelKey: "nav.trips", icon: Plane },
+  // Прикинуть крупную покупку или кредит до того, как тратить (lib/whatif).
+  whatIf: { href: "/what-if", label: "Что если", labelKey: "nav.whatIf", icon: Calculator },
   deductions: {
     href: "/deductions",
     label: "Вычеты",
@@ -124,6 +127,7 @@ export const HUB_GROUPS: HubGroup[] = [
       TAB.subscriptions,
       TAB.cashback,
       TAB.trips,
+      TAB.whatIf,
       TAB.deductions
     ]
   }
@@ -171,7 +175,7 @@ export const DESKTOP_HUBS: HubGroup[] = [
   // Кэшбэк, поездки и вычеты — тоже про то, что будет с деньгами дальше.
   {
     landing: "/recurring",
-    tabs: [TAB.recurring, TAB.subscriptions, TAB.cashback, TAB.trips, TAB.deductions]
+    tabs: [TAB.recurring, TAB.subscriptions, TAB.cashback, TAB.trips, TAB.whatIf, TAB.deductions]
   },
   // Reading the money rather than recording it.
   { landing: "/plan", tabs: [TAB.plan, TAB.analytics, TAB.forecast, TAB.reports] }

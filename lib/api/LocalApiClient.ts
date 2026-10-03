@@ -156,6 +156,7 @@ import type {
   TransactionRow
 } from "@/types/finance";
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
+import type { WhatIfBase } from "@/lib/whatif/simulate";
 import {
   importIntoSheet,
   importWorkbook,
@@ -888,6 +889,7 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/sheet")
       return readSheet(sheetScope(state, searchParams.get("sheet") || MAIN_SHEET)) as T;
     if (pathname === "/workbook") return readWorkbook(state, searchParams.get("sheet")) as T;
+    if (pathname === "/what-if") return this.whatIfBase(this.inBase(state)) as T;
     if (pathname === "/watchdog") {
       const counted = this.countingState(this.inBase(state), false);
       return {
@@ -4669,6 +4671,64 @@ export class LocalApiClient implements ApiClient {
         progress: goal.progress,
         monthlyContribution: goal.monthlyContribution
       }))
+    };
+  }
+
+  /**
+   * Числа для «Что если» (lib/whatif). Средние — по трём ПОЛНЫМ прошлым
+   * месяцам: текущий не кончился, и с ним расход выходил бы меньше настоящего,
+   * а покупка — безопаснее, чем она есть. Нет полных месяцев — берём что есть.
+   */
+  private whatIfBase(state: LocalState): WhatIfBase {
+    const rows = countableRows(state.transactions, false);
+    const now = new Date();
+    const keyOf = (offset: number) =>
+      monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset, 1));
+    const sums = (keys: string[]) => {
+      let income = 0;
+      let expense = 0;
+      for (const row of rows) {
+        if (!keys.some((key) => row.date.startsWith(key))) continue;
+        if (row.type === "INCOME") income += row.amount;
+        else if (row.type === "EXPENSE") expense += row.amount;
+      }
+      return { income, expense };
+    };
+    const full = [-3, -2, -1]
+      .map(keyOf)
+      .filter((key) => rows.some((row) => row.date.startsWith(key)));
+    const keys = full.length > 0 ? full : [keyOf(0)];
+    const total = sums(keys);
+    const open = state.accounts.filter((account) => !account.isArchived);
+    return {
+      currency: state.currency,
+      liquid: this.sumInBase(
+        state,
+        open.filter((account) => account.type === "CASH" || account.type === "DEBIT_CARD")
+      ),
+      savings: this.sumInBase(
+        state,
+        open.filter((account) => account.type === "SAVINGS")
+      ),
+      avgIncome: roundMoney(total.income / keys.length),
+      avgExpense: roundMoney(total.expense / keys.length),
+      debtPayments: this.sumInBase(
+        state,
+        activeDebts(state.liabilities).map((item) => ({
+          balance: item.minPayment,
+          currency: item.currency
+        }))
+      ),
+      cushionTarget: state.emergencyFundMonthsTarget,
+      goals: this.goals(state)
+        .goals.filter((goal) => goal.currentAmount < goal.targetAmount)
+        .map((goal) => ({
+          id: goal.id,
+          title: goal.title,
+          target: goal.targetAmount,
+          saved: goal.currentAmount,
+          monthly: goal.plannedContribution || goal.monthlyContribution
+        }))
     };
   }
 
