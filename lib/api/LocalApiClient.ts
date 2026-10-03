@@ -167,6 +167,7 @@ import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
 import { balanceHistory, monthsBack } from "@/lib/accounts/balance-history";
 import { buildYearRecap } from "@/lib/analytics/year-recap";
 import { compareMonths } from "@/lib/analytics/compare-months";
+import { detectPayday, forecastToPayday } from "@/lib/analytics/payday";
 import {
   importIntoSheet,
   importWorkbook,
@@ -952,6 +953,47 @@ export class LocalApiClient implements ApiClient {
           state.familySettlements ?? [],
           month
         )
+      } as T;
+    }
+    if (pathname === "/payday") {
+      const today = isoDay(new Date());
+      const counted = this.countingState(this.inBase(state), false);
+      const manual = Number(searchParams.get("day"));
+      const detected = detectPayday(
+        counted.transactions
+          .filter((row) => row.type === "INCOME" && row.date.slice(0, 10) <= today)
+          .map((row) => ({ date: row.date, amount: row.amount, category: row.category.label }))
+      );
+      const payday = manual >= 1 && manual <= 31 ? Math.trunc(manual) : detected;
+      if (!payday) return { forecast: null } as T;
+      const open = state.accounts.filter((account) => !account.isArchived);
+      // Обычная трата в день — за 90 дней, без плановых платежей и долгов: они
+      // стоят в списке платежей до зарплаты отдельно.
+      const since = isoDay(new Date(Date.now() - 90 * 86_400_000));
+      const everyday = counted.transactions
+        .filter(
+          (row) =>
+            row.type === "EXPENSE" &&
+            row.date.slice(0, 10) >= since &&
+            row.date.slice(0, 10) < today &&
+            !row.recurringId &&
+            !row.liabilityId
+        )
+        .reduce((sum, row) => sum + row.amount, 0);
+      return {
+        forecast: forecastToPayday({
+          today,
+          payday,
+          source: manual >= 1 && manual <= 31 ? "manual" : "history",
+          liquid: this.sumInBase(
+            state,
+            open.filter((account) => account.type === "CASH" || account.type === "DEBIT_CARD")
+          ),
+          payments: this.forecast(this.inBase(state))
+            .events.filter((event) => event.type === "EXPENSE")
+            .map((event) => ({ date: event.date, amount: event.amount, title: event.title })),
+          usualPerDay: everyday / 90
+        })
       } as T;
     }
     if (pathname === "/compare-months") {
