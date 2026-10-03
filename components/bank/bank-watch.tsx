@@ -12,8 +12,10 @@ import { parseBankNotification, type BankSuggestion } from "@/lib/bank/notificat
 import {
   BANK_ENABLED_KEY,
   BANK_EVENT,
+  BANK_HANDLED_KEY,
   BANK_SUGGESTIONS_KEY,
   mergeSuggestions,
+  parseHandled,
   parseStored
 } from "@/lib/bank/suggestions";
 import { takeBankNotifications } from "@/lib/platform/android-bank";
@@ -33,7 +35,8 @@ export function BankWatch() {
       const merged = mergeSuggestions(
         parseStored(readMine(BANK_SUGGESTIONS_KEY)),
         fresh,
-        Date.now()
+        Date.now(),
+        parseHandled(readMine(BANK_HANDLED_KEY))
       );
       writeMine(BANK_SUGGESTIONS_KEY, JSON.stringify(merged));
       window.dispatchEvent(new Event(BANK_EVENT));

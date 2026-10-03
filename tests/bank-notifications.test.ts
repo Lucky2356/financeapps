@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { parseBankNotification, type BankNotification } from "@/lib/bank/notification-parse";
-import { alreadyRecorded, mergeSuggestions, resolveTarget } from "@/lib/bank/suggestions";
+import {
+  addHandled,
+  alreadyRecorded,
+  mergeSuggestions,
+  resolveTarget
+} from "@/lib/bank/suggestions";
 
 // Уведомления банков: как они приходят на самом деле — пуши и SMS.
 
@@ -26,6 +31,31 @@ describe("уведомления банка", () => {
       card: "1234",
       date: "2026-10-03"
     });
+  });
+
+  it("SMS Сбера о входящем переводе: «Перевод 500р от …» — доход, а не трата", () => {
+    const parsed = parseBankNotification(
+      note("900", "СЧЁТ1234 10:00 Перевод 500р от Ивана И. Баланс: 12 300р")
+    );
+    expect(parsed).toMatchObject({
+      type: "INCOME",
+      amount: 500,
+      merchant: "Ивана И",
+      card: "1234"
+    });
+    // Исходящий перевод тем же словом остаётся тратой.
+    expect(
+      parseBankNotification(note("900", "СЧЁТ1234 10:05 Перевод 700р Баланс: 11 600р"))
+    ).toMatchObject({ type: "EXPENSE", amount: 700 });
+  });
+
+  it("карта через дефис (MIR-1234) и «зачислена на карту» не становятся местом", () => {
+    expect(
+      parseBankNotification(note("900", "MIR-4321 14:05 Покупка 450р PYATEROCHKA Баланс: 9550р"))
+    ).toMatchObject({ card: "4321", merchant: "PYATEROCHKA" });
+    expect(
+      parseBankNotification(note("Банк", "Зарплата 75 000 ₽ зачислена на карту *1234"))
+    ).toMatchObject({ type: "INCOME", amount: 75000, merchant: "Зарплата" });
   });
 
   it("пуш Т-Банка: сумма в заголовке, место в тексте, «Доступно» не сумма", () => {
@@ -98,6 +128,12 @@ describe("предложения из уведомлений", () => {
     const newer = { ...base, id: "new", at: at + 1000 };
     const merged = mergeSuggestions([base, old], [base, newer], at + 2000);
     expect(merged.map((item) => item.id)).toEqual(["new", base.id]);
+  });
+
+  it("отклонённое или записанное не возвращается, когда банк присылает его снова", () => {
+    const handled = addHandled([], base.id);
+    expect(mergeSuggestions([], [base], at + 1000, handled)).toEqual([]);
+    expect(addHandled(handled, base.id)).toEqual([base.id]);
   });
 
   it("уже записанное руками — та же сумма и тип в соседний день", () => {

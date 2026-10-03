@@ -12,6 +12,9 @@ import { suggestCategoryId } from "@/lib/category-suggest";
 export const BANK_SUGGESTIONS_KEY = "bank-suggestions";
 export const BANK_ENABLED_KEY = "bank-notifications";
 export const BANK_EVENT = "bank-suggestions-changed";
+/** Уже записанные или отклонённые — банк может прислать то же уведомление снова. */
+export const BANK_HANDLED_KEY = "bank-handled";
+const HANDLED_LIMIT = 300;
 
 const KEEP_DAYS = 14;
 const LIMIT = 50;
@@ -34,15 +37,39 @@ export function parseStored(raw: string | null): BankSuggestion[] {
   }
 }
 
-/** Новые — сверху; одно уведомление — одно предложение; старые уходят. */
+export function parseHandled(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const list: unknown = JSON.parse(raw);
+    return Array.isArray(list)
+      ? list.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Запомнить обработанное; самые старые забываются. */
+export function addHandled(handled: readonly string[], id: string): string[] {
+  return [...handled.filter((item) => item !== id), id].slice(-HANDLED_LIMIT);
+}
+
+/**
+ * Новые — сверху; одно уведомление — одно предложение; старые уходят. Уже
+ * записанное или отклонённое (`handled`) не возвращается, даже если банк
+ * обновил своё уведомление и телефон прислал его ещё раз.
+ */
 export function mergeSuggestions(
   current: readonly BankSuggestion[],
   fresh: readonly BankSuggestion[],
-  now: number
+  now: number,
+  handled: readonly string[] = []
 ): BankSuggestion[] {
   const since = now - KEEP_DAYS * 86_400_000;
+  const done = new Set(handled);
   const byId = new Map<string, BankSuggestion>();
-  for (const item of [...current, ...fresh]) if (item.at >= since) byId.set(item.id, item);
+  for (const item of [...current, ...fresh])
+    if (item.at >= since && !done.has(item.id)) byId.set(item.id, item);
   return [...byId.values()].sort((a, b) => b.at - a.at).slice(0, LIMIT);
 }
 
