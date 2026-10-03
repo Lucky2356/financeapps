@@ -12,6 +12,7 @@ import { CloudAlert, CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { useFamilyMembers } from "@/components/family/family-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,8 +83,12 @@ function Comparison({
   const same = fields.filter((item) => !item.differs);
   const currency = (row: Record<string, unknown> | null) =>
     typeof row?.currency === "string" ? row.currency : "RUB";
+  const members = useFamilyMembers();
   const show = (field: string, value: unknown, row: Record<string, unknown> | null) =>
-    describeValue(field, value, t, (amount) => formatCurrency(amount, currency(row)));
+    // «Кто платил» — имя, а не номер участника.
+    field === "memberId" && typeof value === "string"
+      ? (members.find((member) => member.id === value)?.name ?? "—")
+      : describeValue(field, value, t, (amount) => formatCurrency(amount, currency(row)));
 
   const head = (title: string, current: boolean, row: Record<string, unknown> | null) => (
     <th scope="col" className="px-2 py-2 text-left align-top font-medium">

@@ -18,13 +18,23 @@ import { cn } from "@/lib/utils";
 /** Чьё это устройство — у каждого человека на устройстве своё. */
 export const FAMILY_ME_KEY = "family-me";
 
+/**
+ * Чья трата, записанная с этого устройства без формы (частые траты, ИИ,
+ * уведомление банка): участник этого устройства. Расход — да, доход — нет:
+ * «кто платил» бывает только у траты.
+ */
+export function deviceMember(type: string): { memberId?: string } {
+  const memberId = type === "EXPENSE" ? readMine(FAMILY_ME_KEY) : null;
+  return memberId ? { memberId } : {};
+}
+
 export type FamilyPage = { members: Member[]; picture: FamilyPicture | null };
 
 export const EMPTY_FAMILY: FamilyPage = { members: [], picture: null };
 
 export function useFamilyMembers(): Member[] {
   const { data } = useApiPageData<FamilyPage>(EMPTY_FAMILY, "/family");
-  return data.members;
+  return data?.members ?? [];
 }
 
 export function FamilyFields({

@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { FAMILY_ME_KEY } from "@/components/family/family-fields";
+import { deviceMember } from "@/components/family/family-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api/client";
@@ -142,7 +142,7 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
         amount: String(item.amount),
         date: item.date,
         description: item.merchant,
-        memberId: readMine(FAMILY_ME_KEY) ?? undefined
+        ...deviceMember(item.type)
       });
       writeMine(LAST_ACCOUNT_KEY, accountId);
       forget(item.id);
