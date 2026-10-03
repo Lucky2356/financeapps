@@ -4815,7 +4815,10 @@ export class LocalApiClient implements ApiClient {
       for (const row of rows) {
         if (!keys.some((key) => row.date.startsWith(key))) continue;
         if (row.type === "INCOME") income += row.amount;
-        else if (row.type === "EXPENSE") expense += row.amount;
+        // Платёж по долгу — тоже расход, но платежи по долгам идут ниже
+        // отдельной строкой (debtPayments): посчитать их и тут значило бы
+        // вычесть дважды и напугать человека несуществующей дырой.
+        else if (row.type === "EXPENSE" && !row.liabilityId) expense += row.amount;
       }
       return { income, expense };
     };
