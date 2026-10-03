@@ -163,6 +163,7 @@ import type {
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
 import type { WhatIfBase } from "@/lib/whatif/simulate";
 import { familyPicture } from "@/lib/family/family";
+import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
 import {
   importIntoSheet,
   importWorkbook,
@@ -947,6 +948,14 @@ export class LocalApiClient implements ApiClient {
         )
       } as T;
     }
+    if (pathname === "/transfer-pairs") {
+      // «Это перевод?»: отложенные человеком пары («нет, это не перевод») —
+      // по ключам, переданным страницей; помнит их само устройство.
+      const dismissed = new Set((searchParams.get("dismissed") ?? "").split(",").filter(Boolean));
+      const currencyOf = (accountId: string) =>
+        state.accounts.find((item) => item.id === accountId)?.currency ?? state.currency;
+      return { pairs: findTransferPairs(state.transactions, currencyOf, dismissed) } as T;
+    }
     if (pathname === "/watchdog") {
       const counted = this.countingState(this.inBase(state), false);
       return {
@@ -1219,6 +1228,8 @@ export class LocalApiClient implements ApiClient {
       return this.saveAndReturn<TResponse>(state, this.restoreTransaction(state, body));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "split")
       return this.saveAndReturn<TResponse>(state, this.createSplit(state, body));
+    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "linkTransfer")
+      return this.saveAndReturn<TResponse>(state, this.linkTransfer(state, body));
     if (pathname === "/transactions") {
       const tx = this.upsertTransaction(state, body, method);
       const budgetWarning = this.budgetWarningFor(state, tx);
@@ -1785,6 +1796,56 @@ export class LocalApiClient implements ApiClient {
       return { category: tx.category.label, spent: roundMoney(spent), limit };
     }
     return null;
+  }
+
+  /**
+   * «Это перевод»: две готовые операции — трата с одного своего счёта и доход
+   * на другой — становятся одним переводом. Деньги на счетах не двигаются:
+   * обе строки уже провели их. Меняется только то, как их считают итоги.
+   */
+  private linkTransfer(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const expense = state.transactions.find((item) => item.id === input.expenseId);
+    const income = state.transactions.find((item) => item.id === input.incomeId);
+    if (!expense || !income) throw new Error("Одной из операций уже нет.");
+    if (expense.type !== "EXPENSE" || income.type !== "INCOME")
+      throw new Error("Перевод — это списание с одного счёта и поступление на другой.");
+    if (transferKeyOf(expense) || transferKeyOf(income))
+      throw new Error("Эта операция уже часть перевода.");
+    if (expense.account.id === income.account.id)
+      throw new Error("Перевод — между двумя разными счетами.");
+    if (Math.abs(expense.amount - income.amount) >= 0.005)
+      throw new Error("Суммы списания и поступления не совпадают.");
+    const transferId = id("transfer");
+    const out = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
+    const into = this.findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
+    const asTransfer = (
+      row: TransactionRow,
+      category: { id: string; label: string; color: string; icon?: string }
+    ): TransactionRow => {
+      // Кто платил и «общая трата» — про траты; у перевода их нет.
+      const { memberId: _member, shared: _shared, ...rest } = row;
+      void _member;
+      void _shared;
+      return {
+        ...rest,
+        transferId,
+        category: {
+          id: category.id,
+          label: category.label,
+          color: category.color,
+          ...(category.icon ? { icon: category.icon } : {})
+        }
+      };
+    };
+    state.transactions = state.transactions.map((row) =>
+      row.id === expense.id
+        ? asTransfer(row, out)
+        : row.id === income.id
+          ? asTransfer(row, into)
+          : row
+    );
+    return { transferId };
   }
 
   private createTransfer(state: LocalState, body: unknown) {

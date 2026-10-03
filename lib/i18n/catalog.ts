@@ -90,6 +90,12 @@ const ru: Messages = {
   "family.rename": "Переименовать: {name}",
   "family.renameTitle": "Участник",
   "family.since": "В семье с",
+  "tp.title": "Похоже на переводы между своими счетами: {count}",
+  "tp.hint":
+    "Списание с одного счёта и поступление на другой той же суммы. Связанные — не доход и не трата.",
+  "tp.link": "Это перевод",
+  "tp.dismiss": "Нет",
+  "tp.linked": "Связано в перевод",
   "family.sinceHint": "Пусто — с самого начала. Общие траты до этого дня его не касаются.",
   "family.sinceShort": "с {date}",
   "family.removeOne": "Убрать: {name}",
@@ -2822,6 +2828,12 @@ const en: Messages = {
   "family.rename": "Rename: {name}",
   "family.renameTitle": "Member",
   "family.since": "In the family since",
+  "tp.title": "Looks like transfers between your accounts: {count}",
+  "tp.hint":
+    "Money out of one account and the same amount into another. Linked, they are neither income nor spending.",
+  "tp.link": "It's a transfer",
+  "tp.dismiss": "No",
+  "tp.linked": "Linked as a transfer",
   "family.sinceHint":
     "Empty — from the start. Shared spending before this day doesn't concern them.",
   "family.sinceShort": "since {date}",

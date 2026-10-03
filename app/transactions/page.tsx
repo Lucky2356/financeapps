@@ -7,6 +7,7 @@ import { LedgerViews } from "@/components/transactions/ledger-views";
 import { TransactionManager } from "@/components/transactions/transaction-manager";
 import { TransactionsSummary } from "@/components/transactions/transactions-summary";
 import { TransactionsAnalytics } from "@/components/transactions/transactions-analytics";
+import { TransferPairsCard } from "@/components/transactions/transfer-pairs-card";
 import { getTransactionsPageData } from "@/lib/data";
 import { ensureFreshServerData } from "@/lib/rendering";
 
@@ -20,6 +21,7 @@ export default async function TransactionsPage() {
         <PageHeader titleKey="page.transactions.title" descriptionKey="page.transactions.desc" />
       </div>
       <TransactionsSummary />
+      <TransferPairsCard />
       <AiQuickAdd />
       <TransactionsAnalytics />
       <Suspense fallback={<LoadingCard messageKey="loading.transactions" />}>
