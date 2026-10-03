@@ -1,6 +1,6 @@
 [package]
 name = "financial-assistant"
-version = "2.5.1"
+version = "2.5.2"
 description = "Financial Assistant MVP desktop shell"
 authors = ["Financial Assistant"]
 edition = "2021"

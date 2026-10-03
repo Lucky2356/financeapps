@@ -103,7 +103,12 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
 
   function target(item: BankSuggestion) {
     return resolveTarget(item, {
-      accounts: (refs?.accounts ?? []) as Array<{ id: string; name: string; isArchived?: boolean }>,
+      accounts: (refs?.accounts ?? []) as Array<{
+        id: string;
+        name: string;
+        isArchived?: boolean;
+        currency?: string;
+      }>,
       categories: refs?.categories ?? [],
       rules: ledger?.rules ?? [],
       history: (ledger?.transactions ?? []).map((row) => ({

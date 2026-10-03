@@ -95,14 +95,18 @@ export function alreadyRecorded(item: BankSuggestion, ledger: readonly Recorded[
 export function resolveTarget(
   item: BankSuggestion,
   refs: {
-    accounts: Array<Ref & { name: string; isArchived?: boolean }>;
+    accounts: Array<Ref & { name: string; isArchived?: boolean; currency?: string }>;
     categories: Array<Ref & { kind: string }>;
     rules: CategorizationRule[];
     history: Parameters<typeof suggestCategoryId>[1];
     lastAccount: string | null;
   }
 ): { accountId: string | null; categoryId: string | null } {
-  const accounts = refs.accounts.filter((account) => !account.isArchived);
+  // Уведомление — в рублях, значит и счёт рублёвый: 450 ₽ на долларовом счёте
+  // записались бы как 450 $.
+  const accounts = refs.accounts.filter(
+    (account) => !account.isArchived && (!account.currency || account.currency === "RUB")
+  );
   const byCard = item.card ? accounts.find((account) => account.name.includes(item.card!)) : null;
   const last = accounts.find((account) => account.id === refs.lastAccount);
   const accountId = (byCard ?? last ?? accounts[0])?.id ?? null;

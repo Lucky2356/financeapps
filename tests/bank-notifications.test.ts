@@ -169,4 +169,18 @@ describe("предложения из уведомлений", () => {
     const unknown = { ...base, merchant: "Совсем новое место", card: null };
     expect(resolveTarget(unknown, refs)).toEqual({ accountId: "a1", categoryId: null });
   });
+
+  it("рублёвое уведомление не записывается на валютный счёт", () => {
+    const refs = {
+      accounts: [
+        { id: "usd", name: "Долларовая", currency: "USD" },
+        { id: "rub", name: "Карта", currency: "RUB" }
+      ],
+      categories: [{ id: "food", kind: "EXPENSE" }],
+      rules: [],
+      history: [],
+      lastAccount: "usd"
+    };
+    expect(resolveTarget({ ...base, card: null }, refs).accountId).toBe("rub");
+  });
 });

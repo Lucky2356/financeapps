@@ -193,6 +193,37 @@ describe("корзина в книге", () => {
     expect((await client.get<TrashList>("/trash")).entries).toEqual([]);
   });
 
+  it("старый перевод (до 1.10, только метка в описании) тоже удаляется целиком", async () => {
+    const storage = new MemoryStorageAdapter();
+    const client = new LocalApiClient(storage);
+    await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "1000" });
+    await client.post("/accounts", { name: "Наличные", type: "CASH", balance: "0" });
+    const [from, to] = (await client.get<AccountsPageData>("/accounts")).accounts;
+    await client.post("/transactions", {
+      action: "transfer",
+      fromAccountId: from.id,
+      toAccountId: to.id,
+      amount: "300",
+      date: "2026-10-01"
+    });
+    // Как было записано до 1.10: номера перевода нет, есть метка в описании.
+    const key = (await storage.keys()).find((item) => /^localFinanceState_[^:]+$/.test(item))!;
+    const book = (await storage.getItem<{ transactions: Array<Record<string, unknown>> }>(key))!;
+    await storage.setItem(key, {
+      ...book,
+      transactions: book.transactions.map(({ transferId: _id, ...row }) => (void _id, row))
+    });
+    client.forgetCachedState();
+    const legs = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    expect(legs).toHaveLength(2);
+    expect(legs.every((row) => !row.transferId)).toBe(true);
+
+    await client.delete(`/transactions?id=${legs[0].id}`);
+    expect(
+      (await client.get<TransactionsPageData>("/transactions?period=all")).transactions
+    ).toEqual([]);
+  });
+
   it("удалённый столбец таблицы возвращается со своими числами", async () => {
     const client = new LocalApiClient(new MemoryStorageAdapter());
     const column = await client.post<{ id: string }>("/sheet", {
