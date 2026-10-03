@@ -102,37 +102,49 @@ export function loliCategory(
   history: readonly HistoryRow[]
 ): string | null {
   const own = categories.filter((category) => category.kind === item.type);
-  const wanted = normal(item.category);
-  if (wanted) {
-    const exact = own.find((category) => normal(category.label) === wanted);
-    if (exact) return exact.id;
-    const stem = wanted.slice(0, Math.max(4, Math.min(6, wanted.length)));
-    const close = own.find((category) => {
-      const label = normal(category.label);
-      return label.startsWith(stem) || wanted.startsWith(label.slice(0, 6));
-    });
-    if (close) return close.id;
-    // По общему слову: у Лоли «Кафе и рестораны», «Дом и ЖКХ», здесь —
-    // «Рестораны», «ЖКХ». Слово узнаётся по началу: «ресторан» = «рестораны».
-    const words = (text: string) =>
-      normal(text)
-        .split(" ")
-        .filter((word) => word.length >= 3);
-    const mine = words(item.category);
-    const shared = own.find((category) =>
-      words(category.label).some((word) =>
-        mine.some((other) => {
-          const size = Math.min(5, word.length, other.length);
-          return word.slice(0, size) === other.slice(0, size) && size >= 3;
-        })
-      )
-    );
-    if (shared) return shared.id;
+  // Все поступления у Лоли — одна статья «Доходы». Какие именно — видно по
+  // описанию: «зарплата» → «Зарплата», а не «Прочие доходы».
+  const generic = item.type === "INCOME" && /^доход/.test(normal(item.category));
+  if (generic && item.description) {
+    const byWhat = byName(item.description, own);
+    if (byWhat) return byWhat;
   }
+  const named = item.category ? byName(item.category, own) : null;
+  if (named) return named;
   const text = item.description || item.category;
   if (!text) return null;
   const suggested = suggestCategoryId(text, [...history], { type: item.type });
   return suggested && own.some((category) => category.id === suggested) ? suggested : null;
+}
+
+/** Статья по названию: целиком, по началу слова, по общему слову. */
+function byName(name: string, own: readonly CategoryRef[]): string | null {
+  const wanted = normal(name);
+  if (!wanted) return null;
+  const exact = own.find((category) => normal(category.label) === wanted);
+  if (exact) return exact.id;
+  const stem = wanted.slice(0, Math.max(4, Math.min(6, wanted.length)));
+  const close = own.find((category) => {
+    const label = normal(category.label);
+    return label.startsWith(stem) || wanted.startsWith(label.slice(0, 6));
+  });
+  if (close) return close.id;
+  // По общему слову: у Лоли «Кафе и рестораны», «Дом и ЖКХ», здесь —
+  // «Рестораны», «ЖКХ». Слово узнаётся по началу: «ресторан» = «рестораны».
+  const words = (text: string) =>
+    normal(text)
+      .split(" ")
+      .filter((word) => word.length >= 3);
+  const mine = words(name);
+  const shared = own.find((category) =>
+    words(category.label).some((word) =>
+      mine.some((other) => {
+        const size = Math.min(5, word.length, other.length);
+        return word.slice(0, size) === other.slice(0, size) && size >= 3;
+      })
+    )
+  );
+  return shared ? shared.id : null;
 }
 
 /** Счёт для траты Лоли: в той же валюте; последний, которым платили, — первым. */

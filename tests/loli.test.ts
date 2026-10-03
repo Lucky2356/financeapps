@@ -106,6 +106,13 @@ describe("очередь от Лоли", () => {
     expect(loliAsk("Питомцы")).toBeNull();
     // Доходная статья тратой не станет.
     expect(ask("Зарплата")).toBeNull();
+    // У Лоли все поступления — «Доходы»; какие именно — по описанию.
+    const incomes = [...categories, { id: "other-income", label: "Прочие доходы", kind: "INCOME" }];
+    const income = (description: string) =>
+      loliCategory({ category: "Доходы", description, type: "INCOME" }, incomes, []);
+    expect(income("зарплата пришла")).toBe("salary");
+    expect(income("от Саши")).toBe("other-income");
+    expect(income("")).toBe("other-income");
   });
 
   it("счёт — в той же валюте, последний — первым", () => {
