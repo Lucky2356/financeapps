@@ -1639,8 +1639,17 @@ export class LocalApiClient implements ApiClient {
       .filter(Boolean)
       .slice(0, 12);
     // Идёт поездка — новая трата получает её метку сама (lib/trips). Плановые
-    // платежи (аренда, подписки) — не поездка, и «не отмечать» тоже уважается.
-    if (method === "POST" && !recurringId && input.noTrip !== "1" && type === "EXPENSE") {
+    // платежи (аренда, подписки), платёж по долгу и перевод между своими
+    // счетами — не поездка: ипотека, внесённая из отпуска, в его бюджет не
+    // входит. «Не отмечать» тоже уважается.
+    if (
+      method === "POST" &&
+      !recurringId &&
+      !input.liabilityId &&
+      !input.transferId &&
+      input.noTrip !== "1" &&
+      type === "EXPENSE"
+    ) {
       const tripTag = tripTagFor(state, storedTransactionDate(input.date).slice(0, 10));
       if (tripTag && !tags.includes(tripTag)) tags.push(tripTag);
     }

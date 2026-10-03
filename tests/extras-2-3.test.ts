@@ -291,6 +291,32 @@ describe("через приложение", () => {
       noTrip: "1"
     });
     expect(skipped.tags).toBeUndefined();
+    // Платёж по долгу и перевод между своими счетами — не траты поездки.
+    const debt = await client.post<{ tags?: string[] }>("/transactions", {
+      amount: "25000",
+      type: "EXPENSE",
+      accountId: card.id,
+      categoryId: food.id,
+      date: todayIso(),
+      liabilityId: "debt-1"
+    });
+    expect(debt.tags).toBeUndefined();
+    const cash = await client.post<{ id: string }>("/accounts", {
+      name: "Наличные",
+      type: "CASH",
+      balance: "0"
+    });
+    await client.post("/transactions", {
+      action: "transfer",
+      fromAccountId: card.id,
+      toAccountId: cash.id,
+      amount: "5000",
+      date: todayIso()
+    });
+    const ledger = await client.get<{
+      transactions: Array<{ transferId?: string; tags?: string[] }>;
+    }>("/transactions?period=all");
+    expect(ledger.transactions.filter((row) => row.transferId && row.tags?.length)).toEqual([]);
     const trips = await client.get<TripsPageData>("/trips");
     expect(trips.active?.spent).toBe(1500);
   });
