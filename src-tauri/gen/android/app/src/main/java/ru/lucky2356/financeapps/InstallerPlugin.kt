@@ -191,6 +191,31 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve()
   }
 
+  // ——— траты из уведомлений банка ————————————————————————————————————————
+  //
+  // Слушает уведомления BankListener (BankNotifications.kt); здесь — узнать,
+  // дан ли доступ, открыть экран доступа и забрать накопленное.
+
+  @Command
+  fun bankStatus(invoke: Invoke) {
+    val answer = JSObject()
+    answer.put("granted", BankNotifications.granted(activity))
+    invoke.resolve(answer)
+  }
+
+  @Command
+  fun bankOpenSettings(invoke: Invoke) {
+    BankNotifications.openSettings(activity)
+    invoke.resolve()
+  }
+
+  @Command
+  fun bankTake(invoke: Invoke) {
+    val answer = JSObject()
+    answer.put("items", BankNotifications.take(activity))
+    invoke.resolve(answer)
+  }
+
   // ——— вход по отпечатку —————————————————————————————————————————————————
   //
   // Ключ данных приложения запечатывается ключом из хранилища Android, который

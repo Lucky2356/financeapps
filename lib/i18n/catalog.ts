@@ -52,6 +52,22 @@ const ru: Messages = {
   "nav.trips": "Поездки",
   "nav.whatIf": "Что если",
   "nav.family": "Семья",
+  "bank.title": "Из уведомлений банка",
+  "bank.income": "Поступление",
+  "bank.expense": "Списание",
+  "bank.record": "Записать",
+  "bank.edit": "Изменить перед записью",
+  "bank.dismiss": "Не записывать",
+  "bank.more": "И ещё {count} — запишите эти, покажутся следующие.",
+  "bank.recorded": "Записано: {amount} · {category}",
+  "bank.set.title": "Траты из уведомлений банка",
+  "bank.set.desc":
+    "Банк прислал «Покупка 450 ₽» — трата ждёт на главной, записать одним нажатием. Уведомления никуда не отправляются.",
+  "bank.set.needAccess":
+    "Нужен доступ к уведомлениям: откройте настройки телефона и включите его для «Финансов».",
+  "bank.set.help":
+    "Приложение читает только уведомления с суммой в рублях и словами «покупка», «оплата», «зачисление». Коды подтверждения и переписка пропускаются. Ничего не записывается само — только по нажатию «Записать».",
+  "bank.set.open": "Открыть настройки телефона",
   "page.family.title": "Семья",
   "page.family.desc": "Кто сколько потратил за месяц, общие траты поровну и кто кому должен.",
   "family.who": "Кто платил",
@@ -2735,6 +2751,22 @@ const en: Messages = {
   "nav.trips": "Trips",
   "nav.whatIf": "What if",
   "nav.family": "Family",
+  "bank.title": "From bank notifications",
+  "bank.income": "Incoming",
+  "bank.expense": "Charge",
+  "bank.record": "Record",
+  "bank.edit": "Edit before recording",
+  "bank.dismiss": "Don't record",
+  "bank.more": "{count} more — record these and the next ones appear.",
+  "bank.recorded": "Recorded: {amount} · {category}",
+  "bank.set.title": "Expenses from bank notifications",
+  "bank.set.desc":
+    "Your bank says “Purchase 450 ₽” — the expense waits on the home screen, one tap to record. Notifications never leave the phone.",
+  "bank.set.needAccess":
+    "Notification access is needed: open phone settings and turn it on for Finance.",
+  "bank.set.help":
+    "The app only reads notifications with a ruble amount and words like “purchase”, “payment”, “credited”. Confirmation codes and messages are skipped. Nothing is recorded on its own — only when you tap “Record”.",
+  "bank.set.open": "Open phone settings",
   "page.family.title": "Family",
   "page.family.desc":
     "Who spent how much this month, shared spending split evenly, and who owes whom.",

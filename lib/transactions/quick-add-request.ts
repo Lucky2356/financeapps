@@ -7,7 +7,18 @@
 // или сама кнопка быстрого добавления. Поэтому запрос не только рассылается
 // событием, но и ждёт здесь: кнопка забирает его, когда появится.
 
-export type QuickAddRequest = { type?: "EXPENSE" | "INCOME"; scanReceipt?: boolean };
+export type QuickAddRequest = {
+  type?: "EXPENSE" | "INCOME";
+  scanReceipt?: boolean;
+  /** Подставить готовое — например, трату из уведомления банка. */
+  prefill?: {
+    amount: number;
+    description: string;
+    date: string;
+    categoryId?: string | null;
+    accountId?: string | null;
+  };
+};
 
 export const QUICK_ADD_OPEN = "quick-add-open";
 
