@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import type { TransactionsPageData } from "@/lib/data";
+import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { annuity, simulate, type WhatIfBase } from "@/lib/whatif/simulate";
 
 const base: WhatIfBase = {
@@ -33,6 +36,15 @@ describe("«Что если»", () => {
     expect(result.freeAfter).toBe(50_000);
     expect(result.pathAfter[12]).toBe(result.pathBefore[12] - 60_000);
     expect(result.cushionAfter).toBe(result.cushionBefore);
+    expect(result.verdict).toBe("ok");
+  });
+
+  it("свободных денег и сейчас меньше взносов на цели — покупка со счетов их не отодвигает", () => {
+    const result = simulate(
+      { ...base, goals: [{ ...base.goals[0], monthly: 80_000 }] },
+      { amount: 10_000, mode: "cash", from: "liquid", months: 12, ratePercent: 0, downPayment: 0 }
+    );
+    expect(result.goals[0].after).toBe(result.goals[0].before);
     expect(result.verdict).toBe("ok");
   });
 
@@ -94,5 +106,22 @@ describe("«Что если»", () => {
     });
     expect(result.verdict).toBe("danger");
     expect(result.reasons[0]).toEqual({ key: "wi.reason.noCash", vars: { short: 20_000 } });
+  });
+
+  it("платёж по долгу не считается дважды: он уже в «платежах по долгам», не в расходах", async () => {
+    const api = new LocalApiClient(new MemoryStorageAdapter());
+    await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "50000" });
+    const page = await api.get<TransactionsPageData>("/transactions");
+    const accountId = page.accounts[0].id;
+    const categoryId = page.categories.find((item) => item.kind === "EXPENSE")!.id;
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+    const date = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}-15`;
+    const expense = (amount: string, extra: Record<string, string> = {}) =>
+      api.post("/transactions", { type: "EXPENSE", amount, accountId, categoryId, date, ...extra });
+    await expense("30000");
+    await expense("12000", { liabilityId: "debt-1" });
+    const whatIf = await api.get<WhatIfBase>("/what-if");
+    expect(whatIf.avgExpense).toBe(30_000);
   });
 });

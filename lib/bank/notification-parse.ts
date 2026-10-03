@@ -41,6 +41,11 @@ const EXPENSE =
   /покупк|оплат|списан|спис\.|снятие|выдача налич|перевод(?! от)|payment|purchase|debit/i;
 const INCOME =
   /зачислен|пополнен|поступлен|перевод от|вам перевели|возврат|кэшбэк|cashback|refund/i;
+// Входящий перевод, где «от кого» стоит после суммы — так пишет Сбер:
+// «СЧЁТ1234 10:00 Перевод 500р от Ивана И. Баланс: 12 300р».
+const TRANSFER_IN = /перевод[^.;]*?\sот\s/i;
+// Слова, при которых это точно трата, даже если где-то рядом «от».
+const SPENT = /покупк|оплат|списан|спис\.|снятие|выдача налич|payment|purchase|debit/i;
 // Не трата и не доход: отказ, код, недостаточно средств, «ожидается».
 const SKIP =
   /отказ|отклон|недостаточно|не прошл|код|пароль|code|password|declined|ожидает|запланир|предодобр|кредитн(?:ый|ого) лимит/i;
@@ -50,7 +55,7 @@ const BALANCE = new RegExp(
   "gi"
 );
 const CARD =
-  /(?:карт[аыеу]?|счёт|счет|сч\.?|card|mir|visa|ecmc|mc|maestro)\s*[*•·.]*\s*(\d{4})|[*•·]{1,2}\s?(\d{4})|\b(?:ECMC|MIR|VISA|MC|СЧЁТ|СЧЕТ)(\d{4})\b/i;
+  /(?:карт[аыеу]?|счёт|счет|сч\.?|card|mir|visa|ecmc|mc|maestro)\s*[*•·.\-]*\s*(\d{4})|[*•·]{1,2}\s?(\d{4})|\b(?:ECMC|MIR|VISA|MC|СЧЁТ|СЧЕТ)(\d{4})\b/i;
 
 function toNumber(whole: string, fraction?: string): number {
   const value = Number(`${whole.replace(/[   ]/g, "")}.${fraction ?? "0"}`);
@@ -79,7 +84,7 @@ function merchantOf(text: string, amountMatch: string): string {
     .replace(new RegExp(CARD.source, "gi"), " ")
     .replace(/\b\d{1,2}[.:]\d{2}(?:[.:]\d{2,4})?\b/g, " ")
     .replace(
-      /покупка|оплата|списание|спис\.|снятие|выдача наличных|зачисление|пополнение|поступление|перевод от|возврат|успешно|по карте|картой|в магазине|магазин|на сумму|сумма|payment|purchase|кэшбэк/gi,
+      /покупка|оплата|списание|спис\.|снятие|выдача наличных|зачислени[ея]|зачислен[аоы]?|пополнение|поступление|перевод от|возврат|успешно|по карте|на карту|картой|в магазине|магазин|на сумму|сумма|payment|purchase|кэшбэк/gi,
       " "
     );
   // Место — ближайший осмысленный кусок после суммы, иначе до неё.
@@ -87,7 +92,13 @@ function merchantOf(text: string, amountMatch: string): string {
   const clean = (part: string) =>
     part
       .split(/[.;\n]|,\s/)
-      .map((piece) => piece.replace(/\s+/g, " ").replace(/^[\s,:\-–—«"]+|[\s,:\-–—»"]+$/g, ""))
+      .map((piece) =>
+        piece
+          .replace(/\s+/g, " ")
+          .replace(/^[\s,:\-–—«"]+|[\s,:\-–—»"]+$/g, "")
+          // «от Ивана И.» — место (вернее, человек) без предлога.
+          .replace(/^от\s+/i, "")
+      )
       .filter(
         (piece) => /[a-zа-яё]{2,}/i.test(piece) && !/^(?:в|на|от|с|по|за|rub|rur|руб)$/i.test(piece)
       );
@@ -98,8 +109,10 @@ function merchantOf(text: string, amountMatch: string): string {
 export function parseBankNotification(item: BankNotification): BankSuggestion | null {
   const source = [item.title, item.text].filter(Boolean).join(". ").replace(/\s+/g, " ").trim();
   if (!source || SKIP.test(source)) return null;
-  const expense = EXPENSE.test(source);
-  const income = INCOME.test(source);
+  const transferIn = TRANSFER_IN.test(source);
+  // «Перевод 500р от Ивана» — деньги пришли, хотя слово «перевод» есть и у трат.
+  const expense = EXPENSE.test(source) && !(transferIn && !SPENT.test(source));
+  const income = INCOME.test(source) || transferIn;
   if (!expense && !income) return null;
   // «Возврат покупки» — это деньги назад, а не трата.
   const type: BankSuggestion["type"] =

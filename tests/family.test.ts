@@ -82,6 +82,27 @@ describe("семья — расчёт", () => {
     ]);
   });
 
+  it("новый участник не должен за то, что купили до него", () => {
+    const late = { ...petya, since: "2026-10-01" };
+    const rows = [spend(6000, "a", true, "2026-09-20"), spend(9000, "a", true, "2026-10-05")];
+    const picture = familyPicture([sasha, masha, late], rows, [], "2026-10");
+    // Сентябрь — на двоих (по 3000), октябрь — на троих (по 3000).
+    expect(picture.balances).toEqual([
+      { id: "a", balance: 9000 },
+      { id: "b", balance: -6000 },
+      { id: "c", balance: -3000 }
+    ]);
+    expect(picture.perMember.map((row) => row.sharedShare)).toEqual([3000, 3000, 3000]);
+    // Кто платил — делит свою трату, даже если «вступил» позже её дня.
+    const payer = familyPicture(
+      [sasha, late],
+      [spend(1000, "c", true, "2026-09-20")],
+      [],
+      "2026-09"
+    );
+    expect(payer.debts).toEqual([{ from: "a", to: "c", amount: 500 }]);
+  });
+
   it("один участник — долгов нет; копейки не плодят переводов", () => {
     expect(familyPicture([sasha], [spend(500, "a", true)], [], "2026-10").debts).toEqual([]);
     expect(
@@ -160,6 +181,37 @@ describe("семья — в книге", () => {
     await api.put("/transactions", { ...base, id: tx.id, memberId: "" });
     family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-10");
     expect(family.picture.unassigned).toBe(300);
+  });
+
+  it("семья уже делит траты — новый участник в ней с сегодня; дату можно поправить", async () => {
+    const { api, accountId, categoryId, a, b } = await setup();
+    // Пока общих трат нет — участники «были всегда».
+    expect(a.since).toBeUndefined();
+    expect(b.since).toBeUndefined();
+    await api.post("/transactions", {
+      type: "EXPENSE",
+      amount: "6000",
+      accountId,
+      categoryId,
+      date: "2026-09-20",
+      memberId: a.id,
+      shared: "true"
+    });
+    const c = await api.post<Member>("/family", { action: "addMember", name: "Петя" });
+    expect(c.since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    let family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-09");
+    expect(family.picture.debts).toEqual([{ from: b.id, to: a.id, amount: 3000 }]);
+
+    // «В семье с самого начала» — и сентябрьская трата делится на троих.
+    await api.post("/family", { action: "renameMember", id: c.id, name: "Петя", since: "" });
+    family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-09");
+    expect(family.picture.debts).toEqual([
+      { from: b.id, to: a.id, amount: 2000 },
+      { from: c.id, to: a.id, amount: 2000 }
+    ]);
+    await expect(
+      api.post("/family", { action: "renameMember", id: c.id, name: "Петя", since: "вчера" })
+    ).rejects.toThrow(/ГГГГ/);
   });
 
   it("удалённый участник — в корзине, и возвращается", async () => {

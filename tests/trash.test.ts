@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import type { SheetPageData } from "@/lib/api/local/sheet";
 import type { AccountsPageData, TransactionsPageData } from "@/lib/data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { addToTrash, pruneTrash, vanishedRows, type TrashEntry } from "@/lib/trash/trash";
@@ -143,6 +144,79 @@ describe("корзина в книге", () => {
     const trash = await client.get<TrashList>("/trash");
     expect(trash.entries).toHaveLength(1);
     expect(trash.entries[0]).toMatchObject({ title: "Такси", origin: "elsewhere" });
+  });
+
+  it("перевод удаляется целиком и возвращается целиком — деньги не исчезают", async () => {
+    const client = new LocalApiClient(new MemoryStorageAdapter());
+    await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "1000" });
+    await client.post("/accounts", { name: "Наличные", type: "CASH", balance: "0" });
+    const accounts = async () =>
+      (await client.get<AccountsPageData>("/accounts")).accounts.map((item) => item.balance);
+    const [from, to] = (await client.get<AccountsPageData>("/accounts")).accounts;
+    await client.post("/transactions", {
+      action: "transfer",
+      fromAccountId: from.id,
+      toAccountId: to.id,
+      amount: "300",
+      date: "2026-10-01"
+    });
+    expect(await accounts()).toEqual([700, 300]);
+    const legs = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+
+    // Правка одной строки (форма не присылает номер перевода) не отрывает её
+    // от перевода.
+    await client.put("/transactions", {
+      id: legs[0].id,
+      type: legs[0].type,
+      amount: String(legs[0].amount),
+      accountId: legs[0].account.id,
+      categoryId: legs[0].category.id,
+      date: "2026-10-02",
+      description: legs[0].description
+    });
+    const edited = (await client.get<TransactionsPageData>("/transactions?period=all"))
+      .transactions;
+    expect(edited.every((item) => item.transferId === legs[1].transferId)).toBe(true);
+
+    // Удалили одну строку перевода — ушёл весь перевод, оба счёта как были.
+    await client.delete(`/transactions?id=${legs[0].id}`);
+    expect(await accounts()).toEqual([1000, 0]);
+    expect(
+      (await client.get<TransactionsPageData>("/transactions?period=all")).transactions
+    ).toEqual([]);
+
+    // Вернули одну запись корзины — вернулся весь перевод.
+    const trash = await client.get<TrashList>("/trash");
+    expect(trash.entries).toHaveLength(2);
+    await client.post("/trash", { action: "restore", ids: [trash.entries[0].id] });
+    expect(await accounts()).toEqual([700, 300]);
+    expect((await client.get<TrashList>("/trash")).entries).toEqual([]);
+  });
+
+  it("удалённый столбец таблицы возвращается со своими числами", async () => {
+    const client = new LocalApiClient(new MemoryStorageAdapter());
+    const column = await client.post<{ id: string }>("/sheet", {
+      action: "addColumn",
+      name: "Продукты",
+      kind: "expense"
+    });
+    await client.post("/sheet", {
+      action: "setCells",
+      cells: [
+        { month: "2026-08", columnId: column.id, input: "20000" },
+        { month: "2026-09", columnId: column.id, input: "18000+500" }
+      ]
+    });
+    await client.post("/sheet", { action: "removeColumn", id: column.id });
+    expect((await client.get<SheetPageData>("/sheet")).cells).toEqual([]);
+
+    const trash = await client.get<TrashList>("/trash");
+    expect(trash.entries).toHaveLength(1);
+    expect(trash.entries[0]).toMatchObject({ collection: "sheetColumns", title: "Продукты" });
+    await client.post("/trash", { action: "restore", ids: [trash.entries[0].id] });
+    const sheet = await client.get<SheetPageData>("/sheet");
+    expect(sheet.columns.map((item) => item.name)).toContain("Продукты");
+    expect(sheet.cells.map((cell) => cell.input).sort()).toEqual(["18000+500", "20000"]);
   });
 
   it("«Очистить корзину» убирает всё; удалить одну — только её", async () => {

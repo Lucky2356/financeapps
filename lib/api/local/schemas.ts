@@ -452,7 +452,12 @@ export const memberSchema = z.object({
   updatedAt,
   id: z.string().min(1),
   name: z.string().trim().min(1).max(40),
-  color: z.string().trim().min(1).max(32).default("#64748b")
+  color: z.string().trim().min(1).max(32).default("#64748b"),
+  /**
+   * С какого дня в семье (YYYY-MM-DD). Общие траты до этого дня его не
+   * касаются. Нет — был всегда (участники, заведённые до v18).
+   */
+  since: z.string().optional()
 });
 /** «Рассчитались»: один участник отдал другому — долг по общим тратам гасится. */
 export const familySettlementSchema = z.object({
@@ -520,7 +525,8 @@ export const localStateSchema = z.object({
     z.literal(14),
     z.literal(15),
     z.literal(16),
-    z.literal(17)
+    z.literal(17),
+    z.literal(18)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   /**

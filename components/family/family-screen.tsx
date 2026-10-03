@@ -67,7 +67,9 @@ export function FamilyScreen() {
   const { data, reload } = useApiPageData<FamilyPage>(EMPTY_FAMILY, `/family?month=${month}`);
   const [me, setMe] = useState<string>(() => readMine(FAMILY_ME_KEY) ?? "");
   const [newName, setNewName] = useState("");
-  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string; since: string } | null>(
+    null
+  );
 
   const members = data.members;
   const picture = data.picture;
@@ -93,8 +95,9 @@ export function FamilyScreen() {
     const member = await act({ action: "addMember", name: newName });
     if (!member) return;
     setNewName("");
-    // Первый участник на этом устройстве — скорее всего, сам человек.
-    if (!me) chooseMe(member.id);
+    // Первый участник на этом устройстве — скорее всего, сам человек. «Своего»
+    // могли и удалить (на другом устройстве) — тогда тоже выбрать заново.
+    if (!members.some((item) => item.id === me)) chooseMe(member.id);
   }
 
   function chooseMe(id: string) {
@@ -181,7 +184,18 @@ export function FamilyScreen() {
             {members.map((member) => (
               <li key={member.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
                 <Dot color={member.color} />
-                <span className="min-w-0 flex-1 truncate font-medium">{member.name}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {member.name}
+                  {member.since ? (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {t("family.sinceShort", {
+                        date: new Date(`${member.since}T12:00:00`).toLocaleDateString(
+                          locale === "en" ? "en-GB" : "ru-RU"
+                        )
+                      })}
+                    </span>
+                  ) : null}
+                </span>
                 {member.id === me ? (
                   <span className="flex items-center gap-1 rounded-full bg-foreground/[0.08] px-2 py-0.5 text-xs">
                     <Smartphone className="size-3" />
@@ -203,7 +217,9 @@ export function FamilyScreen() {
                   size="icon"
                   variant="ghost"
                   aria-label={t("family.rename", { name: member.name })}
-                  onClick={() => setRenaming({ id: member.id, name: member.name })}
+                  onClick={() =>
+                    setRenaming({ id: member.id, name: member.name, since: member.since ?? "" })
+                  }
                 >
                   <Pencil className="size-4" />
                 </Button>
@@ -345,9 +361,12 @@ export function FamilyScreen() {
             onSubmit={(event) => {
               event.preventDefault();
               if (!renaming) return;
-              void act({ action: "renameMember", id: renaming.id, name: renaming.name }).then(
-                (done) => (done ? setRenaming(null) : null)
-              );
+              void act({
+                action: "renameMember",
+                id: renaming.id,
+                name: renaming.name,
+                since: renaming.since
+              }).then((done) => (done ? setRenaming(null) : null));
             }}
           >
             <div className="grid gap-1.5">
@@ -361,6 +380,19 @@ export function FamilyScreen() {
                   setRenaming((was) => (was ? { ...was, name: event.target.value } : was))
                 }
               />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="family-since">{t("family.since")}</Label>
+              <Input
+                id="family-since"
+                type="date"
+                value={renaming?.since ?? ""}
+                onChange={(event) =>
+                  setRenaming((was) => (was ? { ...was, since: event.target.value } : was))
+                }
+                data-testid="family-since"
+              />
+              <p className="text-xs text-muted-foreground">{t("family.sinceHint")}</p>
             </div>
             <DialogFooter>
               <Button type="submit" disabled={!renaming?.name.trim()}>

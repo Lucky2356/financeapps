@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
-import { useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
+import { useMemo, useRef, useState, type ReactNode, type ThHTMLAttributes } from "react";
 import { toast } from "sonner";
 
 import { AmountDrilldown } from "@/components/drilldown/amount-drilldown";
@@ -32,6 +32,7 @@ import {
 import { currencySign } from "@/lib/format";
 import { areAmountsHidden } from "@/lib/preferences";
 import { periodRange } from "@/lib/transactions/filter-chips";
+import { transferKeyOf } from "@/lib/transactions/transfers";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type {
@@ -39,7 +40,8 @@ import type {
   PlanFactPoolCells,
   PlanFactColumn,
   PlanFactMonth,
-  PlanFactPageData
+  PlanFactPageData,
+  TransactionRow
 } from "@/types/finance";
 
 /** Полоса таблицы: план, факт или разница между ними. */
@@ -93,6 +95,20 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
   // categories is a few hundred cells, and each carrying its own closed dialog
   // is a few hundred subscriptions for the one that gets opened.
   const [drill, setDrill] = useState<DrilldownTarget | null>(null);
+  // Расшифровка показывает ровно то, из чего сложена цифра: перевод между
+  // основными и сбережениями в доходы и расходы не входит (он в столбце «В
+  // сбережения»), а итог одной группы — только операции её счетов.
+  const drillPool = drill?.pool;
+  const keepInDrill = useMemo(() => {
+    const savings = new Set(data.savingsAccountIds ?? []);
+    const crossPool = new Set(data.crossPoolTransfers ?? []);
+    return (row: TransactionRow) => {
+      const transfer = transferKeyOf(row);
+      if (transfer && crossPool.has(transfer)) return false;
+      if (!drillPool) return true;
+      return savings.has(row.account.id) === (drillPool === "savings");
+    };
+  }, [data.savingsAccountIds, data.crossPoolTransfers, drillPool]);
 
   const income = data.columns.filter((column) => column.kind === "INCOME");
   const expense = data.columns.filter((column) => column.kind === "EXPENSE");
@@ -372,14 +388,23 @@ export function PlanFactView({ initialData }: { initialData: PlanFactPageData })
         subtitle={drill?.subtitle}
         query={drill?.query ?? ""}
         excludeTransfers={!includeTransfers}
+        keep={keepInDrill}
         currency={data.currency}
       />
     </div>
   );
 }
 
-/** What the grid hands the dialog when a fact figure is clicked. */
-type DrilldownTarget = { title: string; subtitle?: string; query: string };
+/**
+ * What the grid hands the dialog when a fact figure is clicked. `pool` — итог
+ * одной группы счетов: расшифровка показывает только её операции.
+ */
+type DrilldownTarget = {
+  title: string;
+  subtitle?: string;
+  query: string;
+  pool?: "main" | "savings";
+};
 
 /**
  * "Добавить месяц" and the months to choose from. A year forward and a year and
@@ -592,7 +617,7 @@ function TotalCells({
   /** Расход: меньше плана — хорошо. Доход — наоборот. */
   goodWhenNegative: boolean;
   className?: string;
-  onDrill?: () => void;
+  onDrill?: (pool: "main" | "savings") => void;
 }) {
   const halves = [
     { pool: "main", cell: pools.main },
@@ -608,7 +633,7 @@ function TotalCells({
           column={`${column}-${pool}`}
         >
           {band === "fact" && onDrill ? (
-            <DrillFigure value={cell.fact} money={money} onOpen={onDrill} />
+            <DrillFigure value={cell.fact} money={money} onOpen={() => onDrill(pool)} />
           ) : (
             <Figure
               value={cell[band]}
@@ -703,15 +728,18 @@ function BandRow({
   const range = monthRange(month.month);
 
   /** The operations behind a fact figure, as the list page would filter them. */
-  const drillTo = (title: string, categoryIds: string[]) =>
+  const drillTo = (title: string, categoryIds: string[], pool?: "main" | "savings") =>
     onDrill({
-      title,
+      title: pool
+        ? `${title} · ${t(pool === "main" ? "plan.opening.main" : "plan.opening.savings")}`
+        : title,
       subtitle: monthLabel,
       query: new URLSearchParams({
         from: range.from,
         to: range.to,
         categoryId: categoryIds.join(",")
-      }).toString()
+      }).toString(),
+      pool
     });
 
   const categoryCell = (column: PlanFactColumn, index: number) => {
@@ -797,10 +825,11 @@ function BandRow({
         pools={month.incomePools}
         money={money}
         goodWhenNegative={true}
-        onDrill={() =>
+        onDrill={(pool) =>
           drillTo(
             t("plan.income"),
-            income.map((column) => column.categoryId)
+            income.map((column) => column.categoryId),
+            pool
           )
         }
       />
@@ -812,10 +841,11 @@ function BandRow({
         pools={month.expensePools}
         money={money}
         goodWhenNegative={false}
-        onDrill={() =>
+        onDrill={(pool) =>
           drillTo(
             t("plan.expense"),
-            expense.map((column) => column.categoryId)
+            expense.map((column) => column.categoryId),
+            pool
           )
         }
       />

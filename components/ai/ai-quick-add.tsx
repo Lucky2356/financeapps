@@ -10,6 +10,7 @@ import { formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { ImportPageData, SettingsPageData } from "@/lib/data";
 import type { AiParseContext, AiTransactionDraft } from "@/lib/ai/parse-transaction";
+import { deviceMember } from "@/components/family/family-fields";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import {
@@ -159,7 +160,8 @@ export function AiQuickAdd() {
         accountId: draft.accountId,
         categoryId: draft.categoryId,
         date: draft.date,
-        description: draft.description ?? ""
+        description: draft.description ?? "",
+        ...deviceMember(draft.type)
       });
       toast.success(t("tx.toast.added"));
       setDraft(null);

@@ -116,15 +116,20 @@ export function simulate(base: WhatIfBase, scenario: WhatIfScenario): WhatIfResu
     pathAfter.push(round(start - upfront + freeBefore * month - paid));
   }
 
-  // На цели идёт то, что остаётся; не хватает — взносы урезаются поровну.
+  // На цели идёт то, что остаётся; не хватает — взносы урезаются поровну. И до
+  // покупки тоже: если свободных денег и сейчас меньше взносов, «до» считается с
+  // тем же урезанием — иначе покупка, которая ничего в месяц не меняет, выглядела
+  // бы так, будто отодвигает цели.
   const planned = base.goals.reduce((sum, goal) => sum + Math.max(0, goal.monthly), 0);
-  const scale =
-    planned > 0 && freeAfter < planned ? Math.max(0, freeAfter) / planned : planned > 0 ? 1 : 0;
+  const scaleOf = (free: number) =>
+    planned > 0 && free < planned ? Math.max(0, free) / planned : planned > 0 ? 1 : 0;
+  const scaleBefore = scaleOf(freeBefore);
+  const scaleAfter = scaleOf(freeAfter);
   const goals = base.goals.map((goal) => ({
     id: goal.id,
     title: goal.title,
-    before: monthsToGoal(goal.target, goal.saved, goal.monthly),
-    after: monthsToGoal(goal.target, goal.saved, goal.monthly * scale)
+    before: monthsToGoal(goal.target, goal.saved, goal.monthly * scaleBefore),
+    after: monthsToGoal(goal.target, goal.saved, goal.monthly * scaleAfter)
   }));
 
   const reasons: WhatIfResult["reasons"] = [];

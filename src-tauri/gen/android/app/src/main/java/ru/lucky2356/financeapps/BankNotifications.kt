@@ -35,7 +35,10 @@ class BankListener : NotificationListenerService() {
   override fun onNotificationPosted(sbn: StatusBarNotification) {
     try {
       if (sbn.packageName == packageName) return
-      val extras = sbn.notification.extras ?: return
+      val notification = sbn.notification ?: return
+      // Сводка группы повторяет текст своих уведомлений — это не новая трата.
+      if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
+      val extras = notification.extras ?: return
       val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
       val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
         ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString() ?: ""
@@ -46,7 +49,10 @@ class BankListener : NotificationListenerService() {
       } catch (_: Exception) {
         sbn.packageName
       }
-      BankNotifications.store(this, sbn.packageName, app, title, text, sbn.postTime)
+      // Время, которое показывает сам банк: при обновлении уведомления Android
+      // меняет postTime, а оно остаётся прежним — и повтор узнаётся.
+      val at = if (notification.`when` > 0) notification.`when` else sbn.postTime
+      BankNotifications.store(this, sbn.packageName, app, title, text, at)
     } catch (_: Exception) {
       // Чужое уведомление странного вида не должно ронять службу.
     }
@@ -73,11 +79,13 @@ object BankNotifications {
   fun store(context: Context, pkg: String, app: String, title: String, text: String, at: Long) {
     val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val list = try { JSONArray(prefs.getString(KEY, "[]")) } catch (_: Exception) { JSONArray() }
-    // Одно и то же уведомление Android присылает повторно при обновлении.
+    // Одно и то же уведомление Android присылает повторно при обновлении — с тем
+    // же временем. Две одинаковые покупки подряд («Кофе 250 ₽» дважды) — разное
+    // время, и вторая не теряется.
     for (index in 0 until list.length()) {
       val item = list.optJSONObject(index) ?: continue
-      if (item.optString("title") == title && item.optString("text") == text &&
-        item.optString("package") == pkg) return
+      if (item.optString("title") == title.take(300) && item.optString("text") == text.take(1000) &&
+        item.optString("package") == pkg && item.optLong("at") == at) return
     }
     val item = JSONObject()
       .put("package", pkg)

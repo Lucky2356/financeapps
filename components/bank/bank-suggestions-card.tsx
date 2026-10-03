@@ -10,16 +10,19 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { FAMILY_ME_KEY } from "@/components/family/family-fields";
+import { deviceMember } from "@/components/family/family-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api/client";
 import { onDataChanged } from "@/lib/api/data-events";
 import type { BankSuggestion } from "@/lib/bank/notification-parse";
 import {
+  addHandled,
   alreadyRecorded,
   BANK_EVENT,
+  BANK_HANDLED_KEY,
   BANK_SUGGESTIONS_KEY,
+  parseHandled,
   parseStored,
   resolveTarget
 } from "@/lib/bank/suggestions";
@@ -69,6 +72,10 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
   function forget(id: string) {
     const next = parseStored(readMine(BANK_SUGGESTIONS_KEY)).filter((item) => item.id !== id);
     writeMine(BANK_SUGGESTIONS_KEY, JSON.stringify(next));
+    writeMine(
+      BANK_HANDLED_KEY,
+      JSON.stringify(addHandled(parseHandled(readMine(BANK_HANDLED_KEY)), id))
+    );
     setItems(next);
   }
 
@@ -135,7 +142,7 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
         amount: String(item.amount),
         date: item.date,
         description: item.merchant,
-        memberId: readMine(FAMILY_ME_KEY) ?? undefined
+        ...deviceMember(item.type)
       });
       writeMine(LAST_ACCOUNT_KEY, accountId);
       forget(item.id);

@@ -10,6 +10,7 @@ import { Pin, PinOff, Star, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { deviceMember } from "@/components/family/family-fields";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -110,7 +111,8 @@ export function FavoriteChips({
         categoryId: item.categoryId,
         amount: String(item.amount),
         date: formatInputDate(new Date()),
-        description: item.description
+        description: item.description,
+        ...deviceMember(item.type)
       });
       toast.success(
         t("fav.recorded", { name: item.description, amount: formatCurrency(item.amount) }),

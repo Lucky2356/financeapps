@@ -24,6 +24,16 @@ export function isTransfer(row: Pick<TransactionRow, "description"> & { transfer
   return typeof row.description === "string" && LEGACY_MARKER.test(row.description);
 }
 
+/** Which transfer a row is half of — by `transferId`, or the legacy marker. */
+export function transferKeyOf(
+  row: Pick<TransactionRow, "description"> & { transferId?: string }
+): string | null {
+  if (row.transferId) return row.transferId;
+  const marker =
+    typeof row.description === "string" ? /\[transfer:([^\]]+)\]/.exec(row.description) : null;
+  return marker ? marker[1] : null;
+}
+
 /** The same rows with both halves of every transfer removed. */
 export function withoutTransfers<T extends Pick<TransactionRow, "description">>(rows: T[]): T[] {
   return rows.filter((row) => !isTransfer(row));

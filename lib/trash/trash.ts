@@ -83,7 +83,6 @@ export function vanishedRows(
   const sheets = new Set(
     gone.filter((item) => item.collection === "sheets").map((item) => item.key)
   );
-  if (sheets.size === 0) return gone;
   const ofSheet = (row: unknown) =>
     typeof (row as { sheetId?: unknown })?.sheetId === "string" &&
     sheets.has((row as { sheetId: string }).sheetId);
@@ -92,6 +91,14 @@ export function vanishedRows(
   return gone
     .filter((item) => !(item.collection !== "sheets" && ofSheet(item.row)))
     .map((item) => {
+      // Столбец таблицы уходит вместе со своими числами — и возвращаться должен
+      // с ними же: пустой «Продукты» вместо годовых трат — не возврат.
+      if (item.collection === "sheetColumns") {
+        const cells = rowsOf("sheetCells").filter((cell) => cell.columnId === item.key);
+        return cells.length > 0
+          ? { ...item, row: { ...item.row, [SHEET_ARCHIVE]: { sheetCells: cells } } }
+          : item;
+      }
       if (item.collection !== "sheets") return item;
       const mine = (row: unknown) => (row as { sheetId?: unknown })?.sheetId === item.key;
       const columns = rowsOf("sheetColumns").filter(mine);
@@ -112,7 +119,7 @@ export function vanishedRows(
     });
 }
 
-/** Где в записи удалённого листа лежит его содержимое. */
+/** Где в записи удалённого листа (или столбца) лежит его содержимое. */
 export const SHEET_ARCHIVE = "__sheetContent";
 
 /**

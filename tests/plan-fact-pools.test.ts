@@ -428,3 +428,46 @@ describe("итоги доходов и расходов по двум групп
     expect(month.resultBy.savings.plan).toBeCloseTo(2500, 2);
   });
 });
+
+// Сняли со вклада на отпуск и потратили на отпуск. Это одна трата, а не доход
+// плюс две траты — даже когда переводы велено считать: перемещение между
+// основными и сбережениями видно в столбце «В сбережения» (с минусом).
+describe("перевод между основными и сбережениями", () => {
+  it("не доход и не расход ни при какой галке «переводы»", async () => {
+    const client = api();
+    const { card, deposit } = await twoPools(client);
+    const trip = await category(client, "Отпуск-тест", "EXPENSE");
+    const salary = await category(client, "Оклад-тест", "INCOME");
+    await record(client, {
+      accountId: deposit.id,
+      categoryId: salary.id,
+      type: "INCOME",
+      amount: 100000
+    });
+    await client.post("/transactions", {
+      action: "transfer",
+      fromAccountId: deposit.id,
+      toAccountId: card.id,
+      amount: "50000",
+      date: today()
+    });
+    await record(client, {
+      accountId: card.id,
+      categoryId: trip.id,
+      type: "EXPENSE",
+      amount: 50000
+    });
+
+    for (const query of ["/plan", "/plan?transfers=1"]) {
+      const page = await client.get<PlanFactPageData>(query);
+      const month = page.months.find((entry) => entry.month === monthKey())!;
+      expectPools(month, { main: 0, savings: 100000 }, { main: 50000, savings: 0 });
+      expect(month.expense.fact).toBe(50000);
+      expect(month.toSavings.fact).toBe(-50000);
+      expect(month.resultBy.main.fact).toBe(0);
+      expect(month.resultBy.savings.fact).toBe(50000);
+      expect(page.crossPoolTransfers).toHaveLength(1);
+      expect(page.savingsAccountIds).toEqual([deposit.id]);
+    }
+  });
+});

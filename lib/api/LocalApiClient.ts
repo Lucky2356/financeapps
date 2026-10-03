@@ -100,7 +100,12 @@ import {
   toBaseRows
 } from "@/lib/transactions/base-amount";
 import { salvageLocalState } from "@/lib/api/local/schemas";
-import { countableRows, isTransfer, TRANSFER_CATEGORY_LABEL } from "@/lib/transactions/transfers";
+import {
+  countableRows,
+  isTransfer,
+  TRANSFER_CATEGORY_LABEL,
+  transferKeyOf
+} from "@/lib/transactions/transfers";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { InvestmentAnalysisService } from "@/services/InvestmentAnalysisService";
 import {
@@ -242,7 +247,7 @@ const currency = "RUB" as const;
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = BookState &
   ExtrasState & {
-    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
+    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
     /** Следы удалённых строк — см. lib/sync/row-stamps. */
     deletions?: Tombstone[];
     currency: CurrencyCode;
@@ -289,7 +294,7 @@ type LocalState = BookState &
     >;
     transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
     /** Семья: участники и отметки «Рассчитались» — см. lib/family/family.ts. */
-    members?: Array<Stamped<{ id: string; name: string; color: string }>>;
+    members?: Array<Stamped<{ id: string; name: string; color: string; since?: string }>>;
     familySettlements?: Array<
       Stamped<{ id: string; from: string; to: string; amount: number; date: string }>
     >;
@@ -926,10 +931,11 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/what-if") return this.whatIfBase(this.inBase(state)) as T;
     if (pathname === "/family") {
       const month = searchParams.get("month") || monthKeyOf(new Date());
-      const members = (state.members ?? []).map(({ id: memberId, name, color }) => ({
+      const members = (state.members ?? []).map(({ id: memberId, name, color, since }) => ({
         id: memberId,
         name,
-        color
+        color,
+        ...(since ? { since } : {})
       }));
       return {
         members,
@@ -1086,7 +1092,14 @@ export class LocalApiClient implements ApiClient {
         this.deleteTransaction(state, part.id);
       }
     } else if (pathname === "/transactions" && itemId) {
-      this.deleteTransaction(state, itemId);
+      // Перевод — две строки: списание и зачисление. Удалить одну значило бы
+      // заставить деньги исчезнуть — со счёта ушли, никуда не пришли (или
+      // наоборот). Удаляется весь перевод.
+      const transferId = state.transactions.find((item) => item.id === itemId)?.transferId;
+      const ids = transferId
+        ? state.transactions.filter((item) => item.transferId === transferId).map((item) => item.id)
+        : [itemId];
+      for (const one of ids) this.deleteTransaction(state, one);
     } else if (pathname === "/photos" && itemId) {
       const row = state.transactions.find((item) => item.id === itemId);
       if (row?.photo) await this.dropPhoto(itemId, row.photo);
@@ -1654,7 +1667,11 @@ export class LocalApiClient implements ApiClient {
       ...(input.splitGroupId || previous?.splitGroupId
         ? { splitGroupId: String(input.splitGroupId || previous?.splitGroupId) }
         : {}),
-      ...(input.transferId ? { transferId: String(input.transferId) } : {}),
+      // То же для перевода: форма правки его номер не присылает, и половина
+      // перевода после правки даты становилась обычным доходом или тратой.
+      ...(input.transferId || previous?.transferId
+        ? { transferId: String(input.transferId || previous?.transferId) }
+        : {}),
       // Семья: кто платил и общая ли трата. Форма, которая этих полей не знает
       // (быстрая смена категории, правило), их не теряет — берутся прежние.
       ...familyFields(state, input, previous),
@@ -3989,7 +4006,26 @@ export class LocalApiClient implements ApiClient {
     // Куда деньги каждой статьи ходят на самом деле, за всю историю. По этому
     // и делится её план: у плановой цифры счёта нет, а у статьи есть привычка.
     const categoryPools = new Map<string, PlanFactSplit>();
-    for (const transaction of countableRows(state.transactions, includeTransfers)) {
+    // Перевод между основными счетами и сбережениями — не доход и не расход ни
+    // для одной из групп, даже когда переводы велено считать: снять со вклада
+    // на отпуск и потратить на отпуск — одна трата, а не доход плюс две траты.
+    // Он и так виден в столбце «В сбережения» (с минусом — «из сбережений»).
+    const legPools = new Map<string, Set<boolean>>();
+    for (const transaction of state.transactions) {
+      const key = transferKeyOf(transaction);
+      if (!key) continue;
+      const seen = legPools.get(key) ?? new Set<boolean>();
+      seen.add(savingsAccounts.has(transaction.account.id));
+      legPools.set(key, seen);
+    }
+    const crossPool = new Set(
+      [...legPools].filter(([, seen]) => seen.size > 1).map(([key]) => key)
+    );
+    const counted = countableRows(state.transactions, includeTransfers).filter((transaction) => {
+      const key = transferKeyOf(transaction);
+      return !key || !crossPool.has(key);
+    });
+    for (const transaction of counted) {
       const month = transaction.date.slice(0, 7);
       const byCategory = fact.get(month) ?? new Map<string, number>();
       byCategory.set(
@@ -4224,7 +4260,14 @@ export class LocalApiClient implements ApiClient {
       };
     });
 
-    return { source: "database", currency: state.currency, columns, months };
+    return {
+      source: "database",
+      currency: state.currency,
+      columns,
+      months,
+      savingsAccountIds: [...savingsAccounts],
+      crossPoolTransfers: [...crossPool]
+    };
   }
 
   /**
@@ -4749,7 +4792,17 @@ export class LocalApiClient implements ApiClient {
     };
     switch (String(input.action ?? "")) {
       case "addMember": {
-        const member = { id: id("mem"), name: name(), color: color() };
+        // Семья уже делит траты — новый участник в ней с сегодняшнего дня, и
+        // прежние общие траты его не касаются. Семью только заводят — все
+        // «были всегда»: старые траты, отмеченные общими задним числом,
+        // делятся на всех.
+        const inUse = state.transactions.some((row) => row.shared && row.memberId);
+        const member = {
+          id: id("mem"),
+          name: name(),
+          color: color(),
+          ...(inUse ? { since: isoDay(new Date()) } : {})
+        };
         if (members.some((item) => item.name.toLowerCase() === member.name.toLowerCase()))
           throw new Error("Участник с таким именем уже есть.");
         state.members = [...members, member];
@@ -4759,9 +4812,21 @@ export class LocalApiClient implements ApiClient {
         const memberId = String(input.id ?? "");
         if (!members.some((item) => item.id === memberId)) throw new Error("Такого участника нет.");
         const next = name();
-        state.members = members.map((item) =>
-          item.id === memberId ? { ...item, name: next } : item
-        );
+        // «В семье с»: пусто — был всегда; дата — с этого дня.
+        const since =
+          input.since === undefined
+            ? undefined
+            : String(input.since).trim() === ""
+              ? null
+              : String(input.since).trim();
+        if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error("Дата — ГГГГ-ММ-ДД.");
+        state.members = members.map((item) => {
+          if (item.id !== memberId) return item;
+          const renamed = { ...item, name: next };
+          if (since === null) delete renamed.since;
+          else if (since) renamed.since = since;
+          return renamed;
+        });
         return { saved: true };
       }
       case "removeMember": {
@@ -4815,7 +4880,10 @@ export class LocalApiClient implements ApiClient {
       for (const row of rows) {
         if (!keys.some((key) => row.date.startsWith(key))) continue;
         if (row.type === "INCOME") income += row.amount;
-        else if (row.type === "EXPENSE") expense += row.amount;
+        // Платёж по долгу — тоже расход, но платежи по долгам идут ниже
+        // отдельной строкой (debtPayments): посчитать их и тут значило бы
+        // вычесть дважды и напугать человека несуществующей дырой.
+        else if (row.type === "EXPENSE" && !row.liabilityId) expense += row.amount;
       }
       return { income, expense };
     };
@@ -5178,8 +5246,24 @@ export class LocalApiClient implements ApiClient {
       "familySettlements",
       "transactions"
     ];
-    const entries = (await this.trashEntries())
-      .filter((entry) => ids.includes(entry.id))
+    const all = await this.trashEntries();
+    // Перевод — две операции. Вернуть одну значило бы оставить деньги
+    // ушедшими со счёта и никуда не пришедшими: вторая половина идёт следом.
+    const transferOf = (entry: TrashEntry) =>
+      entry.collection === "transactions" && typeof entry.row.transferId === "string"
+        ? entry.row.transferId
+        : null;
+    const transfers = new Set(
+      all
+        .filter((entry) => ids.includes(entry.id))
+        .map(transferOf)
+        .filter((value): value is string => value !== null)
+    );
+    const entries = all
+      .filter((entry) => {
+        const transfer = transferOf(entry);
+        return ids.includes(entry.id) || (transfer !== null && transfers.has(transfer));
+      })
       .sort((a, b) => order.indexOf(a.collection) - order.indexOf(b.collection));
     if (entries.length === 0) throw new Error("В корзине этого уже нет.");
     const holder = state as unknown as Record<string, unknown>;
@@ -5204,10 +5288,10 @@ export class LocalApiClient implements ApiClient {
             this.restoreTransaction(state, { transaction: row });
           }
         } else {
-          // Лист возвращается вместе со всем, что на нём было.
+          // Лист (и столбец) возвращается вместе со всем, что на нём было.
           const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
           delete row[SHEET_ARCHIVE];
-          if (entry.collection === "sheets" && content) {
+          if (content) {
             for (const [collection, list] of Object.entries(content)) {
               const present = Array.isArray(holder[collection])
                 ? (holder[collection] as Array<Record<string, unknown>>)

@@ -667,7 +667,14 @@ export async function getImportPageData(): Promise<ImportPageData> {
 }
 
 export async function getPlanFactPageData(): Promise<PlanFactPageData> {
-  return { source: "database", currency: "RUB", columns: [], months: [] };
+  return {
+    source: "database",
+    currency: "RUB",
+    columns: [],
+    months: [],
+    savingsAccountIds: [],
+    crossPoolTransfers: []
+  };
 }
 
 export async function getCategoriesPageData(): Promise<CategoriesPageData> {
