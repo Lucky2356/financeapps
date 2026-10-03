@@ -48,6 +48,14 @@ test("участники, общая трата из быстрого добав
   await confirm.getByRole("button", { name: "Рассчитались" }).click();
   await expect(page.getByTestId("family-even")).toBeVisible();
 
+  // «В семье с»: дата вступления ставится и видна в списке.
+  await page.getByRole("button", { name: "Переименовать: Маша" }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByTestId("family-since").fill("2026-01-15");
+  await editor.getByRole("button", { name: "Сохранить" }).click();
+  await expect(editor).toBeHidden();
+  await expect(members).toContainText("с 15.01.2026");
+
   // Правка операции помнит, кто платил.
   await openSettled(page, "/transactions?period=all&q=семья-продукты");
   await page

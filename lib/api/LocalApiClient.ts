@@ -242,7 +242,7 @@ const currency = "RUB" as const;
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = BookState &
   ExtrasState & {
-    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
+    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
     /** Следы удалённых строк — см. lib/sync/row-stamps. */
     deletions?: Tombstone[];
     currency: CurrencyCode;
@@ -289,7 +289,7 @@ type LocalState = BookState &
     >;
     transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
     /** Семья: участники и отметки «Рассчитались» — см. lib/family/family.ts. */
-    members?: Array<Stamped<{ id: string; name: string; color: string }>>;
+    members?: Array<Stamped<{ id: string; name: string; color: string; since?: string }>>;
     familySettlements?: Array<
       Stamped<{ id: string; from: string; to: string; amount: number; date: string }>
     >;
@@ -926,10 +926,11 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/what-if") return this.whatIfBase(this.inBase(state)) as T;
     if (pathname === "/family") {
       const month = searchParams.get("month") || monthKeyOf(new Date());
-      const members = (state.members ?? []).map(({ id: memberId, name, color }) => ({
+      const members = (state.members ?? []).map(({ id: memberId, name, color, since }) => ({
         id: memberId,
         name,
-        color
+        color,
+        ...(since ? { since } : {})
       }));
       return {
         members,
@@ -4760,7 +4761,17 @@ export class LocalApiClient implements ApiClient {
     };
     switch (String(input.action ?? "")) {
       case "addMember": {
-        const member = { id: id("mem"), name: name(), color: color() };
+        // Семья уже делит траты — новый участник в ней с сегодняшнего дня, и
+        // прежние общие траты его не касаются. Семью только заводят — все
+        // «были всегда»: старые траты, отмеченные общими задним числом,
+        // делятся на всех.
+        const inUse = state.transactions.some((row) => row.shared && row.memberId);
+        const member = {
+          id: id("mem"),
+          name: name(),
+          color: color(),
+          ...(inUse ? { since: isoDay(new Date()) } : {})
+        };
         if (members.some((item) => item.name.toLowerCase() === member.name.toLowerCase()))
           throw new Error("Участник с таким именем уже есть.");
         state.members = [...members, member];
@@ -4770,9 +4781,21 @@ export class LocalApiClient implements ApiClient {
         const memberId = String(input.id ?? "");
         if (!members.some((item) => item.id === memberId)) throw new Error("Такого участника нет.");
         const next = name();
-        state.members = members.map((item) =>
-          item.id === memberId ? { ...item, name: next } : item
-        );
+        // «В семье с»: пусто — был всегда; дата — с этого дня.
+        const since =
+          input.since === undefined
+            ? undefined
+            : String(input.since).trim() === ""
+              ? null
+              : String(input.since).trim();
+        if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error("Дата — ГГГГ-ММ-ДД.");
+        state.members = members.map((item) => {
+          if (item.id !== memberId) return item;
+          const renamed = { ...item, name: next };
+          if (since === null) delete renamed.since;
+          else if (since) renamed.since = since;
+          return renamed;
+        });
         return { saved: true };
       }
       case "removeMember": {

@@ -88,7 +88,10 @@ const ru: Messages = {
   "family.pickMe":
     "Отметьте, чьё это устройство («Это я»), — новые траты с него сразу пометятся этим человеком.",
   "family.rename": "Переименовать: {name}",
-  "family.renameTitle": "Имя участника",
+  "family.renameTitle": "Участник",
+  "family.since": "В семье с",
+  "family.sinceHint": "Пусто — с самого начала. Общие траты до этого дня его не касаются.",
+  "family.sinceShort": "с {date}",
   "family.removeOne": "Убрать: {name}",
   "family.remove": "Убрать",
   "family.removeConfirm": "Убрать {name} из семьи?",
@@ -2788,7 +2791,11 @@ const en: Messages = {
   "family.pickMe":
     "Mark whose device this is (“That's me”) — new expenses from it are tagged with that person.",
   "family.rename": "Rename: {name}",
-  "family.renameTitle": "Member name",
+  "family.renameTitle": "Member",
+  "family.since": "In the family since",
+  "family.sinceHint":
+    "Empty — from the start. Shared spending before this day doesn't concern them.",
+  "family.sinceShort": "since {date}",
   "family.removeOne": "Remove: {name}",
   "family.remove": "Remove",
   "family.removeConfirm": "Remove {name} from the family?",

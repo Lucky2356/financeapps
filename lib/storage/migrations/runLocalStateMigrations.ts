@@ -18,7 +18,7 @@ export type LocalStateMigration = {
   migrate: (state: RawLocalState) => RawLocalState;
 };
 
-export const LATEST_LOCAL_STATE_VERSION = 17;
+export const LATEST_LOCAL_STATE_VERSION = 18;
 
 export const localStateMigrations: LocalStateMigration[] = [
   {
@@ -249,6 +249,18 @@ export const localStateMigrations: LocalStateMigration[] = [
     // новее своего старое приложение не трогает вовсе и просит обновиться
     // (см. LocalApiClient.state), — это и есть защита.
     migrate: (state) => ({ ...state, schemaVersion: 17 })
+  },
+  {
+    from: 17,
+    to: 18,
+    // v18: у участника семьи — день, с которого он в семье (members[].since).
+    // Общая трата делится на тех, кто тогда уже был: новый участник не
+    // «должен» за прошлогодние продукты. Прежним участникам дня не ставим —
+    // они были всегда, и их долги остаются как были.
+    //
+    // Номер поднят ради старых приложений: 2.5.0 поле не знает и при записи
+    // выбросило бы его, а синхронизация разнесла бы это по всем устройствам.
+    migrate: (state) => ({ ...state, schemaVersion: 18 })
   }
 ];
 

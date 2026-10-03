@@ -5,13 +5,22 @@
 // «общая»: общая трата делится поровну на всех участников, личная никого,
 // кроме самого участника, не касается.
 //
+// Общая трата делится на тех, кто был в семье в её день (Member.since): новый
+// участник не должен за то, что купили до него. У кого дня нет — был всегда.
+//
 // Долги считаются по ОБЩИМ тратам за всё время, а не за месяц: «Саша оплатил
 // продукты в сентябре» не забывается первого октября. Отметка «Рассчитались»
 // (familySettlements) гасит долг деньгами из рук в руки.
 //
 // Чистые функции: экран «Семья» и проверки зовут одно и то же.
 
-export type Member = { id: string; name: string; color: string };
+export type Member = {
+  id: string;
+  name: string;
+  color: string;
+  /** С какого дня в семье, YYYY-MM-DD; нет — был всегда. */
+  since?: string;
+};
 
 export type FamilyTransaction = {
   amount: number;
@@ -49,6 +58,14 @@ const round = (value: number) => Math.round(value * 100) / 100;
 
 const isSpending = (row: FamilyTransaction) => row.type === "EXPENSE" && !row.transferId;
 
+/** На кого делится общая трата: кто был в семье в её день, и всегда — кто платил. */
+function sharersOf(members: Member[], row: FamilyTransaction): Member[] {
+  const day = row.date.slice(0, 10);
+  return members.filter(
+    (member) => member.id === row.memberId || !member.since || member.since <= day
+  );
+}
+
 export function familyPicture(
   members: Member[],
   transactions: FamilyTransaction[],
@@ -56,7 +73,6 @@ export function familyPicture(
   month: string
 ): FamilyPicture {
   const ids = new Set(members.map((member) => member.id));
-  const count = members.length;
   const inMonth = transactions.filter((row) => isSpending(row) && row.date.startsWith(month));
 
   const perMember = members.map((member) => {
@@ -66,12 +82,14 @@ export function familyPicture(
     const sharedPaid = inMonth
       .filter((row) => row.memberId === member.id && row.shared)
       .reduce((sum, row) => sum + row.amount, 0);
-    const sharedShare =
-      count > 0
-        ? inMonth
-            .filter((row) => row.shared && row.memberId && ids.has(row.memberId))
-            .reduce((sum, row) => sum + row.amount / count, 0)
-        : 0;
+    const sharedShare = inMonth
+      .filter((row) => row.shared && row.memberId && ids.has(row.memberId))
+      .reduce((sum, row) => {
+        const sharers = sharersOf(members, row);
+        return sharers.some((item) => item.id === member.id)
+          ? sum + row.amount / sharers.length
+          : sum;
+      }, 0);
     return {
       id: member.id,
       name: member.name,
@@ -96,11 +114,12 @@ export function familyPicture(
 
   // Балансы за всё время: заплатил общее — тебе должны все остальные их долю.
   const balance = new Map(members.map((member) => [member.id, 0]));
-  if (count > 1) {
+  if (members.length > 1) {
     for (const row of transactions) {
       if (!isSpending(row) || !row.shared || !row.memberId || !ids.has(row.memberId)) continue;
-      const share = row.amount / count;
-      for (const member of members) {
+      const sharers = sharersOf(members, row);
+      const share = row.amount / sharers.length;
+      for (const member of sharers) {
         const delta = member.id === row.memberId ? row.amount - share : -share;
         balance.set(member.id, (balance.get(member.id) ?? 0) + delta);
       }
