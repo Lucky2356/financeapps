@@ -150,9 +150,12 @@ function lastDay(month: string): string {
   return `${month}-${String(new Date(year, index, 0).getDate()).padStart(2, "0")}`;
 }
 
-export function BudgetSheet() {
+export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
   const { words, format, locale } = useSheetText();
-  const { data: loaded, reload } = useApiPageData<SheetPageData>(EMPTY, "/sheet");
+  const { data: loaded, reload } = useApiPageData<SheetPageData>(
+    EMPTY,
+    `/sheet?sheet=${encodeURIComponent(sheetId)}`
+  );
   const { data: refs, reload: reloadRefs } = useApiPageData<ImportPageData>(EMPTY_REFS, "/import");
   const phone = useMediaQuery("(max-width: 767px)");
 
@@ -292,18 +295,18 @@ export function BudgetSheet() {
         return { ...was, cells, months };
       });
       try {
-        await apiClient.post("/sheet", { action: "setCells", cells: changes });
+        await apiClient.post("/sheet", { sheetId, action: "setCells", cells: changes });
       } catch (cause) {
         toast.error((cause as Error).message);
         await reload();
       }
     },
-    [sheet.cells, reload]
+    [sheet.cells, reload, sheetId]
   );
 
   async function act(body: Record<string, unknown>, done?: string) {
     try {
-      const result = await apiClient.post("/sheet", body);
+      const result = await apiClient.post("/sheet", { ...body, sheetId });
       await reload();
       if (done) toast.success(done);
       return result;
@@ -541,7 +544,7 @@ export function BudgetSheet() {
     try {
       for (let index = 0; index < count; index += 1) {
         at = nextMonth(at);
-        await apiClient.post("/sheet", { action: "addMonth", month: at });
+        await apiClient.post("/sheet", { sheetId, action: "addMonth", month: at });
       }
       await reload();
       toast.success(format(words.monthsAdded, { count }));
@@ -706,6 +709,7 @@ export function BudgetSheet() {
           </CardContent>
         </Card>
         <SheetWizard
+          sheetId={sheetId}
           open={wizardOpen}
           onOpenChange={setWizardOpen}
           categories={categories}
@@ -717,6 +721,7 @@ export function BudgetSheet() {
           }}
         />
         <SheetImportDialog
+          sheetId={sheetId}
           open={importOpen}
           onOpenChange={setImportOpen}
           categories={categories}
@@ -1421,6 +1426,7 @@ export function BudgetSheet() {
       />
 
       <SheetImportDialog
+        sheetId={sheetId}
         open={importOpen}
         onOpenChange={setImportOpen}
         categories={categories}

@@ -54,6 +54,7 @@ export function shiftMonth(month: string, by: number): string {
 const roundTo = (value: number, step: number) => Math.round(value / step) * step;
 
 export function SheetWizard({
+  sheetId = "main",
   open,
   onOpenChange,
   categories,
@@ -62,6 +63,7 @@ export function SheetWizard({
   format,
   onCreated
 }: {
+  sheetId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: ImportPageData["categories"];
@@ -168,6 +170,7 @@ export function SheetWizard({
           monthly: picks[category.id]?.monthly ?? ""
         }));
       const created = (await apiClient.post("/sheet", {
+        sheetId,
         action: "start",
         from,
         months,
@@ -190,7 +193,7 @@ export function SheetWizard({
           { before: current, overwrite: true, incomeCategoryIds: incomeIds }
         );
         if (changes.length > 0) {
-          await apiClient.post("/sheet", { action: "setCells", cells: changes });
+          await apiClient.post("/sheet", { sheetId, action: "setCells", cells: changes });
         }
       }
       await onCreated();
