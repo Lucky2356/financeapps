@@ -36,7 +36,9 @@ async function seeded() {
 describe("unreadable stored state", () => {
   it("drops the rows it cannot read and keeps everything else", async () => {
     const { storage, stored } = await seeded();
-    const document = (await stored()) as Record<string, unknown>;
+    // Копия: настоящее хранилище отдаёт прочитанное с диска, а память в
+    // проверках — тот же объект, что держит клиент (вне поставки — замороженный).
+    const document = structuredClone(await stored()) as Record<string, unknown>;
     const transactions = document.transactions as Array<Record<string, unknown>>;
     // The shape a zero-rouble operation used to leave behind: the schema wants
     // a positive amount, so the whole document stopped parsing.

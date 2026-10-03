@@ -24,11 +24,26 @@ export function sortTransactions<T extends Sortable>(
   sort: TxSort,
   amountOf: (row: T) => number = (row) => row.amount
 ): T[] {
-  const byDate = (left: T, right: T) =>
-    new Date(right.date).getTime() - new Date(left.date).getTime() ||
+  // Время строки считается один раз, а не в каждом сравнении: сортировка
+  // двадцати тысяч операций — это около трёхсот тысяч сравнений.
+  const times = new Map<T, number>();
+  const timeOf = (row: T) => {
+    let time = times.get(row);
+    if (time === undefined) {
+      time = new Date(row.date).getTime();
+      times.set(row, time);
+    }
+    return time;
+  };
+  const byDate = (left: T, right: T) => {
+    const gap = timeOf(right) - timeOf(left);
+    if (gap) return gap;
     // В пределах дня — сначала записанные позже. У старых строк отметки нет, и
-    // свежая встаёт над ними.
-    (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
+    // свежая встаёт над ними. Отметки — ISO-строки: сравнения строк хватает.
+    const a = right.createdAt ?? "";
+    const b = left.createdAt ?? "";
+    return a < b ? -1 : a > b ? 1 : 0;
+  };
   const copy = [...rows];
   switch (sort) {
     case "date-asc":

@@ -84,8 +84,14 @@ export function findLeaks(input: {
   const dismissed = new Set(input.dismissed ?? []);
   const expenses = input.rows
     .filter((row) => row.type === "EXPENSE" && !row.transferId)
-    .sort((a, b) => day(a.date).localeCompare(day(b.date)));
+    .sort((a, b) => (day(a.date) < day(b.date) ? -1 : day(a.date) > day(b.date) ? 1 : 0));
   const findings: Finding[] = [];
+  // Границы — один раз, а не на каждой строке: на большой книге «Сторож» был
+  // самым медленным из того, что открывается на главной.
+  const since45 = addDays(today, -45);
+  const since30 = addDays(today, -30);
+  const since97 = addDays(today, -97);
+  const since7 = addDays(today, -7);
 
   // Подписка подорожала: последние два списания одной подписки.
   const subscriptions = new Map<string, WatchRow[]>();
@@ -95,12 +101,14 @@ export function findLeaks(input: {
     // Кинопоиск 299 и Яндекс 399 в «Подписках» читались как подорожание.
     if (!row.recurringId && !merchant(row.description)) continue;
     const key = row.recurringId ?? `${row.categoryId}|${merchant(row.description)}`;
-    subscriptions.set(key, [...(subscriptions.get(key) ?? []), row]);
+    const list = subscriptions.get(key);
+    if (list) list.push(row);
+    else subscriptions.set(key, [row]);
   }
   for (const rows of subscriptions.values()) {
     if (rows.length < 2) continue;
     const [previous, last] = rows.slice(-2);
-    if (day(last.date) < addDays(today, -45)) continue;
+    if (day(last.date) < since45) continue;
     if (last.amount > previous.amount * 1.03 && last.amount - previous.amount >= 10) {
       findings.push({
         key: `priceUp:${last.id}`,
@@ -115,14 +123,13 @@ export function findLeaks(input: {
   }
 
   // Двойное списание: одинаковое за двое суток.
-  const recent = expenses.filter(
-    (row) => day(row.date) >= addDays(today, -30) && !row.splitGroupId
-  );
+  const recent = expenses.filter((row) => day(row.date) >= since30 && !row.splitGroupId);
   for (let i = 0; i < recent.length; i += 1) {
+    const a = recent[i];
+    const until = addDays(a.date, 2);
     for (let j = i + 1; j < recent.length; j += 1) {
-      const a = recent[i];
       const b = recent[j];
-      if (day(b.date) > addDays(a.date, 2)) break;
+      if (day(b.date) > until) break;
       // Мелочь не в счёт: два кофе за утро — привычка, а не ошибка банка.
       if (
         a.amount >= 500 &&
@@ -162,11 +169,13 @@ export function findLeaks(input: {
   // Трата втрое больше обычной для категории (за последнюю неделю).
   const history = new Map<string, number[]>();
   for (const row of expenses) {
-    if (day(row.date) < addDays(today, -97) || day(row.date) >= addDays(today, -7)) continue;
-    history.set(row.categoryId, [...(history.get(row.categoryId) ?? []), row.amount]);
+    if (day(row.date) < since97 || day(row.date) >= since7) continue;
+    const list = history.get(row.categoryId);
+    if (list) list.push(row.amount);
+    else history.set(row.categoryId, [row.amount]);
   }
   for (const row of expenses) {
-    if (day(row.date) < addDays(today, -7)) continue;
+    if (day(row.date) < since7) continue;
     const past = history.get(row.categoryId) ?? [];
     if (past.length < 5) continue;
     const usual = median(past);
@@ -192,13 +201,15 @@ export function unusualFor(
   row: Pick<WatchRow, "amount" | "categoryId" | "date">,
   history: readonly WatchRow[]
 ): number | null {
+  const from = addDays(row.date, -90);
+  const until = day(row.date);
   const past = history
     .filter(
       (item) =>
         item.type === "EXPENSE" &&
         item.categoryId === row.categoryId &&
-        day(item.date) >= addDays(row.date, -90) &&
-        day(item.date) < day(row.date)
+        day(item.date) >= from &&
+        day(item.date) < until
     )
     .map((item) => item.amount);
   if (past.length < 5) return null;

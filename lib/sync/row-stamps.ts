@@ -157,6 +157,9 @@ function decide(
   old: Record<string, unknown> | undefined,
   now: string
 ): Record<string, unknown> {
+  // Та же строка — тот же объект: запись её не трогала (см. writableCopy в
+  // LocalApiClient). Сличать поля незачем.
+  if (old === row) return row;
   if (!old || !sameRow(row, old)) return { ...row, [STAMP_FIELD]: now };
 
   const kept = old[STAMP_FIELD];

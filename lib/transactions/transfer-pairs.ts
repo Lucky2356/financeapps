@@ -56,7 +56,16 @@ export function findTransferPairs(
   const free = rows.filter(
     (row) => !transferKeyOf(row) && !row.splitGroupId && !row.liabilityId && row.amount > 0
   );
-  const incomes = free.filter((row) => row.type === "INCOME");
+  // Поступления — по сумме в копейках: сличать каждую трату с каждым доходом
+  // на книге в двадцать тысяч строк — полсекунды на каждое открытие «Учёта».
+  const cents = (amount: number) => Math.round(amount * 100);
+  const incomes = new Map<number, PairRow[]>();
+  for (const row of free) {
+    if (row.type !== "INCOME") continue;
+    const bucket = incomes.get(cents(row.amount));
+    if (bucket) bucket.push(row);
+    else incomes.set(cents(row.amount), [row]);
+  }
   const expenses = free
     .filter((row) => row.type === "EXPENSE")
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -66,7 +75,7 @@ export function findTransferPairs(
   for (const expense of expenses) {
     let best: PairRow | null = null;
     let bestGap = Infinity;
-    for (const income of incomes) {
+    for (const income of incomes.get(cents(expense.amount)) ?? []) {
       if (used.has(income.id)) continue;
       if (income.account.id === expense.account.id) continue;
       if (Math.abs(income.amount - expense.amount) >= 0.005) continue;
