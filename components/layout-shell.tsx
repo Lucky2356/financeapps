@@ -1,4 +1,5 @@
 import { BankWatch } from "@/components/bank/bank-watch";
+import { LoliWatch } from "@/components/loli/loli-watch";
 import { IncomingLinkWatch } from "@/components/sync/incoming-link-watch";
 import { NewDeviceWatch } from "@/components/sync/new-device-watch";
 import { SampleBanner } from "@/components/sample-banner";
@@ -58,6 +59,7 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
       <NewDeviceWatch />
       <IncomingLinkWatch />
       <BankWatch />
+      <LoliWatch />
       <Suspense fallback={null}>
         <ToastListener />
       </Suspense>

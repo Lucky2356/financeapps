@@ -33,6 +33,7 @@ import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
 import { BANK_ENABLED_KEY } from "@/lib/bank/suggestions";
 import { bankAccess, openBankAccess } from "@/lib/platform/android-bank";
+import { configureLoli, loliStatus, type LoliStatus } from "@/lib/platform/android-loli";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AutoBackupPanel, CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
@@ -222,6 +223,24 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     document.addEventListener("visibilitychange", again);
     return () => document.removeEventListener("visibilitychange", again);
   }, [onPhone]);
+  // Лоли — голосовой помощник: стоит ли на телефоне, её ли подпись, что разрешено.
+  const [loli, setLoli] = useState<LoliStatus | null>(null);
+  useEffect(() => {
+    if (!onPhone) return;
+    const check = () => void loliStatus().then(setLoli);
+    check();
+    const again = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", again);
+    return () => document.removeEventListener("visibilitychange", again);
+  }, [onPhone]);
+  function changeLoli(patch: Partial<Pick<LoliStatus, "enabled" | "auto" | "share">>) {
+    if (!loli) return;
+    const next = { ...loli, ...patch };
+    setLoli(next);
+    void configureLoli({ enabled: next.enabled, auto: next.auto, share: next.share });
+  }
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
   useEffect(() => {
     let alive = true;
@@ -638,6 +657,41 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                     >
                       {t("bank.set.open")}
                     </Button>
+                  </div>
+                ) : null}
+                {loli ? (
+                  <div data-testid="loli-settings">
+                    <ToggleRow
+                      title={t("loli.set.title")}
+                      description={
+                        !loli.installed
+                          ? t("loli.set.missing")
+                          : !loli.trusted
+                            ? t("loli.set.untrusted")
+                            : loli.enabled
+                              ? t("loli.set.on")
+                              : t("loli.set.desc")
+                      }
+                      help={t("loli.set.help")}
+                      checked={loli.enabled && loli.trusted}
+                      onChange={(v) => changeLoli({ enabled: v && loli.trusted })}
+                    />
+                    {loli.enabled && loli.trusted ? (
+                      <>
+                        <ToggleRow
+                          title={t("loli.set.auto")}
+                          description={t("loli.set.autoDesc")}
+                          checked={loli.auto}
+                          onChange={(v) => changeLoli({ auto: v })}
+                        />
+                        <ToggleRow
+                          title={t("loli.set.share")}
+                          description={t("loli.set.shareDesc")}
+                          checked={loli.share}
+                          onChange={(v) => changeLoli({ share: v })}
+                        />
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
               </>
