@@ -27,6 +27,7 @@ const ROUTES = [
   "/deductions",
   "/what-if",
   "/family",
+  "/reports/month",
   "/settings?section=general",
   "/settings?section=finance",
   "/settings?section=sync",
