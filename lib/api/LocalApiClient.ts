@@ -670,6 +670,9 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 /** Цвета участников семьи по очереди — различимые и в светлой, и в тёмной теме. */
+/** Статья для разницы, найденной сверкой с банком. */
+const RECONCILE_CATEGORY_LABEL = "Сверка с банком";
+
 const FAMILY_COLORS = ["#0ea5e9", "#f97316", "#22c55e", "#e11d48", "#a855f7", "#eab308"];
 
 /** Поля семьи для операции: из формы, а если форма о них молчит — прежние. */
@@ -1220,6 +1223,8 @@ export class LocalApiClient implements ApiClient {
       return undefined as TResponse;
     }
     if (pathname === "/sync/resolve") return this.resolveConflict<TResponse>(state, body);
+    if (pathname === "/accounts" && (body as { action?: unknown })?.action === "reconcile")
+      return this.saveAndReturn<TResponse>(state, this.reconcileAccount(state, body));
     if (pathname === "/accounts")
       return this.saveAndReturn<TResponse>(state, this.upsertAccount(state, body, method));
     if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
@@ -1796,6 +1801,42 @@ export class LocalApiClient implements ApiClient {
       return { category: tx.category.label, spent: roundMoney(spent), limit };
     }
     return null;
+  }
+
+  /**
+   * Сверка с банком: остаток в банке другой — разница записывается одной
+   * операцией «Сверка с банком», и остаток счёта становится банковским. Не
+   * правкой остатка втихую: тогда деньги взялись бы ниоткуда, и ни итоги, ни
+   * история не знали бы, куда они делись.
+   */
+  private reconcileAccount(state: LocalState, body: unknown) {
+    const input = toFormObject(body);
+    const account = state.accounts.find((item) => item.id === input.id && !item.isArchived);
+    if (!account) throw new Error("Такого счёта нет.");
+    const bank = Number(
+      String(input.balance ?? "")
+        .replace(/[\s\u00a0]/g, "")
+        .replace(",", ".")
+    );
+    if (!Number.isFinite(bank)) throw new Error("Остаток в банке — число.");
+    const difference = roundMoney(bank - account.balance);
+    if (difference === 0) return { recorded: false };
+    const kind = difference > 0 ? "INCOME" : "EXPENSE";
+    const category = this.findOrCreateCategory(state, RECONCILE_CATEGORY_LABEL, kind);
+    const tx = this.upsertTransaction(
+      state,
+      {
+        type: kind,
+        amount: String(Math.abs(difference)),
+        accountId: account.id,
+        categoryId: category.id,
+        date: isoDay(new Date()),
+        description: "Сверка с банком",
+        noTrip: "1"
+      },
+      "POST"
+    );
+    return { recorded: true, id: tx.id, difference };
   }
 
   /**
