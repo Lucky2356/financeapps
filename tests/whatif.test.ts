@@ -119,9 +119,25 @@ describe("«Что если»", () => {
     const date = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}-15`;
     const expense = (amount: string, extra: Record<string, string> = {}) =>
       api.post("/transactions", { type: "EXPENSE", amount, accountId, categoryId, date, ...extra });
+    const loan = await api.post<{ id: string }>("/debts", {
+      name: "Кредит",
+      kind: "LOAN",
+      balance: "300000",
+      minPayment: "12000"
+    });
+    const card = await api.post<{ id: string }>("/debts", {
+      name: "Кредитка",
+      kind: "CREDIT_CARD",
+      balance: "20000",
+      minPayment: "0"
+    });
     await expense("30000");
-    await expense("12000", { liabilityId: "debt-1" });
+    await expense("12000", { liabilityId: loan.id });
+    // Кредитка без минимального платежа — в «платежах по долгам» её нет, и
+    // её погашение остаётся обычным расходом, а не пропадает.
+    await expense("5000", { liabilityId: card.id });
     const whatIf = await api.get<WhatIfBase>("/what-if");
-    expect(whatIf.avgExpense).toBe(30_000);
+    expect(whatIf.avgExpense).toBe(35_000);
+    expect(whatIf.debtPayments).toBe(12_000);
   });
 });

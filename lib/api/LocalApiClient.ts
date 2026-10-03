@@ -1095,9 +1095,13 @@ export class LocalApiClient implements ApiClient {
       // Перевод — две строки: списание и зачисление. Удалить одну значило бы
       // заставить деньги исчезнуть — со счёта ушли, никуда не пришли (или
       // наоборот). Удаляется весь перевод.
-      const transferId = state.transactions.find((item) => item.id === itemId)?.transferId;
-      const ids = transferId
-        ? state.transactions.filter((item) => item.transferId === transferId).map((item) => item.id)
+      // Перевод узнаётся и по старой метке в описании (записанные до 1.10).
+      const row = state.transactions.find((item) => item.id === itemId);
+      const transfer = row ? transferKeyOf(row) : null;
+      const ids = transfer
+        ? state.transactions
+            .filter((item) => transferKeyOf(item) === transfer)
+            .map((item) => item.id)
         : [itemId];
       for (const one of ids) this.deleteTransaction(state, one);
     } else if (pathname === "/photos" && itemId) {
@@ -4880,6 +4884,14 @@ export class LocalApiClient implements ApiClient {
    */
   private whatIfBase(state: LocalState): WhatIfBase {
     const rows = countableRows(state.transactions, false);
+    // Платежи по долгам с минимальным платежом идут ниже отдельной строкой.
+    // Долг без него (кредитка, закрытый) платежом в месяц не считается — его
+    // платежи остаются обычным расходом, иначе они пропали бы вовсе.
+    const scheduledDebts = new Set(
+      activeDebts(state.liabilities)
+        .filter((item) => item.minPayment > 0)
+        .map((item) => item.id)
+    );
     const now = new Date();
     const keyOf = (offset: number) =>
       monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset, 1));
@@ -4892,7 +4904,11 @@ export class LocalApiClient implements ApiClient {
         // Платёж по долгу — тоже расход, но платежи по долгам идут ниже
         // отдельной строкой (debtPayments): посчитать их и тут значило бы
         // вычесть дважды и напугать человека несуществующей дырой.
-        else if (row.type === "EXPENSE" && !row.liabilityId) expense += row.amount;
+        else if (
+          row.type === "EXPENSE" &&
+          !(row.liabilityId && scheduledDebts.has(row.liabilityId))
+        )
+          expense += row.amount;
       }
       return { income, expense };
     };
@@ -5259,8 +5275,8 @@ export class LocalApiClient implements ApiClient {
     // Перевод — две операции. Вернуть одну значило бы оставить деньги
     // ушедшими со счёта и никуда не пришедшими: вторая половина идёт следом.
     const transferOf = (entry: TrashEntry) =>
-      entry.collection === "transactions" && typeof entry.row.transferId === "string"
-        ? entry.row.transferId
+      entry.collection === "transactions"
+        ? transferKeyOf(entry.row as { description: string | null; transferId?: string })
         : null;
     const transfers = new Set(
       all
