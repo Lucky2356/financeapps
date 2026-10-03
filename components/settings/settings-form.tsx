@@ -2,6 +2,7 @@
 
 import { BeforeClearCard } from "@/components/settings/before-clear-card";
 import { LocalCopiesCard } from "@/components/settings/local-copies-card";
+import { TrashCard } from "@/components/settings/trash-card";
 import { MenuSectionRows } from "@/components/settings/menu-sections";
 import {
   AlertTriangle,
@@ -30,6 +31,8 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
+import { BANK_ENABLED_KEY } from "@/lib/bank/suggestions";
+import { bankAccess, openBankAccess } from "@/lib/platform/android-bank";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AutoBackupPanel, CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
@@ -205,6 +208,20 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   // Вечернее напоминание — только на телефоне и только на этом телефоне.
   const [onPhone] = useState(isAndroidShell);
   const [evening, setEvening] = useState(eveningReminderOn);
+  // Траты из уведомлений банка: включено ли здесь и дал ли Android доступ.
+  const [bankOn, setBankOn] = useState(() => readMine(BANK_ENABLED_KEY) === "1");
+  const [bankGranted, setBankGranted] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!onPhone) return;
+    const check = () => void bankAccess().then(setBankGranted);
+    check();
+    // Вернулись из настроек телефона — узнать, дали ли доступ.
+    const again = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", again);
+    return () => document.removeEventListener("visibilitychange", again);
+  }, [onPhone]);
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
   useEffect(() => {
     let alive = true;
@@ -596,6 +613,35 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                 }}
               />
             ) : null}
+            {onPhone ? (
+              <>
+                <ToggleRow
+                  title={t("bank.set.title")}
+                  description={
+                    bankOn && bankGranted === false ? t("bank.set.needAccess") : t("bank.set.desc")
+                  }
+                  help={t("bank.set.help")}
+                  checked={bankOn}
+                  onChange={(v) => {
+                    writeMine(BANK_ENABLED_KEY, v ? "1" : "0");
+                    setBankOn(v);
+                    if (v && bankGranted === false) void openBankAccess();
+                  }}
+                />
+                {bankOn && bankGranted === false ? (
+                  <div className="px-4 pb-4 sm:px-5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void openBankAccess()}
+                    >
+                      {t("bank.set.open")}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </Group>
           <Group title={t("set.group.goals")}>
             <SelectField
@@ -802,6 +848,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
             transactions={[]}
             afterBackup={android ? null : <AutoBackupPanel />}
           />
+          <Group title={t("trash.title")}>
+            <TrashCard />
+          </Group>
           <Group title={t("set.localCopies.title")}>
             <LocalCopiesCard />
           </Group>

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
+import { useI18n } from "@/lib/i18n/context";
 import type { ImportPageData } from "@/lib/data";
 import {
   buildPayload,
@@ -50,12 +51,14 @@ const CREATE = "__create__";
 const NONE = "__none__";
 
 export function SheetImportDialog({
+  sheetId = "main",
   open,
   onOpenChange,
   categories,
   hasSheet,
   onImported
 }: {
+  sheetId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: ImportPageData["categories"];
@@ -63,6 +66,7 @@ export function SheetImportDialog({
   onImported: () => Promise<void>;
 }) {
   const { words, format, locale } = useSheetText();
+  const { t } = useI18n();
   const [text, setText] = useState("");
   const [sheets, setSheets] = useState<Array<{ name: string; grid: Grid }>>([]);
   const [sheetIndex, setSheetIndex] = useState(0);
@@ -108,6 +112,61 @@ export function SheetImportDialog({
   }
 
   const payload = plan && plan.rows.length > 0 ? buildPayload(plan) : null;
+
+  // Весь файл разом: лист, в котором нашлись месяцы, — бюджет; остальные —
+  // свободные листы как есть.
+  const wholeBook = useMemo(
+    () =>
+      sheets.map((sheet) => {
+        const found = planImport(sheet.grid, refs);
+        return found.rows.length > 0
+          ? {
+              name: sheet.name,
+              kind: "budget" as const,
+              months: found.rows.length,
+              plan: found,
+              grid: sheet.grid,
+              rows: 0,
+              cols: 0
+            }
+          : {
+              name: sheet.name,
+              kind: "free" as const,
+              months: 0,
+              plan: null,
+              grid: sheet.grid,
+              rows: sheet.grid.length,
+              cols: Math.max(0, ...sheet.grid.map((line) => line.length))
+            };
+      }),
+    [sheets, refs]
+  );
+  const [skipped, setSkipped] = useState<Set<number>>(new Set());
+
+  async function runWholeBook() {
+    setBusy(true);
+    try {
+      const chosen = wholeBook
+        .filter((_, index) => !skipped.has(index))
+        .map((item) =>
+          item.kind === "budget" && item.plan
+            ? { name: item.name, kind: "budget", payload: buildPayload(item.plan) }
+            : { name: item.name, kind: "free", grid: item.grid }
+        );
+      await apiClient.post("/sheets", { action: "importWorkbook", sheets: chosen });
+      window.dispatchEvent(new Event("workbook-changed"));
+      await onImported();
+      toast.success(t("wb.importedAll", { count: chosen.length }));
+      onOpenChange(false);
+      setPlan(null);
+      setSheets([]);
+      setSkipped(new Set());
+    } catch (cause) {
+      toast.error((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const totals = plan && payload ? checkTotals(plan, payload) : null;
 
   function setColumn(index: number, patch: Partial<ImportColumn>) {
@@ -127,7 +186,7 @@ export function SheetImportDialog({
     if (!payload || !plan) return;
     setBusy(true);
     try {
-      await apiClient.post("/sheet", { action: "import", payload });
+      await apiClient.post("/sheet", { sheetId, action: "import", payload });
       await onImported();
       toast.success(format(words.imported, { months: plan.rows.length }));
       onOpenChange(false);
@@ -209,6 +268,50 @@ export function SheetImportDialog({
             ) : null}
           </div>
         </div>
+
+        {sheets.length > 1 ? (
+          <div className="space-y-2 rounded-lg border p-3" data-testid="workbook-import">
+            <p className="text-sm font-medium">
+              {t("wb.importAllTitle", { count: sheets.length })}
+            </p>
+            <p className="text-xs text-muted-foreground">{t("wb.importAllLead")}</p>
+            <ul className="space-y-1 text-sm">
+              {wholeBook.map((item, index) => (
+                <li key={`${item.name}-${index}`} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-foreground"
+                    checked={!skipped.has(index)}
+                    aria-label={item.name}
+                    onChange={(event) =>
+                      setSkipped((was) => {
+                        const next = new Set(was);
+                        if (event.target.checked) next.delete(index);
+                        else next.add(index);
+                        return next;
+                      })
+                    }
+                  />
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{item.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {item.kind === "budget"
+                      ? t("wb.importAsBudget", { months: item.months })
+                      : t("wb.importAsFree", { rows: item.rows, cols: item.cols })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || wholeBook.length === skipped.size}
+              onClick={() => void runWholeBook()}
+              data-testid="workbook-import-run"
+            >
+              {t("wb.importAll", { count: wholeBook.length - skipped.size })}
+            </Button>
+          </div>
+        ) : null}
 
         {!plan ? (
           <p className="text-sm text-muted-foreground">{words.importNothing}</p>

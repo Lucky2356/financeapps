@@ -8,6 +8,7 @@ import { DashboardForecastStrip } from "@/components/dashboard-forecast-strip";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DistributeCashflow } from "@/components/dashboard/distribute-cashflow";
 import { DailyAllowanceCard } from "@/components/dashboard/daily-allowance-card";
+import { BankSuggestionsCard } from "@/components/bank/bank-suggestions-card";
 import { MonthRecapButton, MonthRecapCard } from "@/components/dashboard/month-recap-card";
 import { WatchdogCard } from "@/components/dashboard/watchdog-card";
 import { WeekRecapCard } from "@/components/dashboard/week-recap-card";
@@ -167,6 +168,7 @@ export function DashboardClient({
 
       {/* Итоги прошлого месяца — в его первые дни, один раз. В любой день —
           кнопкой «Итоги месяца». */}
+      <BankSuggestionsCard currency={data.currency} />
       <MonthRecapCard currency={data.currency} />
       <WeekRecapCard currency={data.currency} />
       <div className="flex justify-end">

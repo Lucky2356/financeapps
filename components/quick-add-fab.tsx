@@ -41,6 +41,7 @@ import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
+import { FamilyFields } from "@/components/family/family-fields";
 import { AmountInput } from "@/components/ui/amount-input";
 import { CategoryOptionLabel } from "@/components/category-option";
 import { Button } from "@/components/ui/button";
@@ -244,7 +245,8 @@ export function QuickAddFab({
     setRestored(false);
     // Недописанное с прошлого раза: закрыли окно случайно — набранное на месте.
     // Ярлык другого типа («Доход») и съёмка чека начинают с чистого.
-    const draft = request.scanReceipt ? null : readDraft(readMine(DRAFT_KEY), Date.now());
+    const draft =
+      request.scanReceipt || request.prefill ? null : readDraft(readMine(DRAFT_KEY), Date.now());
     if (draft && (!request.type || request.type === draft.type)) {
       setType(draft.type);
       setAmount(draft.amount);
@@ -263,6 +265,24 @@ export function QuickAddFab({
       const keptDate = draftDate(draft, Date.now());
       if (keptDate) setDate(keptDate);
       setRestored(true);
+    }
+    // Готовое снаружи (трата из уведомления банка): сумма, место, день — на
+    // месте, человеку остаётся проверить категорию и нажать «Добавить».
+    const prefill = request.prefill;
+    if (prefill) {
+      const written = String(prefill.amount);
+      setAmount(written);
+      setDescription(prefill.description);
+      setDate(prefill.date);
+      setFilledIn((was) => ({ ...was, amount: written, date: prefill.date }));
+      if (prefill.accountId && usable(prefill.accountId)) setAccountId(prefill.accountId);
+      const kindOk = (fresh ?? refs).categories.some(
+        (category) => category.id === prefill.categoryId && category.kind === openedType
+      );
+      if (prefill.categoryId && kindOk) {
+        setCategoryId(prefill.categoryId);
+        setAutoSuggested(true);
+      }
     }
     // Ярлык «Сканировать чек»: сначала камера, окно — уже с суммой. Не
     // наоборот: поверх открытого окна камера вешает телефон (см. scanReceipt).
@@ -1010,6 +1030,8 @@ export function QuickAddFab({
                   ))}
                 </div>
               </div>
+
+              {type === "EXPENSE" ? <FamilyFields isNew /> : null}
 
               <div className="space-y-2">
                 <Label htmlFor="fab-description">{t("qa.descLabel")}</Label>

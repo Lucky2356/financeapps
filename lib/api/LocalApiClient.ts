@@ -20,13 +20,7 @@ import type {
   TransactionsPageData
 } from "@/lib/data";
 import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
-import {
-  importSheet,
-  readSheet,
-  writeSheet,
-  type SheetImport,
-  type SheetState
-} from "@/lib/api/local/sheet";
+import { readSheet, type SheetImport } from "@/lib/api/local/sheet";
 import {
   deductionKindOf,
   readCashback,
@@ -51,6 +45,7 @@ import { localStateSchema, transactionRowSchema } from "@/lib/api/local/schemas"
 import {
   BEFORE_CLEAR_SUFFIX,
   LOCAL_COPY_SUFFIX,
+  TRASH_SUFFIX,
   PRE_UPGRADE_SUFFIX,
   RESCUE_SUFFIX
 } from "@/lib/storage/SyncingStorageAdapter";
@@ -161,6 +156,30 @@ import type {
   TransactionRow
 } from "@/types/finance";
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
+import type { WhatIfBase } from "@/lib/whatif/simulate";
+import { familyPicture } from "@/lib/family/family";
+import {
+  importIntoSheet,
+  importWorkbook,
+  MAIN_SHEET,
+  readWorkbook,
+  sheetScope,
+  writeSheets,
+  writeWorkbook,
+  type BookState,
+  type WorkbookImportSheet
+} from "@/lib/api/local/sheets";
+import {
+  addToTrash,
+  pruneTrash,
+  SHEET_ARCHIVE,
+  readTrash,
+  trashAmount,
+  trashTitle,
+  vanishedRows,
+  type TrashEntry,
+  type TrashOrigin
+} from "@/lib/trash/trash";
 
 const LEGACY_STATE_KEY = "localFinanceState";
 const PROFILE_LIST_KEY = "profileList";
@@ -221,9 +240,9 @@ function profileStateKey(profileId: string): string {
 const currency = "RUB" as const;
 
 type CategoryOption = ImportPageData["categories"][number];
-type LocalState = SheetState &
+type LocalState = BookState &
   ExtrasState & {
-    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17;
     /** Следы удалённых строк — см. lib/sync/row-stamps. */
     deletions?: Tombstone[];
     currency: CurrencyCode;
@@ -269,6 +288,11 @@ type LocalState = SheetState &
       }>
     >;
     transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
+    /** Семья: участники и отметки «Рассчитались» — см. lib/family/family.ts. */
+    members?: Array<Stamped<{ id: string; name: string; color: string }>>;
+    familySettlements?: Array<
+      Stamped<{ id: string; from: string; to: string; amount: number; date: string }>
+    >;
     budgets: Array<Stamped<BudgetsPageData["budgets"][number]>>;
     goals: Array<Stamped<GoalsPageData["goals"][number]>>;
     recurringTransactions: Array<
@@ -639,6 +663,34 @@ const DEFAULT_PROFILE: UserProfile = {
   createdAt: "1970-01-01T00:00:00.000Z"
 };
 
+/** Цвета участников семьи по очереди — различимые и в светлой, и в тёмной теме. */
+const FAMILY_COLORS = ["#0ea5e9", "#f97316", "#22c55e", "#e11d48", "#a855f7", "#eab308"];
+
+/** Поля семьи для операции: из формы, а если форма о них молчит — прежние. */
+function familyFields(
+  state: LocalState,
+  input: Record<string, unknown>,
+  previous: { memberId?: string; shared?: boolean } | undefined
+): { memberId?: string; shared?: boolean } {
+  const members = new Set((state.members ?? []).map((member) => member.id));
+  const raw = input.memberId;
+  const memberId =
+    raw === undefined
+      ? previous?.memberId
+      : typeof raw === "string" && members.has(raw)
+        ? raw
+        : undefined;
+  const sharedRaw = input.shared;
+  const shared =
+    sharedRaw === undefined
+      ? previous?.shared
+      : sharedRaw === true || sharedRaw === "true" || sharedRaw === "1" || sharedRaw === "on";
+  return {
+    ...(memberId ? { memberId } : {}),
+    ...(shared && memberId ? { shared: true } : {})
+  };
+}
+
 export class LocalApiClient implements ApiClient {
   constructor(private readonly storage: StorageAdapter = createStorageAdapter()) {}
 
@@ -648,6 +700,12 @@ export class LocalApiClient implements ApiClient {
   // profile ops) call invalidateStateCache(). Avoids re-reading and Zod-parsing
   // storage on every request (plan A4).
   private stateCache: { key: string; state: LocalState } | null = null;
+
+  /**
+   * Книга, какой она была до того, как синхронизация подменила её снизу. Нужна
+   * корзине: сличив её со слитой, видно, что удалили на другом устройстве.
+   */
+  private remoteBaseline: { key: string; state: LocalState } | null = null;
 
   private invalidateStateCache() {
     this.stateCache = null;
@@ -665,6 +723,9 @@ export class LocalApiClient implements ApiClient {
    * там, где книгу меняет сам клиент. Здесь случай другой — снаружи и без него.
    */
   forgetCachedState(): void {
+    // Первая подмена из нескольких подряд — та, с которой и сличать: книга до
+    // неё — последняя, которую видел человек.
+    if (!this.remoteBaseline && this.stateCache) this.remoteBaseline = this.stateCache;
     this.invalidateStateCache();
   }
 
@@ -747,6 +808,7 @@ export class LocalApiClient implements ApiClient {
     if (pathname === "/backup/before-upgrade") return (await this.preUpgradeBackup()) as T;
     if (pathname === "/backup/before-clear") return (await this.beforeClearCopy()) as T;
     if (pathname === "/backup/local-copies") return (await this.localCopies()) as T;
+    if (pathname === "/trash") return (await this.trashList()) as T;
     if (pathname === "/import") return this.importReferences(state) as T;
     if (pathname === "/backup") {
       // The exported file records when it was made, so the stamp goes into the
@@ -858,7 +920,27 @@ export class LocalApiClient implements ApiClient {
         searchParams.get("transfers") === "1"
       ) as T;
     if (pathname === "/profiles") return (await this.profileList()) as T;
-    if (pathname === "/sheet") return readSheet(state) as T;
+    if (pathname === "/sheet")
+      return readSheet(sheetScope(state, searchParams.get("sheet") || MAIN_SHEET)) as T;
+    if (pathname === "/workbook") return readWorkbook(state, searchParams.get("sheet")) as T;
+    if (pathname === "/what-if") return this.whatIfBase(this.inBase(state)) as T;
+    if (pathname === "/family") {
+      const month = searchParams.get("month") || monthKeyOf(new Date());
+      const members = (state.members ?? []).map(({ id: memberId, name, color }) => ({
+        id: memberId,
+        name,
+        color
+      }));
+      return {
+        members,
+        picture: familyPicture(
+          members,
+          this.inBase(state).transactions,
+          state.familySettlements ?? [],
+          month
+        )
+      } as T;
+    }
     if (pathname === "/watchdog") {
       const counted = this.countingState(this.inBase(state), false);
       return {
@@ -1103,7 +1185,7 @@ export class LocalApiClient implements ApiClient {
       // открывается профиль «Пример», а вернуться к своим — одна кнопка.
       await this.openSampleProfile();
       const sample = this.buildSampleState();
-      await this.save(sample);
+      await this.save(sample, { trash: false });
       return { loaded: true } as TResponse;
     }
     if (pathname === "/sample/leave") {
@@ -1195,6 +1277,13 @@ export class LocalApiClient implements ApiClient {
       return (await this.takeLocalCopy("manual")) as TResponse;
     }
     if (pathname === "/backup/merge") return this.mergeBackup<TResponse>(body);
+    if (pathname === "/trash") {
+      const input = (body ?? {}) as { action?: unknown; ids?: unknown };
+      const ids = Array.isArray(input.ids) ? input.ids.map(String) : [];
+      if (input.action === "restore") return (await this.restoreFromTrash(state, ids)) as TResponse;
+      if (input.action === "empty") return (await this.purgeTrash("all")) as TResponse;
+      return (await this.purgeTrash(ids)) as TResponse;
+    }
     if (pathname === "/investments")
       return this.saveAndReturn<TResponse>(state, await this.updateInvestments(state, body));
     if (pathname === "/categories")
@@ -1232,11 +1321,39 @@ export class LocalApiClient implements ApiClient {
     }
     if (pathname === "/sheet") {
       const input = (body ?? {}) as Record<string, unknown>;
+      const sheetId = input.sheetId ? String(input.sheetId) : MAIN_SHEET;
       if (input.action === "import")
-        return this.saveAndReturn<TResponse>(state, this.importSheet(state, input.payload));
+        return this.saveAndReturn<TResponse>(
+          state,
+          importIntoSheet(
+            state,
+            sheetId,
+            this.withSheetCategories(state, input.payload),
+            () => id("col"),
+            new Date().toISOString()
+          )
+        );
       return this.saveAndReturn<TResponse>(
         state,
-        writeSheet(state, input, () => id("col"))
+        writeWorkbook(state, input, () => id("col"))
+      );
+    }
+    if (pathname === "/family")
+      return this.saveAndReturn<TResponse>(state, this.writeFamily(state, body));
+    if (pathname === "/sheets") {
+      const input = (body ?? {}) as Record<string, unknown>;
+      if (input.action === "importWorkbook") {
+        const sheets = (Array.isArray(input.sheets) ? input.sheets : []) as WorkbookImportSheet[];
+        for (const item of sheets)
+          if (item.kind === "budget") item.payload = this.withSheetCategories(state, item.payload);
+        return this.saveAndReturn<TResponse>(
+          state,
+          importWorkbook(state, sheets, () => id("sh"), new Date().toISOString())
+        );
+      }
+      return this.saveAndReturn<TResponse>(
+        state,
+        writeSheets(state, input, () => id("sh"))
       );
     }
     if (pathname === "/profiles/create") {
@@ -1538,6 +1655,9 @@ export class LocalApiClient implements ApiClient {
         ? { splitGroupId: String(input.splitGroupId || previous?.splitGroupId) }
         : {}),
       ...(input.transferId ? { transferId: String(input.transferId) } : {}),
+      // Семья: кто платил и общая ли трата. Форма, которая этих полей не знает
+      // (быстрая смена категории, правило), их не теряет — берутся прежние.
+      ...familyFields(state, input, previous),
       // Фото чека живёт отдельно (lib/photos) — правка операции его не теряет.
       ...(previous?.photo ? { photo: previous.photo } : {}),
       // Когда операцию записали. Операций одного дня бывает много, и порядок
@@ -4398,7 +4518,11 @@ export class LocalApiClient implements ApiClient {
    * заводятся здесь же (или берутся уже существующие с тем же именем), чтобы
    * «Продукты» из таблицы сразу открывали операции.
    */
-  private importSheet(state: LocalState, raw: unknown) {
+  /**
+   * Перенос из Excel: столбцы, которым человек велел «создать категорию»,
+   * получают её здесь — у листа нет доступа к справочнику категорий.
+   */
+  private withSheetCategories(state: LocalState, raw: unknown): SheetImport {
     const payload = raw as SheetImport & {
       columns: Array<SheetImport["columns"][number] & { createCategory?: "INCOME" | "EXPENSE" }>;
     };
@@ -4415,7 +4539,7 @@ export class LocalApiClient implements ApiClient {
         same?.id ??
         this.upsertCategory(state, { name: column.name, kind: column.createCategory }, "POST").id;
     }
-    return importSheet(state, payload, () => id("col"), new Date().toISOString());
+    return payload;
   }
 
   /** Операции для сторожа: подписка ли категория — из справочника. */
@@ -4606,6 +4730,133 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
+  /** Участники семьи и отметки «Рассчитались». */
+  private writeFamily(state: LocalState, body: unknown) {
+    const input = (body ?? {}) as Record<string, unknown>;
+    const members = state.members ?? [];
+    const name = () => {
+      const text = String(input.name ?? "")
+        .trim()
+        .slice(0, 40);
+      if (!text) throw new Error("Как зовут участника?");
+      return text;
+    };
+    const color = () => {
+      const text = String(input.color ?? "").trim();
+      return /^#[0-9a-fA-F]{3,8}$/.test(text)
+        ? text
+        : FAMILY_COLORS[members.length % FAMILY_COLORS.length];
+    };
+    switch (String(input.action ?? "")) {
+      case "addMember": {
+        const member = { id: id("mem"), name: name(), color: color() };
+        if (members.some((item) => item.name.toLowerCase() === member.name.toLowerCase()))
+          throw new Error("Участник с таким именем уже есть.");
+        state.members = [...members, member];
+        return member;
+      }
+      case "renameMember": {
+        const memberId = String(input.id ?? "");
+        if (!members.some((item) => item.id === memberId)) throw new Error("Такого участника нет.");
+        const next = name();
+        state.members = members.map((item) =>
+          item.id === memberId ? { ...item, name: next } : item
+        );
+        return { saved: true };
+      }
+      case "removeMember": {
+        const memberId = String(input.id ?? "");
+        state.members = members.filter((item) => item.id !== memberId);
+        return { removed: true };
+      }
+      case "settle": {
+        const from = String(input.from ?? "");
+        const to = String(input.to ?? "");
+        const amount = Number(
+          String(input.amount ?? "")
+            .replace(/[\s\u00a0]/g, "")
+            .replace(",", ".")
+        );
+        if (
+          !members.some((item) => item.id === from) ||
+          !members.some((item) => item.id === to) ||
+          from === to
+        )
+          throw new Error("Выберите, кто кому отдал.");
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error("Сумма — больше нуля.");
+        const settlement = {
+          id: id("settle"),
+          from,
+          to,
+          amount: roundMoney(amount),
+          date: typeof input.date === "string" && input.date ? input.date : isoDay(new Date())
+        };
+        state.familySettlements = [...(state.familySettlements ?? []), settlement];
+        return settlement;
+      }
+      default:
+        throw new Error("Неизвестное действие с семьёй.");
+    }
+  }
+
+  /**
+   * Числа для «Что если» (lib/whatif). Средние — по трём ПОЛНЫМ прошлым
+   * месяцам: текущий не кончился, и с ним расход выходил бы меньше настоящего,
+   * а покупка — безопаснее, чем она есть. Нет полных месяцев — берём что есть.
+   */
+  private whatIfBase(state: LocalState): WhatIfBase {
+    const rows = countableRows(state.transactions, false);
+    const now = new Date();
+    const keyOf = (offset: number) =>
+      monthKeyOf(new Date(now.getFullYear(), now.getMonth() + offset, 1));
+    const sums = (keys: string[]) => {
+      let income = 0;
+      let expense = 0;
+      for (const row of rows) {
+        if (!keys.some((key) => row.date.startsWith(key))) continue;
+        if (row.type === "INCOME") income += row.amount;
+        else if (row.type === "EXPENSE") expense += row.amount;
+      }
+      return { income, expense };
+    };
+    const full = [-3, -2, -1]
+      .map(keyOf)
+      .filter((key) => rows.some((row) => row.date.startsWith(key)));
+    const keys = full.length > 0 ? full : [keyOf(0)];
+    const total = sums(keys);
+    const open = state.accounts.filter((account) => !account.isArchived);
+    return {
+      currency: state.currency,
+      liquid: this.sumInBase(
+        state,
+        open.filter((account) => account.type === "CASH" || account.type === "DEBIT_CARD")
+      ),
+      savings: this.sumInBase(
+        state,
+        open.filter((account) => account.type === "SAVINGS")
+      ),
+      avgIncome: roundMoney(total.income / keys.length),
+      avgExpense: roundMoney(total.expense / keys.length),
+      debtPayments: this.sumInBase(
+        state,
+        activeDebts(state.liabilities).map((item) => ({
+          balance: item.minPayment,
+          currency: item.currency
+        }))
+      ),
+      cushionTarget: state.emergencyFundMonthsTarget,
+      goals: this.goals(state)
+        .goals.filter((goal) => goal.currentAmount < goal.targetAmount)
+        .map((goal) => ({
+          id: goal.id,
+          title: goal.title,
+          target: goal.targetAmount,
+          saved: goal.currentAmount,
+          monthly: goal.plannedContribution || goal.monthlyContribution
+        }))
+    };
+  }
+
   /**
    * The active profile's document. `mutable` (the default) hands back a copy,
    * so a handler that changes things — and may still throw — cannot poison the
@@ -4637,6 +4888,18 @@ export class LocalApiClient implements ApiClient {
         await this.storage.setItem(key, migrated);
       }
       this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(migrated)) };
+      const baseline = this.remoteBaseline;
+      this.remoteBaseline = null;
+      if (baseline?.key === key) {
+        await this.putInTrash(
+          key,
+          vanishedRows(
+            baseline.state as unknown as Record<string, unknown>,
+            migrated as unknown as Record<string, unknown>
+          ),
+          "elsewhere"
+        );
+      }
       return structuredClone(migrated);
     }
     // Nothing below may overwrite what is stored: the only reason we are here
@@ -4809,7 +5072,7 @@ export class LocalApiClient implements ApiClient {
     return { resolved: true } as TResponse;
   }
 
-  private async save(state: LocalState, options: { stamp?: boolean } = {}) {
+  private async save(state: LocalState, options: { stamp?: boolean; trash?: boolean } = {}) {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
     const previous = await this.storedState(key);
@@ -4823,6 +5086,16 @@ export class LocalApiClient implements ApiClient {
         : trackDeletions(stampRows(state, previous, now), previous, now);
     await this.storage.setItem(key, next);
     this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
+    // Удалённое — в корзину. Сличаем записанное с прежним, как и для фото ниже:
+    // мест, где что-то удаляют, слишком много, чтобы ловить каждое.
+    // Загрузка примера переписывает книгу целиком — это не удаление.
+    if (options.trash !== false) {
+      await this.putInTrash(
+        key,
+        vanishedRows(previous, next as unknown as Record<string, unknown>),
+        "here"
+      );
+    }
     // Операции не стало — не стало и её фото. Сличаем записанное с прежним,
     // а не ловим каждое место, где операцию удаляют: их много (одна, чек
     // целиком, выбранные, перевод), и одно забытое оставило бы фото навсегда.
@@ -4832,6 +5105,154 @@ export class LocalApiClient implements ApiClient {
     )) {
       await this.dropPhoto(gone.id, gone.place);
     }
+  }
+
+  // ——— корзина ————————————————————————————————————————————————————
+
+  private async putInTrash(
+    stateKey: string,
+    gone: ReturnType<typeof vanishedRows>,
+    origin: TrashOrigin
+  ): Promise<void> {
+    if (gone.length === 0) return;
+    try {
+      const key = `${stateKey}${TRASH_SUFFIX}`;
+      const trash = readTrash(await this.storage.getItem<unknown>(key));
+      await this.storage.setItem(key, {
+        v: 1,
+        entries: addToTrash(trash, gone, new Date().toISOString(), origin, () => id("trash"))
+      });
+    } catch {
+      /* корзина — страховка; книга уже записана, и падать из-за неё нельзя */
+    }
+  }
+
+  private async trashKey(): Promise<string> {
+    return `${profileStateKey(await this.getActiveProfileId())}${TRASH_SUFFIX}`;
+  }
+
+  private async trashEntries(): Promise<TrashEntry[]> {
+    const key = await this.trashKey();
+    return pruneTrash(
+      readTrash(await this.storage.getItem<unknown>(key)),
+      new Date().toISOString()
+    );
+  }
+
+  private async trashList() {
+    const entries = await this.trashEntries();
+    return {
+      entries: entries.map((entry) => ({
+        id: entry.id,
+        collection: entry.collection,
+        title: trashTitle(entry),
+        amount: trashAmount(entry),
+        currency: typeof entry.row.currency === "string" ? entry.row.currency : "RUB",
+        type: typeof entry.row.type === "string" ? entry.row.type : null,
+        date: typeof entry.row.date === "string" ? entry.row.date : null,
+        deletedAt: entry.deletedAt,
+        origin: entry.origin
+      }))
+    };
+  }
+
+  /**
+   * Вернуть из корзины. Сначала счета и категории, потом то, что на них
+   * ссылается: удалили счёт вместе с операциями — вернуть надо в том же порядке.
+   */
+  private async restoreFromTrash(state: LocalState, ids: string[]) {
+    const order = [
+      "sheets",
+      "accounts",
+      "categories",
+      "liabilities",
+      "goals",
+      "budgets",
+      "rules",
+      "recurringTransactions",
+      "cashbackRules",
+      "trips",
+      "sheetColumns",
+      "sheetTargets",
+      "members",
+      "familySettlements",
+      "transactions"
+    ];
+    const entries = (await this.trashEntries())
+      .filter((entry) => ids.includes(entry.id))
+      .sort((a, b) => order.indexOf(a.collection) - order.indexOf(b.collection));
+    if (entries.length === 0) throw new Error("В корзине этого уже нет.");
+    const holder = state as unknown as Record<string, unknown>;
+    const restored: string[] = [];
+    const failed: string[] = [];
+    // Счёт, возвращаемый вместе со своими операциями, уже несёт остаток с ними:
+    // провести операции по нему ещё раз значило бы удвоить деньги.
+    const accountsBack = new Set<string>();
+    for (const entry of entries) {
+      const { updatedAt: _stamp, ...row } = entry.row;
+      void _stamp;
+      try {
+        if (entry.collection === "transactions") {
+          const accountId = (row.account as { id?: unknown } | undefined)?.id;
+          if (typeof accountId === "string" && accountsBack.has(accountId)) {
+            if (!state.transactions.some((item) => item.id === row.id))
+              state.transactions = [
+                transactionRowSchema.omit({ updatedAt: true }).parse(row) as TransactionRow,
+                ...state.transactions
+              ];
+          } else {
+            this.restoreTransaction(state, { transaction: row });
+          }
+        } else {
+          // Лист возвращается вместе со всем, что на нём было.
+          const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
+          delete row[SHEET_ARCHIVE];
+          if (entry.collection === "sheets" && content) {
+            for (const [collection, list] of Object.entries(content)) {
+              const present = Array.isArray(holder[collection])
+                ? (holder[collection] as Array<Record<string, unknown>>)
+                : [];
+              const ids = new Set(present.map((item) => item.id));
+              holder[collection] = [
+                ...present,
+                ...(list as Array<Record<string, unknown>>)
+                  .filter((item) => !ids.has(item.id))
+                  .map(({ updatedAt: _at, ...rest }) => (void _at, rest))
+              ];
+            }
+          }
+          const rows = Array.isArray(holder[entry.collection])
+            ? (holder[entry.collection] as Array<Record<string, unknown>>)
+            : [];
+          if (!rows.some((item) => item.id === row.id)) {
+            // Цель при удалении отдала деньги на счёт (см. remove, /goals): вернуть
+            // её с прежней суммой значило бы посчитать эти деньги дважды.
+            if (entry.collection === "goals") Object.assign(row, { currentAmount: 0, progress: 0 });
+            holder[entry.collection] = [...rows, row];
+            if (entry.collection === "accounts" && typeof row.id === "string")
+              accountsBack.add(row.id);
+          }
+        }
+        restored.push(entry.id);
+      } catch (error) {
+        failed.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    await this.save(state);
+    const key = await this.trashKey();
+    const left = readTrash(await this.storage.getItem<unknown>(key)).filter(
+      (entry) => !restored.includes(entry.id)
+    );
+    await this.storage.setItem(key, { v: 1, entries: left });
+    return { restored: restored.length, failed };
+  }
+
+  private async purgeTrash(ids: string[] | "all") {
+    const key = await this.trashKey();
+    const entries = readTrash(await this.storage.getItem<unknown>(key));
+    const left = ids === "all" ? [] : entries.filter((entry) => !ids.includes(entry.id));
+    await this.storage.setItem(key, { v: 1, entries: left });
+    return { removed: entries.length - left.length };
   }
 
   // ——— фото чеков ————————————————————————————————————————————————
@@ -5028,7 +5449,8 @@ export class LocalApiClient implements ApiClient {
         key.endsWith(RESCUE_SUFFIX) ||
         // Ежедневные копии — тоже данные целиком. Отменить очистку можно и
         // без них: для этого откладывается своя копия, выше.
-        key.endsWith(LOCAL_COPY_SUFFIX)
+        key.endsWith(LOCAL_COPY_SUFFIX) ||
+        key.endsWith(TRASH_SUFFIX)
       ) {
         await this.storage.removeItem(key);
       }

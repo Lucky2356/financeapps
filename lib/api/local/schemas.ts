@@ -110,7 +110,11 @@ export const transactionRowSchema = z.object({
   createdAt: z.string().optional(),
   // Где фото чека: уезжает на другие устройства или лежит только здесь.
   // Само фото — отдельной записью (lib/photos/receipt-photo.ts).
-  photo: z.enum(["synced", "device"]).optional()
+  photo: z.enum(["synced", "device"]).optional(),
+  // Семейный бюджет (v17, lib/family): кто потратил и общая ли это трата —
+  // общая делится поровну между всеми участниками.
+  memberId: z.string().min(1).optional(),
+  shared: z.boolean().optional()
 });
 export const budgetRowSchema = z.object({
   updatedAt,
@@ -372,6 +376,12 @@ export const planNoteSchema = z.object({
 
 // Таблица бюджета (lib/sheet): столбцы, ячейки, месяцы-строки и цели.
 const sheetMonth = z.string().regex(/^\d{4}-\d{2}$/);
+/**
+ * Строка-месяц таблицы. У главной таблицы id — сам месяц («2026-10»), у других
+ * листов — «лист|месяц»: месяцы листов независимы, и одинаковый id у двух
+ * листов слился бы в одну строку.
+ */
+const sheetMonthId = z.string().regex(/^(?:[A-Za-z0-9_-]+\|)?\d{4}-\d{2}$/);
 export const sheetColumnSchema = z.object({
   updatedAt,
   id: z.string().min(1),
@@ -388,7 +398,9 @@ export const sheetColumnSchema = z.object({
   ]),
   categoryId: z.string().nullable().optional(),
   order: z.coerce.number().finite(),
-  hidden: z.boolean().optional()
+  hidden: z.boolean().optional(),
+  // Чей это столбец: нет — главной таблицы, иначе — листа с этим id (v17).
+  sheetId: z.string().min(1).optional()
 });
 export const sheetCellSchema = z.object({
   updatedAt,
@@ -397,13 +409,59 @@ export const sheetCellSchema = z.object({
   columnId: z.string().min(1),
   input: z.string().max(500)
 });
-export const sheetMonthSchema = z.object({ updatedAt, id: sheetMonth });
+export const sheetMonthSchema = z.object({
+  updatedAt,
+  id: sheetMonthId,
+  sheetId: z.string().min(1).optional()
+});
 export const sheetTargetSchema = z.object({
   updatedAt,
   id: z.string().min(1),
   label: z.string().trim().min(1).max(80),
   date: z.string().max(10),
-  amount: z.coerce.number().finite()
+  amount: z.coerce.number().finite(),
+  sheetId: z.string().min(1).optional()
+});
+
+/**
+ * Лист книги таблиц (v17): бюджетный — месяцы × статьи со счётом остатка и
+ * итога, свободный — клетки как в Excel, перенесённые листы любой формы.
+ * Главная таблица — лист с id «main»; её строки листа не носят.
+ */
+export const sheetSchema = z.object({
+  updatedAt,
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,40}$/),
+  name: z.string().trim().min(1).max(60),
+  kind: z.enum(["budget", "free"]),
+  order: z.coerce.number().finite(),
+  rows: z.coerce.number().int().min(1).max(2000).optional(),
+  cols: z.coerce.number().int().min(1).max(200).optional()
+});
+/** Клетка свободного листа: «лист|строка|столбец», ввод как набрал человек. */
+export const freeCellSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  sheetId: z.string().min(1),
+  r: z.coerce.number().int().min(0).max(1999),
+  c: z.coerce.number().int().min(0).max(199),
+  input: z.string().max(500)
+});
+
+/** Участник семейного бюджета (lib/family). */
+export const memberSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(40),
+  color: z.string().trim().min(1).max(32).default("#64748b")
+});
+/** «Рассчитались»: один участник отдал другому — долг по общим тратам гасится. */
+export const familySettlementSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  from: z.string().min(1),
+  to: z.string().min(1),
+  amount: z.coerce.number().finite().positive(),
+  date: z.string().min(1)
 });
 
 // Кэшбэк: условия карты на месяц (lib/cashback). categoryId «*» — на всё прочее.
@@ -461,7 +519,8 @@ export const localStateSchema = z.object({
     z.literal(13),
     z.literal(14),
     z.literal(15),
-    z.literal(16)
+    z.literal(16),
+    z.literal(17)
   ]),
   currency: z.enum(CURRENCY_CODES).default("RUB"),
   /**
@@ -538,6 +597,10 @@ export const localStateSchema = z.object({
   sheetCells: z.array(sheetCellSchema).default([]),
   sheetMonths: z.array(sheetMonthSchema).default([]),
   sheetTargets: z.array(sheetTargetSchema).default([]),
+  sheets: z.array(sheetSchema).default([]),
+  members: z.array(memberSchema).default([]),
+  familySettlements: z.array(familySettlementSchema).default([]),
+  freeCells: z.array(freeCellSchema).default([]),
   cashbackRules: z.array(cashbackRuleSchema).default([]),
   trips: z.array(tripSchema).default([]),
   deductionYears: z.array(deductionYearSchema).default([]),
@@ -552,6 +615,19 @@ export const localStateSchema = z.object({
       targets: z.array(sheetTargetSchema)
     })
     .nullable()
+    .optional(),
+  // То же для остальных листов — по id листа.
+  sheetBackups: z
+    .record(
+      z.string(),
+      z.object({
+        takenAt: z.string(),
+        columns: z.array(sheetColumnSchema),
+        cells: z.array(sheetCellSchema),
+        months: z.array(sheetMonth),
+        targets: z.array(sheetTargetSchema)
+      })
+    )
     .optional(),
   transactions: z.array(transactionRowSchema).default([]),
   budgets: z.array(budgetRowSchema).default([]),

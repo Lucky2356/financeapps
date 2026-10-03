@@ -25,6 +25,8 @@ const ROUTES = [
   "/sheet",
   "/investments",
   "/deductions",
+  "/what-if",
+  "/family",
   "/settings?section=general",
   "/settings?section=finance",
   "/settings?section=sync",

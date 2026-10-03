@@ -63,7 +63,7 @@ export function SheetSummary({
         {tiles.map((tile) => (
           <div
             key={tile.key}
-            className={cn("px-3 py-1.5 sm:flex-1", tile.key === "total" && "bg-primary/5")}
+            className={cn("px-3 py-1.5 sm:flex-1", tile.key === "total" && "bg-foreground/[0.04]")}
             data-testid={`sum-${tile.key}`}
           >
             <p className="text-[11px] text-muted-foreground">{tile.label}</p>
@@ -107,7 +107,7 @@ export function SheetSummary({
 
       {monthsLeft !== null && monthsLeft <= 1 ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
-          <CalendarPlus className="size-4 shrink-0 text-primary" />
+          <CalendarPlus className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1">{format(words.runningOut, { count: monthsLeft })}</span>
           <Button type="button" size="sm" variant="outline" onClick={onAddYear}>
             {words.addYear}

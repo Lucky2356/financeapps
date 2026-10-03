@@ -19,10 +19,7 @@ export function SheetHelp({
   onClose: () => void;
 }) {
   return (
-    <div
-      className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm"
-      data-testid="sheet-help"
-    >
+    <div className="rounded-lg border bg-muted/40 p-4 text-sm" data-testid="sheet-help">
       <div className="flex items-start justify-between gap-2">
         <p className="font-semibold">{words.help}</p>
         <button
@@ -63,7 +60,7 @@ export function SheetHelp({
           {words.legendMinus}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="rounded bg-primary/15 px-1.5 py-0.5 font-medium text-primary">
+          <span className="rounded bg-foreground/10 px-1.5 py-0.5 font-bold text-foreground">
             Сен 2026
           </span>
           {words.legendNow}

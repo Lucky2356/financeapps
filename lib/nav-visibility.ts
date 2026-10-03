@@ -19,6 +19,8 @@ export const HIDEABLE_SECTIONS: readonly HideableSection[] = [
   { href: "/subscriptions", labelKey: "nav.subscriptions" },
   { href: "/cashback", labelKey: "nav.cashback" },
   { href: "/trips", labelKey: "nav.trips" },
+  { href: "/what-if", labelKey: "nav.whatIf" },
+  { href: "/family", labelKey: "nav.family" },
   { href: "/deductions", labelKey: "nav.deductions" },
   { href: "/forecast", labelKey: "nav.forecast" },
   { href: "/reports", labelKey: "nav.reports" }

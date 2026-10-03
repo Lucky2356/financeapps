@@ -161,6 +161,13 @@ export const DEVICE_ONLY_SUFFIX = ":device";
  */
 export const LOCAL_COPY_SUFFIX = ":local-copy";
 
+/**
+ * Корзина: удалённое за 30 дней (lib/trash). Местная — каждое устройство
+ * откладывает то, что исчезло из ЕГО книги, кто бы это ни удалил; возврат
+ * уезжает ко всем обычной правкой.
+ */
+export const TRASH_SUFFIX = ":trash";
+
 function syncableKey(key: string): boolean {
   return (
     !LOCAL_ONLY_KEYS.includes(key) &&
@@ -174,7 +181,8 @@ function syncableKey(key: string): boolean {
     !key.endsWith(RESCUE_SUFFIX) &&
     !key.endsWith(BEFORE_CLEAR_SUFFIX) &&
     !key.endsWith(DEVICE_ONLY_SUFFIX) &&
-    !key.endsWith(LOCAL_COPY_SUFFIX)
+    !key.endsWith(LOCAL_COPY_SUFFIX) &&
+    !key.endsWith(TRASH_SUFFIX)
   );
 }
 
