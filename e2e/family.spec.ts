@@ -69,6 +69,8 @@ test.describe("телефон", () => {
     await openSettled(page, "/family");
     await page.getByTestId("family-name").fill("Александра");
     await page.getByTestId("family-add").click();
+    // Первый участник меняет пустой экран на список — поле ввода новое.
+    await expect(page.getByTestId("family-members")).toContainText("Александра");
     await page.getByTestId("family-name").fill("Мария");
     await page.getByTestId("family-add").click();
     await expect(page.getByTestId("family-person")).toHaveCount(2);

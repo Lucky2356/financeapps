@@ -12,7 +12,9 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true
 test("короткое окно стоит по центру телефона", async ({ page }) => {
   await seedExampleData(page);
   await openSettled(page, "/");
-  await page.getByRole("button", { name: "Итоги месяца" }).click();
+  // exact: в первые дни месяца на главной ещё и карточка итогов с кнопкой
+  // «Закрыть итоги месяца».
+  await page.getByRole("button", { name: "Итоги месяца", exact: true }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
