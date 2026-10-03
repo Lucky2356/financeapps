@@ -39,7 +39,9 @@ export const TRASHED_COLLECTIONS = [
   "sheetTargets",
   "cashbackRules",
   "trips",
-  "sheets"
+  "sheets",
+  "members",
+  "familySettlements"
 ] as const;
 
 export type TrashedCollection = (typeof TRASHED_COLLECTIONS)[number];

@@ -14,6 +14,7 @@ import { onDataChanged } from "@/lib/api/data-events";
 import { matchRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
+import { FamilyFields } from "@/components/family/family-fields";
 import { TransactionFilterBar } from "@/components/transactions/filter-bar";
 import { ReceiptPhotoDialog } from "@/components/transactions/receipt-photo-dialog";
 import type { AiProvider } from "@/lib/ai/models";
@@ -1138,6 +1139,15 @@ function TransactionDialog({
               placeholder={t("tx.dialog.tagsPlaceholder")}
             />
           </div>
+          {selectedType === "EXPENSE" ? (
+            <div className="sm:col-span-2">
+              <FamilyFields
+                isNew={!transaction}
+                initialMemberId={transaction?.memberId}
+                initialShared={transaction?.shared}
+              />
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button type="submit" disabled={pending}>

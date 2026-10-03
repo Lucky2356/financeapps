@@ -199,6 +199,10 @@ export type TransactionRow = {
   liabilityId?: string;
   /** Есть фото чека: уезжает на другие устройства или лежит только здесь. */
   photo?: "synced" | "device";
+  /** Кто из семьи платил — см. lib/family/family.ts. */
+  memberId?: string;
+  /** Общая трата семьи: делится поровну на всех участников. */
+  shared?: boolean;
   /**
    * What `amount` is worth in the base currency, when the account keeps another
    * one. Derived on read and never stored: totals use it, while the row itself

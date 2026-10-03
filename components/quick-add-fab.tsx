@@ -41,6 +41,7 @@ import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
+import { FamilyFields } from "@/components/family/family-fields";
 import { AmountInput } from "@/components/ui/amount-input";
 import { CategoryOptionLabel } from "@/components/category-option";
 import { Button } from "@/components/ui/button";
@@ -1010,6 +1011,8 @@ export function QuickAddFab({
                   ))}
                 </div>
               </div>
+
+              {type === "EXPENSE" ? <FamilyFields isNew /> : null}
 
               <div className="space-y-2">
                 <Label htmlFor="fab-description">{t("qa.descLabel")}</Label>

@@ -110,7 +110,11 @@ export const transactionRowSchema = z.object({
   createdAt: z.string().optional(),
   // Где фото чека: уезжает на другие устройства или лежит только здесь.
   // Само фото — отдельной записью (lib/photos/receipt-photo.ts).
-  photo: z.enum(["synced", "device"]).optional()
+  photo: z.enum(["synced", "device"]).optional(),
+  // Семейный бюджет (v17, lib/family): кто потратил и общая ли это трата —
+  // общая делится поровну между всеми участниками.
+  memberId: z.string().min(1).optional(),
+  shared: z.boolean().optional()
 });
 export const budgetRowSchema = z.object({
   updatedAt,
@@ -443,6 +447,23 @@ export const freeCellSchema = z.object({
   input: z.string().max(500)
 });
 
+/** Участник семейного бюджета (lib/family). */
+export const memberSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  name: z.string().trim().min(1).max(40),
+  color: z.string().trim().min(1).max(32).default("#64748b")
+});
+/** «Рассчитались»: один участник отдал другому — долг по общим тратам гасится. */
+export const familySettlementSchema = z.object({
+  updatedAt,
+  id: z.string().min(1),
+  from: z.string().min(1),
+  to: z.string().min(1),
+  amount: z.coerce.number().finite().positive(),
+  date: z.string().min(1)
+});
+
 // Кэшбэк: условия карты на месяц (lib/cashback). categoryId «*» — на всё прочее.
 export const cashbackRuleSchema = z.object({
   updatedAt,
@@ -577,6 +598,8 @@ export const localStateSchema = z.object({
   sheetMonths: z.array(sheetMonthSchema).default([]),
   sheetTargets: z.array(sheetTargetSchema).default([]),
   sheets: z.array(sheetSchema).default([]),
+  members: z.array(memberSchema).default([]),
+  familySettlements: z.array(familySettlementSchema).default([]),
   freeCells: z.array(freeCellSchema).default([]),
   cashbackRules: z.array(cashbackRuleSchema).default([]),
   trips: z.array(tripSchema).default([]),

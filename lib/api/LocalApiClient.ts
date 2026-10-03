@@ -157,6 +157,7 @@ import type {
 } from "@/types/finance";
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
 import type { WhatIfBase } from "@/lib/whatif/simulate";
+import { familyPicture } from "@/lib/family/family";
 import {
   importIntoSheet,
   importWorkbook,
@@ -287,6 +288,11 @@ type LocalState = BookState &
       }>
     >;
     transactions: Array<Stamped<TransactionRow & { recurringId?: string }>>;
+    /** Семья: участники и отметки «Рассчитались» — см. lib/family/family.ts. */
+    members?: Array<Stamped<{ id: string; name: string; color: string }>>;
+    familySettlements?: Array<
+      Stamped<{ id: string; from: string; to: string; amount: number; date: string }>
+    >;
     budgets: Array<Stamped<BudgetsPageData["budgets"][number]>>;
     goals: Array<Stamped<GoalsPageData["goals"][number]>>;
     recurringTransactions: Array<
@@ -657,6 +663,34 @@ const DEFAULT_PROFILE: UserProfile = {
   createdAt: "1970-01-01T00:00:00.000Z"
 };
 
+/** Цвета участников семьи по очереди — различимые и в светлой, и в тёмной теме. */
+const FAMILY_COLORS = ["#0ea5e9", "#f97316", "#22c55e", "#e11d48", "#a855f7", "#eab308"];
+
+/** Поля семьи для операции: из формы, а если форма о них молчит — прежние. */
+function familyFields(
+  state: LocalState,
+  input: Record<string, unknown>,
+  previous: { memberId?: string; shared?: boolean } | undefined
+): { memberId?: string; shared?: boolean } {
+  const members = new Set((state.members ?? []).map((member) => member.id));
+  const raw = input.memberId;
+  const memberId =
+    raw === undefined
+      ? previous?.memberId
+      : typeof raw === "string" && members.has(raw)
+        ? raw
+        : undefined;
+  const sharedRaw = input.shared;
+  const shared =
+    sharedRaw === undefined
+      ? previous?.shared
+      : sharedRaw === true || sharedRaw === "true" || sharedRaw === "1" || sharedRaw === "on";
+  return {
+    ...(memberId ? { memberId } : {}),
+    ...(shared && memberId ? { shared: true } : {})
+  };
+}
+
 export class LocalApiClient implements ApiClient {
   constructor(private readonly storage: StorageAdapter = createStorageAdapter()) {}
 
@@ -890,6 +924,23 @@ export class LocalApiClient implements ApiClient {
       return readSheet(sheetScope(state, searchParams.get("sheet") || MAIN_SHEET)) as T;
     if (pathname === "/workbook") return readWorkbook(state, searchParams.get("sheet")) as T;
     if (pathname === "/what-if") return this.whatIfBase(this.inBase(state)) as T;
+    if (pathname === "/family") {
+      const month = searchParams.get("month") || monthKeyOf(new Date());
+      const members = (state.members ?? []).map(({ id: memberId, name, color }) => ({
+        id: memberId,
+        name,
+        color
+      }));
+      return {
+        members,
+        picture: familyPicture(
+          members,
+          this.inBase(state).transactions,
+          state.familySettlements ?? [],
+          month
+        )
+      } as T;
+    }
     if (pathname === "/watchdog") {
       const counted = this.countingState(this.inBase(state), false);
       return {
@@ -1287,6 +1338,8 @@ export class LocalApiClient implements ApiClient {
         writeWorkbook(state, input, () => id("col"))
       );
     }
+    if (pathname === "/family")
+      return this.saveAndReturn<TResponse>(state, this.writeFamily(state, body));
     if (pathname === "/sheets") {
       const input = (body ?? {}) as Record<string, unknown>;
       if (input.action === "importWorkbook") {
@@ -1602,6 +1655,9 @@ export class LocalApiClient implements ApiClient {
         ? { splitGroupId: String(input.splitGroupId || previous?.splitGroupId) }
         : {}),
       ...(input.transferId ? { transferId: String(input.transferId) } : {}),
+      // Семья: кто платил и общая ли трата. Форма, которая этих полей не знает
+      // (быстрая смена категории, правило), их не теряет — берутся прежние.
+      ...familyFields(state, input, previous),
       // Фото чека живёт отдельно (lib/photos) — правка операции его не теряет.
       ...(previous?.photo ? { photo: previous.photo } : {}),
       // Когда операцию записали. Операций одного дня бывает много, и порядок
@@ -4674,6 +4730,75 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
+  /** Участники семьи и отметки «Рассчитались». */
+  private writeFamily(state: LocalState, body: unknown) {
+    const input = (body ?? {}) as Record<string, unknown>;
+    const members = state.members ?? [];
+    const name = () => {
+      const text = String(input.name ?? "")
+        .trim()
+        .slice(0, 40);
+      if (!text) throw new Error("Как зовут участника?");
+      return text;
+    };
+    const color = () => {
+      const text = String(input.color ?? "").trim();
+      return /^#[0-9a-fA-F]{3,8}$/.test(text)
+        ? text
+        : FAMILY_COLORS[members.length % FAMILY_COLORS.length];
+    };
+    switch (String(input.action ?? "")) {
+      case "addMember": {
+        const member = { id: id("mem"), name: name(), color: color() };
+        if (members.some((item) => item.name.toLowerCase() === member.name.toLowerCase()))
+          throw new Error("Участник с таким именем уже есть.");
+        state.members = [...members, member];
+        return member;
+      }
+      case "renameMember": {
+        const memberId = String(input.id ?? "");
+        if (!members.some((item) => item.id === memberId)) throw new Error("Такого участника нет.");
+        const next = name();
+        state.members = members.map((item) =>
+          item.id === memberId ? { ...item, name: next } : item
+        );
+        return { saved: true };
+      }
+      case "removeMember": {
+        const memberId = String(input.id ?? "");
+        state.members = members.filter((item) => item.id !== memberId);
+        return { removed: true };
+      }
+      case "settle": {
+        const from = String(input.from ?? "");
+        const to = String(input.to ?? "");
+        const amount = Number(
+          String(input.amount ?? "")
+            .replace(/[\s\u00a0]/g, "")
+            .replace(",", ".")
+        );
+        if (
+          !members.some((item) => item.id === from) ||
+          !members.some((item) => item.id === to) ||
+          from === to
+        )
+          throw new Error("Выберите, кто кому отдал.");
+        if (!Number.isFinite(amount) || amount <= 0) throw new Error("Сумма — больше нуля.");
+        const settlement = {
+          id: id("settle"),
+          from,
+          to,
+          amount: roundMoney(amount),
+          date: typeof input.date === "string" && input.date ? input.date : isoDay(new Date())
+        };
+        state.familySettlements = [...(state.familySettlements ?? []), settlement];
+        return settlement;
+      }
+      default:
+        throw new Error("Неизвестное действие с семьёй.");
+    }
+  }
+
   /**
    * Числа для «Что если» (lib/whatif). Средние — по трём ПОЛНЫМ прошлым
    * месяцам: текущий не кончился, и с ним расход выходил бы меньше настоящего,
@@ -5049,6 +5174,8 @@ export class LocalApiClient implements ApiClient {
       "trips",
       "sheetColumns",
       "sheetTargets",
+      "members",
+      "familySettlements",
       "transactions"
     ];
     const entries = (await this.trashEntries())
