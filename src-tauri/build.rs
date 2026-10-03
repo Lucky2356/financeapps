@@ -3,7 +3,7 @@ fn main() {
   // скачать APK обновления и открыть экран установки, а ещё отдать ссылку
   // financeapps://pair…, которой приложение открыли из QR-кода, и вход по
   // отпечатку (ключ данных под ключом хранилища Android), напоминания,
-  // виджет на рабочем столе и траты из уведомлений банка. Права на его
+  // виджет на рабочем столе, траты из уведомлений банка и связь с Лоли. Права на его
   // команды выводятся здесь, как у настоящих плагинов.
   tauri_build::try_build(tauri_build::Attributes::new().plugin(
     "installer",
@@ -22,6 +22,11 @@ fn main() {
         "bank_status",
         "bank_open_settings",
         "bank_take",
+        "loli_status",
+        "loli_config",
+        "loli_take",
+        "loli_ack",
+        "loli_summary",
       ])
       .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
   ))

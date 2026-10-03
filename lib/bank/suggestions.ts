@@ -8,6 +8,7 @@
 import type { BankSuggestion } from "@/lib/bank/notification-parse";
 import { matchRule, type CategorizationRule } from "@/lib/categorization-rules";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { loliCategory } from "@/lib/loli/inbox";
 
 export const BANK_SUGGESTIONS_KEY = "bank-suggestions";
 export const BANK_ENABLED_KEY = "bank-notifications";
@@ -125,7 +126,7 @@ export function resolveTarget(
   item: BankSuggestion,
   refs: {
     accounts: Array<Ref & { name: string; isArchived?: boolean; currency?: string }>;
-    categories: Array<Ref & { kind: string }>;
+    categories: Array<Ref & { kind: string; label?: string }>;
     rules: CategorizationRule[];
     history: Parameters<typeof suggestCategoryId>[1];
     lastAccount: string | null;
@@ -144,6 +145,15 @@ export function resolveTarget(
     id && refs.categories.some((category) => category.id === id && category.kind === item.type)
       ? id
       : null;
+  // Статью назвал сам источник (Лоли: «на продукты») — она и важнее догадки.
+  const named = item.category
+    ? loliCategory(
+        { category: item.category, description: "", type: item.type },
+        refs.categories.map((category) => ({ ...category, label: category.label ?? "" })),
+        []
+      )
+    : null;
+  if (named) return { accountId, categoryId: named };
   const text = item.merchant;
   const categoryId = text
     ? (known(matchRule(text, refs.rules)) ??

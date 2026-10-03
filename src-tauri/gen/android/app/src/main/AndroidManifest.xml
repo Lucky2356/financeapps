@@ -20,6 +20,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
+    <!-- Лоли (LoliBridge.kt): увидеть, стоит ли она на телефоне и чьей
+         подписью подписана. Начиная с Android 11 чужие приложения иначе не
+         видны вовсе. -->
+    <queries>
+        <package android:name="ai.loli.app" />
+    </queries>
+
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
@@ -105,6 +112,14 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Окно для Лоли: траты голосом и сводка для ответов. Открыто
+             наружу, но отвечает только приложению с подписью Лоли — проверка
+             в LoliProvider.call, по сертификату, а не по имени пакета. -->
+        <provider
+            android:name=".LoliProvider"
+            android:authorities="${applicationId}.loli"
+            android:exported="true" />
 
         <provider
           android:name="androidx.core.content.FileProvider"
