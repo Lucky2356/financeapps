@@ -14,6 +14,7 @@ import { FAMILY_ME_KEY } from "@/components/family/family-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api/client";
+import { onDataChanged } from "@/lib/api/data-events";
 import type { BankSuggestion } from "@/lib/bank/notification-parse";
 import {
   alreadyRecorded,
@@ -57,7 +58,12 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
     void Promise.resolve().then(load);
     const onChange = () => void load();
     window.addEventListener(BANK_EVENT, onChange);
-    return () => window.removeEventListener(BANK_EVENT, onChange);
+    // Записали ту же трату руками или с другого устройства — предложение уходит.
+    const stop = onDataChanged(onChange);
+    return () => {
+      window.removeEventListener(BANK_EVENT, onChange);
+      stop();
+    };
   }, [load]);
 
   function forget(id: string) {
