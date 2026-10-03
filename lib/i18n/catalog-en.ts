@@ -77,6 +77,7 @@ export const en: Messages = {
   "family.rename": "Rename: {name}",
   "family.renameTitle": "Member",
   "family.since": "In the family since",
+  "goal.reached": "Goal reached",
   "mr.title": "Monthly report",
   "mr.open": "Monthly report (PDF)",
   "mr.month": "Report month",

@@ -90,6 +90,7 @@ const ru: Messages = {
   "family.rename": "Переименовать: {name}",
   "family.renameTitle": "Участник",
   "family.since": "В семье с",
+  "goal.reached": "Цель достигнута",
   "mr.title": "Отчёт за месяц",
   "mr.open": "Отчёт за месяц (PDF)",
   "mr.month": "Месяц отчёта",

@@ -8,7 +8,6 @@ import { HeroCard } from "@/components/ui/hero-card";
 import { StatGrid } from "@/components/ui/stat-grid";
 import { StatTile, type StatTone } from "@/components/ui/stat-tile";
 import type { DashboardData } from "@/types/finance";
-import { useCountUp } from "@/hooks/use-count-up";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
@@ -30,7 +29,6 @@ const METRIC_HREF: Record<string, string | undefined> = {
 
 export function DashboardOverview({ data }: { data: DashboardData }) {
   const { t } = useI18n();
-  const netWorthValue = useCountUp(data.netWorth);
   const healthTone =
     data.health.score >= 75 ? "good" : data.health.score >= 50 ? "warning" : "critical";
 
@@ -67,7 +65,7 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
       <HeroCard
         variant="accent"
         label={t("dash.netWorth")}
-        value={formatCurrency(Math.round(netWorthValue), data.currency)}
+        value={formatCurrency(data.netWorth, data.currency)}
         caption={t("dash.netWorthDesc")}
         changePercent={changePercent}
         trend={trend}

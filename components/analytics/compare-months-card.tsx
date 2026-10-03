@@ -86,7 +86,7 @@ export function CompareMonthsCard({ currency }: { currency: string }) {
         {lines.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("cmp.empty")}</p>
         ) : (
-          <ul className="divide-y rounded-lg border text-sm">
+          <ul className="stagger divide-y rounded-lg border text-sm">
             {lines.slice(0, 12).map((line) => (
               <li
                 key={line.categoryId}

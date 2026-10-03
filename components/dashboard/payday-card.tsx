@@ -6,6 +6,7 @@ import { CalendarClock, ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Expand } from "@/components/ui/expand";
 import {
   Select,
   SelectContent,
@@ -80,7 +81,7 @@ export function PaydayCard({ currency }: { currency: string }) {
             className={cn("mt-1 size-4 shrink-0 transition-transform", open && "rotate-180")}
           />
         </button>
-        {open ? (
+        <Expand open={open}>
           <div className="space-y-2 border-t pt-2 text-sm">
             <p className="flex justify-between gap-2">
               <span className="text-muted-foreground">{t("pay.liquid")}</span>
@@ -121,7 +122,7 @@ export function PaydayCard({ currency }: { currency: string }) {
               </Select>
             </div>
           </div>
-        ) : null}
+        </Expand>
       </CardContent>
     </Card>
   );
