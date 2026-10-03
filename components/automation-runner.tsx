@@ -156,6 +156,17 @@ async function runAutomation() {
     }
   }
 
+  // Прежде чем писать платежи самим — забрать то, что записали другие
+  // устройства. Синхронизация поднимается одновременно с этим запуском, и без
+  // ожидания телефон, открытый после компьютера, записывал аренду второй раз:
+  // после обмена в учёте две аренды, а остаток уменьшен дважды.
+  try {
+    const { firstExchange } = await import("@/lib/vault/runtime");
+    await firstExchange();
+  } catch {
+    // Не вышло сверить — пишем по своей книге, как раньше.
+  }
+
   if (settings.autoMaterializeRecurring) {
     try {
       // Auto-post every template whose due date has arrived.

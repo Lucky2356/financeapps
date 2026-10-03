@@ -72,6 +72,39 @@ describe("синхронизирующее хранилище", () => {
     });
   });
 
+  describe("ожидание первой сверки (settled)", () => {
+    it("ждёт, пока запуск заберёт книгу с сервера", async () => {
+      server.seed(SLOT, box("чужое"));
+      let done = false;
+      const waiting = storage.settled(60_000).then(() => (done = true));
+      await Promise.resolve();
+      expect(done).toBe(false);
+      await storage.start(server, glue);
+      await storage.flush();
+      await waiting;
+      expect(done).toBe(true);
+      expect(storage.status).toBe("synced");
+      expect(await storage.getItem(SLOT)).toEqual(box("чужое"));
+    });
+
+    it("уже сверено — не ждёт", async () => {
+      await storage.start(server, glue);
+      await storage.flush();
+      await expect(storage.settled(60_000)).resolves.toBeUndefined();
+    });
+
+    it("сервер так и не ответил — отпускает по времени", async () => {
+      vi.useFakeTimers();
+      try {
+        const waiting = storage.settled(5_000);
+        vi.advanceTimersByTime(5_000);
+        await expect(waiting).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe("остаётся обычным хранилищем", () => {
     it("читает и пишет без всякого сервера", async () => {
       await storage.setItem("что-нибудь", { a: 1 });

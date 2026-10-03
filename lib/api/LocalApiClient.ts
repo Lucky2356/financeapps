@@ -1863,6 +1863,10 @@ export class LocalApiClient implements ApiClient {
       ...state.transactions.filter((item) => item.id !== transaction.id)
     ];
     this.applyBalance(state, account.id, type === "INCOME" ? amount : -amount);
+    // Правка платежа по долгу: прежняя сумма уже вернулась долгу при снятии
+    // старой строки (deleteTransaction), новая — уменьшает его. Новый платёж
+    // (POST) долг уменьшает сам вызвавший — payDebt и автоплатёж.
+    if (method === "PUT" && previous?.liabilityId) this.applyDebtPayment(state, transaction, -1);
     return transaction;
   }
 
@@ -2170,6 +2174,7 @@ export class LocalApiClient implements ApiClient {
     if (state.transactions.some((item) => item.id === row.id)) return row;
     state.transactions = [row, ...state.transactions];
     this.applyBalance(state, account.id, row.type === "INCOME" ? row.amount : -row.amount);
+    this.applyDebtPayment(state, row, -1);
     return row;
   }
 
@@ -2181,7 +2186,32 @@ export class LocalApiClient implements ApiClient {
       existing.account.id,
       existing.type === "INCOME" ? -existing.amount : existing.amount
     );
+    this.applyDebtPayment(state, existing, 1);
     state.transactions = state.transactions.filter((item) => item.id !== transactionId);
+  }
+
+  /**
+   * Платёж по долгу держит долг в согласии с собой: удалили платёж — долг снова
+   * больше (sign = 1), вернули из корзины или поправили сумму — меньше (−1).
+   * Раньше удаление возвращало деньги на счёт, а долг оставался уменьшенным.
+   * Сумма операции — в валюте счёта, долг — в своей: пересчёт по курсу.
+   */
+  private applyDebtPayment(
+    state: LocalState,
+    row: Pick<TransactionRow, "amount" | "type" | "account" | "liabilityId">,
+    sign: 1 | -1
+  ) {
+    if (!row.liabilityId || row.type !== "EXPENSE") return;
+    const liability = state.liabilities.find((item) => item.id === row.liabilityId);
+    if (!liability) return;
+    const currency =
+      state.accounts.find((item) => item.id === row.account.id)?.currency ?? liability.currency;
+    const amount = convert(row.amount, currency, liability.currency, this.rates(state));
+    state.liabilities = state.liabilities.map((item) =>
+      item.id === liability.id
+        ? { ...item, balance: Math.max(0, roundMoney(item.balance + sign * amount)) }
+        : item
+    );
   }
 
   private applyBalance(state: LocalState, accountId: string, delta: number) {
@@ -2571,7 +2601,11 @@ export class LocalApiClient implements ApiClient {
           date: dueDate.toISOString(),
           description: recurring.description ?? withCurrentNames(state, recurring).category.label
         },
-        "POST"
+        "POST",
+        // Операция помнит свой шаблон: без этого аренда, списанная в отпуске,
+        // получала метку поездки, а «до зарплаты» считало её и обычной тратой,
+        // и платежом впереди.
+        recurring.id
       );
     }
     state.recurringTransactions = state.recurringTransactions.map((item) =>
@@ -2621,7 +2655,8 @@ export class LocalApiClient implements ApiClient {
               description:
                 recurring.description ?? withCurrentNames(state, recurring).category.label
             },
-            "POST"
+            "POST",
+            recurring.id
           );
           created += 1;
         } catch {
@@ -2732,11 +2767,17 @@ export class LocalApiClient implements ApiClient {
 
       const amount = paymentAmount(liability);
       if (amount <= 0) continue;
+      // Платёж — в валюте долга, со счёта уходит его пересчёт (как в payDebt):
+      // долларовый кредит с рублёвой карты списывал 300 ₽ вместо 300 $.
+      const currency = state.accounts.find((account) => account.id === accountId)?.currency;
+      const spent = roundMoney(
+        convert(amount, liability.currency, currency ?? liability.currency, this.rates(state))
+      );
 
       this.upsertTransaction(
         state,
         {
-          amount: String(amount),
+          amount: String(spent),
           type: "EXPENSE",
           accountId,
           categoryId,
@@ -3522,7 +3563,7 @@ export class LocalApiClient implements ApiClient {
       progress: effective > 0 ? clamp(percent(spent, effective), 0, 140) : 0,
       isExceeded: effective > 0 && spent > effective,
       suggestedLimit: suggestedLimitFor(category.id, state.transactions, {
-        now: monthKey ? new Date(`${monthKey}-01`) : now
+        now: monthKey ? monthStart(monthKey) : now
       })
     };
   }

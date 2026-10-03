@@ -1212,5 +1212,12 @@ describe("LocalApiClient automation (plan D2c)", () => {
     // Second run finds nothing due — no duplicates created.
     const second = await client.post<{ created: number }>("/recurring/materialize-all", {});
     expect(second.created).toBe(0);
+
+    // Каждая записанная операция помнит свой шаблон.
+    const template = (await client.get<RecurringTransactionsPageData>("/recurring"))
+      .recurringTransactions[0];
+    const rows = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    expect(rows.length).toBe(first.created);
+    for (const row of rows) expect((row as { recurringId?: string }).recurringId).toBe(template.id);
   });
 });

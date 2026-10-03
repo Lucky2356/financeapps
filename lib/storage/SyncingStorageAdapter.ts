@@ -444,6 +444,31 @@ export class SyncingStorageAdapter implements StorageAdapter {
     return this.state;
   }
 
+  /**
+   * Дождаться конца сверки с сервером — но не дольше `limitMs`.
+   *
+   * Для того, что приложение пишет само при запуске (регулярные платежи,
+   * автоплатёж по долгу): писать их по книге, не видевшей чужих правок, значит
+   * записать аренду второй раз, если другое устройство уже записало её. Нет
+   * связи — ждать нечего, пишем по своей книге, как и раньше.
+   */
+  settled(limitMs: number): Promise<void> {
+    const done = (status: SyncStatus) =>
+      status === "synced" || status === "offline" || status === "error";
+    if (done(this.state)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        off();
+        resolve();
+      };
+      const timer = setTimeout(finish, limitMs);
+      const off = this.onStatus((status) => {
+        if (done(status)) finish();
+      });
+    });
+  }
+
   onStatus(listener: (status: SyncStatus) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
