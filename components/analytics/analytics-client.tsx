@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import { ChartSkeleton } from "@/components/charts/chart-skeleton";
+import { CompareMonthsCard } from "@/components/analytics/compare-months-card";
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
@@ -33,9 +34,12 @@ export function AnalyticsClient({ initialData }: { initialData: AnalyticsData })
   // The toggle and the print button used to sit on two rows of their own, each
   // nearly empty, before anything on the screen began.
   return (
-    <AnalyticsView
-      data={data}
-      transfers={<TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />}
-    />
+    <>
+      <AnalyticsView
+        data={data}
+        transfers={<TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />}
+      />
+      <CompareMonthsCard currency={data.currency} />
+    </>
   );
 }

@@ -166,6 +166,7 @@ import { familyPicture } from "@/lib/family/family";
 import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
 import { balanceHistory, monthsBack } from "@/lib/accounts/balance-history";
 import { buildYearRecap } from "@/lib/analytics/year-recap";
+import { compareMonths } from "@/lib/analytics/compare-months";
 import {
   importIntoSheet,
   importWorkbook,
@@ -952,6 +953,26 @@ export class LocalApiClient implements ApiClient {
           month
         )
       } as T;
+    }
+    if (pathname === "/compare-months") {
+      const today = isoDay(new Date());
+      const valid = (value: string | null) => (value && /^\d{4}-\d{2}$/.test(value) ? value : null);
+      const a = valid(searchParams.get("a")) ?? today.slice(0, 7);
+      const b = valid(searchParams.get("b")) ?? previousMonth(a);
+      const counted = this.countingState(this.inBase(state), false);
+      return compareMonths({
+        a,
+        b,
+        today,
+        rows: counted.transactions.map((row) => ({
+          type: row.type,
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label,
+          color: row.category.color
+        }))
+      }) as T;
     }
     if (pathname === "/balance-history") {
       const count = Math.min(Math.max(Number(searchParams.get("months")) || 12, 2), 60);
