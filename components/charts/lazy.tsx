@@ -39,3 +39,16 @@ export const StockPriceChart = dynamic(
   () => import("@/components/charts/stock-price-chart").then((m) => m.StockPriceChart),
   { ssr: false, loading: () => <ChartSkeleton /> }
 );
+
+// История остатка — внизу «Счетов», и тянуть ради неё Recharts в начальную
+// загрузку экрана незачем.
+export const BalanceHistoryCard = dynamic(
+  () => import("@/components/accounts/balance-history-card").then((m) => m.BalanceHistoryCard),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);
+
+// График портфеля с переключателем «стоимость / против индекса» — тоже Recharts.
+export const PortfolioValueChart = dynamic(
+  () => import("@/components/investments/portfolio-value-chart").then((m) => m.PortfolioValueChart),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+);

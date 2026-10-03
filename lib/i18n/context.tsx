@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { DEFAULT_LOCALE, LOCALES, translate, type Locale } from "@/lib/i18n/catalog";
+import { DEFAULT_LOCALE, loadLocale, LOCALES, translate, type Locale } from "@/lib/i18n/catalog";
 
 const STORAGE_KEY = "app-locale";
 
@@ -34,8 +34,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const initial = resolveInitialLocale();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLocaleState(initial);
+    // Словарь языка — до переключения, иначе экран мигнул бы русским.
+    void loadLocale(initial).then(() => setLocaleState(initial));
     // Seed the cookie on first load so the web server renders generated content
     // (recommendations, metrics, insights) in the resolved locale even before
     // the user explicitly changes the language setting.
@@ -53,7 +53,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
+    void loadLocale(next).then(() => setLocaleState(next));
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
     } catch {

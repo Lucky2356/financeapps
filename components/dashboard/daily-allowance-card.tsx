@@ -13,6 +13,8 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { Allowance } from "@/lib/analytics/daily-allowance";
+import { AnimatedMoney } from "@/components/ui/animated-value";
+import { Expand } from "@/components/ui/expand";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
@@ -80,7 +82,7 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
           </span>
         </span>
         <span className={cn("shrink-0 text-base font-semibold tabular-nums", TONE[data.status])}>
-          {money(Math.max(data.leftToday, 0))}
+          <AnimatedMoney value={Math.max(data.leftToday, 0)} currency={currency} />
         </span>
         <ChevronDown
           className={cn(
@@ -89,7 +91,7 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
           )}
         />
       </button>
-      {open ? (
+      <Expand open={open}>
         <CardContent className="space-y-3 border-t pt-3">
           {over ? <p className="text-xs text-muted-foreground">{t("allow.overHint")}</p> : null}
           <div className="flex flex-wrap gap-2 text-xs">
@@ -121,7 +123,7 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
             <p className="text-xs text-muted-foreground">{t("allow.byAverage")}</p>
           ) : null}
         </CardContent>
-      ) : null}
+      </Expand>
     </Card>
   );
 }

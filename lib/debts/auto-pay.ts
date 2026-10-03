@@ -55,9 +55,9 @@ export function isDue(liability: AutoPayLiability, today: Date): boolean {
 }
 
 /** All liabilities whose payment should be posted now. */
-export function dueLiabilities(
-  liabilities: AutoPayLiability[],
+export function dueLiabilities<T extends AutoPayLiability>(
+  liabilities: T[],
   today: Date = new Date()
-): AutoPayLiability[] {
+): T[] {
   return liabilities.filter((liability) => isDue(liability, today));
 }

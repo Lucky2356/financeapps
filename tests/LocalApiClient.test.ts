@@ -314,6 +314,41 @@ describe("LocalApiClient", () => {
     }
   });
 
+  it("keeps two identical purchases of one day, and still skips them on a second import", async () => {
+    // Два кофе по 200 ₽ в один день — две строки выписки. Вторую раньше
+    // принимали за повтор первой, только что записанной, и молча теряли.
+    const client = createClient();
+    const body = {
+      dateColumn: "date",
+      amountColumn: "amount",
+      categoryColumn: "category",
+      descriptionColumn: "description",
+      accountColumn: "account",
+      rows: JSON.stringify([
+        {
+          date: "2026-08-23",
+          amount: "-200",
+          category: "Кафе",
+          account: "Карта",
+          description: "Кофе"
+        },
+        {
+          date: "2026-08-23",
+          amount: "-200",
+          category: "Кафе",
+          account: "Карта",
+          description: "Кофе"
+        }
+      ])
+    };
+    const first = await client.post<{ imported: number; skipped: number }>("/import", body);
+    expect(first).toEqual(expect.objectContaining({ imported: 2, skipped: 0 }));
+    const second = await client.post<{ imported: number; skipped: number }>("/import", body);
+    expect(second).toEqual(expect.objectContaining({ imported: 0, skipped: 2 }));
+    const accounts = await client.get<AccountsPageData>("/accounts");
+    expect(accounts.accounts.find((account) => account.name === "Карта")?.balance).toBe(-400);
+  });
+
   it("files rows with no account of their own under one import account", async () => {
     const client = createClient();
     await client.post("/import", {
@@ -1212,5 +1247,12 @@ describe("LocalApiClient automation (plan D2c)", () => {
     // Second run finds nothing due — no duplicates created.
     const second = await client.post<{ created: number }>("/recurring/materialize-all", {});
     expect(second.created).toBe(0);
+
+    // Каждая записанная операция помнит свой шаблон.
+    const template = (await client.get<RecurringTransactionsPageData>("/recurring"))
+      .recurringTransactions[0];
+    const rows = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    expect(rows.length).toBe(first.created);
+    for (const row of rows) expect((row as { recurringId?: string }).recurringId).toBe(template.id);
   });
 });

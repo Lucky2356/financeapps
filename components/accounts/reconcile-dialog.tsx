@@ -133,7 +133,10 @@ export function ReconcileDialog({
             </div>
             {difference !== null ? (
               difference === 0 ? (
-                <p className="rounded-lg bg-success/10 p-3 text-sm" data-testid="reconcile-match">
+                <p
+                  className="pop-in rounded-lg bg-success/10 p-3 text-sm"
+                  data-testid="reconcile-match"
+                >
                   {t("recon.match")}
                 </p>
               ) : (

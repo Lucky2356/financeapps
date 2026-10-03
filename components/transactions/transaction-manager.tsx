@@ -45,6 +45,7 @@ import { groupByDay } from "@/lib/transactions/day-groups";
 import { isTransfer } from "@/lib/transactions/transfers";
 import { isDateSort, parseSort, TX_SORTS, type TxSort } from "@/lib/transactions/sort";
 import { withFilter } from "@/lib/transactions/filter-chips";
+import { cn } from "@/lib/utils";
 import {
   keepChoice,
   NewAccountDialog,
@@ -69,6 +70,16 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+
+/**
+ * Только что записанная — подсвечивается при появлении (.flash-new): после
+ * «Сохранить» видно, куда она встала. Подсветка играет один раз — когда строка
+ * появляется в списке.
+ */
+function isJustAdded(row: { createdAt?: string }): boolean {
+  const at = row.createdAt ? Date.parse(row.createdAt) : Number.NaN;
+  return Number.isFinite(at) && Date.now() - at < 8000;
+}
 
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const router = useRouter();
@@ -690,7 +701,10 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                   </TableHeader>
                   <TableBody>
                     {visibleTransactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
+                      <TableRow
+                        key={transaction.id}
+                        className={cn(isJustAdded(transaction) && "flash-new")}
+                      >
                         <TableCell>
                           <input
                             type="checkbox"
@@ -811,7 +825,12 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
                     {dayStarts.has(transaction.id) ? (
                       <DayHeader group={dayStarts.get(transaction.id)!} />
                     ) : null}
-                    <div className="rounded-lg border p-3">
+                    <div
+                      className={cn(
+                        "rounded-lg border p-3",
+                        isJustAdded(transaction) && "flash-new"
+                      )}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <input
                           type="checkbox"

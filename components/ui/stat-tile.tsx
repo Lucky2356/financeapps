@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { InfoHint } from "@/components/info-hint";
+import { AnimatedValue } from "@/components/ui/animated-value";
 import { cn } from "@/lib/utils";
 
 export type StatTone = "default" | "success" | "warning" | "danger";
@@ -71,7 +72,9 @@ export function StatTile({
             </span>
           ) : null)}
       </div>
-      <p className="stat num mt-2 truncate text-lg sm:text-xl">{value}</p>
+      <p className="stat num mt-2 truncate text-lg sm:text-xl">
+        <AnimatedValue text={value} />
+      </p>
       {/* Пояснение переносится, а не обрывается. Одной строкой оно на телефоне
           превращалось в «Текущий календарн…», «Доходы минус расх…», «Цели
           требуют боль…» — то есть не говорило ничего. В отличие от суммы выше,

@@ -750,6 +750,31 @@ function familyFields(
   };
 }
 
+/**
+ * Книга для записи — без копирования строк.
+ *
+ * Запись меняет книгу так: подменяет раздел целиком (`state.accounts =
+ * state.accounts.map(…)`), добавляет в него строку или переписывает поле
+ * раздела-объекта (`state.investments.watchlist = …`). Для этого достаточно
+ * свежих разделов и свежих объектов первого уровня; сами строки, которых
+ * запись не касалась, остаются общими с кэшем. Раньше книга копировалась
+ * целиком (structuredClone) — на двадцати тысячах операций это ~70 мс на
+ * каждое сохранение, и ещё столько же уходило на сличение каждой строки с
+ * прежней при отметке времени: копия — всегда «другой» объект. Общие строки
+ * отметка узнаёт сразу (row-stamps, decide).
+ *
+ * Правка строки на месте была бы порчей кэша — вне поставки он заморожен
+ * вглубь (freeze-state.ts), и такая правка падает на первом же тесте.
+ */
+function writableCopy<T>(state: T): T {
+  const copy = { ...(state as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(copy)) {
+    if (Array.isArray(value)) copy[key] = [...value];
+    else if (value !== null && typeof value === "object") copy[key] = { ...value };
+  }
+  return copy as T;
+}
+
 export class LocalApiClient implements ApiClient {
   constructor(private readonly storage: StorageAdapter = createStorageAdapter()) {}
 
@@ -1863,6 +1888,10 @@ export class LocalApiClient implements ApiClient {
       ...state.transactions.filter((item) => item.id !== transaction.id)
     ];
     this.applyBalance(state, account.id, type === "INCOME" ? amount : -amount);
+    // Правка платежа по долгу: прежняя сумма уже вернулась долгу при снятии
+    // старой строки (deleteTransaction), новая — уменьшает его. Новый платёж
+    // (POST) долг уменьшает сам вызвавший — payDebt и автоплатёж.
+    if (method === "PUT" && previous?.liabilityId) this.applyDebtPayment(state, transaction, -1);
     return transaction;
   }
 
@@ -2170,6 +2199,7 @@ export class LocalApiClient implements ApiClient {
     if (state.transactions.some((item) => item.id === row.id)) return row;
     state.transactions = [row, ...state.transactions];
     this.applyBalance(state, account.id, row.type === "INCOME" ? row.amount : -row.amount);
+    this.applyDebtPayment(state, row, -1);
     return row;
   }
 
@@ -2181,7 +2211,32 @@ export class LocalApiClient implements ApiClient {
       existing.account.id,
       existing.type === "INCOME" ? -existing.amount : existing.amount
     );
+    this.applyDebtPayment(state, existing, 1);
     state.transactions = state.transactions.filter((item) => item.id !== transactionId);
+  }
+
+  /**
+   * Платёж по долгу держит долг в согласии с собой: удалили платёж — долг снова
+   * больше (sign = 1), вернули из корзины или поправили сумму — меньше (−1).
+   * Раньше удаление возвращало деньги на счёт, а долг оставался уменьшенным.
+   * Сумма операции — в валюте счёта, долг — в своей: пересчёт по курсу.
+   */
+  private applyDebtPayment(
+    state: LocalState,
+    row: Pick<TransactionRow, "amount" | "type" | "account" | "liabilityId">,
+    sign: 1 | -1
+  ) {
+    if (!row.liabilityId || row.type !== "EXPENSE") return;
+    const liability = state.liabilities.find((item) => item.id === row.liabilityId);
+    if (!liability) return;
+    const currency =
+      state.accounts.find((item) => item.id === row.account.id)?.currency ?? liability.currency;
+    const amount = convert(row.amount, currency, liability.currency, this.rates(state));
+    state.liabilities = state.liabilities.map((item) =>
+      item.id === liability.id
+        ? { ...item, balance: Math.max(0, roundMoney(item.balance + sign * amount)) }
+        : item
+    );
   }
 
   private applyBalance(state: LocalState, accountId: string, delta: number) {
@@ -2571,7 +2626,11 @@ export class LocalApiClient implements ApiClient {
           date: dueDate.toISOString(),
           description: recurring.description ?? withCurrentNames(state, recurring).category.label
         },
-        "POST"
+        "POST",
+        // Операция помнит свой шаблон: без этого аренда, списанная в отпуске,
+        // получала метку поездки, а «до зарплаты» считало её и обычной тратой,
+        // и платежом впереди.
+        recurring.id
       );
     }
     state.recurringTransactions = state.recurringTransactions.map((item) =>
@@ -2621,7 +2680,8 @@ export class LocalApiClient implements ApiClient {
               description:
                 recurring.description ?? withCurrentNames(state, recurring).category.label
             },
-            "POST"
+            "POST",
+            recurring.id
           );
           created += 1;
         } catch {
@@ -2732,11 +2792,17 @@ export class LocalApiClient implements ApiClient {
 
       const amount = paymentAmount(liability);
       if (amount <= 0) continue;
+      // Платёж — в валюте долга, со счёта уходит его пересчёт (как в payDebt):
+      // долларовый кредит с рублёвой карты списывал 300 ₽ вместо 300 $.
+      const currency = state.accounts.find((account) => account.id === accountId)?.currency;
+      const spent = roundMoney(
+        convert(amount, liability.currency, currency ?? liability.currency, this.rates(state))
+      );
 
       this.upsertTransaction(
         state,
         {
-          amount: String(amount),
+          amount: String(spent),
           type: "EXPENSE",
           accountId,
           categoryId,
@@ -2774,6 +2840,24 @@ export class LocalApiClient implements ApiClient {
     let imported = 0;
     let skipped = 0;
     const transactionIds: string[] = [];
+    // Повтор — это строка, которая уже была в учёте ДО этого импорта, и ровно
+    // столько раз, сколько она там была. Сличать с учётом, в который файл уже
+    // пишется, значило бы отбросить второй кофе за 200 ₽ того же дня: две
+    // одинаковые покупки в выписке — обычное дело.
+    const keyOf = (parts: Array<string | number>) => parts.join("|");
+    const before = new Map<string, number>();
+    for (const transaction of state.transactions) {
+      const key = keyOf([
+        transaction.account.id,
+        transaction.category.id,
+        transaction.type,
+        transaction.amount,
+        transaction.date.slice(0, 10),
+        transaction.description ?? ""
+      ]);
+      before.set(key, (before.get(key) ?? 0) + 1);
+    }
+    const seen = new Map<string, number>();
     for (const row of rows) {
       const rawAmount = parseImportedAmount(row[input.amountColumn]);
       const date = parseImportedDate(row[input.dateColumn]);
@@ -2812,20 +2896,15 @@ export class LocalApiClient implements ApiClient {
             type
           );
       }
-      const duplicate = state.transactions.some((transaction) => {
-        return (
-          transaction.account.id === account.id &&
-          transaction.category.id === category.id &&
-          transaction.type === type &&
-          transaction.amount === Math.abs(rawAmount) &&
-          // День строки файла — тот, что будет записан, а не UTC-день местной
-          // полуночи: к востоку от Гринвича это вчера, и повторный импорт
-          // того же файла не узнавал ни одной строки и задваивал всё.
-          transaction.date.slice(0, 10) === storedTransactionDate(date).slice(0, 10) &&
-          (transaction.description ?? "") === description
-        );
-      });
-      if (duplicate) {
+      // День строки файла — тот, что будет записан, а не UTC-день местной
+      // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же
+      // файла не узнавал ни одной строки и задваивал всё.
+      const day = storedTransactionDate(date).slice(0, 10);
+      const key = keyOf([account.id, category.id, type, Math.abs(rawAmount), day, description]);
+      const already = before.get(key) ?? 0;
+      const count = seen.get(key) ?? 0;
+      seen.set(key, count + 1);
+      if (count < already) {
         skipped += 1;
         continue;
       }
@@ -3461,7 +3540,7 @@ export class LocalApiClient implements ApiClient {
     // time — west of Greenwich that is the previous month.
     const targetDate = month ? monthStart(month) : new Date();
     const selectedMonth = monthKeyOf(targetDate);
-    const budgets = this.budgetRows(state, selectedMonth);
+    const budgets = this.budgetRows(state, selectedMonth, true);
     const finance = this.financeInput(state);
     return {
       source: "database",
@@ -3475,15 +3554,36 @@ export class LocalApiClient implements ApiClient {
     };
   }
 
+  /**
+   * Траты по категориям — разложенные один раз на список операций. Лимиты
+   * строятся по каждой категории, и каждая раньше перебирала весь учёт — трижды
+   * (этот месяц, прошлый, подсказка лимита): на двадцати категориях и двадцати
+   * тысячах операций это больше миллиона проверок на одно открытие экрана.
+   */
+  private expensesByCategory = new WeakMap<
+    readonly TransactionRow[],
+    Map<string, TransactionRow[]>
+  >();
+
+  private expensesOf(rows: readonly TransactionRow[], categoryId: string): TransactionRow[] {
+    let groups = this.expensesByCategory.get(rows);
+    if (!groups) {
+      groups = new Map();
+      for (const row of rows) {
+        if (row.type !== "EXPENSE") continue;
+        const list = groups.get(row.category.id);
+        if (list) list.push(row);
+        else groups.set(row.category.id, [row]);
+      }
+      this.expensesByCategory.set(rows, groups);
+    }
+    return groups.get(categoryId) ?? [];
+  }
+
   /** Amounts are expected in the base currency already — see `inBase`. */
   private spentInMonth(state: LocalState, categoryId: string, monthKey: string): number {
-    return state.transactions
-      .filter(
-        (transaction) =>
-          transaction.type === "EXPENSE" &&
-          transaction.category.id === categoryId &&
-          transaction.date.startsWith(monthKey)
-      )
+    return this.expensesOf(state.transactions, categoryId)
+      .filter((transaction) => transaction.date.startsWith(monthKey))
       .reduce((sum, transaction) => sum + transaction.amount, 0);
   }
 
@@ -3492,7 +3592,8 @@ export class LocalApiClient implements ApiClient {
     category: CategoryOption,
     limitAmount: number,
     monthKey?: string,
-    rollover = false
+    rollover = false,
+    suggest = true
   ): BudgetsPageData["budgets"][number] {
     const now = new Date();
     const month = monthKey ?? monthKeyOf(now);
@@ -3521,13 +3622,17 @@ export class LocalApiClient implements ApiClient {
       rolloverAmount: carried,
       progress: effective > 0 ? clamp(percent(spent, effective), 0, 140) : 0,
       isExceeded: effective > 0 && spent > effective,
-      suggestedLimit: suggestedLimitFor(category.id, state.transactions, {
-        now: monthKey ? new Date(`${monthKey}-01`) : now
-      })
+      // Подсказка лимита нужна только экрану «Лимиты»; главной, прогнозу и
+      // советам она ни к чему, а стоит прохода по трём месяцам учёта.
+      suggestedLimit: suggest
+        ? suggestedLimitFor(category.id, this.expensesOf(state.transactions, category.id), {
+            now: monthKey ? monthStart(monthKey) : now
+          })
+        : 0
     };
   }
 
-  private budgetRows(state: LocalState, monthKey?: string) {
+  private budgetRows(state: LocalState, monthKey?: string, suggest = false) {
     const month = monthKey ?? monthKeyOf(new Date());
     return state.categories
       .filter((category) => category.kind === "EXPENSE")
@@ -3538,7 +3643,8 @@ export class LocalApiClient implements ApiClient {
           category,
           spendingPlan(state, category.id, month) ?? 0,
           month,
-          inForce?.rollover ?? false
+          inForce?.rollover ?? false,
+          suggest
         );
       });
   }
@@ -5295,7 +5401,7 @@ export class LocalApiClient implements ApiClient {
     const profileId = await this.getActiveProfileId();
     const key = profileStateKey(profileId);
     if (this.stateCache && this.stateCache.key === key) {
-      return mutable ? structuredClone(this.stateCache.state) : this.stateCache.state;
+      return mutable ? writableCopy(this.stateCache.state) : this.stateCache.state;
     }
     const existing = await this.storage.getItem<unknown>(key);
     const parsed = localStateSchema.safeParse(existing);
@@ -5513,7 +5619,9 @@ export class LocalApiClient implements ApiClient {
         ? state
         : trackDeletions(stampRows(state, previous, now), previous, now);
     await this.storage.setItem(key, next);
-    this.stateCache = { key, state: freezeLedgerOutsideProduction(structuredClone(next)) };
+    // Без копии: следующая запись всё равно начнёт с writableCopy, а чтения
+    // книгу не трогают (см. freeze-state.ts — вне поставки она заморожена).
+    this.stateCache = { key, state: freezeLedgerOutsideProduction(next) };
     // Удалённое — в корзину. Сличаем записанное с прежним, как и для фото ниже:
     // мест, где что-то удаляют, слишком много, чтобы ловить каждое.
     // Загрузка примера переписывает книгу целиком — это не удаление.

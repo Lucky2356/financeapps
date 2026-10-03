@@ -91,7 +91,7 @@ export function YearRecapCard({ currency }: { currency: string }) {
           <p className="text-sm text-muted-foreground">{t("yr.empty")}</p>
         ) : (
           <>
-            <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <dl className="stagger grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
               <div>
                 <dt className="text-muted-foreground">{t("yr.income")}</dt>
                 <dd className="text-lg font-semibold tabular-nums">{money(data.income)}</dd>
@@ -135,7 +135,7 @@ export function YearRecapCard({ currency }: { currency: string }) {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <p className="text-sm font-medium">{t("yr.top")}</p>
-                <ul className="space-y-1.5 text-sm">
+                <ul className="stagger space-y-1.5 text-sm">
                   {data.top.map((item) => (
                     <li key={item.categoryId} className="flex items-center gap-2">
                       <span
@@ -152,7 +152,7 @@ export function YearRecapCard({ currency }: { currency: string }) {
                   ))}
                 </ul>
               </div>
-              <ul className="space-y-1.5 text-sm">
+              <ul className="stagger space-y-1.5 text-sm">
                 {data.best ? (
                   <li>
                     <span className="text-muted-foreground">{t("yr.best")}: </span>

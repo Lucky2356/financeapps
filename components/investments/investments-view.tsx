@@ -21,7 +21,7 @@ import { AllocationBar } from "@/components/investments/allocation-bar";
 import { PortfolioBreakdown } from "@/components/investments/portfolio-breakdown";
 import { HoldingCard } from "@/components/investments/holding-card";
 import { PortfolioHero } from "@/components/investments/portfolio-hero";
-import { PortfolioValueChart } from "@/components/investments/portfolio-value-chart";
+import { PortfolioValueChart } from "@/components/charts/lazy";
 import { RealizedTaxReport } from "@/components/investments/realized-tax-report";
 import { HoldingsTable } from "@/components/investments/holdings-table";
 import { UpcomingPayouts } from "@/components/investments/upcoming-payouts";

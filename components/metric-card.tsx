@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Minus, TrendingDown, TrendingUp } from "l
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkline } from "@/components/charts/sparkline";
+import { AnimatedValue } from "@/components/ui/animated-value";
 import { METRIC_HINT_KEY, InfoHint } from "@/components/info-hint";
 import type { MetricCard as MetricCardType } from "@/types/finance";
 import { cn } from "@/lib/utils";
@@ -62,7 +63,9 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
       </CardHeader>
       <CardContent>
         <div className="flex items-end justify-between gap-3">
-          <div className="stat text-2xl">{metric.value}</div>
+          <div className="stat text-2xl">
+            <AnimatedValue text={metric.value} />
+          </div>
           {metric.spark && metric.spark.length > 1 ? (
             <Sparkline values={metric.spark} className={cn("shrink-0", toneText[tone])} />
           ) : null}

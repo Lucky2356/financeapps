@@ -4,6 +4,11 @@ import "@testing-library/jest-dom/vitest";
 import { beforeEach } from "vitest";
 
 import { clearPageData } from "@/lib/api/page-data-cache";
+import { loadLocale } from "@/lib/i18n/catalog";
+
+// Английский словарь в приложении подгружается по выбору языка; проверкам он
+// нужен сразу.
+await loadLocale("en");
 
 // Экраны помнят последний показанный ответ по каждому маршруту (см.
 // lib/api/page-data-cache) — в приложении эта память живёт столько же, сколько

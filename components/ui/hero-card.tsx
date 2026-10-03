@@ -2,6 +2,7 @@
 
 import { TrendingDown, TrendingUp } from "lucide-react";
 
+import { AnimatedValue } from "@/components/ui/animated-value";
 import { cn } from "@/lib/utils";
 
 // The headline panel of a screen: the single number that matters, the change
@@ -89,7 +90,9 @@ export function HeroCard({
         ) : null}
       </div>
 
-      <p className="stat num relative mt-3 text-3xl sm:text-4xl">{value}</p>
+      <p className="stat num relative mt-3 text-3xl sm:text-4xl">
+        <AnimatedValue text={value} />
+      </p>
       {caption ? (
         <p
           className={cn(

@@ -26,6 +26,7 @@ import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
+import { isTransfer } from "@/lib/transactions/transfers";
 import type { PlanFactPageData } from "@/types/finance";
 
 function monthsBack(count: number): string[] {
@@ -77,9 +78,11 @@ export function MonthReport() {
   const lines = (plan?.columns ?? [])
     .map((column) => ({ column, cell: row?.cells[column.categoryId] }))
     .filter(({ cell }) => cell && (cell.plan > 0 || cell.fact > 0));
+  // Сумма в валюте отчёта: трата с долларовой карты — по курсу, а не «как есть».
+  const inBase = (item: { amount: number; baseAmount?: number }) => item.baseAmount ?? item.amount;
   const biggest = (ledger?.transactions ?? [])
-    .filter((item) => item.type === "EXPENSE" && !item.transferId)
-    .sort((a, b) => b.amount - a.amount)
+    .filter((item) => item.type === "EXPENSE" && !isTransfer(item))
+    .sort((a, b) => inBase(b) - inBase(a))
     .slice(0, 8);
 
   return (
@@ -221,7 +224,7 @@ export function MonthReport() {
                   </span>
                   <span className="text-muted-foreground">{item.category.label}</span>
                   <span className="w-28 text-right font-medium tabular-nums">
-                    {money(item.amount)}
+                    {money(inBase(item))}
                   </span>
                 </li>
               ))}

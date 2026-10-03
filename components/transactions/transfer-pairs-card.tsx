@@ -87,7 +87,7 @@ export function TransferPairsCard() {
           />
         </button>
         {open ? (
-          <ul className="divide-y rounded-lg border">
+          <ul className="stagger divide-y rounded-lg border">
             {pairs.map((pair) => (
               <li
                 key={pair.key}

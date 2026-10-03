@@ -3,7 +3,7 @@
 import { FAMILY_ME_KEY } from "@/components/family/family-fields";
 import { GoalFamilyLine, GoalMemberPicker, GoalSharesFields } from "@/components/goals/goal-family";
 import { readMine } from "@/lib/storage/mine";
-import { Edit2, Flag, PiggyBank, Plus, Trash2 } from "lucide-react";
+import { Edit2, Flag, PartyPopper, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/select";
 import { FieldLabel } from "@/components/ui/field-label";
 import { Label } from "@/components/ui/label";
+import { AnimatedMoney } from "@/components/ui/animated-value";
 import { Progress } from "@/components/ui/progress";
 
 export function GoalManager({ data }: { data: GoalsPageData }) {
@@ -195,13 +196,25 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Progress value={goal.progress} />
+                  <Progress
+                    value={goal.progress}
+                    indicatorClassName={goal.progress >= 100 ? "bg-success" : undefined}
+                  />
+                  {goal.progress >= 100 ? (
+                    <p
+                      className="pop-in mt-2 inline-flex items-center gap-1.5 rounded-full bg-success/12 px-2.5 py-1 text-xs font-medium text-success"
+                      data-testid="goal-reached"
+                    >
+                      <PartyPopper className="size-3.5" aria-hidden />
+                      {t("goal.reached")}
+                    </p>
+                  ) : null}
                   <GoalFamilyLine family={goal.family} currency={pageData.currency} />
                   <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                     <div>
                       <p className="text-xs text-muted-foreground">{t("goal.saved")}</p>
                       <p className="text-sm font-semibold">
-                        {formatCurrency(goal.currentAmount, pageData.currency)}
+                        <AnimatedMoney value={goal.currentAmount} currency={pageData.currency} />
                       </p>
                     </div>
                     <div>

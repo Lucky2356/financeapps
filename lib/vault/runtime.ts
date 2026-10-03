@@ -223,6 +223,21 @@ export async function resumeSync(): Promise<boolean> {
  * показать ему пустой экран, пока она едет, — значит показать то же самое, что
  * при неудаче.
  */
+/**
+ * Первая сверка с сервером после запуска — если устройство к нему привязано.
+ * Не дольше `limitMs`: сеть не должна держать приложение. См.
+ * SyncingStorageAdapter.settled.
+ */
+export async function firstExchange(limitMs = 10_000): Promise<void> {
+  const linked = await serverAccount.link().then(Boolean, () => false);
+  if (!linked) return;
+  await syncStorage.settled(limitMs);
+  // Приехавшая книга доходит до клиента не сразу: кэш забывается с короткой
+  // задержкой (refreshWhenBooksArrive, lib/api/client.ts). Писать раньше —
+  // значит писать по книге, прочитанной до слияния.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+}
+
 export async function flushSync(): Promise<void> {
   await syncStorage.flush();
 }

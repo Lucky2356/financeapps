@@ -4,6 +4,7 @@ import { parseBankNotification, type BankNotification } from "@/lib/bank/notific
 import {
   addHandled,
   alreadyRecorded,
+  pendingSuggestions,
   mergeSuggestions,
   resolveTarget
 } from "@/lib/bank/suggestions";
@@ -145,6 +146,21 @@ describe("предложения из уведомлений", () => {
     );
     expect(alreadyRecorded(base, [{ amount: 450, date: "2026-10-03", type: "INCOME" }])).toBe(
       false
+    );
+  });
+
+  it("одна операция в учёте закрывает одно уведомление: второй кофе не прячется", () => {
+    const second = { ...base, id: "second", at: base.at + 60_000 };
+    const ledger = [{ id: "tx1", amount: 450, date: base.date, type: "EXPENSE" }];
+    // Записано руками одно — ждёт второе.
+    expect(pendingSuggestions([second, base], ledger).map((item) => item.id)).toEqual(["second"]);
+    // Записано из самого уведомления — соседнее того же размера не трогает.
+    expect(pendingSuggestions([second], ledger, new Set(["tx1"])).map((item) => item.id)).toEqual([
+      "second"
+    ]);
+    // Две операции — обе закрыты.
+    expect(pendingSuggestions([second, base], [...ledger, { ...ledger[0], id: "tx2" }])).toEqual(
+      []
     );
   });
 
