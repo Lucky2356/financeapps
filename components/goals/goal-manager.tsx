@@ -1,5 +1,8 @@
 "use client";
 
+import { FAMILY_ME_KEY } from "@/components/family/family-fields";
+import { GoalFamilyLine, GoalMemberPicker, GoalSharesFields } from "@/components/goals/goal-family";
+import { readMine } from "@/lib/storage/mine";
 import { Edit2, Flag, PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
@@ -193,6 +196,7 @@ export function GoalManager({ data }: { data: GoalsPageData }) {
                 </CardHeader>
                 <CardContent>
                   <Progress value={goal.progress} />
+                  <GoalFamilyLine family={goal.family} currency={pageData.currency} />
                   <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                     <div>
                       <p className="text-xs text-muted-foreground">{t("goal.saved")}</p>
@@ -376,6 +380,8 @@ function DepositDialog({
   // one direction the app had no way to record: the figure had to be typed over
   // in the edit form, which moved nothing and left capital wrong.
   const [mode, setMode] = useState<"deposit" | "withdraw">("deposit");
+  // Кто вносит — для совместной цели семьи; по умолчанию участник устройства.
+  const [memberId, setMemberId] = useState(() => readMine(FAMILY_ME_KEY) ?? "");
 
   const remaining = goal.targetAmount - goal.currentAmount;
 
@@ -415,7 +421,8 @@ function DepositDialog({
         action: mode,
         goalId: goal.id,
         amount: String(value),
-        accountId
+        accountId,
+        ...(memberId ? { memberId } : {})
       });
       toast.success(mode === "deposit" ? t("goal.deposit.success") : t("goal.withdraw.success"));
       setOpen(false);
@@ -504,6 +511,7 @@ function DepositDialog({
             )}
             <p className="text-xs text-muted-foreground">{t("goal.deposit.note")}</p>
           </div>
+          <GoalMemberPicker value={memberId} onChange={setMemberId} />
           <DialogFooter>
             <Button type="submit" disabled={loading || accounts.length === 0}>
               {mode === "deposit" ? t("goal.deposit.submit") : t("goal.withdraw.submit")}
@@ -655,6 +663,7 @@ function GoalDialog({
             />
           </div>
         </div>
+        <GoalSharesFields shares={goal?.shares} />
         <DialogFooter>
           <Button type="submit">{t("common.save")}</Button>
         </DialogFooter>

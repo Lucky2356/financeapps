@@ -163,6 +163,7 @@ import type {
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
 import type { WhatIfBase } from "@/lib/whatif/simulate";
 import { familyPicture } from "@/lib/family/family";
+import { goalFamily } from "@/lib/family/goal-shares";
 import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
 import { balanceHistory, monthsBack } from "@/lib/accounts/balance-history";
 import { buildYearRecap } from "@/lib/analytics/year-recap";
@@ -252,7 +253,26 @@ const currency = "RUB" as const;
 type CategoryOption = ImportPageData["categories"][number];
 type LocalState = BookState &
   ExtrasState & {
-    schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18;
+    schemaVersion:
+      | 1
+      | 2
+      | 3
+      | 4
+      | 5
+      | 6
+      | 7
+      | 8
+      | 9
+      | 10
+      | 11
+      | 12
+      | 13
+      | 14
+      | 15
+      | 16
+      | 17
+      | 18
+      | 19;
     /** Следы удалённых строк — см. lib/sync/row-stamps. */
     deletions?: Tombstone[];
     currency: CurrencyCode;
@@ -674,6 +694,32 @@ const DEFAULT_PROFILE: UserProfile = {
 };
 
 /** Цвета участников семьи по очереди — различимые и в светлой, и в тёмной теме. */
+/**
+ * Доли совместной цели из формы: JSON {участник: %}. Пустой объект — «поровну»
+ * (поле убирается); форма, которая о долях молчит, прежних не трогает.
+ */
+function goalSharesFrom(
+  raw: unknown,
+  previous: Record<string, number> | undefined
+): { shares?: Record<string, number> } {
+  if (raw === undefined) return previous ? { shares: previous } : {};
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw || "{}");
+    } catch {
+      parsed = {};
+    }
+  }
+  const shares: Record<string, number> = {};
+  if (parsed && typeof parsed === "object")
+    for (const [member, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const number = Number(value);
+      if (member && Number.isFinite(number) && number > 0) shares[member] = number;
+    }
+  return Object.keys(shares).length > 0 ? { shares } : {};
+}
+
 /** Статья для разницы, найденной сверкой с банком. */
 const RECONCILE_CATEGORY_LABEL = "Сверка с банком";
 
@@ -2223,7 +2269,8 @@ export class LocalApiClient implements ApiClient {
       currentAmount: held,
       deadline: new Date(input.deadline).toISOString(),
       linkedAccountId,
-      plannedContribution: Math.max(Number(input.plannedContribution ?? 0), 0)
+      plannedContribution: Math.max(Number(input.plannedContribution ?? 0), 0),
+      ...goalSharesFrom(input.shares, previous?.shares)
     });
     state.goals = previous
       ? state.goals.map((item) => (item.id === row.id ? row : item))
@@ -2310,10 +2357,16 @@ export class LocalApiClient implements ApiClient {
 
     // The amount is typed in the account's own currency — that is the money the
     // owner is looking at — and a goal is kept in the app's, like every total.
-    return this.applyGoalMovement(state, goal, account, {
-      accountDelta: -amount,
-      goalDelta: roundMoney(convert(amount, account.currency, state.currency, this.rates(state)))
-    });
+    return this.applyGoalMovement(
+      state,
+      goal,
+      account,
+      {
+        accountDelta: -amount,
+        goalDelta: roundMoney(convert(amount, account.currency, state.currency, this.rates(state)))
+      },
+      input.memberId
+    );
   }
 
   /** The other direction: money comes back out of a goal onto an account. */
@@ -2327,12 +2380,18 @@ export class LocalApiClient implements ApiClient {
     if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
     if (amount > goal.currentAmount) throw new Error("В цели меньше денег, чем вы снимаете.");
 
-    return this.applyGoalMovement(state, goal, account, {
-      accountDelta: roundMoney(
-        convert(amount, state.currency, account.currency, this.rates(state))
-      ),
-      goalDelta: -amount
-    });
+    return this.applyGoalMovement(
+      state,
+      goal,
+      account,
+      {
+        accountDelta: roundMoney(
+          convert(amount, state.currency, account.currency, this.rates(state))
+        ),
+        goalDelta: -amount
+      },
+      input.memberId
+    );
   }
 
   private goalById(state: LocalState, goalId: string | undefined) {
@@ -2366,16 +2425,23 @@ export class LocalApiClient implements ApiClient {
     state: LocalState,
     goal: GoalsPageData["goals"][number],
     account: { id: string; currency: string },
-    sides: { accountDelta: number; goalDelta: number }
+    sides: { accountDelta: number; goalDelta: number },
+    memberId?: unknown
   ) {
     this.applyBalance(state, account.id, sides.accountDelta);
+    // Кто из семьи пополнил или снял — для совместных целей (lib/family/goal-shares).
+    const member =
+      typeof memberId === "string" && (state.members ?? []).some((item) => item.id === memberId)
+        ? memberId
+        : undefined;
     state.goalMovements = [
       {
         id: id("goalmove"),
         goalId: goal.id,
         accountId: account.id,
         amount: sides.goalDelta,
-        date: storedTransactionDate(new Date())
+        date: storedTransactionDate(new Date()),
+        ...(member ? { memberId: member } : {})
       },
       ...(state.goalMovements ?? [])
     ].slice(0, 2000);
@@ -3478,7 +3544,24 @@ export class LocalApiClient implements ApiClient {
   }
 
   private goals(state: LocalState): GoalsPageData {
-    return { source: "database", goals: state.goals.map(recomputeGoal), currency: state.currency };
+    const members = (state.members ?? []).map(({ id: memberId, name, color }) => ({
+      id: memberId,
+      name,
+      color
+    }));
+    return {
+      source: "database",
+      goals: state.goals.map((goal) => ({
+        ...recomputeGoal(goal),
+        family: goalFamily({
+          goalId: goal.id,
+          members,
+          shares: goal.shares,
+          movements: state.goalMovements ?? []
+        })
+      })),
+      currency: state.currency
+    };
   }
 
   private debts(state: LocalState): LiabilitiesPageData {

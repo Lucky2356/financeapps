@@ -309,6 +309,10 @@ export type GoalRow = {
   monthlyContribution: number;
   linkedAccountId?: string;
   plannedContribution?: number;
+  /** Доли участников семьи, % — см. lib/family/goal-shares.ts. */
+  shares?: Record<string, number>;
+  /** Кто сколько внёс — только на чтение, если в семье двое и больше. */
+  family?: import("@/lib/family/goal-shares").GoalFamily | null;
 };
 
 export type WatchlistRow = {
