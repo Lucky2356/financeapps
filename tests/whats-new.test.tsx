@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -221,7 +221,8 @@ describe("окно", () => {
 
   it("новая установка окна не видит", async () => {
     await mount(parseChangelog(SAMPLE));
+    // Список выпусков грузится отдельным куском — запоминается чуть позже.
+    await waitFor(() => expect(localStorage.getItem(WHATS_NEW_KEY)).toBe("3.1.0"));
     expect(screen.queryByTestId("whats-new")).toBeNull();
-    expect(localStorage.getItem(WHATS_NEW_KEY)).toBe("3.1.0");
   });
 });

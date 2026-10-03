@@ -24,11 +24,17 @@ import { useI18n } from "@/lib/i18n/context";
 import { ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { readMine, writeMine } from "@/lib/storage/mine";
 import type { WhatsNewItem, WhatsNewRelease } from "@/lib/whats-new/parse";
-import releasesJson from "@/lib/whats-new/releases.generated.json";
 import { decideWhatsNew, MAX_RELEASES, WHATS_NEW_KEY } from "@/lib/whats-new/seen";
 import { cn } from "@/lib/utils";
 
-const RELEASES = releasesJson as WhatsNewRelease[];
+/**
+ * Список выпусков — отдельным куском, по требованию: нужен он раз в выпуск, а
+ * грузился на каждом экране вместе со всем приложением.
+ */
+const loadReleases = () =>
+  import("@/lib/whats-new/releases.generated.json").then(
+    (module) => module.default as WhatsNewRelease[]
+  );
 
 /** «Настройки → О приложении» открывает окно этим событием. */
 export const WHATS_NEW_OPEN_EVENT = "finapps:whats-new-open";
@@ -276,30 +282,38 @@ export function WhatsNew() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    let decision;
+    let seen: string | null;
+    let onboarded: boolean;
     try {
-      decision = decideWhatsNew({
-        seen: readMine(WHATS_NEW_KEY),
-        current: APP_VERSION,
-        onboarded: Boolean(readMine(ONBOARDING_STORAGE_KEY)),
-        releases: RELEASES
-      });
+      seen = readMine(WHATS_NEW_KEY);
+      onboarded = Boolean(readMine(ONBOARDING_STORAGE_KEY));
     } catch {
       return; // localStorage недоступен — окно просто не покажется
     }
-    if (decision.show) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setReleases(decision.releases);
-      setOpen(true);
-    } else if (decision.remember) {
-      remember();
-    }
+    // Эту версию уже видели — список выпусков не нужен вовсе.
+    if (seen === APP_VERSION) return;
+    let cancelled = false;
+    void loadReleases().then((releases) => {
+      if (cancelled) return;
+      const decision = decideWhatsNew({ seen, current: APP_VERSION, onboarded, releases });
+      if (decision.show) {
+        setReleases(decision.releases);
+        setOpen(true);
+      } else if (decision.remember) {
+        remember();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     function openHistory() {
-      setReleases(RELEASES.slice(0, MAX_RELEASES));
-      setOpen(true);
+      void loadReleases().then((releases) => {
+        setReleases(releases.slice(0, MAX_RELEASES));
+        setOpen(true);
+      });
     }
     window.addEventListener(WHATS_NEW_OPEN_EVENT, openHistory);
     return () => window.removeEventListener(WHATS_NEW_OPEN_EVENT, openHistory);
