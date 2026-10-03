@@ -987,8 +987,9 @@ export class LocalApiClient implements ApiClient {
       return readCashback(
         state,
         month,
+        // Погашение кредита — не покупка по карте: кэшбэк за него не платят.
         this.countingState(state, false)
-          .transactions.filter((row) => row.type === "EXPENSE")
+          .transactions.filter((row) => row.type === "EXPENSE" && !row.liabilityId)
           .map((row) => ({
             id: row.id,
             date: row.date,

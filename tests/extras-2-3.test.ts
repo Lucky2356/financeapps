@@ -260,6 +260,15 @@ describe("через приложение", () => {
       categoryId: food.id,
       date: todayIso()
     });
+    // Погашение кредита с той же карты — не покупка, кэшбэка за него нет.
+    await client.post("/transactions", {
+      amount: "30000",
+      type: "EXPENSE",
+      accountId: card.id,
+      categoryId: food.id,
+      date: todayIso(),
+      liabilityId: "debt-1"
+    });
     const page = await client.get<CashbackPageData>(`/cashback?month=${month}`);
     expect(page.rules).toHaveLength(1);
     expect(page.summary.earned).toBe(100);
