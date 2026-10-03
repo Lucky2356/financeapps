@@ -1086,7 +1086,14 @@ export class LocalApiClient implements ApiClient {
         this.deleteTransaction(state, part.id);
       }
     } else if (pathname === "/transactions" && itemId) {
-      this.deleteTransaction(state, itemId);
+      // Перевод — две строки: списание и зачисление. Удалить одну значило бы
+      // заставить деньги исчезнуть — со счёта ушли, никуда не пришли (или
+      // наоборот). Удаляется весь перевод.
+      const transferId = state.transactions.find((item) => item.id === itemId)?.transferId;
+      const ids = transferId
+        ? state.transactions.filter((item) => item.transferId === transferId).map((item) => item.id)
+        : [itemId];
+      for (const one of ids) this.deleteTransaction(state, one);
     } else if (pathname === "/photos" && itemId) {
       const row = state.transactions.find((item) => item.id === itemId);
       if (row?.photo) await this.dropPhoto(itemId, row.photo);
@@ -5181,8 +5188,24 @@ export class LocalApiClient implements ApiClient {
       "familySettlements",
       "transactions"
     ];
-    const entries = (await this.trashEntries())
-      .filter((entry) => ids.includes(entry.id))
+    const all = await this.trashEntries();
+    // Перевод — две операции. Вернуть одну значило бы оставить деньги
+    // ушедшими со счёта и никуда не пришедшими: вторая половина идёт следом.
+    const transferOf = (entry: TrashEntry) =>
+      entry.collection === "transactions" && typeof entry.row.transferId === "string"
+        ? entry.row.transferId
+        : null;
+    const transfers = new Set(
+      all
+        .filter((entry) => ids.includes(entry.id))
+        .map(transferOf)
+        .filter((value): value is string => value !== null)
+    );
+    const entries = all
+      .filter((entry) => {
+        const transfer = transferOf(entry);
+        return ids.includes(entry.id) || (transfer !== null && transfers.has(transfer));
+      })
       .sort((a, b) => order.indexOf(a.collection) - order.indexOf(b.collection));
     if (entries.length === 0) throw new Error("В корзине этого уже нет.");
     const holder = state as unknown as Record<string, unknown>;
@@ -5207,10 +5230,10 @@ export class LocalApiClient implements ApiClient {
             this.restoreTransaction(state, { transaction: row });
           }
         } else {
-          // Лист возвращается вместе со всем, что на нём было.
+          // Лист (и столбец) возвращается вместе со всем, что на нём было.
           const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
           delete row[SHEET_ARCHIVE];
-          if (entry.collection === "sheets" && content) {
+          if (content) {
             for (const [collection, list] of Object.entries(content)) {
               const present = Array.isArray(holder[collection])
                 ? (holder[collection] as Array<Record<string, unknown>>)
