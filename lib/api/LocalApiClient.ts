@@ -164,6 +164,8 @@ import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/p
 import type { WhatIfBase } from "@/lib/whatif/simulate";
 import { familyPicture } from "@/lib/family/family";
 import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
+import { balanceHistory, monthsBack } from "@/lib/accounts/balance-history";
+import { buildYearRecap } from "@/lib/analytics/year-recap";
 import {
   importIntoSheet,
   importWorkbook,
@@ -950,6 +952,34 @@ export class LocalApiClient implements ApiClient {
           month
         )
       } as T;
+    }
+    if (pathname === "/balance-history") {
+      const count = Math.min(Math.max(Number(searchParams.get("months")) || 12, 2), 60);
+      return this.balanceHistoryPage(state, monthsBack(monthKeyOf(new Date()), count)) as T;
+    }
+    if (pathname === "/year-recap") {
+      const today = isoDay(new Date());
+      const year = Number(searchParams.get("year")) || Number(today.slice(0, 4));
+      const counted = this.countingState(this.inBase(state), false);
+      const history = this.balanceHistoryPage(state, [
+        `${year - 1}-12`,
+        today.startsWith(String(year)) ? today.slice(0, 7) : `${year}-12`
+      ]);
+      return buildYearRecap({
+        year,
+        today,
+        rows: counted.transactions.map((row) => ({
+          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
+          date: row.date,
+          amount: row.amount,
+          categoryId: row.category.id,
+          category: row.category.label,
+          color: row.category.color,
+          description: row.description
+        })),
+        capital: { start: history.total[0], end: history.total[1] },
+        cushion: { start: history.cushion[0], end: history.cushion[1] }
+      }) as T;
     }
     if (pathname === "/transfer-pairs") {
       // «Это перевод?»: отложенные человеком пары («нет, это не перевод») —
@@ -1801,6 +1831,62 @@ export class LocalApiClient implements ApiClient {
       return { category: tx.category.label, spent: roundMoney(spent), limit };
     }
     return null;
+  }
+
+  /**
+   * История остатка (lib/accounts/balance-history.ts) — по счетам в их валюте
+   * и итогом в основной: все деньги и подушка (сбережения и цели).
+   */
+  private balanceHistoryPage(state: LocalState, months: string[]) {
+    const rates = this.rates(state);
+    const live = state.accounts.filter((account) => !account.isArchived);
+    const history = balanceHistory({
+      accounts: live.map((account) => ({
+        id: account.id,
+        name: account.name,
+        type: account.type,
+        currency: account.currency,
+        balance: account.balance
+      })),
+      flows: state.transactions.map((row) => ({
+        accountId: row.account.id,
+        date: row.date,
+        signed: row.type === "INCOME" ? row.amount : -row.amount
+      })),
+      goalsNow: state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0),
+      // Пополнение цели снимает деньги со счёта — в истории счёта это видно,
+      // а в целях деньги прибывают.
+      goalMovements: (state.goalMovements ?? []).map((item) => ({
+        date: item.date,
+        amount: item.amount
+      })),
+      months
+    });
+    // Пополнение цели — минус на счёте без операции: учесть его в счёте.
+    for (const movement of state.goalMovements ?? []) {
+      const account = history.accounts.find((item) => item.id === movement.accountId);
+      if (!account) continue;
+      account.values = account.values.map((value, index) =>
+        movement.date.slice(0, 7) > months[index] ? roundMoney(value + movement.amount) : value
+      );
+    }
+    const inBase = (amount: number, currency: string) =>
+      convert(amount, currency, state.currency, rates);
+    const total = months.map((_, index) =>
+      roundMoney(
+        history.accounts.reduce((sum, item) => sum + inBase(item.values[index], item.currency), 0) +
+          history.goals[index]
+      )
+    );
+    const cushion = months.map((_, index) =>
+      roundMoney(
+        history.accounts
+          .filter((item) => SAVINGS_ACCOUNT_TYPES.includes(item.type))
+          .reduce((sum, item) => sum + inBase(item.values[index], item.currency), 0) +
+          history.goals[index]
+      )
+    );
+    return { currency: state.currency, ...history, total, cushion };
   }
 
   /**

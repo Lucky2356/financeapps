@@ -1,6 +1,7 @@
 "use client";
 
 import { ReportView } from "@/components/reports/report-view";
+import { YearRecapCard } from "@/components/reports/year-recap-card";
 import { TransfersToggle } from "@/components/analytics/transfers-toggle";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { transfersQuery, useIncludeTransfers } from "@/hooks/use-include-transfers";
@@ -33,6 +34,7 @@ export function ReportClient({
       <div className="no-print flex justify-end">
         <TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />
       </div>
+      <YearRecapCard currency={analyticsData.currency} />
       <ReportView
         analytics={analyticsData}
         netWorth={dashboardData.netWorth}

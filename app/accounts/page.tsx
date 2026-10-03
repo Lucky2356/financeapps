@@ -1,5 +1,6 @@
 import { AccountManager } from "@/components/accounts/account-manager";
 import { AccountsSummary } from "@/components/accounts/accounts-summary";
+import { BalanceHistoryCard } from "@/components/accounts/balance-history-card";
 import { FxRatesNote } from "@/components/accounts/fx-rates-note";
 import { PageHeader } from "@/components/page-header";
 import { getAccountsPageData } from "@/lib/data";
@@ -19,6 +20,7 @@ export default async function AccountsPage() {
       <AccountsSummary data={data} />
       <FxRatesNote accounts={data.accounts} />
       <AccountManager data={data} />
+      <BalanceHistoryCard />
     </div>
   );
 }
