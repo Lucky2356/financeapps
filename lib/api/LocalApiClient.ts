@@ -1661,7 +1661,11 @@ export class LocalApiClient implements ApiClient {
       ...(input.splitGroupId || previous?.splitGroupId
         ? { splitGroupId: String(input.splitGroupId || previous?.splitGroupId) }
         : {}),
-      ...(input.transferId ? { transferId: String(input.transferId) } : {}),
+      // То же для перевода: форма правки его номер не присылает, и половина
+      // перевода после правки даты становилась обычным доходом или тратой.
+      ...(input.transferId || previous?.transferId
+        ? { transferId: String(input.transferId || previous?.transferId) }
+        : {}),
       // Семья: кто платил и общая ли трата. Форма, которая этих полей не знает
       // (быстрая смена категории, правило), их не теряет — берутся прежние.
       ...familyFields(state, input, previous),

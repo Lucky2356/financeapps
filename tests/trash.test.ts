@@ -163,6 +163,21 @@ describe("корзина в книге", () => {
     expect(await accounts()).toEqual([700, 300]);
     const legs = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
 
+    // Правка одной строки (форма не присылает номер перевода) не отрывает её
+    // от перевода.
+    await client.put("/transactions", {
+      id: legs[0].id,
+      type: legs[0].type,
+      amount: String(legs[0].amount),
+      accountId: legs[0].account.id,
+      categoryId: legs[0].category.id,
+      date: "2026-10-02",
+      description: legs[0].description
+    });
+    const edited = (await client.get<TransactionsPageData>("/transactions?period=all"))
+      .transactions;
+    expect(edited.every((item) => item.transferId === legs[1].transferId)).toBe(true);
+
     // Удалили одну строку перевода — ушёл весь перевод, оба счёта как были.
     await client.delete(`/transactions?id=${legs[0].id}`);
     expect(await accounts()).toEqual([1000, 0]);
