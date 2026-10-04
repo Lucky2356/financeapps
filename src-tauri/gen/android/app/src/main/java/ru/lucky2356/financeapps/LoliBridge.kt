@@ -129,6 +129,10 @@ object LoliBridge {
     false to false
   }
 
+  /** Начало отпечатка подписи установленной Лоли — показать, если она не та. */
+  fun found(context: Context): String? =
+    signatures(context, PACKAGE).firstOrNull()?.let { it.take(4) + "…" + it.takeLast(4) }
+
   fun trusted(context: Context, caller: String?): Boolean {
     if (caller != PACKAGE) return false
     return signatures(context, caller).any { it in TRUSTED }

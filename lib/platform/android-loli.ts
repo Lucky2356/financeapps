@@ -15,6 +15,9 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
   }
 }
 
+/** Связь включили или поменяли — пора забрать траты и обновить сводку. */
+export const LOLI_EVENT = "financeapps:loli";
+
 export type LoliStatus = {
   /** Лоли стоит на телефоне. */
   installed: boolean;
@@ -25,6 +28,8 @@ export type LoliStatus = {
   auto: boolean;
   /** Отдавать Лоли сводку для ответов. */
   share: boolean;
+  /** Начало отпечатка подписи найденной Лоли — если она не та, видно, чья. */
+  found?: string;
 };
 
 export async function loliStatus(): Promise<LoliStatus | null> {

@@ -82,7 +82,7 @@ export const en: Messages = {
   "loli.set.on": "Expenses from Loli arrive here. Works offline, on this phone only.",
   "loli.set.missing": "Loli is not installed on this phone.",
   "loli.set.untrusted":
-    "An app named Loli was found, but it is not signed by Loli — the link stays closed.",
+    "An app named Loli was found, but it is not signed with Loli's key (signature {sign}) — the link stays closed. Install Loli from its GitHub releases.",
   "loli.set.help":
     "Loli hands expenses over right on the phone, with no server or internet. Only the real Loli is accepted — the app checks its signature. Loli never sees the books themselves.",
   "loli.set.auto": "Record straight away",

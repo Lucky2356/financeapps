@@ -243,6 +243,7 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
     answer.put("enabled", config.enabled)
     answer.put("auto", config.auto)
     answer.put("share", config.share)
+    if (installed && !trusted) LoliBridge.found(activity)?.let { answer.put("found", it) }
     invoke.resolve(answer)
   }
 
