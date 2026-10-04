@@ -26,14 +26,19 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
 import { BANK_ENABLED_KEY } from "@/lib/bank/suggestions";
 import { bankAccess, openBankAccess } from "@/lib/platform/android-bank";
-import { configureLoli, loliStatus, type LoliStatus } from "@/lib/platform/android-loli";
+import {
+  configureLoli,
+  LOLI_EVENT,
+  loliStatus,
+  type LoliStatus
+} from "@/lib/platform/android-loli";
 import { isAndroidShell } from "@/lib/platform/device";
 import { applyDensity } from "@/components/app-settings-sync";
 import { AutoBackupPanel, CloudSyncPanel } from "@/components/settings/cloud-sync-panel";
@@ -236,10 +241,14 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     return () => document.removeEventListener("visibilitychange", again);
   }, [onPhone]);
   function changeLoli(patch: Partial<Pick<LoliStatus, "enabled" | "auto" | "share">>) {
-    if (!loli) return;
+    if (!loli?.installed || !loli.trusted) return;
     const next = { ...loli, ...patch };
     setLoli(next);
-    void configureLoli({ enabled: next.enabled, auto: next.auto, share: next.share });
+    // Записали — и сразу обменялись: забрать присланное и оставить сводку,
+    // не дожидаясь следующей правки в учёте.
+    void configureLoli({ enabled: next.enabled, auto: next.auto, share: next.share }).then(() =>
+      window.dispatchEvent(new Event(LOLI_EVENT))
+    );
   }
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
   useEffect(() => {
@@ -439,7 +448,13 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   // выпуске настройка появилась: всё, что про другие устройства, — в
   // «Синхронизации», всё, что про пароль и соседей по устройству, — в «Пароле и
   // доступе», и «Данные» перестали быть свалкой из восьми карточек.
-  const sections = useMemo<Section[]>(() => {
+  //
+  // Собираются заново на каждой отрисовке — без useMemo. Раньше их запоминали со
+  // списком зависимостей, и каждый забытый в нём переключатель («Переводы на
+  // главной», потом «Лоли», «Траты из уведомлений банка», «Вечером напомнить»)
+  // сохранял нажатие, а на экране не менялся. Экран лёгкий: пересобрать дешевле,
+  // чем однажды снова забыть.
+  const sections = ((): Section[] => {
     const list: Section[] = [];
 
     list.push({
@@ -667,14 +682,15 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
                         !loli.installed
                           ? t("loli.set.missing")
                           : !loli.trusted
-                            ? t("loli.set.untrusted")
+                            ? t("loli.set.untrusted", { sign: loli.found ?? "—" })
                             : loli.enabled
                               ? t("loli.set.on")
                               : t("loli.set.desc")
                       }
                       help={t("loli.set.help")}
                       checked={loli.enabled && loli.trusted}
-                      onChange={(v) => changeLoli({ enabled: v && loli.trusted })}
+                      disabled={!loli.installed || !loli.trusted}
+                      onChange={(v) => changeLoli({ enabled: v })}
                     />
                     {loli.enabled && loli.trusted ? (
                       <>
@@ -1023,25 +1039,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     });
 
     return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    settings,
-    pageData,
-    status,
-    locale,
-    loadingSample,
-    clearing,
-    checkingUpdate,
-    android,
-    textSize,
-    startScreen,
-    defaultAccount,
-    accounts,
-    // Без этого переключатель «Переводы на главной» рисовался со значением
-    // на момент открытия: включить — да, а выключить уже нет, он оставался
-    // включённым и на каждое нажатие снова включал.
-    homeTransfers
-  ]);
+  })();
 
   const trimmedQuery = query.trim().toLowerCase();
   const matches = trimmedQuery
@@ -1357,13 +1355,15 @@ function ToggleRow({
   description,
   help,
   checked,
-  onChange
+  onChange,
+  disabled
 }: {
   title: string;
   description: string;
   help?: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   const id = useId();
   return (
@@ -1382,7 +1382,13 @@ function ToggleRow({
           {description}
         </label>
       </div>
-      <Switch id={id} checked={checked} onChange={onChange} aria-label={title} />
+      <Switch
+        id={id}
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+        aria-label={title}
+      />
     </div>
   );
 }

@@ -56,14 +56,17 @@ export function buildLoliSummary(input: {
     v: 1,
     updatedAt: input.now.toISOString(),
     currency: input.currency,
-    today: input.allowance
-      ? {
-          canSpend: round(Math.max(input.allowance.leftToday, 0)),
-          perDay: round(input.allowance.perDay),
-          spent: round(input.allowance.spentToday),
-          status: input.allowance.status
-        }
-      : null,
+    // Доходов в этом месяце нет и взять неоткуда — «можно сегодня» не считается
+    // (на главной эта карточка тогда тоже не показывается), а не «ноль».
+    today:
+      input.allowance && input.allowance.income > 0
+        ? {
+            canSpend: round(Math.max(input.allowance.leftToday, 0)),
+            perDay: round(input.allowance.perDay),
+            spent: round(input.allowance.spentToday),
+            status: input.allowance.status
+          }
+        : null,
     month: {
       month,
       income: round(input.recap?.income ?? 0),

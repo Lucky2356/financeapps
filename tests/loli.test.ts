@@ -285,4 +285,31 @@ describe("сводка для Лоли", () => {
     ]);
     expect(JSON.stringify(summary)).not.toContain("Пятёрочка");
   });
+
+  it("доходов в месяце нет — «можно сегодня» не отдаётся, а не «ноль»", () => {
+    const summary = buildLoliSummary({
+      now: new Date(2026, 9, 3, 12),
+      currency: "RUB",
+      allowance: {
+        perDay: 0,
+        leftToday: 0,
+        daysLeft: 29,
+        budget: 0,
+        incomeSource: "actual",
+        status: "over",
+        spentToday: 0,
+        spentYesterday: 0,
+        spentBeforeToday: 0,
+        upcoming: 0,
+        income: 0
+      },
+      recap: null,
+      budgets: [],
+      accounts: [],
+      totalBalance: 0,
+      payday: null
+    });
+    // Иначе Лоли сказала бы «бюджет месяца уже израсходован».
+    expect(summary.today).toBeNull();
+  });
 });

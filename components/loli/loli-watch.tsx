@@ -31,6 +31,7 @@ import { parseLoliQueue } from "@/lib/loli/inbox";
 import { buildLoliSummary } from "@/lib/loli/summary";
 import {
   ackLoliQueue,
+  LOLI_EVENT,
   loliStatus,
   publishLoliSummary,
   takeLoliQueue
@@ -139,11 +140,18 @@ export function LoliWatch() {
       if (document.visibilityState === "visible") void takeFromLoli();
     }, 30_000);
     document.addEventListener("visibilitychange", visible);
+    const now = () => {
+      void takeFromLoli();
+      window.clearTimeout(timer);
+      void shareWithLoli().catch(() => undefined);
+    };
+    window.addEventListener(LOLI_EVENT, now);
     const stop = onDataChanged(share);
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(every);
       document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener(LOLI_EVENT, now);
       stop();
     };
   }, []);

@@ -19,6 +19,7 @@ export function Switch({
   onChange,
   id,
   className,
+  disabled,
   "aria-label": ariaLabel,
   "aria-describedby": describedBy
 }: {
@@ -26,6 +27,8 @@ export function Switch({
   onChange: (value: boolean) => void;
   id?: string;
   className?: string;
+  /** Нельзя переключить — причина должна быть написана рядом. */
+  disabled?: boolean;
   "aria-label"?: string;
   "aria-describedby"?: string;
 }) {
@@ -36,15 +39,16 @@ export function Switch({
         type="checkbox"
         role="switch"
         checked={checked}
+        disabled={disabled}
         aria-label={ariaLabel}
         aria-describedby={describedBy}
         onChange={(event) => onChange(event.target.checked)}
-        className="peer absolute inset-0 z-10 m-0 cursor-pointer opacity-0"
+        className="peer absolute inset-0 z-10 m-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
       />
       <span
         aria-hidden
         className={cn(
-          "h-6 w-11 rounded-full border border-border bg-muted transition-colors",
+          "h-6 w-11 rounded-full border border-border bg-muted transition-colors peer-disabled:opacity-50",
           "peer-checked:border-primary peer-checked:bg-primary",
           "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
         )}
