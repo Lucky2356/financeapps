@@ -28,6 +28,7 @@ import {
   resolveTarget
 } from "@/lib/bank/suggestions";
 import type { ImportPageData, TransactionsPageData } from "@/lib/data";
+import { LOLI_LINKS_KEY, LOLI_PREFIX, parseLinks, withLink } from "@/lib/loli/inbox";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { LAST_ACCOUNT_KEY, readMine, writeMine } from "@/lib/storage/mine";
@@ -150,6 +151,15 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
         ...deviceMember(item.type)
       });
       writeMine(LAST_ACCOUNT_KEY, accountId);
+      // Трата из Лоли: запомнить, какая операция её записала, — чтобы правка
+      // или «отмени последнее» в Лоли нашли именно её.
+      if (item.id.startsWith(LOLI_PREFIX)) {
+        const loliId = item.id.slice(LOLI_PREFIX.length);
+        writeMine(
+          LOLI_LINKS_KEY,
+          JSON.stringify(withLink(parseLinks(readMine(LOLI_LINKS_KEY)), loliId, created.id))
+        );
+      }
       writeMine(
         BANK_RECORDED_KEY,
         JSON.stringify(addHandled(parseHandled(readMine(BANK_RECORDED_KEY)), created.id))

@@ -77,6 +77,22 @@ export const en: Messages = {
   "family.rename": "Rename: {name}",
   "family.renameTitle": "Member",
   "family.since": "In the family since",
+  "loli.set.title": "Loli voice assistant",
+  "loli.set.desc": "Tell Loli “spent 850 on groceries” and the expense appears here.",
+  "loli.set.on": "Expenses from Loli arrive here. Works offline, on this phone only.",
+  "loli.set.missing": "Loli is not installed on this phone.",
+  "loli.set.untrusted":
+    "An app named Loli was found, but it is not signed by Loli — the link stays closed.",
+  "loli.set.help":
+    "Loli hands expenses over right on the phone, with no server or internet. Only the real Loli is accepted — the app checks its signature. Loli never sees the books themselves.",
+  "loli.set.auto": "Record straight away",
+  "loli.set.autoDesc":
+    "Otherwise the expense waits in Suggestions on the home screen and is recorded with one tap.",
+  "loli.set.share": "Answer Loli about money",
+  "loli.set.shareDesc":
+    "Totals only — daily allowance, limits, balances, until payday. No single transaction.",
+  "loli.recorded": "Loli: recorded {amount} · {category}",
+  "loli.suggested": "Loli: expenses in Suggestions — {count}",
   "goal.reached": "Goal reached",
   "mr.title": "Monthly report",
   "mr.open": "Monthly report (PDF)",

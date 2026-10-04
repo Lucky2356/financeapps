@@ -66,6 +66,18 @@ class WidgetArgs {
 }
 
 @InvokeArg
+class LoliConfigArgs {
+  var enabled: Boolean = false
+  var auto: Boolean = false
+  var share: Boolean = true
+}
+
+@InvokeArg
+class LoliSummaryArgs {
+  var json: String = "{}"
+}
+
+@InvokeArg
 class InstallArgs {
   lateinit var url: String
   /** Куда сообщать, сколько скачано: 40 МБ по мобильной сети — это минуты. */
@@ -214,6 +226,52 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
     val answer = JSObject()
     answer.put("items", BankNotifications.take(activity))
     invoke.resolve(answer)
+  }
+
+  // ——— Лоли ————————————————————————————————————————————————————————————————
+  //
+  // Голосовой помощник владельца шлёт траты через LoliProvider (LoliBridge.kt);
+  // здесь — включить связку, забрать присланное и положить сводку для ответов.
+
+  @Command
+  fun loliStatus(invoke: Invoke) {
+    val (installed, trusted) = LoliBridge.installed(activity)
+    val config = LoliBridge.config(activity)
+    val answer = JSObject()
+    answer.put("installed", installed)
+    answer.put("trusted", trusted)
+    answer.put("enabled", config.enabled)
+    answer.put("auto", config.auto)
+    answer.put("share", config.share)
+    invoke.resolve(answer)
+  }
+
+  @Command
+  fun loliConfig(invoke: Invoke) {
+    val args = invoke.parseArgs(LoliConfigArgs::class.java)
+    LoliBridge.configure(activity, args.enabled, args.auto, args.share)
+    invoke.resolve()
+  }
+
+  @Command
+  fun loliTake(invoke: Invoke) {
+    val answer = JSObject()
+    answer.put("items", LoliBridge.peek(activity))
+    invoke.resolve(answer)
+  }
+
+  @Command
+  fun loliAck(invoke: Invoke) {
+    val args = invoke.parseArgs(LoliSummaryArgs::class.java)
+    LoliBridge.ack(activity, args.json)
+    invoke.resolve()
+  }
+
+  @Command
+  fun loliSummary(invoke: Invoke) {
+    val args = invoke.parseArgs(LoliSummaryArgs::class.java)
+    LoliBridge.storeSummary(activity, args.json)
+    invoke.resolve()
   }
 
   // ——— вход по отпечатку —————————————————————————————————————————————————
