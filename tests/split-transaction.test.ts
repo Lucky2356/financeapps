@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { TransactionsPageData } from "@/lib/data";
 
 // Один чек — несколько категорий.
 
@@ -41,9 +40,7 @@ describe("разделить операцию", () => {
 
     expect(parts).toHaveLength(2);
     expect(new Set(parts.map((p) => p.splitGroupId)).size).toBe(1);
-    const accounts = await api.get<{ accounts: Array<{ id: string; balance: number }> }>(
-      "/accounts"
-    );
+    const accounts = await api.get("/accounts");
     expect(accounts.accounts.find((a) => a.id === account.id)?.balance).toBe(10000 - 2340);
   });
 
@@ -61,11 +58,9 @@ describe("разделить операцию", () => {
     });
     await api.delete(`/transactions?splitGroupId=${parts[0].splitGroupId}`);
 
-    const list = await api.get<TransactionsPageData>("/transactions");
+    const list = await api.get("/transactions");
     expect(list.transactions.filter((tx) => tx.splitGroupId)).toHaveLength(0);
-    const accounts = await api.get<{ accounts: Array<{ id: string; balance: number }> }>(
-      "/accounts"
-    );
+    const accounts = await api.get("/accounts");
     expect(accounts.accounts.find((a) => a.id === account.id)?.balance).toBe(10000);
   });
 
@@ -91,7 +86,7 @@ describe("разделить операцию", () => {
       date: "2026-09-27"
     });
 
-    const list = await api.get<TransactionsPageData>("/transactions");
+    const list = await api.get("/transactions");
     const edited = list.transactions.find((tx) => tx.id === parts[1].id);
     expect(edited?.amount).toBe(70);
     expect(edited?.splitGroupId).toBe(parts[0].splitGroupId);
@@ -111,7 +106,7 @@ describe("разделить операцию", () => {
         ])
       })
     ).rejects.toThrow();
-    const list = await api.get<TransactionsPageData>("/transactions");
+    const list = await api.get("/transactions");
     expect(list.transactions).toHaveLength(0);
   });
 });

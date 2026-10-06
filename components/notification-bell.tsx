@@ -17,8 +17,6 @@ import {
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
 import { buildNotifications, countUrgent, type NotificationItem } from "@/lib/notifications";
-import type { BudgetsPageData } from "@/lib/data";
-import type { DashboardData, ForecastData } from "@/types/finance";
 import { useDataVersion } from "@/hooks/use-data-version";
 
 const badgeVariant = {
@@ -73,11 +71,9 @@ export function NotificationBell() {
       // Pull from all three sources; each is best-effort so one failure does
       // not blank out the others.
       const [dashboard, forecast, budgets] = await Promise.all([
-        apiClient.get<Pick<DashboardData, "recommendations">>("/dashboard").catch(() => null),
-        apiClient
-          .get<Pick<ForecastData, "upcomingEvents" | "warnings" | "currency">>("/forecast")
-          .catch(() => null),
-        apiClient.get<BudgetsPageData>("/budgets").catch(() => null)
+        apiClient.get("/dashboard").catch(() => null),
+        apiClient.get("/forecast").catch(() => null),
+        apiClient.get("/budgets").catch(() => null)
       ]);
       if (cancelled) return;
       setItems(

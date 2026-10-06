@@ -254,7 +254,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   useEffect(() => {
     let alive = true;
     apiClient
-      .get<AccountsPageData>("/accounts")
+      .get("/accounts")
       .then((page) => {
         if (alive) setAccounts(page.accounts);
       })

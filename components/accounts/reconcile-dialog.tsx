@@ -60,9 +60,7 @@ export function ReconcileDialog({
     if (!account) return;
     let alive = true;
     void apiClient
-      .get<TransactionsPageData>(
-        `/transactions?accountId=${encodeURIComponent(account.id)}&period=all&limit=10`
-      )
+      .get(`/transactions?accountId=${encodeURIComponent(account.id)}&period=all&limit=10`)
       .then((page) => (alive ? setRecent(page.transactions.slice(0, 10)) : undefined))
       .catch(() => (alive ? setRecent([]) : undefined));
     return () => {

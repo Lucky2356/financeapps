@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useTheme } from "next-themes";
 
 import { apiClient } from "@/lib/api/client";
-import type { SettingsPageData } from "@/lib/data";
 import { themeChosenThisSession } from "@/lib/theme-preference";
 
 // Applies interface density globally by scaling the root font size.
@@ -30,7 +29,7 @@ export function AppSettingsSync() {
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .get<SettingsPageData>("/settings")
+      .get("/settings")
       .then((settings) => {
         if (cancelled) return;
         // Never overwrite a choice the user made while this read was in flight:

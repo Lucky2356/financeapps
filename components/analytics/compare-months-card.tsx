@@ -41,7 +41,7 @@ export function CompareMonthsCard({ currency }: { currency: string }) {
   const months = useMemo(() => lastMonths(24), []);
   const [a, setA] = useState(months[0]);
   const [b, setB] = useState(months[1]);
-  const { data } = useApiPageData<MonthComparison>(EMPTY, `/compare-months?a=${a}&b=${b}`);
+  const { data } = useApiPageData(EMPTY, `/compare-months?a=${a}&b=${b}`);
   const money = (value: number) => formatCurrency(value, currency);
   const name = (month: string) =>
     new Date(`${month}-01T12:00:00`).toLocaleDateString(locale === "en" ? "en-GB" : "ru-RU", {

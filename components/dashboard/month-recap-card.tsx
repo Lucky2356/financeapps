@@ -195,7 +195,7 @@ function RecapBody({ data, currency }: { data: MonthRecap; currency: string }) {
 export function MonthRecapCard({ currency }: { currency: string }) {
   const { t, locale } = useI18n();
   const [visible, setVisible] = useState(false);
-  const { data } = useApiPageData<MonthRecap>(EMPTY, "/month-recap");
+  const { data } = useApiPageData(EMPTY, "/month-recap");
 
   useEffect(() => {
     const day = new Date().getDate();
@@ -250,7 +250,7 @@ export function MonthRecapButton({ currency }: { currency: string }) {
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(currentMonth);
-  const { data } = useApiPageData<MonthRecap>(EMPTY, `/month-recap?month=${month}`);
+  const { data } = useApiPageData(EMPTY, `/month-recap?month=${month}`);
   const shown = data.month === month ? data : { ...EMPTY, month };
   const atNow = month >= currentMonth();
 

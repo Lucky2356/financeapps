@@ -24,7 +24,7 @@ export async function pickSyncFolder(): Promise<string | null> {
 
 // Encrypts the current local state and writes it to the sync folder.
 export async function pushToFolder(folder: string, passphrase: string): Promise<void> {
-  const backup = await apiClient.get<unknown>("/backup");
+  const backup = await apiClient.get("/backup");
   const payload = JSON.stringify({ exportedAt: new Date().toISOString(), backup });
   const encrypted = await encryptString(payload, passphrase);
   const fs = await import("@tauri-apps/plugin-fs");

@@ -116,9 +116,7 @@ describe("второе устройство принимает учётную з
     // Тот же случай, но названный прямо: книга первого запуска НЕ пуста.
     const phone = device();
     await phone.account.create(PASSWORD, FAST);
-    const book = await new LocalApiClient(phone.sealed).get<{
-      categories: unknown[];
-    }>("/categories");
+    const book = await new LocalApiClient(phone.sealed).get("/categories");
 
     expect(book.categories.length).toBeGreaterThan(0);
   });

@@ -53,7 +53,7 @@ export function groupTrash(entries: Entry[]): Group[] {
 export function TrashCard() {
   const { t, locale } = useI18n();
   const confirm = useConfirm();
-  const { data, reload } = useApiPageData<{ entries: Entry[] }>({ entries: [] }, "/trash");
+  const { data, reload } = useApiPageData({ entries: [] }, "/trash");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const groups = useMemo(() => groupTrash(data.entries), [data.entries]);

@@ -50,10 +50,8 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
     if (stored.length === 0) return;
     const since = formatInputDate(new Date(Date.now() - 16 * 86_400_000));
     const [recent, references] = await Promise.all([
-      apiClient
-        .get<TransactionsPageData>(`/transactions?from=${since}&limit=all`)
-        .catch(() => null),
-      apiClient.get<ImportPageData>("/import").catch(() => null)
+      apiClient.get(`/transactions?from=${since}&limit=all`).catch(() => null),
+      apiClient.get("/import").catch(() => null)
     ]);
     setLedger(recent);
     setRefs(references);

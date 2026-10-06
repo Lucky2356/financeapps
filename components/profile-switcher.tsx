@@ -79,7 +79,7 @@ function ProfileSwitcherInner({ compact }: { compact: boolean }) {
 
   async function loadProfiles() {
     try {
-      const data = await apiClient.get<ProfileList>("/profiles");
+      const data = await apiClient.get("/profiles");
       setList(data);
     } catch {
       // web mode — profiles endpoint not available, silently ignore
@@ -89,7 +89,7 @@ function ProfileSwitcherInner({ compact }: { compact: boolean }) {
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .get<ProfileList>("/profiles")
+      .get("/profiles")
       .then((data) => {
         if (!cancelled) setList(data);
       })

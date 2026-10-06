@@ -1,18 +1,21 @@
 "use client";
 
 import type { ApiClient } from "@/lib/api/ApiClient";
-import { ASSET_KINDS, type AssetKind } from "@/types/enums";
-import { id, monthKeyOf, normalizePath, toFormObject } from "@/lib/api/local/helpers";
-import { readSheet } from "@/lib/api/local/sheet";
+import type {
+  DeletePath,
+  PathWithQuery,
+  ReadPath,
+  ReadResponses,
+  WritePath
+} from "@/lib/api/routes";
+import { MARKET_READS, STATE_READS, type ReadRequest } from "@/lib/api/local/reads";
 import {
-  deductionKindOf,
-  readCashback,
-  readDeductions,
-  readTrips,
-  writeCashback,
-  writeDeductionYear,
-  writeTrips
-} from "@/lib/api/local/extras";
+  STATE_DELETES,
+  STATE_WRITES,
+  type DeleteRequest,
+  type WriteRequest
+} from "@/lib/api/local/writes";
+import { id, normalizePath, routeOf, toFormObject } from "@/lib/api/local/helpers";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
 import { STAMPED, stampRows, trackDeletions } from "@/lib/sync/row-stamps";
 import { localStateSchema, transactionRowSchema } from "@/lib/api/local/schemas";
@@ -33,38 +36,15 @@ import {
   type StoredPhoto
 } from "@/lib/photos/receipt-photo";
 import { todayDay } from "@/lib/transactions/date";
-import { convert } from "@/lib/currency";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
 import { LATEST_LOCAL_STATE_VERSION } from "@/lib/storage/migrations/runLocalStateMigrations";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
-import { roundMoney } from "@/lib/utils";
 import { salvageLocalState } from "@/lib/api/local/schemas";
 import { transferKeyOf } from "@/lib/transactions/transfers";
-import { createMarketDataProvider } from "@/services/market/createMarketDataProvider";
-import { historyRangeStart } from "@/lib/market/history-range";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import { recordPortfolioSnapshot } from "@/lib/investments/snapshots";
-import { buildMonthRecap, previousMonth } from "@/lib/analytics/month-recap";
-import { findLeaks, unusualFor } from "@/lib/analytics/watchdog";
-import { buildWeekRecap } from "@/lib/analytics/week-recap";
 import type { TransactionRow } from "@/types/finance";
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
-import { familyPicture } from "@/lib/family/family";
-import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
-import { monthsBack } from "@/lib/accounts/balance-history";
-import { buildYearRecap } from "@/lib/analytics/year-recap";
-import { compareMonths } from "@/lib/analytics/compare-months";
-import { detectPayday, forecastToPayday } from "@/lib/analytics/payday";
-import {
-  importIntoSheet,
-  importWorkbook,
-  MAIN_SHEET,
-  readWorkbook,
-  sheetScope,
-  writeSheets,
-  writeWorkbook,
-  type WorkbookImportSheet
-} from "@/lib/api/local/sheets";
 import {
   addToTrash,
   pruneTrash,
@@ -78,82 +58,15 @@ import {
 } from "@/lib/trash/trash";
 import {
   type LocalState,
-  STANDARD_CATEGORY_IDS,
   standardCategoriesFrom,
   createInitialState,
   createBlankState,
   migrateLocalState
 } from "@/lib/api/local/state";
-import { applyBalance, ratesOf, sumInBase, inBase, countingState } from "@/lib/api/local/money";
-import {
-  upsertAccount,
-  upsertTransaction,
-  createSplit,
-  balanceHistoryPage,
-  reconcileAccount,
-  linkTransfer,
-  createTransfer,
-  restoreTransaction,
-  deleteTransaction,
-  importCsvRows,
-  undoLastImport,
-  accountsPage,
-  transactionsPage,
-  importReferences,
-  watchRows
-} from "@/lib/api/local/ledger";
-import { budgetWarningFor, upsertBudget } from "@/lib/api/local/budgets";
-import {
-  upsertGoal,
-  depositToGoal,
-  withdrawFromGoal,
-  goalAccount,
-  goalsPage
-} from "@/lib/api/local/goals";
-import { upsertLiability, payDebt, autoPayDebts, debtsPage } from "@/lib/api/local/debts";
-import {
-  upsertRecurring,
-  materializeRecurring,
-  materializeAllDue,
-  recurringPage
-} from "@/lib/api/local/recurring";
-import {
-  updateInvestments,
-  investmentEventsPage,
-  addRealizedEvent,
-  undoSale,
-  addExpectedDividend,
-  addMarketAlert,
-  setTargetAllocations,
-  payoutsPage,
-  investmentsPage
-} from "@/lib/api/local/investments";
-import {
-  rulesPage,
-  addRule,
-  categoriesPage,
-  withSheetCategories,
-  sheetFacts,
-  upsertCategory
-} from "@/lib/api/local/categories";
-import { planFactPage, savePlan } from "@/lib/api/local/plan";
-import {
-  budgetsPage,
-  forecastPage,
-  recordNetWorthSnapshot,
-  allowancePage,
-  dashboardPage,
-  analyticsPage,
-  whatIfBase
-} from "@/lib/api/local/overview";
-import {
-  backupDocument,
-  updateSettings,
-  updateFxRates,
-  settingsPage
-} from "@/lib/api/local/settings";
+import { restoreTransaction } from "@/lib/api/local/ledger";
+import { investmentsPage } from "@/lib/api/local/investments";
+import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
-import { writeFamily } from "@/lib/api/local/family";
 
 // Прежде жили здесь — потребители импортируют их отсюда.
 export {
@@ -314,7 +227,24 @@ export class LocalApiClient implements ApiClient {
     return next;
   }
 
-  async get<T>(path: string): Promise<T> {
+  /**
+   * Чтения, которым мало документа: копии, корзина, профили и фото лежат в
+   * хранилище рядом с ним, а «/backup» и «/investments» попутно сохраняют то,
+   * что узнали. Остальные чтения — в lib/api/local/reads.ts.
+   */
+  private readonly storeReads = {
+    "/backup/before-upgrade": () => this.preUpgradeBackup(),
+    "/backup/before-clear": () => this.beforeClearCopy(),
+    "/backup/local-copies": () => this.localCopies(),
+    "/trash": () => this.trashList(),
+    "/profiles": () => this.profileList(),
+    "/photos": ({ state, searchParams }: ReadRequest) =>
+      this.readPhoto(state, searchParams.get("id") ?? ""),
+    "/backup": ({ state }: ReadRequest) => this.exportBackup(state),
+    "/investments": ({ state }: ReadRequest) => this.refreshInvestments(state)
+  };
+
+  async get<P extends ReadPath>(path: PathWithQuery<P>): Promise<ReadResponses[P]> {
     // Reads get the cached document itself rather than a copy of it. Cloning a
     // ledger of a few thousand operations costs more than everything the screen
     // then does with it — over half the time of a page load went into copying
@@ -322,443 +252,92 @@ export class LocalApiClient implements ApiClient {
     // never touch this one; `tests/read-paths.test.ts` holds them to it.
     const state = await this.state(false);
     const { pathname, searchParams } = normalizePath(path);
-
-    if (pathname === "/accounts") return accountsPage(state) as T;
-    if (pathname === "/transactions") return transactionsPage(state, searchParams) as T;
-    if (pathname === "/budgets")
-      // Moving money between your own accounts is not spending, so a limit must
-      // never be eaten by it — on this screen there is nothing to toggle, the
-      // answer is always no.
-      return budgetsPage(
-        countingState(inBase(state), false),
-        searchParams.get("month") ?? undefined
-      ) as T;
-    if (pathname === "/goals") return goalsPage(state) as T;
-    if (pathname === "/debts") return debtsPage(state) as T;
-    if (pathname === "/rules") return rulesPage(state) as T;
-    if (pathname === "/recurring") return recurringPage(state) as T;
-    if (pathname === "/forecast") return forecastPage(inBase(state)) as T;
-    if (pathname === "/month-recap") {
-      // Итоги ПРОШЛОГО месяца по умолчанию: их показывают в начале нового.
-      const counted = countingState(inBase(state), false);
-      const today = isoDay(new Date());
-      const month = /^\d{4}-\d{2}$/.test(searchParams.get("month") ?? "")
-        ? String(searchParams.get("month"))
-        : previousMonth(today.slice(0, 7));
-      return buildMonthRecap({
-        month,
-        // Идущий месяц — на сегодня, и прошлый для сравнения — к тому же числу.
-        asOfDay: month === today.slice(0, 7) ? Number(today.slice(8, 10)) : null,
-        rows: counted.transactions.map((row) => ({
-          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
-          date: row.date,
-          amount: row.amount,
-          categoryId: row.category.id,
-          category: row.category.label,
-          color: row.category.color
-        })),
-        budgets: budgetsPage(counted, month).budgets
-      }) as T;
-    }
-    if (pathname === "/allowance") return allowancePage(countingState(inBase(state), false)) as T;
-    if (pathname === "/dashboard")
-      return (await dashboardPage(
-        countingState(inBase(state), searchParams.get("transfers") === "1")
-      )) as T;
-    if (pathname === "/settings") return settingsPage(state) as T;
-    if (pathname === "/backup/before-upgrade") return (await this.preUpgradeBackup()) as T;
-    if (pathname === "/backup/before-clear") return (await this.beforeClearCopy()) as T;
-    if (pathname === "/backup/local-copies") return (await this.localCopies()) as T;
-    if (pathname === "/trash") return (await this.trashList()) as T;
-    if (pathname === "/import") return importReferences(state) as T;
-    if (pathname === "/backup") {
-      // The exported file records when it was made, so the stamp goes into the
-      // payload here — and into storage inside the queue, on a state read
-      // again, so an export cannot roll back whatever was saved meanwhile.
-      const stamped = new Date().toISOString();
-      const payload = await backupDocument({ ...state, lastBackupAt: stamped });
-      await this.serialize(async () => {
-        const fresh = await this.state();
-        fresh.lastBackupAt = stamped;
-        await this.save(fresh);
-      });
-      return payload as T;
-    }
-    if (pathname === "/investments/search") {
-      // `kind` narrows the search to shares, bonds, funds or metal. Without it
-      // a search for "ОФЗ" drowned in every share whose name happens to match.
-      const kind = searchParams.get("kind");
-      const results = await createMarketDataProvider().searchSecurities(
-        searchParams.get("q") ?? "",
-        25,
-        kind && ASSET_KINDS.includes(kind as AssetKind) ? (kind as AssetKind) : undefined
-      );
-      return { results } as T;
-    }
-    if (pathname === "/investments/payouts") return (await payoutsPage(state)) as T;
-    if (pathname === "/investments/index") {
-      // Индекс Мосбиржи для сравнения: IMOEX (цены) или MCFTR (с дивидендами).
-      const index = searchParams.get("index") === "MCFTR" ? "MCFTR" : "IMOEX";
-      const range = searchParams.get("range") ?? "6m";
-      const prices = await createMarketDataProvider().getIndexHistory(
-        index,
-        historyRangeStart(range),
-        new Date()
-      );
-      return {
-        index,
-        range,
-        points: prices.map((p) => ({ date: p.date.toISOString(), price: p.price }))
-      } as T;
-    }
-    if (pathname === "/investments/history") {
-      const ticker = (searchParams.get("ticker") ?? "").toUpperCase();
-      const range = searchParams.get("range") ?? "6m";
-      const prices = ticker
-        ? await createMarketDataProvider().getHistoricalPrices(
-            ticker,
-            historyRangeStart(range),
-            new Date()
-          )
-        : [];
-      return {
-        ticker,
-        range,
-        points: prices.map((p) => ({ date: p.date.toISOString(), price: p.price }))
-      } as T;
-    }
-    if (pathname === "/investments") {
-      const invData = await investmentsPage(state);
-      // Persist last-known prices so they survive app restart. Read the state
-      // again inside the queue first: fetching quotes takes seconds, and
-      // whatever the owner saved meanwhile must not be rolled back by the
-      // snapshot this request started from.
-      await this.serialize(async () => {
-        const fresh = await this.state();
-        fresh.investments = {
-          ...fresh.investments,
-          securities: invData.securities,
-          watchlist: invData.watchlist,
-          portfolio: invData.portfolio,
-          structure: invData.structure,
-          sectorStructure: invData.sectorStructure,
-          assetStructure: invData.assetStructure
-        };
-        // Снимок дня: портфель пуст — снимать нечего (иначе история
-        // начиналась бы с нулей до первой покупки).
-        if (invData.portfolio.length > 0) {
-          fresh.portfolioSnapshots = recordPortfolioSnapshot(
-            fresh.portfolioSnapshots ?? [],
-            isoDay(new Date()),
-            invData.portfolio.reduce((sum, row) => sum + row.currentValue, 0),
-            invData.portfolio.reduce((sum, row) => sum + row.quantity * row.averageBuyPrice, 0)
-          );
-          invData.history = fresh.portfolioSnapshots;
-        }
-        await this.save(fresh);
-      });
-      return invData as T;
-    }
-    if (pathname === "/investments/events") return investmentEventsPage(state) as T;
-    if (pathname === "/market/alerts") return { alerts: [...(state.marketAlerts ?? [])] } as T;
-    if (pathname === "/investments/dividends")
-      return {
-        dividends: [...(state.expectedDividends ?? [])],
-        realized: (state.realizedInvestmentEvents ?? []).filter(
-          (event) => event.type === "DIVIDEND"
-        ),
-        currency: state.currency
-      } as T;
-    if (pathname === "/investments/targets")
-      return { targets: [...(state.targetAllocations ?? [])], currency: state.currency } as T;
-    if (pathname === "/categories") return categoriesPage(state) as T;
-    if (pathname === "/analytics")
-      return analyticsPage(inBase(state), searchParams.get("transfers") === "1") as T;
-    if (pathname === "/plan")
-      return planFactPage(
-        inBase(state),
-        Number(searchParams.get("ahead") ?? 0),
-        searchParams.get("transfers") === "1"
-      ) as T;
-    if (pathname === "/profiles") return (await this.profileList()) as T;
-    if (pathname === "/sheet")
-      return readSheet(sheetScope(state, searchParams.get("sheet") || MAIN_SHEET)) as T;
-    if (pathname === "/workbook") return readWorkbook(state, searchParams.get("sheet")) as T;
-    if (pathname === "/what-if") return whatIfBase(inBase(state)) as T;
-    if (pathname === "/family") {
-      const month = searchParams.get("month") || monthKeyOf(new Date());
-      const members = (state.members ?? []).map(({ id: memberId, name, color, since }) => ({
-        id: memberId,
-        name,
-        color,
-        ...(since ? { since } : {})
-      }));
-      return {
-        members,
-        picture: familyPicture(
-          members,
-          inBase(state).transactions,
-          state.familySettlements ?? [],
-          month
-        )
-      } as T;
-    }
-    if (pathname === "/payday") {
-      const today = isoDay(new Date());
-      const counted = countingState(inBase(state), false);
-      const manual = Number(searchParams.get("day"));
-      const detected = detectPayday(
-        counted.transactions
-          .filter((row) => row.type === "INCOME" && row.date.slice(0, 10) <= today)
-          .map((row) => ({ date: row.date, amount: row.amount, category: row.category.label }))
-      );
-      const payday = manual >= 1 && manual <= 31 ? Math.trunc(manual) : detected;
-      if (!payday) return { forecast: null } as T;
-      const open = state.accounts.filter((account) => !account.isArchived);
-      // Обычная трата в день — за 90 дней, без плановых платежей и долгов: они
-      // стоят в списке платежей до зарплаты отдельно.
-      const since = isoDay(new Date(Date.now() - 90 * 86_400_000));
-      const everyday = counted.transactions
-        .filter(
-          (row) =>
-            row.type === "EXPENSE" &&
-            row.date.slice(0, 10) >= since &&
-            row.date.slice(0, 10) < today &&
-            !row.recurringId &&
-            !row.liabilityId
-        )
-        .reduce((sum, row) => sum + row.amount, 0);
-      return {
-        forecast: forecastToPayday({
-          today,
-          payday,
-          source: manual >= 1 && manual <= 31 ? "manual" : "history",
-          liquid: sumInBase(
-            state,
-            open.filter((account) => account.type === "CASH" || account.type === "DEBIT_CARD")
-          ),
-          payments: forecastPage(inBase(state))
-            .events.filter((event) => event.type === "EXPENSE")
-            .map((event) => ({ date: event.date, amount: event.amount, title: event.title })),
-          usualPerDay: everyday / 90
-        })
-      } as T;
-    }
-    if (pathname === "/compare-months") {
-      const today = isoDay(new Date());
-      const valid = (value: string | null) => (value && /^\d{4}-\d{2}$/.test(value) ? value : null);
-      const a = valid(searchParams.get("a")) ?? today.slice(0, 7);
-      const b = valid(searchParams.get("b")) ?? previousMonth(a);
-      const counted = countingState(inBase(state), false);
-      return compareMonths({
-        a,
-        b,
-        today,
-        rows: counted.transactions.map((row) => ({
-          type: row.type,
-          date: row.date,
-          amount: row.amount,
-          categoryId: row.category.id,
-          category: row.category.label,
-          color: row.category.color
-        }))
-      }) as T;
-    }
-    if (pathname === "/balance-history") {
-      const count = Math.min(Math.max(Number(searchParams.get("months")) || 12, 2), 60);
-      return balanceHistoryPage(state, monthsBack(monthKeyOf(new Date()), count)) as T;
-    }
-    if (pathname === "/year-recap") {
-      const today = isoDay(new Date());
-      const year = Number(searchParams.get("year")) || Number(today.slice(0, 4));
-      const counted = countingState(inBase(state), false);
-      const history = balanceHistoryPage(state, [
-        `${year - 1}-12`,
-        today.startsWith(String(year)) ? today.slice(0, 7) : `${year}-12`
-      ]);
-      return buildYearRecap({
-        year,
-        today,
-        rows: counted.transactions.map((row) => ({
-          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
-          date: row.date,
-          amount: row.amount,
-          categoryId: row.category.id,
-          category: row.category.label,
-          color: row.category.color,
-          description: row.description
-        })),
-        capital: { start: history.total[0], end: history.total[1] },
-        cushion: { start: history.cushion[0], end: history.cushion[1] }
-      }) as T;
-    }
-    if (pathname === "/transfer-pairs") {
-      // «Это перевод?»: отложенные человеком пары («нет, это не перевод») —
-      // по ключам, переданным страницей; помнит их само устройство.
-      const dismissed = new Set((searchParams.get("dismissed") ?? "").split(",").filter(Boolean));
-      const currencyOf = (accountId: string) =>
-        state.accounts.find((item) => item.id === accountId)?.currency ?? state.currency;
-      return { pairs: findTransferPairs(state.transactions, currencyOf, dismissed) } as T;
-    }
-    if (pathname === "/watchdog") {
-      const counted = countingState(inBase(state), false);
-      return {
-        findings: findLeaks({
-          rows: watchRows(counted),
-          trials: state.recurringTransactions
-            .filter((item) => item.isActive && item.trialEndsOn)
-            .map((item) => ({
-              id: item.id,
-              name: item.description || item.category.label,
-              trialEndsOn: String(item.trialEndsOn),
-              amount: item.amount
-            })),
-          today: isoDay(new Date())
-        })
-      } as T;
-    }
-    if (pathname === "/week-recap") {
-      const counted = countingState(inBase(state), false);
-      return buildWeekRecap({
-        today: new Date(),
-        perDay: allowancePage(counted).perDay,
-        rows: counted.transactions.map((row) => ({
-          type: row.type === "INCOME" ? "INCOME" : "EXPENSE",
-          date: row.date,
-          amount: row.amount,
-          categoryId: row.category.id,
-          category: row.category.label
-        }))
-      }) as T;
-    }
-    if (pathname === "/photos")
-      return (await this.readPhoto(state, searchParams.get("id") ?? "")) as T;
-    if (pathname === "/cashback") {
-      const month = /^\d{4}-\d{2}$/.test(searchParams.get("month") ?? "")
-        ? String(searchParams.get("month"))
-        : isoDay(new Date()).slice(0, 7);
-      return readCashback(
-        state,
-        month,
-        // Погашение кредита — не покупка по карте: кэшбэк за него не платят.
-        countingState(state, false)
-          .transactions.filter((row) => row.type === "EXPENSE" && !row.liabilityId)
-          .map((row) => ({
-            id: row.id,
-            date: row.date,
-            amount: row.amount,
-            accountId: row.account.id,
-            categoryId: row.category.id,
-            category: row.category.label
-          }))
-      ) as T;
-    }
-    if (pathname === "/trips") {
-      const based = countingState(inBase(state), false);
-      const rates = ratesOf(state);
-      return readTrips(
-        state,
-        (tripCurrency) =>
-          based.transactions
-            .filter((row) => row.type === "EXPENSE" && row.tags?.length)
-            .map((row) => ({
-              date: row.date,
-              amount: convert(row.amount, state.currency, tripCurrency, rates),
-              categoryId: row.category.id,
-              category: row.category.label,
-              color: row.category.color,
-              tags: row.tags
-            })),
-        isoDay(new Date())
-      ) as T;
-    }
-    if (pathname === "/deductions") {
-      const year = Number(searchParams.get("year")) || new Date().getFullYear();
-      const based = countingState(inBase(state), false);
-      const kinds = new Map(
-        state.categories.flatMap((c) => (c.deduction ? [[c.id, c.deduction] as const] : []))
-      );
-      const salaryWords = /зарплат|зп\b|аванс|преми|оклад|salary|wage/i;
-      return readDeductions(state, {
-        year,
-        spends: based.transactions.flatMap((row) => {
-          const kind = row.type === "EXPENSE" ? kinds.get(row.category.id) : undefined;
-          return kind
-            ? [
-                {
-                  id: row.id,
-                  date: row.date,
-                  amount: row.amount,
-                  kind,
-                  description: row.description,
-                  category: row.category.label
-                }
-              ]
-            : [];
-        }),
-        netSalary: based.transactions
-          .filter(
-            (row) =>
-              row.type === "INCOME" &&
-              row.date.startsWith(String(year)) &&
-              salaryWords.test(row.category.label)
-          )
-          .reduce((sum, row) => sum + row.amount, 0),
-        marked: [...kinds.entries()].map(([categoryId, kind]) => ({ categoryId, kind }))
-      }) as T;
-    }
-    if (pathname === "/sheet/facts")
-      return sheetFacts(
-        countingState(inBase(state), false),
-        searchParams.get("from") ?? "",
-        searchParams.get("to") ?? ""
-      ) as T;
-
-    throw new Error(`Local API route is not implemented: ${pathname}`);
+    const handler =
+      routeOf(STATE_READS, pathname) ??
+      routeOf(MARKET_READS, pathname) ??
+      routeOf(this.storeReads, pathname);
+    if (!handler) throw new Error(`Local API route is not implemented: ${pathname}`);
+    // Тип ответа пути выведен из этого же обработчика (lib/api/routes.ts), и
+    // связать их здесь, где путь — уже просто строка, можно только приведением.
+    // Оно одно на все чтения.
+    return (await handler({ state, searchParams })) as ReadResponses[P];
   }
 
-  async post<TResponse, TBody = unknown>(path: string, body?: TBody): Promise<TResponse> {
+  /**
+   * The exported file records when it was made, so the stamp goes into the
+   * payload here — and into storage inside the queue, on a state read again,
+   * so an export cannot roll back whatever was saved meanwhile.
+   */
+  private async exportBackup(state: LocalState) {
+    const stamped = new Date().toISOString();
+    const payload = await backupDocument({ ...state, lastBackupAt: stamped });
+    await this.serialize(async () => {
+      const fresh = await this.state();
+      fresh.lastBackupAt = stamped;
+      await this.save(fresh);
+    });
+    return payload;
+  }
+
+  private async refreshInvestments(state: LocalState) {
+    const invData = await investmentsPage(state);
+    // Persist last-known prices so they survive app restart. Read the state
+    // again inside the queue first: fetching quotes takes seconds, and
+    // whatever the owner saved meanwhile must not be rolled back by the
+    // snapshot this request started from.
+    await this.serialize(async () => {
+      const fresh = await this.state();
+      fresh.investments = {
+        ...fresh.investments,
+        securities: invData.securities,
+        watchlist: invData.watchlist,
+        portfolio: invData.portfolio,
+        structure: invData.structure,
+        sectorStructure: invData.sectorStructure,
+        assetStructure: invData.assetStructure
+      };
+      // Снимок дня: портфель пуст — снимать нечего (иначе история
+      // начиналась бы с нулей до первой покупки).
+      if (invData.portfolio.length > 0) {
+        fresh.portfolioSnapshots = recordPortfolioSnapshot(
+          fresh.portfolioSnapshots ?? [],
+          isoDay(new Date()),
+          invData.portfolio.reduce((sum, row) => sum + row.currentValue, 0),
+          invData.portfolio.reduce((sum, row) => sum + row.quantity * row.averageBuyPrice, 0)
+        );
+        invData.history = fresh.portfolioSnapshots;
+      }
+      await this.save(fresh);
+    });
+    return invData;
+  }
+
+  async post<TResponse = unknown, TBody = unknown>(
+    path: WritePath,
+    body?: TBody
+  ): Promise<TResponse> {
     return this.serialize(() => this.write<TResponse>(path, body, "POST"));
   }
 
-  async put<TResponse, TBody = unknown>(path: string, body?: TBody): Promise<TResponse> {
+  async put<TResponse = unknown, TBody = unknown>(
+    path: WritePath,
+    body?: TBody
+  ): Promise<TResponse> {
     return this.serialize(() => this.write<TResponse>(path, body, "PUT"));
   }
 
-  async delete<T>(path: string): Promise<T> {
-    return this.serialize(() => this.remove<T>(path));
+  async delete(path: DeletePath): Promise<void> {
+    return this.serialize(() => this.remove(path));
   }
 
-  private async remove<T>(path: string): Promise<T> {
-    const state = await this.state();
-    const { pathname, searchParams } = normalizePath(path);
-    const itemId = searchParams.get("id");
-
-    if (pathname === "/accounts" && itemId) {
-      state.accounts = state.accounts.map((account) =>
-        account.id === itemId ? { ...account, isArchived: true } : account
-      );
-    } else if (pathname === "/transactions" && searchParams.get("splitGroupId")) {
-      // Чек, разложенный по категориям, удаляется целиком — его части по
-      // отдельности ничего не значат.
-      const group = searchParams.get("splitGroupId");
-      for (const part of state.transactions.filter((item) => item.splitGroupId === group)) {
-        deleteTransaction(state, part.id);
-      }
-    } else if (pathname === "/transactions" && itemId) {
-      // Перевод — две строки: списание и зачисление. Удалить одну значило бы
-      // заставить деньги исчезнуть — со счёта ушли, никуда не пришли (или
-      // наоборот). Удаляется весь перевод.
-      // Перевод узнаётся и по старой метке в описании (записанные до 1.10).
-      const row = state.transactions.find((item) => item.id === itemId);
-      const transfer = row ? transferKeyOf(row) : null;
-      const ids = transfer
-        ? state.transactions
-            .filter((item) => transferKeyOf(item) === transfer)
-            .map((item) => item.id)
-        : [itemId];
-      for (const one of ids) deleteTransaction(state, one);
-    } else if (pathname === "/photos" && itemId) {
+  /**
+   * Удаления, которым мало документа: фото лежит в хранилище отдельно от
+   * операции, профиль и «Очистить все данные» — это само хранилище.
+   * Остальные удаления — в lib/api/local/writes.ts.
+   */
+  private readonly storeDeletes = {
+    "/photos": async ({ state, itemId }: DeleteRequest) => {
+      if (!itemId) return false;
       const row = state.transactions.find((item) => item.id === itemId);
       if (row?.photo) await this.dropPhoto(itemId, row.photo);
       state.transactions = state.transactions.map((item) => {
@@ -767,89 +346,42 @@ export class LocalApiClient implements ApiClient {
         void _dropped;
         return rest;
       });
-    } else if (pathname === "/goals" && itemId) {
-      // Deleting a goal that still holds money used to make that money vanish:
-      // capital fell by the amount, no account got it back, and the record of
-      // how it got there stayed behind and kept being counted. The money goes
-      // somewhere first — onto a chosen account, or written off deliberately.
-      const goal = state.goals.find((item) => item.id === itemId);
-      if (goal && goal.currentAmount > 0) {
-        const writeOff = searchParams.get("writeOff") === "1";
-        const accountId = searchParams.get("accountId") || goal.linkedAccountId;
-        if (!writeOff) {
-          const account = goalAccount(state, accountId);
-          applyBalance(
-            state,
-            account.id,
-            roundMoney(
-              convert(goal.currentAmount, state.currency, account.currency, ratesOf(state))
-            )
-          );
-        }
-      }
-      state.goals = state.goals.filter((item) => item.id !== itemId);
-      state.goalMovements = (state.goalMovements ?? []).filter(
-        (movement) => movement.goalId !== itemId
-      );
-    } else if (pathname === "/debts" && itemId) {
-      state.liabilities = state.liabilities.filter((liability) => liability.id !== itemId);
-    } else if (pathname === "/investments/events" && itemId) {
-      // Recording a sale takes the shares out of the portfolio and puts the
-      // money on an account, so deleting the record has to undo both — see
-      // undoSale.
-      const event = (state.realizedInvestmentEvents ?? []).find((item) => item.id === itemId);
-      if (event?.type === "SELL") undoSale(state, event);
-      state.realizedInvestmentEvents = (state.realizedInvestmentEvents ?? []).filter(
-        (item) => item.id !== itemId
-      );
-    } else if (pathname === "/market/alerts" && itemId) {
-      state.marketAlerts = (state.marketAlerts ?? []).filter((alert) => alert.id !== itemId);
-    } else if (pathname === "/investments/dividends" && itemId) {
-      state.expectedDividends = (state.expectedDividends ?? []).filter(
-        (dividend) => dividend.id !== itemId
-      );
-    } else if (pathname === "/investments/targets" && itemId) {
-      state.targetAllocations = (state.targetAllocations ?? []).filter(
-        (target) => target.id !== itemId
-      );
-    } else if (pathname === "/rules" && itemId) {
-      state.rules = state.rules.filter((rule) => rule.id !== itemId);
-    } else if (pathname === "/recurring" && itemId) {
-      // Deleting a plan only removes the plan — operations already posted from it
-      // stay in the ledger (they describe money that actually moved).
-      state.recurringTransactions = state.recurringTransactions.filter(
-        (item) => item.id !== itemId
-      );
-    } else if (pathname === "/categories" && itemId) {
-      if (STANDARD_CATEGORY_IDS.has(itemId)) {
-        throw new Error(
-          "Стандартную категорию удалить нельзя — её можно переименовать, перекрасить или сменить значок."
-        );
-      }
-      const txCount = state.transactions.filter((t) => t.category.id === itemId).length;
-      if (txCount > 0) {
-        throw new Error(`Нельзя удалить категорию: к ней привязано ${txCount} операций.`);
-      }
-      state.categories = state.categories.filter((c) => c.id !== itemId);
-    } else if (pathname === "/profiles" && itemId) {
+      await this.save(state);
+      return true;
+    },
+    "/profiles": async ({ itemId }: DeleteRequest) => {
+      if (!itemId) return false;
       await this.deleteProfile(itemId);
-      return undefined as T;
-    } else if (pathname === "/storage/clear") {
+      return true;
+    },
+    "/storage/clear": async () => {
       await this.clearEverything();
-      return undefined as T;
-    } else {
-      throw new Error(`Local API delete route is not implemented: ${pathname}`);
+      return true;
     }
+  };
 
-    await this.save(state);
-    return undefined as T;
+  private async remove(path: string): Promise<void> {
+    const state = await this.state();
+    const { pathname, searchParams } = normalizePath(path);
+    const request: DeleteRequest = { state, searchParams, itemId: searchParams.get("id") };
+
+    const change = routeOf(STATE_DELETES, pathname);
+    if (change?.(request)) {
+      await this.save(state);
+      return;
+    }
+    const own = change ? undefined : routeOf(this.storeDeletes, pathname);
+    if (own && (await own(request))) return;
+    throw new Error(`Local API delete route is not implemented: ${pathname}`);
   }
 
-  private async write<TResponse>(path: string, body: unknown, method: "POST" | "PUT") {
-    const state = await this.state();
-    const { pathname } = normalizePath(path);
-
-    if (pathname === "/sample") {
+  /**
+   * Записи, которым мало документа: пример и профили — это отдельные книги
+   * в хранилище, копии и корзина лежат рядом с книгой, фото — отдельно от
+   * операции. Остальные записи — в lib/api/local/writes.ts.
+   */
+  private readonly storeWrites = {
+    "/sample": async () => {
       // Пример — в своём профиле, а не поверх того, что человек уже завёл.
       // Раньше «Загрузить пример» ложился в текущие данные, и потом их надо
       // было чистить — вместе со своими, если успел что-то внести. Теперь
@@ -857,202 +389,78 @@ export class LocalApiClient implements ApiClient {
       await this.openSampleProfile();
       const sample = buildSampleState();
       await this.save(sample, { trash: false });
-      return { loaded: true } as TResponse;
-    }
-    if (pathname === "/sample/leave") {
+      return { loaded: true };
+    },
+    "/sample/leave": async ({ body }: WriteRequest) => {
       await this.leaveSampleProfile(toFormObject(body).remove === "true");
-      return undefined as TResponse;
-    }
-    if (pathname === "/sync/resolve") return this.resolveConflict<TResponse>(state, body);
-    if (pathname === "/accounts" && (body as { action?: unknown })?.action === "reconcile")
-      return this.saveAndReturn<TResponse>(state, reconcileAccount(state, body));
-    if (pathname === "/accounts")
-      return this.saveAndReturn<TResponse>(state, upsertAccount(state, body, method));
-    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "transfer")
-      return this.saveAndReturn<TResponse>(state, createTransfer(state, body));
-    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "restore")
-      return this.saveAndReturn<TResponse>(state, restoreTransaction(state, body));
-    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "split")
-      return this.saveAndReturn<TResponse>(state, createSplit(state, body));
-    if (pathname === "/transactions" && (body as { action?: unknown })?.action === "linkTransfer")
-      return this.saveAndReturn<TResponse>(state, linkTransfer(state, body));
-    if (pathname === "/transactions") {
-      const tx = upsertTransaction(state, body, method);
-      const budgetWarning = budgetWarningFor(state, tx);
-      // Сторож: трата втрое больше обычной для категории — «это верно?».
-      const usual =
-        tx.type === "EXPENSE" && method === "POST"
-          ? unusualFor(
-              { amount: tx.amount, categoryId: tx.category.id, date: tx.date },
-              watchRows(state).filter((row) => row.id !== tx.id)
-            )
-          : null;
-      return this.saveAndReturn<TResponse>(state, {
-        ...tx,
-        budgetWarning,
-        ...(usual !== null ? { unusual: { usual } } : {})
-      });
-    }
-    if (pathname === "/transactions/transfer")
-      return this.saveAndReturn<TResponse>(state, createTransfer(state, body));
-    if (pathname === "/budgets")
-      return this.saveAndReturn<TResponse>(state, upsertBudget(state, body));
-    if (pathname === "/goals" && (body as { action?: unknown })?.action === "deposit") {
-      return this.saveAndReturn<TResponse>(state, depositToGoal(state, body));
-    }
-    if (pathname === "/goals" && (body as { action?: unknown })?.action === "withdraw") {
-      return this.saveAndReturn<TResponse>(state, withdrawFromGoal(state, body));
-    }
-    if (pathname === "/goals")
-      return this.saveAndReturn<TResponse>(state, upsertGoal(state, body, method));
-    if (pathname === "/debts")
-      return this.saveAndReturn<TResponse>(state, upsertLiability(state, body, method));
-    if (pathname === "/rules") return this.saveAndReturn<TResponse>(state, addRule(state, body));
-    if (pathname === "/recurring")
-      return this.saveAndReturn<TResponse>(state, upsertRecurring(state, body, method));
-    if (pathname === "/recurring/materialize")
-      return this.saveAndReturn<TResponse>(state, materializeRecurring(state, body));
-    if (pathname === "/recurring/materialize-all")
-      return this.saveAndReturn<TResponse>(state, materializeAllDue(state));
-    if (pathname === "/debts/pay")
-      return this.saveAndReturn<TResponse>(state, payDebt(state, body));
-    if (pathname === "/debts/auto-pay")
-      return this.saveAndReturn<TResponse>(state, autoPayDebts(state));
-    if (pathname === "/networth/snapshot")
-      return this.saveAndReturn<TResponse>(state, await recordNetWorthSnapshot(state));
-    if (pathname === "/import")
-      return this.saveAndReturn<TResponse>(state, importCsvRows(state, body));
-    if (pathname === "/import/undo")
-      return this.saveAndReturn<TResponse>(state, undoLastImport(state));
-    if (pathname === "/settings")
-      return this.saveAndReturn<TResponse>(state, updateSettings(state, body));
-    if (pathname === "/fx") return this.saveAndReturn<TResponse>(state, updateFxRates(state, body));
-    if (pathname === "/investments/events")
-      return this.saveAndReturn<TResponse>(state, addRealizedEvent(state, body));
-    if (pathname === "/investments/dividends")
-      return this.saveAndReturn<TResponse>(state, addExpectedDividend(state, body));
-    if (pathname === "/investments/targets")
-      return this.saveAndReturn<TResponse>(state, setTargetAllocations(state, body));
-    if (pathname === "/market/alerts")
-      return this.saveAndReturn<TResponse>(state, addMarketAlert(state, body));
-    if (pathname === "/backup") return this.restoreBackup<TResponse>(body);
-    if (pathname === "/backup/before-clear") {
+      return undefined;
+    },
+    "/sync/resolve": ({ state, body }: WriteRequest) => this.resolveConflict(state, body),
+    "/backup": ({ body }: WriteRequest) => this.restoreBackup(body),
+    "/backup/before-clear": async () => {
       await this.undoClear();
-      return { restored: true } as TResponse;
-    }
-    if (pathname === "/backup/local-copies") {
+      return { restored: true };
+    },
+    "/backup/local-copies": async ({ body }: WriteRequest) => {
       const input = (body ?? {}) as { action?: unknown; id?: unknown };
       if (input.action === "restore") {
         await this.restoreLocalCopy(String(input.id ?? ""));
-        return { restored: true } as TResponse;
+        return { restored: true };
       }
-      if (input.action === "daily") return (await this.dailyLocalCopy()) as TResponse;
-      return (await this.takeLocalCopy("manual")) as TResponse;
-    }
-    if (pathname === "/backup/merge") return this.mergeBackup<TResponse>(body);
-    if (pathname === "/trash") {
+      if (input.action === "daily") return this.dailyLocalCopy();
+      return this.takeLocalCopy("manual");
+    },
+    "/backup/merge": ({ body }: WriteRequest) => this.mergeBackup(body),
+    "/trash": async ({ state, body }: WriteRequest) => {
       const input = (body ?? {}) as { action?: unknown; ids?: unknown };
       const ids = Array.isArray(input.ids) ? input.ids.map(String) : [];
-      if (input.action === "restore") return (await this.restoreFromTrash(state, ids)) as TResponse;
-      if (input.action === "empty") return (await this.purgeTrash("all")) as TResponse;
-      return (await this.purgeTrash(ids)) as TResponse;
-    }
-    if (pathname === "/investments")
-      return this.saveAndReturn<TResponse>(state, await updateInvestments(state, body));
-    if (pathname === "/categories")
-      return this.saveAndReturn<TResponse>(state, upsertCategory(state, body, method));
-    if (pathname === "/plan") return this.saveAndReturn<TResponse>(state, savePlan(state, body));
-    if (pathname === "/photos") return this.attachPhoto<TResponse>(state, body);
-    if (pathname === "/cashback")
-      return this.saveAndReturn<TResponse>(
-        state,
-        writeCashback(state, (body ?? {}) as Record<string, unknown>, () => id("cb"), {
-          account: (accountId) =>
-            state.accounts.some((item) => item.id === accountId && !item.isArchived),
-          category: (categoryId) => state.categories.some((item) => item.id === categoryId)
-        })
-      );
-    if (pathname === "/trips")
-      return this.saveAndReturn<TResponse>(
-        state,
-        writeTrips(state, (body ?? {}) as Record<string, unknown>, () => id("trip"))
-      );
-    if (pathname === "/deductions") {
-      const input = (body ?? {}) as Record<string, unknown>;
-      if (input.action === "mark") {
-        const kind = deductionKindOf(input.kind);
-        state.categories = state.categories.map((category) => {
-          if (category.id !== input.categoryId) return category;
-          const { deduction: _was, ...rest } = category;
-          void _was;
-          return kind ? { ...rest, deduction: kind } : rest;
-        });
-        return this.saveAndReturn<TResponse>(state, { categoryId: input.categoryId, kind });
-      }
-      return this.saveAndReturn<TResponse>(state, writeDeductionYear(state, input));
-    }
-    if (pathname === "/sheet") {
-      const input = (body ?? {}) as Record<string, unknown>;
-      const sheetId = input.sheetId ? String(input.sheetId) : MAIN_SHEET;
-      if (input.action === "import")
-        return this.saveAndReturn<TResponse>(
-          state,
-          importIntoSheet(
-            state,
-            sheetId,
-            withSheetCategories(state, input.payload),
-            () => id("col"),
-            new Date().toISOString()
-          )
-        );
-      return this.saveAndReturn<TResponse>(
-        state,
-        writeWorkbook(state, input, () => id("col"))
-      );
-    }
-    if (pathname === "/family")
-      return this.saveAndReturn<TResponse>(state, writeFamily(state, body));
-    if (pathname === "/sheets") {
-      const input = (body ?? {}) as Record<string, unknown>;
-      if (input.action === "importWorkbook") {
-        const sheets = (Array.isArray(input.sheets) ? input.sheets : []) as WorkbookImportSheet[];
-        for (const item of sheets)
-          if (item.kind === "budget") item.payload = withSheetCategories(state, item.payload);
-        return this.saveAndReturn<TResponse>(
-          state,
-          importWorkbook(state, sheets, () => id("sh"), new Date().toISOString())
-        );
-      }
-      return this.saveAndReturn<TResponse>(
-        state,
-        writeSheets(state, input, () => id("sh"))
-      );
-    }
-    if (pathname === "/profiles/create") {
+      if (input.action === "restore") return this.restoreFromTrash(state, ids);
+      if (input.action === "empty") return this.purgeTrash("all");
+      return this.purgeTrash(ids);
+    },
+    "/photos": ({ state, body }: WriteRequest) => this.attachPhoto(state, body),
+    "/profiles/create": ({ body }: WriteRequest) => {
       const input = toFormObject(body);
-      const profile = await this.createProfile(input.name ?? "Профиль", input.color ?? "#0d9488");
-      return profile as TResponse;
-    }
-    if (pathname === "/profiles/switch") {
-      const input = toFormObject(body);
-      await this.switchProfile(input.profileId ?? "");
-      return undefined as TResponse;
-    }
-    if (pathname === "/profiles/rename") {
+      return this.createProfile(input.name ?? "Профиль", input.color ?? "#0d9488");
+    },
+    "/profiles/switch": async ({ body }: WriteRequest) => {
+      await this.switchProfile(toFormObject(body).profileId ?? "");
+      return undefined;
+    },
+    "/profiles/rename": async ({ body }: WriteRequest) => {
       const input = toFormObject(body);
       await this.renameProfile(input.profileId ?? "", input.name ?? "");
-      return undefined as TResponse;
+      return undefined;
     }
+  };
+
+  private async write<TResponse>(
+    path: string,
+    body: unknown,
+    method: "POST" | "PUT"
+  ): Promise<TResponse> {
+    const state = await this.state();
+    const { pathname } = normalizePath(path);
+    const request: WriteRequest = { state, body, method };
+
+    // Обработчик правит документ и отвечает; сохраняется документ здесь, после
+    // него, — и только если он не бросил ошибку.
+    const change = routeOf(STATE_WRITES, pathname);
+    // Ответ записи называет вызывающий (см. lib/api/routes.ts — почему), и
+    // приведение к нему здесь одно на все записи.
+    if (change) return (await this.saveAndReturn(state, await change(request))) as TResponse;
+    const own = routeOf(this.storeWrites, pathname);
+    if (own) return (await own(request)) as TResponse;
 
     throw new Error(`Local API write route is not implemented: ${pathname}`);
   }
 
-  private async saveAndReturn<TResponse>(state: LocalState, value: unknown) {
+  private async saveAndReturn<T>(state: LocalState, value: T): Promise<T> {
     await this.save(state);
-    return value as TResponse;
+    return value;
   }
 
-  private async restoreBackup<TResponse>(body: unknown) {
+  private async restoreBackup(body: unknown) {
     const payload = (body as { backup?: unknown })?.backup;
     // Scheduled backups and folder sync write the document inside an envelope
     // (`{ exportedAt, backup }`); the button writes it bare. Accept either, so
@@ -1076,7 +484,7 @@ export class LocalApiClient implements ApiClient {
     if (!restored.aiApiKey) restored.aiApiKey = current.aiApiKey ?? "";
 
     await this.save(restored, { stamp: false });
-    return { restored: true } as TResponse;
+    return { restored: true };
   }
 
   /**
@@ -1092,7 +500,7 @@ export class LocalApiClient implements ApiClient {
    * сложить их остатки значило бы соврать. Одинаковое имя получает «(2)», чтобы
    * было видно, что их два, — объединить или убрать лишний человек решит сам.
    */
-  private async mergeBackup<TResponse>(body: unknown) {
+  private async mergeBackup(body: unknown) {
     const payload = (body as { backup?: unknown })?.backup;
     const document =
       payload && typeof payload === "object" && "backup" in payload
@@ -1177,7 +585,7 @@ export class LocalApiClient implements ApiClient {
     );
 
     await this.save(state);
-    return { merged: added } as TResponse;
+    return { merged: added };
   }
 
   /**
@@ -1365,7 +773,7 @@ export class LocalApiClient implements ApiClient {
    * ровно тем же порядком, что любая другая правка, а не отдельным механизмом,
    * который однажды разойдётся с основным.
    */
-  private async resolveConflict<TResponse>(state: LocalState, body: unknown): Promise<TResponse> {
+  private async resolveConflict(state: LocalState, body: unknown) {
     const input = body as { collection?: unknown; key?: unknown; row?: unknown };
     const collection = typeof input.collection === "string" ? input.collection : "";
     const key = typeof input.key === "string" ? input.key : "";
@@ -1392,7 +800,7 @@ export class LocalApiClient implements ApiClient {
 
     holder[collection] = kept;
     await this.save(state);
-    return { resolved: true } as TResponse;
+    return { resolved: true };
   }
 
   private async save(state: LocalState, options: { stamp?: boolean; trash?: boolean } = {}) {
@@ -1609,7 +1017,7 @@ export class LocalApiClient implements ApiClient {
         { photo: null, place: row.photo, missing: true };
   }
 
-  private async attachPhoto<TResponse>(state: LocalState, body: unknown) {
+  private async attachPhoto(state: LocalState, body: unknown) {
     const input = (body ?? {}) as Record<string, unknown>;
     const transactionId = String(input.transactionId ?? "");
     const row = state.transactions.find((item) => item.id === transactionId);
@@ -1630,7 +1038,7 @@ export class LocalApiClient implements ApiClient {
     state.transactions = state.transactions.map((item) =>
       item.id === transactionId ? { ...item, photo: place } : item
     );
-    return this.saveAndReturn<TResponse>(state, { transactionId, place });
+    return this.saveAndReturn(state, { transactionId, place });
   }
 
   /**

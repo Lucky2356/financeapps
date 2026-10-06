@@ -50,7 +50,7 @@ export function ReceiptPhotoDialog({
       setDeviceOnly(readMine(PHOTO_DEVICE_ONLY_KEY) === "1");
     });
     apiClient
-      .get<PhotoAnswer>(`/photos?id=${encodeURIComponent(transactionId)}`)
+      .get(`/photos?id=${encodeURIComponent(transactionId)}`)
       .then((result) => {
         if (alive) setAnswer(result);
       })

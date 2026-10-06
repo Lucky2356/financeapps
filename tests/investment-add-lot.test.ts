@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { InvestmentData } from "@/types/finance";
 
 // «В портфель» из подборки докупает, а не переписывает.
 //
@@ -11,7 +10,7 @@ import type { InvestmentData } from "@/types/finance";
 // Молча и без возврата.
 
 async function portfolio(api: LocalApiClient) {
-  return (await api.get<InvestmentData>("/investments")).portfolio;
+  return (await api.get("/investments")).portfolio;
 }
 
 describe("докупка к позиции", () => {

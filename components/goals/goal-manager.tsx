@@ -322,7 +322,7 @@ function DeleteGoalDialog({
   useEffect(() => {
     let cancelled = false;
     void apiClient
-      .get<AccountsPageData>("/accounts")
+      .get("/accounts")
       .then((data) => {
         if (cancelled) return;
         setAccounts(data.accounts);
@@ -404,7 +404,7 @@ function DepositDialog({
     if (!open) return;
     let cancelled = false;
     void apiClient
-      .get<AccountsPageData>("/accounts")
+      .get("/accounts")
       .then((data) => {
         if (cancelled) return;
         // The /accounts endpoint already excludes archived accounts.
@@ -554,7 +554,7 @@ function GoalDialog({
   useEffect(() => {
     let cancelled = false;
     void apiClient
-      .get<AccountsPageData>("/accounts")
+      .get("/accounts")
       .then((data) => {
         if (!cancelled) setAccounts(data?.accounts ?? []);
       })

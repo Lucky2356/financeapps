@@ -33,7 +33,7 @@ export type FamilyPage = { members: Member[]; picture: FamilyPicture | null };
 export const EMPTY_FAMILY: FamilyPage = { members: [], picture: null };
 
 export function useFamilyMembers(): Member[] {
-  const { data } = useApiPageData<FamilyPage>(EMPTY_FAMILY, "/family");
+  const { data } = useApiPageData(EMPTY_FAMILY, "/family");
   return data?.members ?? [];
 }
 

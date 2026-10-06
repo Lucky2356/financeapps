@@ -6,12 +6,6 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import type {
-  AccountsPageData,
-  BudgetsPageData,
-  GoalsPageData,
-  TransactionsPageData
-} from "@/lib/data";
 import { AccountsQuickSetup } from "@/components/dashboard/accounts-quick-setup";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
@@ -49,10 +43,10 @@ export function SetupChecklist() {
 
   const loadCounts = useCallback(async () => {
     const [accounts, transactions, budgets, goals, password, link] = await Promise.all([
-      apiClient.get<AccountsPageData>("/accounts").catch(() => null),
-      apiClient.get<TransactionsPageData>("/transactions").catch(() => null),
-      apiClient.get<BudgetsPageData>("/budgets").catch(() => null),
-      apiClient.get<GoalsPageData>("/goals").catch(() => null),
+      apiClient.get("/accounts").catch(() => null),
+      apiClient.get("/transactions").catch(() => null),
+      apiClient.get("/budgets").catch(() => null),
+      apiClient.get("/goals").catch(() => null),
       accountService.hasPassword().catch(() => false),
       serverAccount.link().catch(() => null)
     ]);

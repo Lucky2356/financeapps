@@ -64,7 +64,7 @@ export function TransactionsAnalytics() {
   const load = useCallback(async () => {
     setState("loading");
     try {
-      setData(await apiClient.get<AnalyticsData>("/analytics"));
+      setData(await apiClient.get("/analytics"));
       setState("ready");
     } catch {
       setData(null);

@@ -20,7 +20,6 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api/client";
-import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { readMine, writeMine } from "@/lib/storage/mine";
@@ -71,9 +70,7 @@ export function FavoriteChips({
 
   async function load() {
     const since = formatInputDate(new Date(Date.now() - 60 * 86_400_000));
-    const ledger = await apiClient
-      .get<TransactionsPageData>(`/transactions?from=${since}&limit=all`)
-      .catch(() => null);
+    const ledger = await apiClient.get(`/transactions?from=${since}&limit=all`).catch(() => null);
     if (!ledger) return;
     setFavorites(
       suggestFavorites(

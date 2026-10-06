@@ -1,19 +1,31 @@
+import type {
+  DeletePath,
+  PathWithQuery,
+  ReadPath,
+  ReadResponses,
+  WritePath
+} from "@/lib/api/routes";
+
 export type ApiRequestOptions = {
   headers?: Record<string, string>;
   signal?: AbortSignal;
 };
 
 export interface ApiClient {
-  get<T>(path: string, options?: ApiRequestOptions): Promise<T>;
-  post<TResponse, TBody = unknown>(
-    path: string,
+  /** Тип ответа выводится из пути — см. lib/api/routes.ts. */
+  get<P extends ReadPath>(
+    path: PathWithQuery<P>,
+    options?: ApiRequestOptions
+  ): Promise<ReadResponses[P]>;
+  post<TResponse = unknown, TBody = unknown>(
+    path: WritePath,
     body?: TBody,
     options?: ApiRequestOptions
   ): Promise<TResponse>;
-  put<TResponse, TBody = unknown>(
-    path: string,
+  put<TResponse = unknown, TBody = unknown>(
+    path: WritePath,
     body?: TBody,
     options?: ApiRequestOptions
   ): Promise<TResponse>;
-  delete<T>(path: string, options?: ApiRequestOptions): Promise<T>;
+  delete(path: DeletePath, options?: ApiRequestOptions): Promise<void>;
 }

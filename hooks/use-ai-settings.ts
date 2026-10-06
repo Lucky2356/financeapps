@@ -13,7 +13,7 @@ export function useAiSettings(): SettingsPageData | null {
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .get<SettingsPageData>("/settings")
+      .get("/settings")
       .then((data) => {
         if (!cancelled) setSettings(data);
       })

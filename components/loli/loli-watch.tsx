@@ -18,11 +18,7 @@ import { PAYDAY_KEY } from "@/components/dashboard/payday-card";
 import { deviceMember } from "@/components/family/family-fields";
 import { apiClient } from "@/lib/api/client";
 import { onDataChanged } from "@/lib/api/data-events";
-import type { Allowance } from "@/lib/analytics/daily-allowance";
-import type { MonthRecap } from "@/lib/analytics/month-recap";
-import type { PaydayForecast } from "@/lib/analytics/payday";
 import { BANK_EVENT } from "@/lib/bank/suggestions";
-import type { AccountsPageData, BudgetsPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
@@ -38,11 +34,11 @@ import {
 } from "@/lib/platform/android-loli";
 import { isAndroidShell } from "@/lib/platform/device";
 import { LAST_ACCOUNT_KEY, readMine, writeMine } from "@/lib/storage/mine";
-import { SAMPLE_PROFILE_ID, type ProfileList } from "@/types/profiles";
+import { SAMPLE_PROFILE_ID } from "@/types/profiles";
 
 async function inSample(): Promise<boolean> {
   try {
-    const list = await apiClient.get<ProfileList>("/profiles");
+    const list = await apiClient.get("/profiles");
     return list.activeProfileId === SAMPLE_PROFILE_ID;
   } catch {
     return true; // не знаем, чей учёт открыт, — лучше подождать
@@ -99,13 +95,11 @@ async function shareWithLoli() {
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const manual = readMine(PAYDAY_KEY);
   const [allowance, recap, budgets, accounts, payday] = await Promise.all([
-    apiClient.get<Allowance>("/allowance").catch(() => null),
-    apiClient.get<MonthRecap>(`/month-recap?month=${month}`).catch(() => null),
-    apiClient.get<BudgetsPageData>(`/budgets?month=${month}`).catch(() => null),
-    apiClient.get<AccountsPageData>("/accounts").catch(() => null),
-    apiClient
-      .get<{ forecast: PaydayForecast | null }>(`/payday${manual ? `?day=${manual}` : ""}`)
-      .catch(() => null)
+    apiClient.get("/allowance").catch(() => null),
+    apiClient.get(`/month-recap?month=${month}`).catch(() => null),
+    apiClient.get(`/budgets?month=${month}`).catch(() => null),
+    apiClient.get("/accounts").catch(() => null),
+    apiClient.get(manual ? `/payday?day=${manual}` : "/payday").catch(() => null)
   ]);
   const summary = buildLoliSummary({
     now,

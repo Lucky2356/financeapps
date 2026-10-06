@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import type { AccountsPageData, SettingsPageData } from "@/lib/data";
+import type { AccountsPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 
@@ -26,7 +26,7 @@ export function FxRatesNote({ accounts }: { accounts: AccountsPageData["accounts
     if (!hasForeign) return;
     let cancelled = false;
     apiClient
-      .get<SettingsPageData>("/settings")
+      .get("/settings")
       .then((data) => {
         if (!cancelled) setUpdatedAt(data.currencyRatesUpdatedAt ?? null);
       })

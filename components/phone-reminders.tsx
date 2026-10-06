@@ -12,13 +12,6 @@ import { useEffect } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import { onDataChanged } from "@/lib/api/data-events";
-import type { Allowance } from "@/lib/analytics/daily-allowance";
-import type {
-  AccountsPageData,
-  BudgetsPageData,
-  SettingsPageData,
-  TransactionsPageData
-} from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
@@ -31,7 +24,6 @@ import {
 import { isAndroidShell } from "@/lib/platform/device";
 import { planReminders } from "@/lib/reminders/plan";
 import { readMine, writeMine } from "@/lib/storage/mine";
-import type { ForecastData } from "@/types/finance";
 
 export const EVENING_REMINDER_KEY = "reminder-evening";
 const ONCE_KEY = "reminders-once";
@@ -57,14 +49,12 @@ export async function refreshPhoneReminders(): Promise<void> {
     translate(locale, key, values);
   const day = today();
   const [settings, forecast, budgets, accounts, todays, allowance] = await Promise.all([
-    apiClient.get<SettingsPageData>("/settings").catch(() => null),
-    apiClient.get<ForecastData>("/forecast").catch(() => null),
-    apiClient.get<BudgetsPageData>("/budgets").catch(() => null),
-    apiClient.get<AccountsPageData>("/accounts").catch(() => null),
-    apiClient
-      .get<TransactionsPageData>(`/transactions?from=${day}&to=${day}&limit=10`)
-      .catch(() => null),
-    apiClient.get<Allowance>("/allowance").catch(() => null)
+    apiClient.get("/settings").catch(() => null),
+    apiClient.get("/forecast").catch(() => null),
+    apiClient.get("/budgets").catch(() => null),
+    apiClient.get("/accounts").catch(() => null),
+    apiClient.get(`/transactions?from=${day}&to=${day}&limit=10`).catch(() => null),
+    apiClient.get("/allowance").catch(() => null)
   ]);
   const currency = forecast?.currency ?? budgets?.currency ?? "RUB";
   const money = (value: number) => formatCurrency(value, currency);

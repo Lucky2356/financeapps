@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { NO_MONTH } from "@/lib/analytics/best-month";
-import type { AnalyticsData } from "@/lib/data";
 
 // The figures on the analytics screen. Each case here is one that used to print
 // a number the owner could act on and that was simply wrong.
@@ -18,9 +17,7 @@ async function seed(client: LocalApiClient) {
     type: "DEBIT_CARD",
     balance: "100000"
   });
-  const categories = await client.get<{
-    categories: Array<{ id: string; name: string; kind: string }>;
-  }>("/categories");
+  const categories = await client.get("/categories");
   return {
     account,
     salary: categories.categories.find((category) => category.kind === "INCOME"),
@@ -53,7 +50,7 @@ describe("analytics figures", () => {
       description: "Продукты"
     });
 
-    const analytics = await client.get<AnalyticsData>("/analytics");
+    const analytics = await client.get("/analytics");
     // Divided by six regardless of activity, this read 8.3% — and sat next to
     // an insight that computed the same thing honestly and said 50%.
     expect(analytics.avgSavingsRate).toBe(50);
@@ -98,7 +95,7 @@ describe("analytics figures", () => {
       description: "Зарплата"
     });
 
-    const analytics = await client.get<AnalyticsData>("/analytics");
+    const analytics = await client.get("/analytics");
     const ring = analytics.topExpenseCategories.reduce((sum, item) => sum + item.total, 0);
     const spent = analytics.monthlyCashflow.reduce((sum, month) => sum + month.expense, 0);
     expect(analytics.topExpenseCategories.length).toBe(10);
@@ -112,7 +109,7 @@ describe("analytics figures", () => {
     const client = createClient();
     await seed(client);
 
-    const analytics = await client.get<AnalyticsData>("/analytics");
+    const analytics = await client.get("/analytics");
     expect(analytics.bestMonth).toBe(NO_MONTH);
     expect(analytics.worstMonth).toBe(NO_MONTH);
   });
@@ -142,7 +139,7 @@ describe("analytics figures", () => {
 
     // The window says "six months"; a row dated next year took a share of it
     // while being absent from every month drawn beside it.
-    const analytics = await client.get<AnalyticsData>("/analytics");
+    const analytics = await client.get("/analytics");
     const groceries = analytics.topExpenseCategories.find(
       (category) => category.category === "Продукты"
     );
@@ -176,7 +173,7 @@ describe("analytics figures", () => {
       date: today(),
       description: "Продукты"
     });
-    const before = await client.get<{ recommendations: Array<{ id: string }> }>("/budgets");
+    const before = await client.get("/budgets");
     expect(before.recommendations.map((item) => item.id)).toContain("essential-share-high");
 
     await client.post("/transactions", {
@@ -187,7 +184,7 @@ describe("analytics figures", () => {
       date: today(),
       description: "В накопления"
     });
-    const after = await client.get<{ recommendations: Array<{ id: string }> }>("/budgets");
+    const after = await client.get("/budgets");
 
     // Moving money between your own accounts changes nothing about how the
     // month went, so the advice built on it must not change either. The home

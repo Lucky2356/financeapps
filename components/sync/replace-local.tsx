@@ -38,7 +38,7 @@ export function ReplaceLocal({
   async function merge() {
     setBusy(true);
     try {
-      carryOver(await apiClient.get<unknown>("/backup"));
+      carryOver(await apiClient.get("/backup"));
       await apiClient.delete("/storage/clear");
       forgetMyData();
       onReplaced();
@@ -53,7 +53,7 @@ export function ReplaceLocal({
     setBusy(true);
     try {
       if (withBackup) {
-        const backup = await apiClient.get<unknown>("/backup");
+        const backup = await apiClient.get("/backup");
         const saved = await fileSystem.saveTextFile(
           `financial-assistant-backup-${todayDay()}.json`,
           JSON.stringify(backup, null, 2),

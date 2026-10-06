@@ -41,7 +41,7 @@ const TONE: Record<Allowance["status"], string> = {
 
 export function DailyAllowanceCard({ currency }: { currency: string }) {
   const { t } = useI18n();
-  const { data } = useApiPageData<Allowance>(EMPTY, "/allowance");
+  const { data } = useApiPageData(EMPTY, "/allowance");
   const [open, setOpen] = useState(false);
 
   // Ни доходов, ни трат — считать нечего; пустая карточка с нулём только пугает.

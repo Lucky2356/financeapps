@@ -15,7 +15,6 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { useApiPageData } from "@/hooks/use-api-page-data";
-import type { PaydayForecast } from "@/lib/analytics/payday";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { readMine, writeMine } from "@/lib/storage/mine";
@@ -28,10 +27,7 @@ export function PaydayCard({ currency }: { currency: string }) {
   const { t } = useI18n();
   const [manual, setManual] = useState<string>(() => readMine(PAYDAY_KEY) ?? "");
   const [open, setOpen] = useState(false);
-  const { data } = useApiPageData<{ forecast: PaydayForecast | null }>(
-    { forecast: null },
-    `/payday${manual ? `?day=${manual}` : ""}`
-  );
+  const { data } = useApiPageData({ forecast: null }, manual ? `/payday?day=${manual}` : "/payday");
   const forecast = data.forecast;
   if (!forecast) return null;
   const money = (value: number) => formatCurrency(value, currency);

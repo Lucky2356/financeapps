@@ -31,7 +31,7 @@ function readDismissed(): string[] {
 
 export function WatchdogCard({ currency }: { currency: string }) {
   const { t, locale } = useI18n();
-  const { data } = useApiPageData<{ findings: Finding[] }>({ findings: [] }, "/watchdog");
+  const { data } = useApiPageData({ findings: [] }, "/watchdog");
   const [dismissed, setDismissed] = useState<string[]>([]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

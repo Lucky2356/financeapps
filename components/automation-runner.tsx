@@ -10,8 +10,7 @@ import { getClientLocale } from "@/lib/i18n/client-locale";
 import { isAndroidShell } from "@/lib/platform/device";
 import { isDesktopShell } from "@/lib/updates/desktop";
 import { updateTeaser } from "@/lib/updates/latest";
-import type { BudgetsPageData, SettingsPageData } from "@/lib/data";
-import type { DashboardData, ForecastData } from "@/types/finance";
+import type { SettingsPageData } from "@/lib/data";
 import { NOTIFY_KEY, readMine, writeMine } from "@/lib/storage/mine";
 
 // True when the cached FX rates are missing or not from today (local date).
@@ -58,7 +57,7 @@ export function AutomationRunner() {
 async function runAutomation() {
   let settings: SettingsPageData;
   try {
-    settings = await apiClient.get<SettingsPageData>("/settings");
+    settings = await apiClient.get("/settings");
   } catch {
     return;
   }
@@ -225,11 +224,9 @@ async function runAutomation() {
       // soon. Fire a system notification for the urgent ones (WARNING/CRITICAL),
       // deduped per day so opening the app repeatedly does not re-notify.
       const [dashboard, forecast, budgets] = await Promise.all([
-        apiClient.get<Pick<DashboardData, "recommendations">>("/dashboard").catch(() => null),
-        apiClient
-          .get<Pick<ForecastData, "upcomingEvents" | "warnings" | "currency">>("/forecast")
-          .catch(() => null),
-        apiClient.get<BudgetsPageData>("/budgets").catch(() => null)
+        apiClient.get("/dashboard").catch(() => null),
+        apiClient.get("/forecast").catch(() => null),
+        apiClient.get("/budgets").catch(() => null)
       ]);
 
       const urgent = buildNotifications({

@@ -241,9 +241,7 @@ function ExtendedReport({
         // `hasNextPage` can never spin here forever.
         const collected: TransactionsPageData["transactions"] = [];
         for (let page = 1; page <= 60; page += 1) {
-          const result = await apiClient.get<TransactionsPageData>(
-            `/transactions?limit=100&page=${page}&from=${since}`
-          );
+          const result = await apiClient.get(`/transactions?limit=100&page=${page}&from=${since}`);
           if (cancelled) return;
           collected.push(...result.transactions);
           if (!result.pagination.hasNextPage) break;

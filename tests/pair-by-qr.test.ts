@@ -3,7 +3,6 @@ import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { AccountsPageData } from "@/lib/data";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { SyncingStorageAdapter, type Merge } from "@/lib/storage/SyncingStorageAdapter";
@@ -106,7 +105,7 @@ async function checkAnswered(
 }
 
 async function names(device: Phone): Promise<string[]> {
-  const page = await device.app.get<AccountsPageData>("/accounts");
+  const page = await device.app.get("/accounts");
   return page.accounts.map((account) => account.name).sort();
 }
 

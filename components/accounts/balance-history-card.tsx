@@ -45,7 +45,7 @@ export function BalanceHistoryCard() {
   const { t, locale } = useI18n();
   const [months, setMonths] = useState("12");
   const [pick, setPick] = useState("total");
-  const { data } = useApiPageData<HistoryPage>(EMPTY, `/balance-history?months=${months}`);
+  const { data } = useApiPageData(EMPTY, `/balance-history?months=${months}`);
   if (data.months.length === 0) return null;
 
   const account = data.accounts.find((item) => item.id === pick);

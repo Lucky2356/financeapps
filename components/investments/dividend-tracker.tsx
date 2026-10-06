@@ -14,12 +14,6 @@ import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type DividendsResponse = {
-  dividends: ExpectedDividend[];
-  realized: RealizedInvestmentEvent[];
-  currency: string;
-};
-
 // Desktop-only dividend tracker: annual income from the realized-dividend journal
 // plus a small list of upcoming expected payouts (which also surface on the
 // financial calendar).
@@ -32,7 +26,7 @@ export function DividendTracker() {
 
   const load = () =>
     apiClient
-      .get<DividendsResponse>("/investments/dividends")
+      .get("/investments/dividends")
       .then((data) => {
         setExpected(data.dividends);
         setRealized(data.realized);

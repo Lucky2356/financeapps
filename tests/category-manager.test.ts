@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { CategoriesPageData } from "@/lib/data";
 
 function createClient() {
   return new LocalApiClient(new MemoryStorageAdapter());
@@ -10,7 +9,7 @@ function createClient() {
 describe("Category management in LocalApiClient", () => {
   it("returns default categories on fresh state", async () => {
     const client = createClient();
-    const data = await client.get<CategoriesPageData>("/categories");
+    const data = await client.get("/categories");
     expect(data.categories.length).toBeGreaterThan(0);
     const income = data.categories.filter((c) => c.kind === "INCOME");
     const expense = data.categories.filter((c) => c.kind === "EXPENSE");
@@ -29,7 +28,7 @@ describe("Category management in LocalApiClient", () => {
       isSubscription: false
     });
 
-    const after = await client.get<CategoriesPageData>("/categories");
+    const after = await client.get("/categories");
     const created = after.categories.find((c) => c.name === "Тест категория");
     expect(created).toBeDefined();
     expect(created?.kind).toBe("EXPENSE");
@@ -37,7 +36,7 @@ describe("Category management in LocalApiClient", () => {
 
     // Delete it (no transactions)
     await client.delete(`/categories?id=${created!.id}`);
-    const afterDelete = await client.get<CategoriesPageData>("/categories");
+    const afterDelete = await client.get("/categories");
     expect(afterDelete.categories.find((c) => c.name === "Тест категория")).toBeUndefined();
   });
 
@@ -67,7 +66,7 @@ describe("Category management in LocalApiClient", () => {
     const client = createClient();
 
     // Get existing category
-    const data = await client.get<CategoriesPageData>("/categories");
+    const data = await client.get("/categories");
     const expenseCategory = data.categories.find((c) => c.kind === "EXPENSE");
     if (!expenseCategory) return;
 

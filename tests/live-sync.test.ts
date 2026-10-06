@@ -105,7 +105,7 @@ describe("живая синхронизация", () => {
     await pc.app.post("/accounts", { name: "Своя", type: "DEBIT_CARD", balance: 100 });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const seen = await pc.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const seen = await pc.app.get("/accounts");
     expect(seen.accounts.map((row) => row.name).sort()).toEqual(["Своя", "Телефонный"]);
   });
 

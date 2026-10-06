@@ -39,7 +39,7 @@ export function MarketAlertsPanel() {
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .get<{ alerts: MarketAlert[] }>("/market/alerts")
+      .get("/market/alerts")
       .then((data) => {
         if (!cancelled) setAlerts(data.alerts ?? []);
       })

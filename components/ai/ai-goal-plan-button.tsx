@@ -5,7 +5,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import type { AnalyticsData } from "@/lib/data";
 import type { AiProvider } from "@/lib/ai/models";
 import { useAiSettings } from "@/hooks/use-ai-settings";
 import { useI18n } from "@/lib/i18n/context";
@@ -42,7 +41,7 @@ export function AiGoalPlanButton({ goal, currency }: { goal: GoalLike; currency:
 
     let freeCashflow = 0;
     try {
-      const analytics = await apiClient.get<AnalyticsData>("/analytics");
+      const analytics = await apiClient.get("/analytics");
       freeCashflow = Math.round(analytics.avgMonthlyIncome - analytics.avgMonthlyExpense);
     } catch {
       /* fall back to 0 free cashflow */

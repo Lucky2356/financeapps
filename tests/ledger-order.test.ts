@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { AccountsPageData, TransactionsPageData } from "@/lib/data";
+import type { AccountsPageData } from "@/lib/data";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -36,12 +36,12 @@ it("puts the operation recorded last on top of its day, wherever its row sits", 
   await add("вечером");
 
   // Как после слияния: самая свежая строка оказалась в конце массива.
-  const document = await client.get<{ transactions: unknown[] }>("/backup");
+  const document = await client.get("/backup");
   const rows = document.transactions;
-  rows.push(rows.shift());
+  rows.push(rows.shift()!);
   const other = new LocalApiClient(new MemoryStorageAdapter());
   await other.post("/backup", { backup: document });
 
-  const ledger = await other.get<TransactionsPageData>("/transactions?from=2026-09-01");
+  const ledger = await other.get("/transactions?from=2026-09-01");
   expect(ledger.transactions.map((row) => row.description)).toEqual(["вечером", "днём", "утром"]);
 });

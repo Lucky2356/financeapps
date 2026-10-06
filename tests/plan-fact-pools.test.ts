@@ -7,7 +7,7 @@ import {
   SAVINGS_TRANSFER_ID
 } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { PlanFactMonth, PlanFactPageData, PlanFactSplit } from "@/types/finance";
+import type { PlanFactMonth, PlanFactSplit } from "@/types/finance";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const monthKey = () => {
@@ -61,7 +61,7 @@ function expectPools(month: PlanFactMonth, income: PlanFactSplit, expense: PlanF
 }
 
 async function thisMonth(client: LocalApiClient) {
-  const page = await client.get<PlanFactPageData>("/plan");
+  const page = await client.get("/plan");
   const month = page.months.find((entry) => entry.month === monthKey());
   if (!month) throw new Error("текущего месяца нет в таблице");
   return month;
@@ -458,8 +458,8 @@ describe("перевод между основными и сбережениям
       amount: 50000
     });
 
-    for (const query of ["/plan", "/plan?transfers=1"]) {
-      const page = await client.get<PlanFactPageData>(query);
+    for (const query of ["/plan", "/plan?transfers=1"] as const) {
+      const page = await client.get(query);
       const month = page.months.find((entry) => entry.month === monthKey())!;
       expectPools(month, { main: 0, savings: 100000 }, { main: 50000, savings: 0 });
       expect(month.expense.fact).toBe(50000);

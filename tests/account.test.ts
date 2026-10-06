@@ -84,9 +84,7 @@ describe("книга, которая уже лежала на устройств
     const { account, plain, sealed } = await withExistingBook();
     await account.create("пароль", FAST);
 
-    const after = await new LocalApiClient(sealed).get<{ accounts: Array<{ name: string }> }>(
-      "/accounts"
-    );
+    const after = await new LocalApiClient(sealed).get("/accounts");
     expect(after.accounts.map((row) => row.name).sort()).toEqual(["Карта", "Накопительный"]);
     expect(await plain.keys()).not.toContain(`${BOOK}:sealing`);
   });
@@ -180,9 +178,7 @@ describe("замок и ключ", () => {
     const next = restart();
     await next.account.unlock("правильный");
 
-    const data = await new LocalApiClient(next.sealed).get<{ accounts: Array<{ name: string }> }>(
-      "/accounts"
-    );
+    const data = await new LocalApiClient(next.sealed).get("/accounts");
     expect(data.accounts.map((row) => row.name)).toContain("Карта");
   });
 
@@ -203,9 +199,7 @@ describe("замок и ключ", () => {
 
     const sealed = new EncryptingStorageAdapter(fresh.plain);
     await new AccountService(fresh.plain, sealed).unlockWithCode(recoveryCode);
-    const data = await new LocalApiClient(sealed).get<{ accounts: Array<{ name: string }> }>(
-      "/accounts"
-    );
+    const data = await new LocalApiClient(sealed).get("/accounts");
     expect(data.accounts.map((row) => row.name)).toContain("Вклад");
   });
 });
@@ -294,7 +288,7 @@ describe("очистка хранилища", () => {
     expect((await account.state()).status).toBe("locked");
     await account.unlock("пароль");
 
-    const after = await new LocalApiClient(sealed).get<{ accounts: unknown[] }>("/accounts");
+    const after = await new LocalApiClient(sealed).get("/accounts");
     expect(after.accounts).toEqual([]);
   });
 
@@ -336,9 +330,7 @@ describe("смена пароля и восстановление", () => {
     await expect(account.unlock("старый")).rejects.toThrow(/Не подходит/);
     await account.unlock("новый");
 
-    const data = await new LocalApiClient(sealed).get<{ accounts: Array<{ name: string }> }>(
-      "/accounts"
-    );
+    const data = await new LocalApiClient(sealed).get("/accounts");
     expect(data.accounts.map((row) => row.name)).toContain("Копилка");
   });
 
@@ -371,9 +363,7 @@ describe("смена пароля и восстановление", () => {
     const account = new AccountService(d.plain, sealed);
     await account.resetPassword(recoveryCode, "новый");
 
-    const data = await new LocalApiClient(sealed).get<{ accounts: Array<{ name: string }> }>(
-      "/accounts"
-    );
+    const data = await new LocalApiClient(sealed).get("/accounts");
     expect(data.accounts.map((row) => row.name)).toContain("Три года записей");
     expect(sealed.unlocked).toBe(true);
   });

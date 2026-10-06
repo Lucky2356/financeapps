@@ -23,6 +23,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { TransactionsPageData } from "@/lib/data";
+import type { DeletePath } from "@/lib/api/routes";
 
 type BudgetWarning = { category: string; spent: number; limit: number };
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
@@ -108,7 +109,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
       }
 
       try {
-        const nextData = await apiClient.get<TransactionsPageData>(
+        const nextData = await apiClient.get(
           paramsString ? `/transactions?${paramsString}` : "/transactions"
         );
         setPageData(nextData);
@@ -127,7 +128,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     // the server-rendered `data` is an empty placeholder on the static build.
     void (async () => {
       try {
-        const nextData = await apiClient.get<TransactionsPageData>(
+        const nextData = await apiClient.get(
           paramsString ? `/transactions?${paramsString}` : "/transactions"
         );
         if (!cancelled) setPageData(nextData);
@@ -275,7 +276,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
       await deleteWithUndo(transaction);
       return;
     }
-    const path = group
+    const path: DeletePath = group
       ? `/transactions?splitGroupId=${encodeURIComponent(group)}`
       : `/transactions?id=${encodeURIComponent(transaction.id)}`;
     await run(() => apiClient.delete(path), {
@@ -291,10 +292,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     let photo: { data: string; place: "synced" | "device" } | null = null;
     if (transaction.photo) {
       const answer = await apiClient
-        .get<{
-          photo: string | null;
-          place: "synced" | "device" | null;
-        }>(`/photos?id=${encodeURIComponent(transaction.id)}`)
+        .get(`/photos?id=${encodeURIComponent(transaction.id)}`)
         .catch(() => null);
       if (answer?.photo && answer.place) photo = { data: answer.photo, place: answer.place };
     }

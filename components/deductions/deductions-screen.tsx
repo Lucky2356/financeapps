@@ -22,8 +22,6 @@ import {
 } from "@/components/ui/select";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
-import type { DeductionsPageData } from "@/lib/api/local/extras";
-import type { CategoriesPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { DEDUCTION_KINDS, deductionCsv, type DeductionKind } from "@/lib/tax/deductions";
@@ -33,7 +31,7 @@ const NONE = "none";
 export function DeductionsScreen() {
   const { words, format, locale } = useExtrasText();
   const [year, setYear] = useState(() => new Date().getFullYear());
-  const { data, reload } = useApiPageData<DeductionsPageData>(
+  const { data, reload } = useApiPageData(
     {
       year,
       lines: [],
@@ -48,7 +46,7 @@ export function DeductionsScreen() {
     },
     `/deductions?year=${year}`
   );
-  const { data: categoriesData, reload: reloadCategories } = useApiPageData<CategoriesPageData>(
+  const { data: categoriesData, reload: reloadCategories } = useApiPageData(
     { source: "database", categories: [] },
     "/categories"
   );

@@ -133,7 +133,7 @@ describe("таблица в книге", () => {
         { month: "2026-10", columnId: income.id, input: "100000" }
       ]
     });
-    const read = await client.get<SheetPageData>("/sheet");
+    const read = await client.get("/sheet");
     // Новый расход — в конце основных, перед сбережениями.
     expect(read.columns.map((column) => column.name)).toEqual([
       "Остаток",
@@ -150,10 +150,10 @@ describe("таблица в книге", () => {
       action: "setCells",
       cells: [{ month: "2026-10", columnId: food.id, input: "" }]
     });
-    expect((await client.get<SheetPageData>("/sheet")).cells).toHaveLength(1);
+    expect((await client.get("/sheet")).cells).toHaveLength(1);
 
     // Удалённый столбец уносит свои ячейки.
     await client.post("/sheet", { action: "removeColumn", id: income.id });
-    expect((await client.get<SheetPageData>("/sheet")).cells).toHaveLength(0);
+    expect((await client.get("/sheet")).cells).toHaveLength(0);
   });
 });

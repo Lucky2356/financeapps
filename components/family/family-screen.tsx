@@ -19,7 +19,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { EMPTY_FAMILY, FAMILY_ME_KEY, type FamilyPage } from "@/components/family/family-fields";
+import { EMPTY_FAMILY, FAMILY_ME_KEY } from "@/components/family/family-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -64,7 +64,7 @@ export function FamilyScreen() {
   const { t, locale } = useI18n();
   const confirm = useConfirm();
   const [month, setMonth] = useState(thisMonth);
-  const { data, reload } = useApiPageData<FamilyPage>(EMPTY_FAMILY, `/family?month=${month}`);
+  const { data, reload } = useApiPageData(EMPTY_FAMILY, `/family?month=${month}`);
   const [me, setMe] = useState<string>(() => readMine(FAMILY_ME_KEY) ?? "");
   const [newName, setNewName] = useState("");
   const [renaming, setRenaming] = useState<{ id: string; name: string; since: string } | null>(

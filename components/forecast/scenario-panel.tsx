@@ -7,8 +7,6 @@ import { apiClient } from "@/lib/api/client";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { projectScenario } from "@/services/ScenarioPlanningService";
-import type { AnalyticsData } from "@/lib/data";
-import type { ForecastData } from "@/types/finance";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,8 +42,8 @@ export function ScenarioPanel() {
     let cancelled = false;
     void (async () => {
       const [forecast, analytics] = await Promise.all([
-        apiClient.get<ForecastData>("/forecast").catch(() => null),
-        apiClient.get<AnalyticsData>("/analytics").catch(() => null)
+        apiClient.get("/forecast").catch(() => null),
+        apiClient.get("/analytics").catch(() => null)
       ]);
       if (cancelled || !forecast) return;
       setBase({

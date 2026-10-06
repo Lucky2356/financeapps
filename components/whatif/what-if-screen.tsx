@@ -132,7 +132,7 @@ function Path({
 
 export function WhatIfScreen() {
   const { t, locale } = useI18n();
-  const { data: base } = useApiPageData<WhatIfBase>(EMPTY, "/what-if");
+  const { data: base } = useApiPageData(EMPTY, "/what-if");
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<WhatIfScenario["mode"]>("cash");
   const [from, setFrom] = useState<WhatIfScenario["from"]>("liquid");

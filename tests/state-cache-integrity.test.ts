@@ -26,7 +26,7 @@ describe("кэш книги не расходится с хранилищем", 
 
     await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "1000" });
 
-    const shown = await api.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const shown = await api.get("/accounts");
     const disk = (await stored(storage)) as { accounts: Array<{ name: string }> } | null;
 
     expect(shown.accounts.map((a) => a.name)).toEqual(["Карта"]);
@@ -37,10 +37,8 @@ describe("кэш книги не расходится с хранилищем", 
     const storage = new MemoryStorageAdapter();
     const api = new LocalApiClient(storage);
     await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "10000" });
-    const accounts = await api.get<{ accounts: Array<{ id: string }> }>("/accounts");
-    const categories = await api.get<{ categories: Array<{ id: string; kind: string }> }>(
-      "/categories"
-    );
+    const accounts = await api.get("/accounts");
+    const categories = await api.get("/categories");
     const accountId = accounts.accounts[0].id;
     const categoryId = categories.categories.find((c) => c.kind === "EXPENSE")!.id;
 
@@ -62,9 +60,7 @@ describe("кэш книги не расходится с хранилищем", 
       description: "Продукты подороже"
     });
 
-    const shown = await api.get<{ transactions: Array<{ amount: number; description: string }> }>(
-      "/transactions?limit=all"
-    );
+    const shown = await api.get("/transactions?limit=all");
     const disk = (await stored(storage)) as {
       transactions: Array<{ amount: number; description: string }>;
     } | null;

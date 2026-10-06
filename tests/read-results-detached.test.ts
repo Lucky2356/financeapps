@@ -39,10 +39,7 @@ describe("ответ чтения отвязан от книги", () => {
 
     // Именно /transactions отдаёт справочники вместе со списком операций, и
     // именно они раньше были массивами самой книги.
-    const page = await client.get<{
-      categories: Array<{ id: string }>;
-      rules: Array<{ id: string }>;
-    }>("/transactions");
+    const page = await client.get("/transactions");
     // Ровно то, что делает любой экран, которому нужен свой порядок.
     page.categories.reverse();
     page.rules.reverse();
@@ -60,10 +57,12 @@ describe("ответ чтения отвязан от книги", () => {
     const { storage, client } = await seeded();
     const before = structuredClone(await stored(storage));
 
-    const alerts = await client.get<{ alerts: unknown[] }>("/market/alerts");
-    alerts.alerts.push({ id: "подделка" });
-    const tax = await client.get<{ events: unknown[] }>("/investments/events");
-    tax.events.push({ id: "подделка" });
+    const alerts = await client.get("/market/alerts");
+    // Подделка нарочно не той формы: проверяется, что чужая правка ответа не
+    // доезжает до диска, а не то, что в ответ можно положить.
+    (alerts.alerts as unknown[]).push({ id: "подделка" });
+    const tax = await client.get("/investments/events");
+    (tax.events as unknown[]).push({ id: "подделка" });
 
     await client.post("/settings", { theme: "dark" });
     const after = await stored(storage);
@@ -74,7 +73,7 @@ describe("ответ чтения отвязан от книги", () => {
 
   it("строку из ответа нельзя испортить молча", async () => {
     const { client } = await seeded();
-    const page = await client.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const page = await client.get("/accounts");
     const account = page.accounts[0];
     expect(account).toBeDefined();
 

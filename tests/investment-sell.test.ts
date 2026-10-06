@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { InvestmentData } from "@/types/finance";
-import type { TransactionsPageData } from "@/lib/data";
 
 // Recording a sale used to touch the tax ledger and nothing else: the shares
 // stayed in the portfolio, the money arrived nowhere, and the same gain was
@@ -42,7 +40,7 @@ describe("recording a sale", () => {
       date: "2026-08-01"
     });
 
-    const data = await api.get<InvestmentData>("/investments");
+    const data = await api.get("/investments");
     const position = data.portfolio.find((row) => row.ticker === "SBER");
     expect(position?.quantity).toBe(30);
     // 60 from the 2024 lot and 10 from the 2025 one — what is left is the rest
@@ -63,7 +61,7 @@ describe("recording a sale", () => {
       date: "2026-08-01"
     });
 
-    const data = await api.get<InvestmentData>("/investments");
+    const data = await api.get("/investments");
     expect(data.portfolio.find((row) => row.ticker === "SBER")).toBeUndefined();
   });
 
@@ -96,13 +94,11 @@ describe("recording a sale", () => {
       date: "2026-08-01"
     });
 
-    const accounts = await api.get<{ accounts: Array<{ id: string; balance: number }> }>(
-      "/accounts"
-    );
+    const accounts = await api.get("/accounts");
     // 10 × 300 − 50 of commission.
     expect(accounts.accounts.find((item) => item.id === accountId)?.balance).toBe(2_950);
 
-    const ledger = await api.get<TransactionsPageData>("/transactions?limit=all");
+    const ledger = await api.get("/transactions?limit=all");
     expect(ledger.transactions.some((row) => row.description === "Продажа SBER")).toBe(true);
   });
 
@@ -122,7 +118,7 @@ describe("recording a sale", () => {
       date: "2026-08-01"
     });
 
-    const data = await api.get<InvestmentData>("/investments");
+    const data = await api.get("/investments");
     const position = data.portfolio.find((row) => row.ticker === "SBER");
     expect(position?.averageBuyPrice).toBe(325);
   });
@@ -146,12 +142,11 @@ describe("deleting a sale", () => {
 
   it("puts the shares back and takes the money away again", async () => {
     const { api, accountId } = await soldEverything();
-    const [event] = (await api.get<{ events: Array<{ id: string }> }>("/investments/events"))
-      .events;
+    const [event] = (await api.get("/investments/events")).events;
 
     await api.delete(`/investments/events?id=${event.id}`);
 
-    const data = await api.get<InvestmentData>("/investments");
+    const data = await api.get("/investments");
     const position = data.portfolio.find((row) => row.ticker === "SBER");
     expect(position?.quantity).toBe(100);
     expect(position?.averageBuyPrice).toBe(250);
@@ -160,11 +155,9 @@ describe("deleting a sale", () => {
       { date: "2025-06-01", quantity: 40, price: 325 }
     ]);
 
-    const accounts = await api.get<{ accounts: Array<{ id: string; balance: number }> }>(
-      "/accounts"
-    );
+    const accounts = await api.get("/accounts");
     expect(accounts.accounts.find((item) => item.id === accountId)?.balance).toBe(0);
-    const ledger = await api.get<TransactionsPageData>("/transactions?limit=all");
+    const ledger = await api.get("/transactions?limit=all");
     expect(ledger.transactions.some((row) => row.description === "Продажа SBER")).toBe(false);
   });
 
@@ -179,12 +172,11 @@ describe("deleting a sale", () => {
       fee: "0",
       date: "2026-08-01"
     });
-    const [event] = (await api.get<{ events: Array<{ id: string }> }>("/investments/events"))
-      .events;
+    const [event] = (await api.get("/investments/events")).events;
 
     await api.delete(`/investments/events?id=${event.id}`);
 
-    const data = await api.get<InvestmentData>("/investments");
+    const data = await api.get("/investments");
     const position = data.portfolio.find((row) => row.ticker === "SBER");
     expect(position?.quantity).toBe(100);
     expect(position?.averageBuyPrice).toBe(250);

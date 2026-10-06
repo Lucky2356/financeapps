@@ -37,3 +37,15 @@ export function toFormObject(body: unknown) {
     ])
   ) as Record<string, string>;
 }
+
+/**
+ * Обработчик пути из таблицы маршрутов — или undefined, если такого пути нет.
+ *
+ * Только собственные ключи таблицы: путь приходит строкой, и «/constructor»
+ * не должен найти то, что таблица унаследовала от Object.
+ */
+export function routeOf<T extends object>(table: T, pathname: string): T[keyof T] | undefined {
+  return Object.prototype.hasOwnProperty.call(table, pathname)
+    ? table[pathname as keyof T]
+    : undefined;
+}

@@ -73,10 +73,11 @@ function PayForm({
   useEffect(() => {
     let alive = true;
     void apiClient
-      .get<{ accounts?: Array<{ id: string; name: string; isArchived?: boolean }> }>("/accounts")
+      .get("/accounts")
       .then((result) => {
         if (!alive) return;
-        const usable = (result?.accounts ?? []).filter((account) => !account.isArchived);
+        // «/accounts» отдаёт только действующие счета — архивные уже отсеяны.
+        const usable = result?.accounts ?? [];
         setAccounts(usable);
         setAccountId((was) =>
           usable.some((account) => account.id === was) ? was : (usable[0]?.id ?? "")

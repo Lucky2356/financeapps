@@ -3,13 +3,6 @@ import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { sampleDate } from "@/lib/sample-data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type {
-  AccountsPageData,
-  BudgetsPageData,
-  GoalsPageData,
-  TransactionsPageData
-} from "@/lib/data";
-import type { DashboardData } from "@/types/finance";
 
 describe("sample data seeding", () => {
   it("populates a realistic example and can be cleared back to empty", async () => {
@@ -17,11 +10,11 @@ describe("sample data seeding", () => {
 
     await client.post("/sample", {});
 
-    const dashboard = await client.get<DashboardData>("/dashboard");
-    const accounts = await client.get<AccountsPageData>("/accounts");
-    const transactions = await client.get<TransactionsPageData>("/transactions");
-    const budgets = await client.get<BudgetsPageData>("/budgets");
-    const goals = await client.get<GoalsPageData>("/goals");
+    const dashboard = await client.get("/dashboard");
+    const accounts = await client.get("/accounts");
+    const transactions = await client.get("/transactions");
+    const budgets = await client.get("/budgets");
+    const goals = await client.get("/goals");
 
     expect(accounts.accounts.length).toBeGreaterThan(0);
     expect(transactions.transactions.length).toBeGreaterThan(0);
@@ -32,8 +25,8 @@ describe("sample data seeding", () => {
     expect(dashboard.emergencyFund.amount).toBeGreaterThan(0);
 
     await client.delete("/storage/clear");
-    const cleared = await client.get<DashboardData>("/dashboard");
-    const clearedAccounts = await client.get<AccountsPageData>("/accounts");
+    const cleared = await client.get("/dashboard");
+    const clearedAccounts = await client.get("/accounts");
     expect(cleared.netWorth).toBe(0);
     expect(clearedAccounts.accounts).toHaveLength(0);
   });

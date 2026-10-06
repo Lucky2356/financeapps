@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LocalApiClient, type BeforeClearCopy } from "@/lib/api/LocalApiClient";
-import type { AccountsPageData } from "@/lib/data";
+import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 
 // «Очистить все данные» нажимают и по ошибке. Неделю очистку можно отменить.
 
 async function names(client: LocalApiClient): Promise<string[]> {
-  const page = await client.get<AccountsPageData>("/accounts");
+  const page = await client.get("/accounts");
   return page.accounts.map((account) => account.name).sort();
 }
 
@@ -23,7 +22,7 @@ describe("копия перед очисткой", () => {
 
     await client.delete("/storage/clear");
     expect(await names(client)).toEqual([]);
-    const copy = await client.get<BeforeClearCopy | null>("/backup/before-clear");
+    const copy = await client.get("/backup/before-clear");
     expect(copy?.savedAt).toBeTruthy();
 
     await client.post("/backup/before-clear", {});

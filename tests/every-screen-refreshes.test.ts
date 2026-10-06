@@ -49,7 +49,9 @@ const ON_DEMAND: Record<string, string> = {
   "components/drilldown/amount-drilldown.tsx": "читает при раскрытии суммы",
   "components/investments/inline-stock-chart.tsx": "котировки с биржи, а не книга",
   "components/sync/replace-local.tsx": "снимает копию по нажатию «Сохранить копию и заменить»",
-  "components/investments/security-search.tsx": "поиск бумаги по набранному"
+  "components/investments/security-search.tsx": "поиск бумаги по набранному",
+  "components/transactions/favorite-chips.tsx":
+    "внутри окна быстрой записи: читает при каждом его открытии"
 };
 
 /**

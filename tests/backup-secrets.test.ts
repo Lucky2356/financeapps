@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { SettingsPageData } from "@/lib/data";
 
 // GUARD: the AI provider key is a secret, and a backup is a file people move
 // around — a cloud folder on a schedule, a cable, a messenger. Anything secret
@@ -16,7 +15,7 @@ const client = () => new LocalApiClient(new MemoryStorageAdapter());
 async function exported(accountName: string, type = "DEBIT_CARD") {
   const source = client();
   await source.post("/accounts", { name: accountName, type, balance: "1000" });
-  return source.get<unknown>("/backup");
+  return source.get("/backup");
 }
 
 describe("резервная копия и секреты", () => {
@@ -24,7 +23,7 @@ describe("резервная копия и секреты", () => {
     const api = client();
     await api.post("/settings", { aiApiKey: KEY, aiEnabled: "true" });
 
-    const backup = await api.get<Record<string, unknown>>("/backup");
+    const backup = await api.get("/backup");
     expect(backup.aiApiKey).toBe("");
     expect(JSON.stringify(backup)).not.toContain(KEY);
   });
@@ -33,7 +32,7 @@ describe("резервная копия и секреты", () => {
     const api = client();
     await api.post("/settings", { aiApiKey: KEY, aiProvider: "openai", currency: "USD" });
 
-    const backup = await api.get<Record<string, unknown>>("/backup");
+    const backup = await api.get("/backup");
     expect(backup.aiProvider).toBe("openai");
     expect(backup.currency).toBe("USD");
   });
@@ -46,7 +45,7 @@ describe("резервная копия и секреты", () => {
     await target.post("/settings", { aiApiKey: KEY });
     await target.post("/backup", { backup: await exported("Карта") });
 
-    const settings = await target.get<SettingsPageData>("/settings");
+    const settings = await target.get("/settings");
     expect(settings.aiApiKey).toBe(KEY);
   });
 
@@ -54,7 +53,7 @@ describe("резервная копия и секреты", () => {
     const target = client();
     await target.post("/backup", { backup: await exported("Вклад-проверка", "SAVINGS") });
 
-    const accounts = await target.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const accounts = await target.get("/accounts");
     expect(accounts.accounts.map((a) => a.name)).toContain("Вклад-проверка");
   });
 });

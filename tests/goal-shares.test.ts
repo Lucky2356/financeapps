@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { GoalsPageData } from "@/lib/data";
 import type { Member } from "@/lib/family/family";
 import { goalFamily, goalShares } from "@/lib/family/goal-shares";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
@@ -79,7 +78,7 @@ describe("совместная цель — в книге", () => {
       accountId: card.id,
       memberId: b.id
     });
-    let page = await api.get<GoalsPageData>("/goals");
+    let page = await api.get("/goals");
     let family = page.goals[0].family!;
     expect(family.custom).toBe(true);
     expect(family.members.map((member) => [member.contributed, member.behind])).toEqual([
@@ -95,7 +94,7 @@ describe("совместная цель — в книге", () => {
       currentAmount: "40000",
       deadline: "2027-06-01"
     });
-    page = await api.get<GoalsPageData>("/goals");
+    page = await api.get("/goals");
     expect(page.goals[0].shares).toEqual({ [a.id]: 60, [b.id]: 40 });
     // «Поровну» — пустые доли.
     await api.put("/goals", {
@@ -106,7 +105,7 @@ describe("совместная цель — в книге", () => {
       deadline: "2027-06-01",
       shares: "{}"
     });
-    page = await api.get<GoalsPageData>("/goals");
+    page = await api.get("/goals");
     family = page.goals[0].family!;
     expect(page.goals[0].shares).toBeUndefined();
     expect(family.members.map((member) => member.behind)).toEqual([0, 10000]);

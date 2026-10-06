@@ -32,7 +32,7 @@ export function RulesManager() {
 
   async function load() {
     try {
-      const next = await apiClient.get<RulesPageData>("/rules");
+      const next = await apiClient.get("/rules");
       setData(next);
       setCategoryId((current) => current || next.categories[0]?.id || "");
     } catch {
@@ -43,7 +43,7 @@ export function RulesManager() {
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .get<RulesPageData>("/rules")
+      .get("/rules")
       .then((next) => {
         if (cancelled) return;
         setData(next);

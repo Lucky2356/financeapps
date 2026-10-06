@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { BANK_SUGGESTIONS_KEY, parseStored, resolveTarget } from "@/lib/bank/suggestions";
-import type { AccountsPageData, ImportPageData, TransactionsPageData } from "@/lib/data";
 import { applyLoliItems, type LoliDeps } from "@/lib/loli/apply";
 import {
   LOLI_LINKS_KEY,
@@ -47,9 +46,8 @@ async function setup(auto = true) {
     member: () => ({}),
     now: Date.now()
   };
-  const rows = async () =>
-    (await client.get<TransactionsPageData>("/transactions?period=all&limit=all")).transactions;
-  const balance = async () => (await client.get<AccountsPageData>("/accounts")).accounts[0].balance;
+  const rows = async () => (await client.get("/transactions?period=all&limit=all")).transactions;
+  const balance = async () => (await client.get("/accounts")).accounts[0].balance;
   return { client, memory, deps, rows, balance };
 }
 
@@ -225,7 +223,7 @@ describe("в «Подсказки»", () => {
 
   it("«Записать» в подсказке выбирает статью, названную Лоли", async () => {
     const { client } = await setup(false);
-    const refs = await client.get<ImportPageData>("/import");
+    const refs = await client.get("/import");
     const suggestion = loliSuggestion(
       expense("r1", 12000, { description: "что-то новое" }) as never
     );

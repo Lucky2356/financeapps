@@ -8,7 +8,7 @@ import { apiClient } from "@/lib/api/client";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { computeRebalance } from "@/lib/investments/rebalance";
-import type { PortfolioRow, TargetAllocation } from "@/types/finance";
+import type { PortfolioRow } from "@/types/finance";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
@@ -46,7 +46,7 @@ export function RebalancePanel({
 
   useEffect(() => {
     void apiClient
-      .get<{ targets: TargetAllocation[] }>("/investments/targets")
+      .get("/investments/targets")
       .then((data) => {
         const map: Record<string, string> = {};
         for (const target of data.targets) map[target.sector] = String(target.targetPct);

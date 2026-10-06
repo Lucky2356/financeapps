@@ -32,7 +32,7 @@ export function AiBudgetPlanCard() {
   async function generate() {
     let analytics: AnalyticsData;
     try {
-      analytics = await apiClient.get<AnalyticsData>("/analytics");
+      analytics = await apiClient.get("/analytics");
     } catch {
       return toast.error(t("aiq.err.loadData"));
     }

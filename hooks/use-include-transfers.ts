@@ -48,7 +48,15 @@ export function useIncludeTransfers(
   return [include, update];
 }
 
-/** Query suffix for the endpoints that honour the setting. */
-export function transfersQuery(include: boolean, separator: "?" | "&" = "?"): string {
+/**
+ * Query suffix for the endpoints that honour the setting.
+ *
+ * Тип — точный («» или «?transfers=1»), а не string: путь, собранный с ним,
+ * остаётся путём, по которому выводится тип ответа (lib/api/routes.ts).
+ */
+export function transfersQuery<Separator extends "?" | "&" = "?">(
+  include: boolean,
+  separator: Separator = "?" as Separator
+): "" | `${Separator}transfers=1` {
   return include ? `${separator}transfers=1` : "";
 }

@@ -22,12 +22,10 @@ import {
 } from "@/components/ui/select";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { previousMonth, type MonthRecap } from "@/lib/analytics/month-recap";
-import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
 import { isTransfer } from "@/lib/transactions/transfers";
-import type { PlanFactPageData } from "@/types/finance";
 
 function monthsBack(count: number): string[] {
   const now = new Date();
@@ -60,9 +58,9 @@ export function MonthReport() {
   const { t, locale } = useI18n();
   const months = useMemo(() => monthsBack(24), []);
   const [month, setMonth] = useState(() => previousMonth(months[0]));
-  const { data: recap } = useApiPageData<MonthRecap>(EMPTY_RECAP, `/month-recap?month=${month}`);
-  const { data: plan } = useApiPageData<PlanFactPageData | null>(null, "/plan");
-  const { data: ledger } = useApiPageData<TransactionsPageData | null>(
+  const { data: recap } = useApiPageData(EMPTY_RECAP, `/month-recap?month=${month}`);
+  const { data: plan } = useApiPageData(null, "/plan");
+  const { data: ledger } = useApiPageData(
     null,
     `/transactions?from=${month}-01&to=${monthEnd(month)}&limit=all`
   );

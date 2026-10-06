@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { convert, DEFAULT_CURRENCY_RATES } from "@/lib/currency";
-import type { AccountsPageData, LiabilitiesPageData, TransactionsPageData } from "@/lib/data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 
 // Платёж по долгу и сам долг держатся вместе: удалили платёж — долг вернулся,
@@ -11,7 +10,7 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 async function setup(extra: Record<string, string> = {}) {
   const client = new LocalApiClient(new MemoryStorageAdapter());
   await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "50000" });
-  const account = (await client.get<AccountsPageData>("/accounts")).accounts[0];
+  const account = (await client.get("/accounts")).accounts[0];
   await client.post("/debts", {
     name: "Кредит",
     kind: "LOAN",
@@ -22,12 +21,10 @@ async function setup(extra: Record<string, string> = {}) {
     dueDay: "1",
     ...extra
   });
-  const debt = async () => (await client.get<LiabilitiesPageData>("/debts")).liabilities[0];
-  const ledger = async () =>
-    (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+  const debt = async () => (await client.get("/debts")).liabilities[0];
+  const ledger = async () => (await client.get("/transactions?period=all")).transactions;
   const cash = async () =>
-    (await client.get<AccountsPageData>("/accounts")).accounts.find((a) => a.id === account.id)!
-      .balance;
+    (await client.get("/accounts")).accounts.find((a) => a.id === account.id)!.balance;
   return { client, account, debt, ledger, cash };
 }
 
@@ -49,7 +46,7 @@ describe("платёж по долгу и долг", () => {
     await client.post("/debts/pay", { id, amount: "5000", accountId: account.id });
     const [row] = await ledger();
     await client.delete(`/transactions?id=${row.id}`);
-    const trash = await client.get<{ entries: Array<{ id: string }> }>("/trash");
+    const trash = await client.get("/trash");
     await client.post("/trash", { action: "restore", ids: trash.entries.map((e) => e.id) });
     expect((await debt()).balance).toBe(25000);
   });

@@ -43,14 +43,7 @@ describe("облигация с НКД", () => {
       averageBuyPrice: "590"
     });
 
-    const data = await api.get<{
-      portfolio: Array<{
-        ticker: string;
-        currentValue: number;
-        pnl: number;
-        accruedInterest?: number;
-      }>;
-    }>("/investments");
+    const data = await api.get("/investments");
     const bond = data.portfolio.find((row) => row.ticker === BOND.ticker);
     expect(bond?.currentValue).toBe(6200);
     // (600 − 590) × 10, а не (620 − 590) × 10 = 300.

@@ -12,14 +12,13 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useApiPageData } from "@/hooks/use-api-page-data";
-import type { BeforeClearCopy } from "@/lib/api/LocalApiClient";
 import { apiClient } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
 export function BeforeClearCard() {
   const { t } = useI18n();
-  const { data: copy } = useApiPageData<BeforeClearCopy | null>(null, "/backup/before-clear");
+  const { data: copy } = useApiPageData(null, "/backup/before-clear");
   const [busy, setBusy] = useState(false);
 
   if (!copy) return null;

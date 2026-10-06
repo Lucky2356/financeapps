@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { depositOutlook, depositsEndingSoon } from "@/lib/accounts/deposits";
 import { interestSchedule } from "@/lib/accounts/interest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { CashbackPageData, DeductionsPageData, TripsPageData } from "@/lib/api/local/extras";
 import {
   ANY_CATEGORY,
   bestCard,
@@ -14,7 +13,6 @@ import {
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { deductionCsv, deductionYear, taxFromNetSalary } from "@/lib/tax/deductions";
 import { activeTrip, tripTag, tripView } from "@/lib/trips/trips";
-import type { ForecastData } from "@/types/finance";
 
 const rule = (over: Partial<CashbackRule>): CashbackRule => ({
   id: over.id ?? Math.random().toString(36).slice(2),
@@ -233,9 +231,7 @@ describe("через приложение", () => {
       type: "DEBIT_CARD",
       balance: "100000"
     });
-    const { categories } = await client.get<{
-      categories: Array<{ id: string; name: string; kind: string }>;
-    }>("/categories");
+    const { categories } = await client.get("/categories");
     const food = categories.find((category) => category.name === "Продукты")!;
     return { client, card, food };
   }
@@ -269,7 +265,7 @@ describe("через приложение", () => {
       date: todayIso(),
       liabilityId: "debt-1"
     });
-    const page = await client.get<CashbackPageData>(`/cashback?month=${month}`);
+    const page = await client.get(`/cashback?month=${month}`);
     expect(page.rules).toHaveLength(1);
     expect(page.summary.earned).toBe(100);
   });
@@ -322,11 +318,9 @@ describe("через приложение", () => {
       amount: "5000",
       date: todayIso()
     });
-    const ledger = await client.get<{
-      transactions: Array<{ transferId?: string; tags?: string[] }>;
-    }>("/transactions?period=all");
+    const ledger = await client.get("/transactions?period=all");
     expect(ledger.transactions.filter((row) => row.transferId && row.tags?.length)).toEqual([]);
-    const trips = await client.get<TripsPageData>("/trips");
+    const trips = await client.get("/trips");
     expect(trips.active?.spent).toBe(1500);
   });
 
@@ -341,9 +335,7 @@ describe("через приложение", () => {
       date: todayIso()
     });
     await client.post("/deductions", { year: new Date().getFullYear(), taxPaid: "50000" });
-    const page = await client.get<DeductionsPageData>(
-      `/deductions?year=${new Date().getFullYear()}`
-    );
+    const page = await client.get(`/deductions?year=${new Date().getFullYear()}`);
     expect(page.refund).toBe(1300);
     expect(page.taxEstimated).toBe(false);
     expect(page.marked).toEqual([{ categoryId: food.id, kind: "MEDICAL" }]);
@@ -360,7 +352,7 @@ describe("через приложение", () => {
       interestRate: "15",
       depositEndsOn: endsOn
     });
-    const forecast = await client.get<ForecastData>("/forecast");
+    const forecast = await client.get("/forecast");
     expect(forecast.warnings.some((warning) => warning.id.startsWith("deposit-"))).toBe(true);
   });
 });
@@ -373,9 +365,7 @@ describe("кэшбэк: правка условия", () => {
       type: "DEBIT_CARD",
       balance: "0"
     });
-    const { categories } = await client.get<{
-      categories: Array<{ id: string; name: string; kind: string }>;
-    }>("/categories");
+    const { categories } = await client.get("/categories");
     const expense = categories.filter((category) => category.kind === "EXPENSE");
     const month = "2026-09";
     await client.post("/cashback", {
@@ -397,7 +387,7 @@ describe("кэшбэк: правка условия", () => {
       categoryId: expense[0].id,
       percent: "7"
     });
-    const page = await client.get<CashbackPageData>(`/cashback?month=${month}`);
+    const page = await client.get(`/cashback?month=${month}`);
     expect(page.rules).toHaveLength(1);
     expect(page.rules[0]).toMatchObject({ categoryId: expense[0].id, percent: 7 });
   });

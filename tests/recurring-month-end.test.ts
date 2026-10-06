@@ -3,11 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { formatInputDate } from "@/lib/format";
-import type {
-  AccountsPageData,
-  RecurringTransactionsPageData,
-  TransactionsPageData
-} from "@/lib/data";
+import type { AccountsPageData } from "@/lib/data";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 
 // Платёж на 31-е после первого февраля переезжал на 28-е — навсегда: следующая
@@ -68,7 +64,7 @@ describe("a monthly payment at the end of the month", () => {
 
     // Февраль: шаблон стоит на 28-м. Человек правит только сумму — форма
     // присылает ту дату, что показывает, то есть 28 февраля.
-    let page = await client.get<RecurringTransactionsPageData>("/recurring");
+    let page = await client.get("/recurring");
     const stored = page.recurringTransactions[0];
     expect(day(new Date(stored.nextDate))).toBe("28.2");
     await client.put("/recurring", {
@@ -81,13 +77,11 @@ describe("a monthly payment at the end of the month", () => {
     vi.setSystemTime(new Date(2026, 4, 1, 12));
     await client.post("/recurring/materialize-all", {});
 
-    const transactions = await client.get<TransactionsPageData>(
-      "/transactions?from=2026-01-01&to=2026-12-31"
-    );
+    const transactions = await client.get("/transactions?from=2026-01-01&to=2026-12-31");
     const posted = transactions.transactions.map((row) => row.date.slice(0, 10)).sort();
     expect(posted).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"]);
 
-    page = await client.get<RecurringTransactionsPageData>("/recurring");
+    page = await client.get("/recurring");
     expect(day(new Date(page.recurringTransactions[0].nextDate))).toBe("31.5");
   });
 });

@@ -58,7 +58,7 @@ export async function runAutoBackup(config: AutoBackupConfig): Promise<string | 
   if (config.frequency === "off" || !config.folder) return null;
   const fs = await import("@tauri-apps/plugin-fs");
 
-  const backup = await apiClient.get<unknown>("/backup");
+  const backup = await apiClient.get("/backup");
   const payload = JSON.stringify({ exportedAt: new Date().toISOString(), backup }, null, 2);
   const name = backupFileName();
   await fs.writeTextFile(joinPath(config.folder, name), payload);
