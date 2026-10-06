@@ -7,7 +7,7 @@
 [![CI](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml/badge.svg)](https://github.com/Lucky2356/financeapps/actions/workflows/ci.yml)
 [![Release](https://github.com/Lucky2356/financeapps/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/Lucky2356/financeapps/actions/workflows/desktop-release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-1443%20unit%20%2B%2085%20server%20%2B%20290%20e2e-success)
+![Tests](https://img.shields.io/badge/tests-1449%20unit%20%2B%2085%20server%20%2B%20290%20e2e-success)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Android-blue)
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org/)
@@ -122,6 +122,16 @@ REST-подобную поверхность (`GET /transactions`, `POST /plan`,
 
 Зависимости между модулями идут в одну сторону — от `money.ts` к `overview.ts`, без циклов.
 
+**Маршруты — таблицы, а не цепочка `if`.** Путь находит обработчик в таблице: чтения — в
+`lib/api/local/reads.ts`, записи и удаления — в `lib/api/local/writes.ts`; те немногие, кому мало
+документа (копии, корзина, профили, фото), — в самом клиенте. Обработчик записи только правит
+документ и отвечает, сохраняет документ клиент — один раз и только если обработчик не бросил ошибку.
+
+**Тип ответа выводится из пути** (`lib/api/routes.ts`): `apiClient.get("/accounts")` и
+`` useApiPageData(initial, `/budgets?month=${month}`) `` получают ровно то, что возвращает обработчик
+пути, без `get<T>` и приведений, а путь, которого нет, не компилируется. У записей проверяется сам
+путь; тип ответа называет вызывающий — один путь делает разные дела по полю `action` в теле.
+
 **Оболочка.** Tauri 2 c плагинами `fs`, `dialog`, `http`, `opener`, `process` на обеих платформах и
 `updater` + `window-state` только на десктопе (у них нет Android-реализации). Разрешённые адреса
 пришпилены в `src-tauri/capabilities/default.json`.
@@ -233,7 +243,7 @@ Android проверяет наличие новой версии и предл�
 |---|---|---|
 | Типы | `npm run typecheck` | `tsc --noEmit`, строгий режим |
 | Стиль | `npm run lint` | ESLint с `--max-warnings=0` |
-| Модульные | `npm run test` | **1443** проверки в 202 файлах (Vitest + Testing Library): деньги, миграции, шифрование, слияние, фильтры, сервисы, компоненты |
+| Модульные | `npm run test` | **1449** проверок в 203 файлах (Vitest + Testing Library): деньги, миграции, шифрование, слияние, фильтры, сервисы, компоненты |
 | Служба | `npm run test:server` | **85** проверок службы синхронизации, в том числе безопасности |
 | Сборка | `npm run build:static` | статический экспорт — общий бандл обеих оболочек |
 | E2E | `npm run test:e2e` | **290** проверок в 59 файлах сценариев (Playwright) против **собранного статического приложения**, а не дев-сервера |
