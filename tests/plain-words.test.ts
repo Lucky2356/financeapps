@@ -28,7 +28,23 @@ const SPOKEN = [
   "lib/storage/EncryptingStorageAdapter.ts",
   "lib/sync/vault-crypto.ts",
   "lib/sync/HttpSyncTransport.ts",
-  "lib/api/LocalApiClient.ts"
+  "lib/api/LocalApiClient.ts",
+  // Разделы, вынесенные из LocalApiClient: их сообщения об ошибках человек
+  // видит так же, как прежде видел их в самом клиенте.
+  "lib/api/local/budgets.ts",
+  "lib/api/local/categories.ts",
+  "lib/api/local/debts.ts",
+  "lib/api/local/family.ts",
+  "lib/api/local/goals.ts",
+  "lib/api/local/investments.ts",
+  "lib/api/local/ledger.ts",
+  "lib/api/local/money.ts",
+  "lib/api/local/overview.ts",
+  "lib/api/local/plan.ts",
+  "lib/api/local/recurring.ts",
+  "lib/api/local/sample.ts",
+  "lib/api/local/settings.ts",
+  "lib/api/local/state.ts"
 ];
 
 /**
