@@ -10,6 +10,7 @@ import type {
 } from "@/lib/api/routes";
 import { MARKET_READS, STATE_READS, type ReadRequest } from "@/lib/api/local/reads";
 import {
+  PRICED_WRITES,
   STATE_DELETES,
   STATE_WRITES,
   type DeleteRequest,
@@ -64,7 +65,7 @@ import {
   migrateLocalState
 } from "@/lib/api/local/state";
 import { restoreTransaction } from "@/lib/api/local/ledger";
-import { investmentsPage } from "@/lib/api/local/investments";
+import { investmentsPage, marketPricesFor, type MarketPrices } from "@/lib/api/local/investments";
 import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
 
@@ -316,14 +317,37 @@ export class LocalApiClient implements ApiClient {
     path: WritePath,
     body?: TBody
   ): Promise<TResponse> {
-    return this.serialize(() => this.write<TResponse>(path, body, "POST"));
+    return this.enqueueWrite<TResponse>(path, body, "POST");
   }
 
   async put<TResponse = unknown, TBody = unknown>(
     path: WritePath,
     body?: TBody
   ): Promise<TResponse> {
-    return this.serialize(() => this.write<TResponse>(path, body, "PUT"));
+    return this.enqueueWrite<TResponse>(path, body, "PUT");
+  }
+
+  /**
+   * Поставить запись в очередь. Обычная встаёт сразу, в порядке вызова.
+   *
+   * Запись, которой нужны цены с биржи (PRICED_WRITES), сначала получает их —
+   * ДО очереди, а не в ней: биржу ждут секундами, и всё это время очередь
+   * стояла бы. Документ для этого читается без очереди, как при любом чтении:
+   * он нужен только затем, чтобы не ходить на биржу с пустым портфелем.
+   * Портфель могут успеть поменять, пока ждём биржу, — обработчик считает по
+   * документу, прочитанному уже в очереди, а бумага без полученной цены идёт
+   * по своей последней.
+   */
+  private enqueueWrite<TResponse>(
+    path: string,
+    body: unknown,
+    method: "POST" | "PUT"
+  ): Promise<TResponse> {
+    if (!PRICED_WRITES.has(normalizePath(path).pathname))
+      return this.serialize(() => this.write<TResponse>(path, body, method));
+    return this.state(false)
+      .then(marketPricesFor)
+      .then((prices) => this.serialize(() => this.write<TResponse>(path, body, method, prices)));
   }
 
   async delete(path: DeletePath): Promise<void> {
@@ -437,11 +461,12 @@ export class LocalApiClient implements ApiClient {
   private async write<TResponse>(
     path: string,
     body: unknown,
-    method: "POST" | "PUT"
+    method: "POST" | "PUT",
+    prices?: MarketPrices
   ): Promise<TResponse> {
     const state = await this.state();
     const { pathname } = normalizePath(path);
-    const request: WriteRequest = { state, body, method };
+    const request: WriteRequest = { state, body, method, prices };
 
     // Обработчик правит документ и отвечает; сохраняется документ здесь, после
     // него, — и только если он не бросил ошибку.

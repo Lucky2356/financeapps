@@ -55,7 +55,8 @@ import {
   addRealizedEvent,
   setTargetAllocations,
   undoSale,
-  updateInvestments
+  updateInvestments,
+  type MarketPrices
 } from "@/lib/api/local/investments";
 import { addRule, upsertCategory, withSheetCategories } from "@/lib/api/local/categories";
 import { savePlan } from "@/lib/api/local/plan";
@@ -64,7 +65,20 @@ import { updateFxRates, updateSettings } from "@/lib/api/local/settings";
 import { writeFamily } from "@/lib/api/local/family";
 
 /** Что получает обработчик записи. */
-export type WriteRequest = { state: LocalState; body: unknown; method: "POST" | "PUT" };
+export type WriteRequest = {
+  state: LocalState;
+  body: unknown;
+  method: "POST" | "PUT";
+  /** Цены с биржи, если путь их просит (PRICED_WRITES) — получены до очереди. */
+  prices?: MarketPrices;
+};
+
+/**
+ * Записи, которым нужны цены с биржи. Клиент запрашивает их ДО очереди
+ * записей и передаёт обработчику: ждать сеть внутри очереди — значит держать
+ * за собой все остальные записи (см. marketPricesFor).
+ */
+export const PRICED_WRITES: ReadonlySet<string> = new Set(["/networth/snapshot"]);
 
 /** Что получает обработчик удаления. */
 export type DeleteRequest = {
@@ -167,7 +181,8 @@ export const STATE_WRITES = {
   "/recurring/materialize-all": ({ state }: WriteRequest) => materializeAllDue(state),
   "/debts/pay": ({ state, body }: WriteRequest) => payDebt(state, body),
   "/debts/auto-pay": ({ state }: WriteRequest) => autoPayDebts(state),
-  "/networth/snapshot": ({ state }: WriteRequest) => recordNetWorthSnapshot(state),
+  "/networth/snapshot": ({ state, prices }: WriteRequest) =>
+    recordNetWorthSnapshot(state, prices ?? new Map()),
   "/import": ({ state, body }: WriteRequest) => importCsvRows(state, body),
   "/import/undo": ({ state }: WriteRequest) => undoLastImport(state),
   "/settings": ({ state, body }: WriteRequest) => updateSettings(state, body),

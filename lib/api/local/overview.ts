@@ -28,7 +28,7 @@ import { accountsPage } from "@/lib/api/local/ledger";
 import { budgetRows } from "@/lib/api/local/budgets";
 import { goalsPage } from "@/lib/api/local/goals";
 import { recurringPage } from "@/lib/api/local/recurring";
-import { portfolioValueOf } from "@/lib/api/local/investments";
+import { portfolioValueAt, portfolioValueOf, type MarketPrices } from "@/lib/api/local/investments";
 
 export function budgetsPage(state: LocalState, month?: string): BudgetsPageData {
   // "2026-08-01" parses as UTC midnight, and the key is read back in local
@@ -93,10 +93,11 @@ export function forecastPage(state: LocalState): ForecastPageData {
 }
 
 // Current net worth (liquid + portfolio + goals − debts) — used by the
-// dashboard and the daily snapshot recorder (plan B7).
-export async function computeNetWorthValue(state: LocalState): Promise<number> {
+// daily snapshot recorder (plan B7). Prices come in from outside: they are
+// fetched before the write queue, see marketPricesFor.
+export function computeNetWorthValue(state: LocalState, prices: MarketPrices): number {
   const totalBalance = accountsPage(state).totalBalance;
-  const portfolioValue = await portfolioValueOf(state);
+  const portfolioValue = portfolioValueAt(state, prices);
   const goalSavings = roundMoney(state.goals.reduce((sum, goal) => sum + goal.currentAmount, 0));
   const liabilitiesTotal = sumInBase(state, activeDebts(state.liabilities));
   return computeNetWorth({ totalBalance, portfolioValue, goalSavings, liabilitiesTotal });
@@ -104,8 +105,8 @@ export async function computeNetWorthValue(state: LocalState): Promise<number> {
 
 // Records today's net worth snapshot (idempotent per day). Called once on app
 // load via the automation runner so the capital trend reflects real values.
-export async function recordNetWorthSnapshot(state: LocalState) {
-  const value = await computeNetWorthValue(state);
+export function recordNetWorthSnapshot(state: LocalState, prices: MarketPrices) {
+  const value = computeNetWorthValue(state, prices);
   state.netWorthSnapshots = recordSnapshot(
     state.netWorthSnapshots ?? [],
     isoDay(new Date()),

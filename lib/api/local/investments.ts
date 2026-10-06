@@ -609,16 +609,35 @@ export async function investmentsPage(state: LocalState): Promise<InvestmentData
   };
 }
 
-// Current market value of the investment portfolio (0 when empty).
-export async function portfolioValueOf(state: LocalState): Promise<number> {
-  if (!state.investments.portfolio.length) return 0;
-  const provider = createMarketDataProvider();
-  const securities = await provider.getSecurities();
-  const priceByTicker = new Map(securities.map((security) => [security.ticker, security.price]));
+/** Цены бумаг по тикеру — с биржи, то есть по сети. */
+export type MarketPrices = ReadonlyMap<string, number>;
+
+/**
+ * Цены, которые понадобятся записи, — запрошенные ДО очереди записей.
+ *
+ * Биржа отвечает секундами, а то и не отвечает, пока не истечёт срок. Запись,
+ * ждущая её внутри очереди, держит все записи за собой: снимок капитала,
+ * который фоновый прогон делает при каждой загрузке, держал так «Создать» в
+ * окне нового счёта — человек нажимал, а окно висело, пока не ответит биржа.
+ * Пустой портфель цен не просит вовсе.
+ */
+export async function marketPricesFor(state: LocalState): Promise<MarketPrices> {
+  if (!state.investments.portfolio.length) return new Map();
+  const securities = await createMarketDataProvider().getSecurities();
+  return new Map(securities.map((security) => [security.ticker, security.price]));
+}
+
+/** Стоимость портфеля по данным ценам; бумага без цены — по последней своей. */
+export function portfolioValueAt(state: LocalState, prices: MarketPrices): number {
   return roundMoney(
     state.investments.portfolio.reduce((sum, position) => {
-      const price = priceByTicker.get(position.ticker) ?? position.currentPrice;
+      const price = prices.get(position.ticker) ?? position.currentPrice;
       return sum + price * position.quantity;
     }, 0)
   );
+}
+
+// Current market value of the investment portfolio (0 when empty).
+export async function portfolioValueOf(state: LocalState): Promise<number> {
+  return portfolioValueAt(state, await marketPricesFor(state));
 }
