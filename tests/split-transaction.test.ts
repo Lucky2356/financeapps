@@ -7,16 +7,16 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 
 async function setup() {
   const api = new LocalApiClient(new MemoryStorageAdapter());
-  const account = await api.post<{ id: string; balance: number }>("/accounts", {
+  const account = await api.post("/accounts", {
     name: "Карта",
     type: "DEBIT_CARD",
     balance: "10000"
   });
-  const food = await api.post<{ id: string }>("/categories", {
+  const food = await api.post("/categories", {
     name: "Еда из чека",
     kind: "EXPENSE"
   });
-  const home = await api.post<{ id: string }>("/categories", {
+  const home = await api.post("/categories", {
     name: "Дом из чека",
     kind: "EXPENSE"
   });
@@ -26,7 +26,7 @@ async function setup() {
 describe("разделить операцию", () => {
   it("пишет части с общей меткой и списывает сумму целиком", async () => {
     const { api, account, food, home } = await setup();
-    const parts = await api.post<Array<{ splitGroupId: string; amount: number }>>("/transactions", {
+    const parts = await api.post("/transactions", {
       action: "split",
       type: "EXPENSE",
       accountId: account.id,
@@ -46,7 +46,7 @@ describe("разделить операцию", () => {
 
   it("удаляется целиком — и деньги возвращаются на счёт", async () => {
     const { api, account, food, home } = await setup();
-    const parts = await api.post<Array<{ splitGroupId: string }>>("/transactions", {
+    const parts = await api.post("/transactions", {
       action: "split",
       type: "EXPENSE",
       accountId: account.id,
@@ -66,7 +66,7 @@ describe("разделить операцию", () => {
 
   it("правка одной части не отрывает её от покупки", async () => {
     const { api, account, food, home } = await setup();
-    const parts = await api.post<Array<{ id: string; splitGroupId: string }>>("/transactions", {
+    const parts = await api.post("/transactions", {
       action: "split",
       type: "EXPENSE",
       accountId: account.id,

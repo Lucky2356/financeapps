@@ -96,7 +96,7 @@ describe("лимиты и план/факт — одно число", () => {
 
   it("предупреждение о превышении сверяется с лимитом месяца операции", async () => {
     const { api, food } = await seeded();
-    const account = await api.post<{ id: string }>("/accounts", {
+    const account = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "0"
@@ -104,7 +104,7 @@ describe("лимиты и план/факт — одно число", () => {
     await api.post("/budgets", { categoryId: food, limitAmount: "1000", month: "2026-07" });
     await api.post("/budgets", { categoryId: food, limitAmount: "100000", month: "2026-08" });
 
-    const spent = await api.post<{ budgetWarning?: { limit: number } | null }>("/transactions", {
+    const spent = await api.post("/transactions", {
       amount: "2000",
       type: "EXPENSE",
       accountId: account.id,

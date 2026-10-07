@@ -6,10 +6,12 @@ import type {
   PathWithQuery,
   ReadPath,
   ReadResponses,
-  WritePath
+  WriteResponse,
+  WriteRoute
 } from "@/lib/api/routes";
 import { MARKET_READS, STATE_READS, type ReadRequest } from "@/lib/api/local/reads";
 import {
+  byAction,
   PRICED_WRITES,
   STATE_DELETES,
   STATE_WRITES,
@@ -167,6 +169,12 @@ function writableCopy<T>(state: T): T {
   return copy as T;
 }
 
+/** Какие строки корзины: `ids` в теле. */
+function trashIds(body: unknown): string[] {
+  const ids = (body as { ids?: unknown } | null)?.ids;
+  return Array.isArray(ids) ? ids.map(String) : [];
+}
+
 export class LocalApiClient implements ApiClient {
   constructor(private readonly storage: StorageAdapter = createStorageAdapter()) {}
 
@@ -313,18 +321,18 @@ export class LocalApiClient implements ApiClient {
     return invData;
   }
 
-  async post<TResponse = unknown, TBody = unknown>(
-    path: WritePath,
-    body?: TBody
-  ): Promise<TResponse> {
-    return this.enqueueWrite<TResponse>(path, body, "POST");
+  async post<P extends WriteRoute, const Body = undefined>(
+    path: PathWithQuery<P>,
+    body?: Body
+  ): Promise<WriteResponse<P, Body>> {
+    return this.enqueueWrite<WriteResponse<P, Body>>(path, body, "POST");
   }
 
-  async put<TResponse = unknown, TBody = unknown>(
-    path: WritePath,
-    body?: TBody
-  ): Promise<TResponse> {
-    return this.enqueueWrite<TResponse>(path, body, "PUT");
+  async put<P extends WriteRoute, const Body = undefined>(
+    path: PathWithQuery<P>,
+    body?: Body
+  ): Promise<WriteResponse<P, Body>> {
+    return this.enqueueWrite<WriteResponse<P, Body>>(path, body, "PUT");
   }
 
   /**
@@ -425,23 +433,24 @@ export class LocalApiClient implements ApiClient {
       await this.undoClear();
       return { restored: true };
     },
-    "/backup/local-copies": async ({ body }: WriteRequest) => {
-      const input = (body ?? {}) as { action?: unknown; id?: unknown };
-      if (input.action === "restore") {
-        await this.restoreLocalCopy(String(input.id ?? ""));
-        return { restored: true };
-      }
-      if (input.action === "daily") return this.dailyLocalCopy();
-      return this.takeLocalCopy("manual");
-    },
+    "/backup/local-copies": byAction(
+      {
+        restore: async ({ body }: WriteRequest) => {
+          await this.restoreLocalCopy(String((body as { id?: unknown } | null)?.id ?? ""));
+          return { restored: true };
+        },
+        daily: () => this.dailyLocalCopy()
+      },
+      () => this.takeLocalCopy("manual")
+    ),
     "/backup/merge": ({ body }: WriteRequest) => this.mergeBackup(body),
-    "/trash": async ({ state, body }: WriteRequest) => {
-      const input = (body ?? {}) as { action?: unknown; ids?: unknown };
-      const ids = Array.isArray(input.ids) ? input.ids.map(String) : [];
-      if (input.action === "restore") return this.restoreFromTrash(state, ids);
-      if (input.action === "empty") return this.purgeTrash("all");
-      return this.purgeTrash(ids);
-    },
+    "/trash": byAction(
+      {
+        restore: ({ state, body }: WriteRequest) => this.restoreFromTrash(state, trashIds(body)),
+        empty: () => this.purgeTrash("all")
+      },
+      ({ body }: WriteRequest) => this.purgeTrash(trashIds(body))
+    ),
     "/photos": ({ state, body }: WriteRequest) => this.attachPhoto(state, body),
     "/profiles/create": ({ body }: WriteRequest) => {
       const input = toFormObject(body);
@@ -471,8 +480,8 @@ export class LocalApiClient implements ApiClient {
     // Обработчик правит документ и отвечает; сохраняется документ здесь, после
     // него, — и только если он не бросил ошибку.
     const change = routeOf(STATE_WRITES, pathname);
-    // Ответ записи называет вызывающий (см. lib/api/routes.ts — почему), и
-    // приведение к нему здесь одно на все записи.
+    // Тип ответа выводится из пути и `action` (lib/api/routes.ts); здесь путь
+    // приходит строкой, и приведение к нему одно на все записи.
     if (change) return (await this.saveAndReturn(state, await change(request))) as TResponse;
     const own = routeOf(this.storeWrites, pathname);
     if (own) return (await own(request)) as TResponse;

@@ -226,7 +226,7 @@ describe("вклады", () => {
 describe("через приложение", () => {
   async function setup() {
     const client = new LocalApiClient(new MemoryStorageAdapter());
-    const card = await client.post<{ id: string }>("/accounts", {
+    const card = await client.post("/accounts", {
       name: "Т-Банк",
       type: "DEBIT_CARD",
       balance: "100000"
@@ -279,7 +279,7 @@ describe("через приложение", () => {
       budget: "30000",
       currency: "RUB"
     });
-    const tagged = await client.post<{ tags?: string[] }>("/transactions", {
+    const tagged = await client.post("/transactions", {
       amount: "1500",
       type: "EXPENSE",
       accountId: card.id,
@@ -287,7 +287,7 @@ describe("через приложение", () => {
       date: todayIso()
     });
     expect(tagged.tags).toEqual(["казань"]);
-    const skipped = await client.post<{ tags?: string[] }>("/transactions", {
+    const skipped = await client.post("/transactions", {
       amount: "700",
       type: "EXPENSE",
       accountId: card.id,
@@ -297,7 +297,7 @@ describe("через приложение", () => {
     });
     expect(skipped.tags).toBeUndefined();
     // Платёж по долгу и перевод между своими счетами — не траты поездки.
-    const debt = await client.post<{ tags?: string[] }>("/transactions", {
+    const debt = await client.post("/transactions", {
       amount: "25000",
       type: "EXPENSE",
       accountId: card.id,
@@ -306,7 +306,7 @@ describe("через приложение", () => {
       liabilityId: "debt-1"
     });
     expect(debt.tags).toBeUndefined();
-    const cash = await client.post<{ id: string }>("/accounts", {
+    const cash = await client.post("/accounts", {
       name: "Наличные",
       type: "CASH",
       balance: "0"
@@ -360,7 +360,7 @@ describe("через приложение", () => {
 describe("кэшбэк: правка условия", () => {
   it("правка на уже занятую категорию оставляет одно условие", async () => {
     const client = new LocalApiClient(new MemoryStorageAdapter());
-    const card = await client.post<{ id: string }>("/accounts", {
+    const card = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "0"
@@ -374,7 +374,7 @@ describe("кэшбэк: правка условия", () => {
       categoryId: expense[0].id,
       percent: "5"
     });
-    const second = await client.post<{ id: string }>("/cashback", {
+    const second = await client.post("/cashback", {
       month,
       accountId: card.id,
       categoryId: expense[1].id,

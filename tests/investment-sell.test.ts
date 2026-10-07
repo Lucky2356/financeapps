@@ -8,7 +8,7 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 // counted both as realized and as still-to-come in "if you sold today".
 async function withPosition() {
   const api = new LocalApiClient(new MemoryStorageAdapter());
-  const account = await api.post<{ id: string }>("/accounts", {
+  const account = await api.post("/accounts", {
     name: "Брокерский",
     type: "BROKERAGE",
     balance: "0"

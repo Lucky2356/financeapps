@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { AccountsPageData, GoalsPageData } from "@/lib/data";
 
 function todayInput() {
   // Local date (matches the app's formatInputDate) to avoid UTC/local month-boundary drift.
@@ -28,12 +27,12 @@ describe("new user journey", () => {
     expect(emptyAccounts.accounts).toHaveLength(0);
 
     // 1. Create accounts.
-    const card = await client.post<AccountsPageData["accounts"][number]>("/accounts", {
+    const card = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "100000"
     });
-    const savings = await client.post<AccountsPageData["accounts"][number]>("/accounts", {
+    const savings = await client.post("/accounts", {
       name: "Накопительный",
       type: "SAVINGS",
       balance: "120000"
@@ -77,7 +76,7 @@ describe("new user journey", () => {
     expect(food?.suggestedLimit).toBeGreaterThan(0); // suggestion from history
 
     // 4. Goal + deposit (money moves from a balance into the goal; net worth held).
-    const goal = await client.post<GoalsPageData["goals"][number]>("/goals", {
+    const goal = await client.post("/goals", {
       title: "Отпуск",
       targetAmount: "200000",
       currentAmount: "0",

@@ -120,8 +120,8 @@ describe("семья — в книге", () => {
     const page = await api.get("/transactions");
     const accountId = page.accounts[0].id;
     const categoryId = page.categories.find((item) => item.kind === "EXPENSE")!.id;
-    const a = await api.post<Member>("/family", { action: "addMember", name: "Саша" });
-    const b = await api.post<Member>("/family", { action: "addMember", name: "Маша" });
+    const a = await api.post("/family", { action: "addMember", name: "Саша" });
+    const b = await api.post("/family", { action: "addMember", name: "Маша" });
     return { api, accountId, categoryId, a, b };
   }
 
@@ -132,7 +132,7 @@ describe("семья — в книге", () => {
       /уже есть/
     );
 
-    const tx = await api.post<{ id: string }>("/transactions", {
+    const tx = await api.post("/transactions", {
       type: "EXPENSE",
       amount: "4000",
       accountId,
@@ -167,7 +167,7 @@ describe("семья — в книге", () => {
   it("чужой участник не прилипает; пустой выбор снимает участника", async () => {
     const { api, accountId, categoryId, a } = await setup();
     const base = { type: "EXPENSE", amount: "300", accountId, categoryId, date: "2026-10-03" };
-    const tx = await api.post<{ id: string }>("/transactions", { ...base, memberId: "nobody" });
+    const tx = await api.post("/transactions", { ...base, memberId: "nobody" });
     let family = await api.get("/family?month=2026-10");
     expect(family.picture.unassigned).toBe(300);
 
@@ -194,7 +194,7 @@ describe("семья — в книге", () => {
       memberId: a.id,
       shared: "true"
     });
-    const c = await api.post<Member>("/family", { action: "addMember", name: "Петя" });
+    const c = await api.post("/family", { action: "addMember", name: "Петя" });
     expect(c.since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     let family = await api.get("/family?month=2026-09");
     expect(family.picture.debts).toEqual([{ from: b.id, to: a.id, amount: 3000 }]);

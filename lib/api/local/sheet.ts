@@ -197,157 +197,157 @@ function fillWizard(state: SheetState, wizard: Wizard, months: string[]) {
 }
 
 /**
- * Правка таблицы. `makeId` — от вызывающего: у книги свой способ выдавать
- * имена строкам. Категории для переноса из Excel заводит тоже вызывающий — у
- * него для этого есть всё, здесь нет.
+ * Правка таблицы — дела бюджетного листа по полю `action` в теле. Таблицей, а
+ * не веткой switch: по ней же выводится ответ каждого дела (lib/api/routes.ts).
+ * `makeId` — от вызывающего: у книги свой способ выдавать имена строкам.
+ * Категории для переноса из Excel заводит тоже вызывающий — у него для этого
+ * есть всё, здесь нет.
  */
-export function writeSheet(state: SheetState, body: Body, makeId: () => string): unknown {
-  const action = String(body.action ?? "");
-  const columns = state.sheetColumns ?? [];
-
-  switch (action) {
-    case "start": {
-      // Пустой лист: Остаток, Доходы, подушка — и год вперёд с этого месяца. С
-      // мастером (статьи, суммы, число месяцев) — то, что человек выбрал.
-      const wizard = readWizard(body);
-      if (columns.length === 0) {
-        const made = wizard ? wizardColumns(wizard, makeId) : starterColumns(makeId);
-        state.sheetColumns = renumber(made);
-      }
-      const from = month(body.from);
-      let at = from;
-      const filled = wizard ? wizard.months : 12;
-      const months: string[] = [];
-      for (let index = 0; index < filled; index += 1) {
-        ensureMonth(state, at);
-        months.push(at);
-        const [year, m] = at.split("-").map(Number);
-        const next = new Date(year, m, 1);
-        at = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
-      }
-      if (wizard && columns.length === 0) fillWizard(state, wizard, months);
-      return readSheet(state);
+export const SHEET_ACTIONS = {
+  start: (state: SheetState, body: Body, makeId: () => string) => {
+    const columns = state.sheetColumns ?? [];
+    // Пустой лист: Остаток, Доходы, подушка — и год вперёд с этого месяца. С
+    // мастером (статьи, суммы, число месяцев) — то, что человек выбрал.
+    const wizard = readWizard(body);
+    if (columns.length === 0) {
+      const made = wizard ? wizardColumns(wizard, makeId) : starterColumns(makeId);
+      state.sheetColumns = renumber(made);
     }
-
-    case "setCells": {
-      const cells = Array.isArray(body.cells) ? body.cells : [];
-      const known = new Set(columns.map((column) => column.id));
-      for (const raw of cells as Body[]) {
-        const columnId = String(raw.columnId ?? "");
-        if (!known.has(columnId)) continue;
-        setCell(state, { month: month(raw.month), columnId, input: String(raw.input ?? "") });
-      }
-      return { saved: cells.length };
+    const from = month(body.from);
+    let at = from;
+    const filled = wizard ? wizard.months : 12;
+    const months: string[] = [];
+    for (let index = 0; index < filled; index += 1) {
+      ensureMonth(state, at);
+      months.push(at);
+      const [year, m] = at.split("-").map(Number);
+      const next = new Date(year, m, 1);
+      at = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
     }
+    if (wizard && columns.length === 0) fillWizard(state, wizard, months);
+    return readSheet(state);
+  },
 
-    case "addColumn": {
-      const column: SheetColumn = {
-        id: makeId(),
-        name: name(body.name),
-        kind: kind(body.kind),
-        categoryId: body.categoryId ? String(body.categoryId) : null,
-        // Вставка после указанного столбца или в конец своего раздела.
-        order: 0
-      };
-      const ordered = orderedColumns(columns);
-      const after = ordered.find((item) => item.id === body.afterId);
-      if (after) {
-        column.order = after.order + 5;
-      } else {
-        const section = ordered.filter(
-          (item) => isSavingsKind(item.kind) === isSavingsKind(column.kind)
-        );
-        const last = section[section.length - 1];
-        column.order = last ? last.order + 5 : isSavingsKind(column.kind) ? 10_000 : -5;
-      }
-      state.sheetColumns = renumber([...columns, column]);
-      return column;
+  setCells: (state: SheetState, body: Body) => {
+    const columns = state.sheetColumns ?? [];
+    const cells = Array.isArray(body.cells) ? body.cells : [];
+    const known = new Set(columns.map((column) => column.id));
+    for (const raw of cells as Body[]) {
+      const columnId = String(raw.columnId ?? "");
+      if (!known.has(columnId)) continue;
+      setCell(state, { month: month(raw.month), columnId, input: String(raw.input ?? "") });
     }
+    return { saved: cells.length };
+  },
 
-    case "updateColumn": {
-      const id = String(body.id ?? "");
-      if (!columns.some((column) => column.id === id)) throw new Error("Такого столбца нет.");
-      state.sheetColumns = columns.map((column) => {
-        if (column.id !== id) return column;
-        const next = { ...column };
-        if (body.name !== undefined) next.name = name(body.name);
-        if (body.kind !== undefined) next.kind = kind(body.kind);
-        if (body.categoryId !== undefined)
-          next.categoryId = body.categoryId ? String(body.categoryId) : null;
-        if (body.hidden !== undefined) next.hidden = Boolean(body.hidden);
-        return next;
-      });
-      return { saved: true };
-    }
-
-    case "moveColumn": {
-      const ordered = orderedColumns(columns);
-      const index = ordered.findIndex((column) => column.id === body.id);
-      const step = Number(body.direction) < 0 ? -1 : 1;
-      const target = index + step;
-      if (index < 0 || target < 0 || target >= ordered.length) return { saved: false };
-      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
-      state.sheetColumns = ordered.map((column, position) =>
-        column.order === position * 10 ? column : { ...column, order: position * 10 }
+  addColumn: (state: SheetState, body: Body, makeId: () => string) => {
+    const columns = state.sheetColumns ?? [];
+    const column: SheetColumn = {
+      id: makeId(),
+      name: name(body.name),
+      kind: kind(body.kind),
+      categoryId: body.categoryId ? String(body.categoryId) : null,
+      // Вставка после указанного столбца или в конец своего раздела.
+      order: 0
+    };
+    const ordered = orderedColumns(columns);
+    const after = ordered.find((item) => item.id === body.afterId);
+    if (after) {
+      column.order = after.order + 5;
+    } else {
+      const section = ordered.filter(
+        (item) => isSavingsKind(item.kind) === isSavingsKind(column.kind)
       );
-      return { saved: true };
+      const last = section[section.length - 1];
+      column.order = last ? last.order + 5 : isSavingsKind(column.kind) ? 10_000 : -5;
     }
+    state.sheetColumns = renumber([...columns, column]);
+    return column;
+  },
 
-    case "removeColumn": {
-      const id = String(body.id ?? "");
-      state.sheetColumns = columns.filter((column) => column.id !== id);
-      state.sheetCells = (state.sheetCells ?? []).filter((cell) => cell.columnId !== id);
-      return { saved: true };
-    }
+  updateColumn: (state: SheetState, body: Body) => {
+    const columns = state.sheetColumns ?? [];
+    const id = String(body.id ?? "");
+    if (!columns.some((column) => column.id === id)) throw new Error("Такого столбца нет.");
+    state.sheetColumns = columns.map((column) => {
+      if (column.id !== id) return column;
+      const next = { ...column };
+      if (body.name !== undefined) next.name = name(body.name);
+      if (body.kind !== undefined) next.kind = kind(body.kind);
+      if (body.categoryId !== undefined)
+        next.categoryId = body.categoryId ? String(body.categoryId) : null;
+      if (body.hidden !== undefined) next.hidden = Boolean(body.hidden);
+      return next;
+    });
+    return { saved: true };
+  },
 
-    case "addMonth": {
-      ensureMonth(state, month(body.month));
-      return { saved: true };
-    }
+  moveColumn: (state: SheetState, body: Body) => {
+    const columns = state.sheetColumns ?? [];
+    const ordered = orderedColumns(columns);
+    const index = ordered.findIndex((column) => column.id === body.id);
+    const step = Number(body.direction) < 0 ? -1 : 1;
+    const target = index + step;
+    if (index < 0 || target < 0 || target >= ordered.length) return { saved: false };
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    state.sheetColumns = ordered.map((column, position) =>
+      column.order === position * 10 ? column : { ...column, order: position * 10 }
+    );
+    return { saved: true };
+  },
 
-    case "removeMonth": {
-      const value = month(body.month);
-      state.sheetMonths = (state.sheetMonths ?? []).filter((row) => row.id !== value);
-      state.sheetCells = (state.sheetCells ?? []).filter((cell) => cell.month !== value);
-      return { saved: true };
-    }
+  removeColumn: (state: SheetState, body: Body) => {
+    const columns = state.sheetColumns ?? [];
+    const id = String(body.id ?? "");
+    state.sheetColumns = columns.filter((column) => column.id !== id);
+    state.sheetCells = (state.sheetCells ?? []).filter((cell) => cell.columnId !== id);
+    return { saved: true };
+  },
 
-    case "setTarget": {
-      const amount = Number(body.amount);
-      if (!Number.isFinite(amount)) throw new Error("Сумма цели — число.");
-      const target: SheetTarget = {
-        id: body.id ? String(body.id) : makeId(),
-        label: name(body.label),
-        date: String(body.date ?? "").slice(0, 10),
-        amount
-      };
-      state.sheetTargets = [
-        ...(state.sheetTargets ?? []).filter((row) => row.id !== target.id),
-        target
-      ];
-      return target;
-    }
+  addMonth: (state: SheetState, body: Body) => {
+    ensureMonth(state, month(body.month));
+    return { saved: true };
+  },
 
-    case "removeTarget": {
-      state.sheetTargets = (state.sheetTargets ?? []).filter((row) => row.id !== body.id);
-      return { saved: true };
-    }
+  removeMonth: (state: SheetState, body: Body) => {
+    const value = month(body.month);
+    state.sheetMonths = (state.sheetMonths ?? []).filter((row) => row.id !== value);
+    state.sheetCells = (state.sheetCells ?? []).filter((cell) => cell.month !== value);
+    return { saved: true };
+  },
 
-    case "undoImport": {
-      const backup = state.sheetBackup;
-      if (!backup) throw new Error("Отменять нечего.");
-      state.sheetColumns = backup.columns;
-      state.sheetCells = backup.cells;
-      state.sheetMonths = backup.months.map((id) => ({ id }));
-      state.sheetTargets = backup.targets;
-      state.sheetBackup = null;
-      return readSheet(state);
-    }
+  setTarget: (state: SheetState, body: Body, makeId: () => string) => {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount)) throw new Error("Сумма цели — число.");
+    const target: SheetTarget = {
+      id: body.id ? String(body.id) : makeId(),
+      label: name(body.label),
+      date: String(body.date ?? "").slice(0, 10),
+      amount
+    };
+    state.sheetTargets = [
+      ...(state.sheetTargets ?? []).filter((row) => row.id !== target.id),
+      target
+    ];
+    return target;
+  },
 
-    default:
-      throw new Error(`Неизвестное действие с таблицей: ${action}`);
+  removeTarget: (state: SheetState, body: Body) => {
+    state.sheetTargets = (state.sheetTargets ?? []).filter((row) => row.id !== body.id);
+    return { saved: true };
+  },
+
+  undoImport: (state: SheetState) => {
+    const backup = state.sheetBackup;
+    if (!backup) throw new Error("Отменять нечего.");
+    state.sheetColumns = backup.columns;
+    state.sheetCells = backup.cells;
+    state.sheetMonths = backup.months.map((id) => ({ id }));
+    state.sheetTargets = backup.targets;
+    state.sheetBackup = null;
+    return readSheet(state);
   }
-}
+};
 
 /** Столбец переноса из Excel: как назван, чем считается и с какой категорией. */
 export type SheetImportColumn = {

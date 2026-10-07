@@ -64,7 +64,7 @@ describe("очередь записей не ждёт биржу", () => {
     asked = 0;
     hold = true;
 
-    const snapshot = api.post<{ recorded: boolean; value: number }>("/networth/snapshot");
+    const snapshot = api.post("/networth/snapshot");
     // Снимок спросил биржу — и ждёт её.
     await vi.waitFor(() => expect(asked).toBe(1));
 

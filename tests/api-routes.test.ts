@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { routeOf } from "@/lib/api/local/helpers";
@@ -49,6 +49,49 @@ describe("таблица маршрутов", () => {
     expect(page.transactions.length).toBeGreaterThan(0);
     const accounts = await client.get("/accounts");
     expect(accounts.accounts.length).toBeGreaterThan(0);
+  });
+
+  it("ответ записи — у того дела, что названо в `action`", async () => {
+    const client = new LocalApiClient(new MemoryStorageAdapter());
+    const account = await client.post("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: 500
+    });
+    expectTypeOf(account.id).toEqualTypeOf<string>();
+
+    // Один путь — разные дела, и у каждого свой ответ.
+    const goal = await client.post("/goals", {
+      title: "Отпуск",
+      targetAmount: "1000",
+      deadline: "2027-06-01"
+    });
+    const deposit = await client.post("/goals", {
+      action: "deposit",
+      goalId: goal.id,
+      accountId: account.id,
+      amount: "100"
+    });
+    expect(goal.id).toBeTruthy();
+    expect(deposit).toBeDefined();
+
+    const tab = await client.post("/sheets", { action: "create", name: "Отпуск", kind: "free" });
+    expectTypeOf(tab.id).toEqualTypeOf<string>();
+    const renamed = await client.post("/sheets", { action: "rename", id: tab.id, name: "Море" });
+    expectTypeOf(renamed).toEqualTypeOf<{ saved: boolean }>();
+    expect(renamed).toEqual({ saved: true });
+
+    // Незнакомое дело — ответ дела по умолчанию, а если оно бросает — never.
+    const dance = () => client.post("/family", { action: "dance" });
+    expectTypeOf(dance).returns.resolves.toBeNever();
+    await expect(dance()).rejects.toThrow("Неизвестное действие с семьёй.");
+
+    // `action` известно только строкой — ответ любой из ответов пути.
+    const loose = await client.post("/trash", { action: String("empty") });
+    expectTypeOf(loose).toEqualTypeOf<
+      { restored: number; failed: string[] } | { removed: number }
+    >();
+    expect(loose).toEqual({ removed: 0 });
   });
 
   it("запись сохраняет документ после обработчика, а ошибка — нет", async () => {

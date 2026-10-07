@@ -15,7 +15,7 @@ describe("листы", () => {
     const main = await api.get("/sheet");
     expect(main.months).toHaveLength(12);
 
-    const tab = await api.post<{ id: string }>("/sheets", {
+    const tab = await api.post("/sheets", {
       action: "create",
       name: "Отпуск",
       kind: "budget"
@@ -43,7 +43,7 @@ describe("листы", () => {
 
   it("свободный лист: числа, формулы и текст; удалить строку — остальные сдвигаются", async () => {
     const api = client();
-    const tab = await api.post<{ id: string }>("/sheets", {
+    const tab = await api.post("/sheets", {
       action: "create",
       name: "Расчёты",
       kind: "free"
@@ -110,7 +110,7 @@ describe("листы", () => {
 
   it("удалённый лист возвращается из корзины целиком", async () => {
     const api = client();
-    const tab = await api.post<{ id: string }>("/sheets", {
+    const tab = await api.post("/sheets", {
       action: "create",
       name: "Лишний",
       kind: "free"

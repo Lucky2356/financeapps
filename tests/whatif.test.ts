@@ -118,13 +118,13 @@ describe("«Что если»", () => {
     const date = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}-15`;
     const expense = (amount: string, extra: Record<string, string> = {}) =>
       api.post("/transactions", { type: "EXPENSE", amount, accountId, categoryId, date, ...extra });
-    const loan = await api.post<{ id: string }>("/debts", {
+    const loan = await api.post("/debts", {
       name: "Кредит",
       kind: "LOAN",
       balance: "300000",
       minPayment: "12000"
     });
-    const card = await api.post<{ id: string }>("/debts", {
+    const card = await api.post("/debts", {
       name: "Кредитка",
       kind: "CREDIT_CARD",
       balance: "20000",

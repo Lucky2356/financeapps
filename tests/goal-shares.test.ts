@@ -50,14 +50,14 @@ describe("совместная цель — расчёт", () => {
 describe("совместная цель — в книге", () => {
   it("пополнение помнит участника, доли сохраняются и не теряются при правке", async () => {
     const api = new LocalApiClient(new MemoryStorageAdapter());
-    const card = await api.post<{ id: string }>("/accounts", {
+    const card = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "100000"
     });
-    const a = await api.post<Member>("/family", { action: "addMember", name: "Саша" });
-    const b = await api.post<Member>("/family", { action: "addMember", name: "Маша" });
-    const goal = await api.post<{ id: string }>("/goals", {
+    const a = await api.post("/family", { action: "addMember", name: "Саша" });
+    const b = await api.post("/family", { action: "addMember", name: "Маша" });
+    const goal = await api.post("/goals", {
       title: "Отпуск",
       targetAmount: "200000",
       currentAmount: "0",

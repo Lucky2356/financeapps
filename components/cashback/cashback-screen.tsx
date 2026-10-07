@@ -84,7 +84,7 @@ export function CashbackScreen() {
 
   async function copyPrevious() {
     try {
-      const result = await apiClient.post<{ copied: number }>("/cashback", {
+      const result = await apiClient.post("/cashback", {
         action: "copyPrevious",
         month
       });

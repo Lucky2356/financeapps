@@ -17,12 +17,12 @@ async function client_() {
 describe("moving money between own accounts", () => {
   it("does not create or destroy any of it across currencies", async () => {
     const api = await client_();
-    const roubles = await api.post<{ id: string }>("/accounts", {
+    const roubles = await api.post("/accounts", {
       name: "Рубли",
       type: "DEBIT_CARD",
       balance: "100000"
     });
-    const dollars = await api.post<{ id: string }>("/accounts", {
+    const dollars = await api.post("/accounts", {
       name: "Доллары",
       type: "DEBIT_CARD",
       balance: "1000",
@@ -52,13 +52,13 @@ describe("moving money between own accounts", () => {
 describe("putting money into a goal", () => {
   it("credits the goal in the app's currency and stays visible in plan/fact", async () => {
     const api = await client_();
-    const dollars = await api.post<{ id: string }>("/accounts", {
+    const dollars = await api.post("/accounts", {
       name: "Доллары",
       type: "DEBIT_CARD",
       balance: "1000",
       currency: "USD"
     });
-    const goal = await api.post<{ id: string }>("/goals", {
+    const goal = await api.post("/goals", {
       title: "Отпуск",
       targetAmount: "300000",
       currentAmount: "0",
@@ -107,14 +107,14 @@ describe("the money in a goal", () => {
 
   it("moves between the account and the goal, and back again", async () => {
     const api = await client_();
-    const account = await api.post<{ id: string }>("/accounts", {
+    const account = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "100000"
     });
     const capitalBefore = (await api.get("/dashboard")).netWorth;
 
-    const goal = await api.post<{ id: string }>("/goals", {
+    const goal = await api.post("/goals", {
       title: "Отпуск",
       targetAmount: "300000",
       currentAmount: "50000",
@@ -143,12 +143,12 @@ describe("the money in a goal", () => {
 
   it("goes back to an account when the goal is deleted", async () => {
     const api = await client_();
-    const account = await api.post<{ id: string }>("/accounts", {
+    const account = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "100000"
     });
-    const goal = await api.post<{ id: string }>("/goals", {
+    const goal = await api.post("/goals", {
       title: "Отпуск",
       targetAmount: "300000",
       currentAmount: "40000",
@@ -167,7 +167,7 @@ describe("the money in a goal", () => {
 
   it("stays visible in plan/fact after a top-up", async () => {
     const api = await client_();
-    const account = await api.post<{ id: string }>("/accounts", {
+    const account = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "100000"
@@ -176,7 +176,7 @@ describe("the money in a goal", () => {
     const monthBefore = before.months.find((entry) => entry.month === monthKey());
     const totalBefore = (monthBefore?.opening.fact ?? 0) + (monthBefore?.savings.fact ?? 0);
 
-    const goal = await api.post<{ id: string }>("/goals", {
+    const goal = await api.post("/goals", {
       title: "Отпуск",
       targetAmount: "300000",
       currentAmount: "0",
@@ -247,12 +247,12 @@ describe("the head of the debts screen", () => {
 describe("limits", () => {
   it("are not eaten by moving money between own accounts", async () => {
     const api = await client_();
-    const from = await api.post<{ id: string }>("/accounts", {
+    const from = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "100000"
     });
-    const to = await api.post<{ id: string }>("/accounts", {
+    const to = await api.post("/accounts", {
       name: "Копилка",
       type: "SAVINGS",
       balance: "0"
@@ -278,12 +278,12 @@ describe("limits", () => {
 describe("верхняя граница суммы", () => {
   async function ledger() {
     const client = await client_();
-    const account = await client.post<{ id: string }>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "1000"
     });
-    const category = await client.post<{ id: string }>("/categories", {
+    const category = await client.post("/categories", {
       name: "Граница-тест",
       kind: "EXPENSE"
     });
@@ -308,7 +308,7 @@ describe("верхняя граница суммы", () => {
 
   it("отклоняет её же в переводе", async () => {
     const { client, account } = await ledger();
-    const second = await client.post<{ id: string }>("/accounts", {
+    const second = await client.post("/accounts", {
       name: "Вклад",
       type: "SAVINGS",
       balance: "0"

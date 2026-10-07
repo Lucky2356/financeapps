@@ -37,16 +37,16 @@ async function record(
 
 /** A category of the given side, named so it cannot clash with the built-in ones. */
 const category = (client: LocalApiClient, name: string, kind: "INCOME" | "EXPENSE") =>
-  client.post<{ id: string }>("/categories", { name, kind });
+  client.post("/categories", { name, kind });
 
 /** One account in each pool — the whole point of the split is telling them apart. */
 async function twoPools(client: LocalApiClient) {
-  const card = await client.post<{ id: string }>("/accounts", {
+  const card = await client.post("/accounts", {
     name: "Карта",
     type: "DEBIT_CARD",
     balance: "0"
   });
-  const deposit = await client.post<{ id: string }>("/accounts", {
+  const deposit = await client.post("/accounts", {
     name: "Вклад",
     type: "SAVINGS",
     balance: "0"
@@ -155,7 +155,7 @@ describe("month totals split by pool", () => {
   it("closes on the balances even when the account of an operation is archived", async () => {
     const client = api();
     const { card } = await twoPools(client);
-    const closed = await client.post<{ id: string }>("/accounts", {
+    const closed = await client.post("/accounts", {
       name: "Старая карта",
       type: "DEBIT_CARD",
       balance: "0"
@@ -314,7 +314,7 @@ describe("планируемый перевод в сбережения", () => 
   it("пополнение цели — это тоже переезд в сбережения", async () => {
     const client = api();
     const { card } = await twoPools(client);
-    const goal = await client.post<{ id: string }>("/goals", {
+    const goal = await client.post("/goals", {
       title: "Отпуск",
       targetAmount: "100000",
       currentAmount: "0",

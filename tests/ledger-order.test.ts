@@ -2,7 +2,6 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { AccountsPageData } from "@/lib/data";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -15,7 +14,7 @@ it("puts the operation recorded last on top of its day, wherever its row sits", 
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 8, 26, 9));
   const client = new LocalApiClient(new MemoryStorageAdapter());
-  const account = await client.post<AccountsPageData["accounts"][number]>("/accounts", {
+  const account = await client.post("/accounts", {
     name: "Карта",
     type: "DEBIT_CARD",
     balance: "10000"

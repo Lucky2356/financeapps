@@ -139,7 +139,7 @@ export function BankSuggestionsCard({ currency }: { currency: string }) {
     if (!accountId || !categoryId) return edit(item);
     setBusy(item.id);
     try {
-      const created = await apiClient.post<{ id: string }>("/transactions", {
+      const created = await apiClient.post("/transactions", {
         type: item.type,
         accountId,
         categoryId,

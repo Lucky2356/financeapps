@@ -119,24 +119,17 @@ export function RecurringManager({ data }: { data: RecurringTransactionsPageData
   }
 
   async function materializeTemplate(id: string) {
-    await run(
-      () =>
-        apiClient.post<{ created: number; nextDate: string }, { id: string }>(
-          "/recurring/materialize",
-          { id }
-        ),
-      {
-        error: t("rec.toast.materializeError"),
-        onSuccess: async (result) => {
-          toast.success(
-            result.created > 0
-              ? t("rec.toast.materialized", { count: result.created })
-              : t("rec.toast.noneDue")
-          );
-          await refresh();
-        }
+    await run(() => apiClient.post("/recurring/materialize", { id }), {
+      error: t("rec.toast.materializeError"),
+      onSuccess: async (result) => {
+        toast.success(
+          result.created > 0
+            ? t("rec.toast.materialized", { count: result.created })
+            : t("rec.toast.noneDue")
+        );
+        await refresh();
       }
-    );
+    });
   }
 
   return (

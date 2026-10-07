@@ -28,24 +28,47 @@ import type { LocalState } from "@/lib/api/local/state";
 import { findOrCreateCategory, ratesOf } from "@/lib/api/local/money";
 import { upsertTransaction, deleteTransaction } from "@/lib/api/local/ledger";
 
-export async function updateInvestments(state: LocalState, body: unknown) {
+/** Что нужно любому делу с портфелем: форма, тикер и справочник биржи. */
+type MarketContext = {
+  input: ReturnType<typeof toFormObject>;
+  ticker: string | undefined;
+  provider: ReturnType<typeof createMarketDataProvider>;
+  securities: Awaited<ReturnType<ReturnType<typeof createMarketDataProvider>["getSecurities"]>>;
+  marketSource: ReturnType<typeof marketDataSource>;
+};
+
+async function marketContext(body: unknown, refresh: boolean): Promise<MarketContext> {
   const input = toFormObject(body);
-  const action = input.action ?? "";
   const provider = createMarketDataProvider();
   // An explicit refresh should bypass the cache for genuinely fresh quotes.
-  if (action === "refreshMarket") await provider.updateMarketPrices();
+  if (refresh) await provider.updateMarketPrices();
   const securities = await provider.getSecurities();
   const ticker = input.ticker?.toUpperCase();
   // Раньше «MOCK» писалось всегда, когда переменная не равна "moex", — хотя
   // по умолчанию цены живые. Правило теперь одно с выбором поставщика.
   const marketSource = marketDataSource();
+  return { input, ticker, provider, securities, marketSource };
+}
 
-  if (action === "refreshMarket") {
+/**
+ * Дело с портфелем на справочнике биржи. Справочник берётся до дела — для
+ * «Обновить цены» после сброса кэша, чтобы котировки были свежими.
+ */
+function withMarket<Result>(
+  run: (state: LocalState, market: MarketContext) => Promise<Result>,
+  refresh = false
+) {
+  return async (state: LocalState, body: unknown) => run(state, await marketContext(body, refresh));
+}
+
+/** Дела с портфелем по полю `action`; без него (и «Докупить») — позиция записывается. */
+export const INVESTMENT_ACTIONS = {
+  refreshMarket: withMarket(async (state, { securities, marketSource }) => {
     state.investments = await investmentsPage(state);
     return { updated: securities.length, source: marketSource };
-  }
+  }, true),
 
-  if (action === "addWatchlist") {
+  addWatchlist: withMarket(async (state, { ticker, provider, securities }) => {
     if (!ticker) throw new Error("Ticker is required.");
     // The search spans the whole MOEX board, so a picked ticker may be outside
     // the curated list — resolve it live before giving up.
@@ -59,26 +82,30 @@ export async function updateInvestments(state: LocalState, body: unknown) {
       : [...state.investments.watchlist, security];
     state.investments = await investmentsPage(state);
     return state.investments.watchlist.find((item) => item.ticker === ticker);
-  }
+  }),
 
-  if (action === "removeWatchlist") {
+  removeWatchlist: withMarket(async (state, { ticker }) => {
     if (!ticker) throw new Error("Ticker is required.");
     state.investments.watchlist = state.investments.watchlist.filter(
       (item) => item.ticker !== ticker
     );
     state.investments = await investmentsPage(state);
     return undefined;
-  }
+  }),
 
-  if (action === "delete") {
+  delete: withMarket(async (state, { ticker }) => {
     if (!ticker) throw new Error("Ticker is required.");
     state.investments.portfolio = state.investments.portfolio.filter(
       (item) => item.ticker !== ticker
     );
     state.investments = await investmentsPage(state);
     return undefined;
-  }
+  })
+};
 
+/** Позиция портфеля: новая, правка или «Докупить» (action addLot). */
+export const savePosition = withMarket(async (state, { input, ticker, provider, securities }) => {
+  const action = input.action ?? "";
   if (!ticker) throw new Error("Ticker is required.");
   const security =
     securities.find((item) => item.ticker === ticker) ??
@@ -151,7 +178,7 @@ export async function updateInvestments(state: LocalState, body: unknown) {
   ];
   state.investments = await investmentsPage(state);
   return state.investments.portfolio.find((item) => item.ticker === ticker);
-}
+});
 
 // Realized investment events (desktop tax ledger): sells and dividends.
 export function investmentEventsPage(state: LocalState): {

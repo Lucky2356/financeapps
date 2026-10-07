@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { SheetPageData } from "@/lib/api/local/sheet";
 import {
   buildPayload,
   checkTotals,
@@ -135,7 +134,7 @@ describe("перенос таблицы владельца", () => {
   it("в книге: заводит нужные категории и отменяется целиком", async () => {
     const client = new LocalApiClient(new MemoryStorageAdapter());
     await client.post("/sheet", { action: "start", from: "2026-10" });
-    const imported = await client.post<SheetPageData>("/sheet", {
+    const imported = await client.post("/sheet", {
       action: "import",
       payload: buildPayload(plan)
     });
@@ -150,7 +149,7 @@ describe("перенос таблицы владельца", () => {
         .at(-1)
     ).toBe(91977);
 
-    const undone = await client.post<SheetPageData>("/sheet", { action: "undoImport" });
+    const undone = await client.post("/sheet", { action: "undoImport" });
     expect(undone.months).toHaveLength(12);
     expect(undone.columns.map((column) => column.name)).toEqual([
       "Остаток",

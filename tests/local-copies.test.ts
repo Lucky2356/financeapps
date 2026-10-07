@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOCAL_COPIES_KEEP, LocalApiClient, type LocalCopy } from "@/lib/api/LocalApiClient";
+import { LOCAL_COPIES_KEEP, LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { LOCAL_COPY_SUFFIX, SyncingStorageAdapter } from "@/lib/storage/SyncingStorageAdapter";
 import { FakeSyncServer } from "./helpers/fake-sync-server";
@@ -23,7 +23,7 @@ describe("копии на этом устройстве", () => {
   it("копия по кнопке — и «Вернуть» возвращает всё, как было", async () => {
     const client = new LocalApiClient(new MemoryStorageAdapter());
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "100" });
-    const copy = await client.post<LocalCopy>("/backup/local-copies", { action: "take" });
+    const copy = await client.post("/backup/local-copies", { action: "take" });
     expect(copy.reason).toBe("manual");
 
     await client.post("/accounts", { name: "Лишний", type: "CASH", balance: "1" });

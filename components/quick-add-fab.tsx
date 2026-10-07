@@ -39,7 +39,6 @@ import {
 import { useConfirmFutureDate } from "@/hooks/use-confirm-future-date";
 import { useI18n } from "@/lib/i18n/context";
 
-type BudgetWarning = { category: string; spent: number; limit: number };
 import { FamilyFields } from "@/components/family/family-fields";
 import { AmountInput } from "@/components/ui/amount-input";
 import { CategoryOptionLabel } from "@/components/category-option";
@@ -423,11 +422,7 @@ export function QuickAddFab({
     if (splitParts.length > 0) return submitSplit(payload);
 
     try {
-      const result = await apiClient.post<{
-        id?: string;
-        budgetWarning?: BudgetWarning;
-        unusual?: { usual: number };
-      }>("/transactions", {
+      const result = await apiClient.post("/transactions", {
         ...payload,
         type,
         accountId,

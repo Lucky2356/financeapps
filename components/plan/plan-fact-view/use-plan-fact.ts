@@ -84,17 +84,14 @@ export function usePlanFact(initialData: PlanFactPageData) {
       destructive: true
     });
     if (!confirmed) return;
-    await run(
-      () => apiClient.post<{ hasFacts?: boolean }>("/plan", { action: "removeMonth", month }),
-      {
-        success: t("plan.removed"),
-        error: t("plan.saveError"),
-        onSuccess: async (result) => {
-          if (result?.hasFacts) toast.info(t("plan.removeKeptFacts"));
-          await reload();
-        }
+    await run(() => apiClient.post("/plan", { action: "removeMonth", month }), {
+      success: t("plan.removed"),
+      error: t("plan.saveError"),
+      onSuccess: async (result) => {
+        if (result?.hasFacts) toast.info(t("plan.removeKeptFacts"));
+        await reload();
       }
-    );
+    });
   }
 
   async function save(body: Record<string, string>) {

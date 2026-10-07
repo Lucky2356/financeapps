@@ -72,7 +72,7 @@ describe("Category management in LocalApiClient", () => {
 
     // Add a transaction using this category (a fresh install has no accounts,
     // so create one first).
-    const account = await client.post<{ id: string }>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "0"

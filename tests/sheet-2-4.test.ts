@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { SheetPageData } from "@/lib/api/local/sheet";
 import { clearMonth, copyMonth, factFill } from "@/lib/sheet/fill";
 import { guessRole, planImport } from "@/lib/sheet/import";
 import { firstShortfall, focusRow, monthsAhead } from "@/lib/sheet/insights";
@@ -176,7 +175,7 @@ describe("мастер создания таблицы", () => {
 
   it("собирает столбцы, месяцы и суммы из ответов", async () => {
     const client = api();
-    const result = await client.post<SheetPageData>("/sheet", {
+    const result = await client.post("/sheet", {
       action: "start",
       from: "2026-10",
       months: 6,
@@ -222,7 +221,7 @@ describe("мастер создания таблицы", () => {
 
   it("без сбережений — без их столбцов; количество месяцев ограничено", async () => {
     const client = api();
-    const result = await client.post<SheetPageData>("/sheet", {
+    const result = await client.post("/sheet", {
       action: "start",
       from: "2026-10",
       months: 999,
@@ -236,7 +235,7 @@ describe("мастер создания таблицы", () => {
   it("на уже созданной таблице ничего не затирает", async () => {
     const client = api();
     await client.post("/sheet", { action: "start", from: "2026-10" });
-    const again = await client.post<SheetPageData>("/sheet", {
+    const again = await client.post("/sheet", {
       action: "start",
       from: "2026-10",
       articles: [{ name: "Лишнее", categoryId: null, monthly: 5 }]

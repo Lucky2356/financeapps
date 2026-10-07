@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { formatInputDate } from "@/lib/format";
-import type { AccountsPageData } from "@/lib/data";
 import { RecurringTransactionService } from "@/services/RecurringTransactionService";
 
 // Платёж на 31-е после первого февраля переезжал на 28-е — навсегда: следующая
@@ -45,7 +44,7 @@ describe("a monthly payment at the end of the month", () => {
     vi.setSystemTime(new Date(2026, 1, 10, 12));
 
     const client = new LocalApiClient(new MemoryStorageAdapter());
-    const account = await client.post<AccountsPageData["accounts"][number]>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "100000"

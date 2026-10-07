@@ -61,7 +61,7 @@ export function MarketAlertsPanel() {
     if (!cleanTicker) return toast.error(t("alerts.err.ticker"));
     if (!Number.isFinite(numeric)) return toast.error(t("alerts.err.value"));
     try {
-      const created = await apiClient.post<MarketAlert>("/market/alerts", {
+      const created = await apiClient.post("/market/alerts", {
         ticker: cleanTicker,
         metric,
         op,

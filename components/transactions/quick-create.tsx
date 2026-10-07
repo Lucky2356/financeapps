@@ -70,7 +70,7 @@ export function NewAccountDialog({
     if (!name.trim()) return;
     setBusy(true);
     try {
-      const created = await apiClient.post<{ id: string }>("/accounts", {
+      const created = await apiClient.post("/accounts", {
         name: name.trim(),
         type,
         balance: balance.replace(",", ".").trim() || "0"
@@ -165,7 +165,7 @@ export function NewCategoryDialog({
     if (!name.trim()) return;
     setBusy(true);
     try {
-      const created = await apiClient.post<{ id: string }>("/categories", {
+      const created = await apiClient.post("/categories", {
         name: name.trim(),
         kind,
         color: kind === "INCOME" ? "#16a34a" : "#64748b",

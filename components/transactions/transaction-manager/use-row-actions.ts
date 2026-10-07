@@ -15,10 +15,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import type { useI18n } from "@/lib/i18n/context";
 import { isTransfer } from "@/lib/transactions/transfers";
 
-import type {
-  BudgetWarning,
-  TransactionRow
-} from "@/components/transactions/transaction-manager/helpers";
+import type { TransactionRow } from "@/components/transactions/transaction-manager/helpers";
 
 /** Правка и удаление одной операции — то, что делается из строки списка. */
 export function useTransactionRowActions({
@@ -54,17 +51,19 @@ export function useTransactionRowActions({
     // same way adding it does, so the same question is asked here.
     if (!(await confirmFutureDate(payload.date))) return;
 
-    await run(() => apiClient.put<{ budgetWarning?: BudgetWarning }>("/transactions", payload), {
+    await run(() => apiClient.put("/transactions", payload), {
       success: t("tx.toast.updated"),
       error: t("tx.toast.saveError"),
       onSuccess: async (result) => {
         setEditingTransaction(null);
-        if (result?.budgetWarning) {
+        // Форма правки шлёт поля как есть, без `action`, — ответ обычной записи.
+        const warning = result && "budgetWarning" in result ? result.budgetWarning : null;
+        if (warning) {
           toast.warning(
             t("tx.toast.budgetWarning", {
-              category: result.budgetWarning.category,
-              spent: formatCurrency(result.budgetWarning.spent),
-              limit: formatCurrency(result.budgetWarning.limit)
+              category: warning.category,
+              spent: formatCurrency(warning.spent),
+              limit: formatCurrency(warning.limit)
             })
           );
         }

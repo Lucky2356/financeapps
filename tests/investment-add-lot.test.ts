@@ -99,7 +99,7 @@ describe("цена покупки при продаже — по FIFO", () => {
         { date: "2025-06-01", quantity: 40, price: 325 }
       ])
     });
-    const event = await api.post<{ buyPrice: number }>("/investments/events", {
+    const event = await api.post("/investments/events", {
       type: "SELL",
       ticker: "SBER",
       quantity: "70",

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { SheetPageData } from "@/lib/api/local/sheet";
 import { evaluate } from "@/lib/sheet/formula";
 import { computeSheet, type SheetColumn } from "@/lib/sheet/model";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
@@ -106,7 +105,7 @@ describe("таблица в книге", () => {
 
   it("чистый лист: Остаток, Доходы, подушка и год вперёд", async () => {
     const client = api();
-    const sheet = await client.post<SheetPageData>("/sheet", { action: "start", from: "2026-10" });
+    const sheet = await client.post("/sheet", { action: "start", from: "2026-10" });
     expect(sheet.columns.map((column) => column.name)).toEqual([
       "Остаток",
       "Доходы",
@@ -119,8 +118,8 @@ describe("таблица в книге", () => {
 
   it("ячейки, столбцы и месяцы правятся и переживают перечитывание", async () => {
     const client = api();
-    const start = await client.post<SheetPageData>("/sheet", { action: "start", from: "2026-10" });
-    const food = await client.post<SheetColumn>("/sheet", {
+    const start = await client.post("/sheet", { action: "start", from: "2026-10" });
+    const food = await client.post("/sheet", {
       action: "addColumn",
       name: "Продукты",
       kind: "expense"

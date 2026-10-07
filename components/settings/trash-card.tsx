@@ -78,7 +78,7 @@ export function TrashCard() {
   async function restore(ids: string[]) {
     setBusy(true);
     try {
-      const result = await apiClient.post<{ restored: number; failed: string[] }>("/trash", {
+      const result = await apiClient.post("/trash", {
         action: "restore",
         ids
       });

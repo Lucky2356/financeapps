@@ -296,7 +296,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
 
   async function refreshMarketPrices(silent = false) {
     try {
-      const result = await apiClient.post<{ updated: number; source: string }>("/investments", {
+      const result = await apiClient.post("/investments", {
         action: "refreshMarket"
       });
       if (!silent) {

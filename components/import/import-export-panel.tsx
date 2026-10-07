@@ -317,10 +317,7 @@ export function ImportExportPanel({
     };
 
     try {
-      const result = await apiClient.post<{ imported: number; skipped: number }>(
-        "/import",
-        payload
-      );
+      const result = await apiClient.post("/import", payload);
       toast.success(
         t("imp.toast.imported", { imported: result.imported, skipped: result.skipped })
       );
@@ -338,7 +335,7 @@ export function ImportExportPanel({
   async function undoLastImport() {
     try {
       setUndoPending(true);
-      const result = await apiClient.post<{ removed: number }>("/import/undo", {});
+      const result = await apiClient.post("/import/undo", {});
       if (result.removed > 0) {
         toast.success(t("imp.toast.undone", { removed: result.removed }));
       } else {

@@ -5,21 +5,27 @@
 // профили, копии, корзина, фото), живут в самом клиенте.
 //
 // Один путь может делать несколько разных дел — что именно, говорит поле
-// `action` в теле запроса. Разбор `action` — внутри обработчика пути.
+// `action` в теле запроса. Такие дела перечислены таблицей (byAction), а не
+// ветками внутри обработчика: по таблице же выводится ответ каждого дела
+// (lib/api/routes.ts).
 
-import { id } from "@/lib/api/local/helpers";
+import { id, routeOf } from "@/lib/api/local/helpers";
 import {
+  CASHBACK_ACTIONS,
   deductionKindOf,
-  writeCashback,
-  writeDeductionYear,
-  writeTrips
+  saveCashbackRule,
+  saveTrip,
+  TRIP_ACTIONS,
+  writeDeductionYear
 } from "@/lib/api/local/extras";
 import {
   importIntoSheet,
   importWorkbook,
   MAIN_SHEET,
-  writeSheets,
-  writeWorkbook,
+  SHEETS_ACTIONS,
+  unknownSheetsAction,
+  unknownWorkbookAction,
+  WORKBOOK_ACTIONS,
   type WorkbookImportSheet
 } from "@/lib/api/local/sheets";
 import { convert } from "@/lib/currency";
@@ -54,15 +60,16 @@ import {
   addMarketAlert,
   addRealizedEvent,
   setTargetAllocations,
+  INVESTMENT_ACTIONS,
+  savePosition,
   undoSale,
-  updateInvestments,
   type MarketPrices
 } from "@/lib/api/local/investments";
 import { addRule, upsertCategory, withSheetCategories } from "@/lib/api/local/categories";
 import { savePlan } from "@/lib/api/local/plan";
 import { recordNetWorthSnapshot } from "@/lib/api/local/overview";
 import { updateFxRates, updateSettings } from "@/lib/api/local/settings";
-import { writeFamily } from "@/lib/api/local/family";
+import { FAMILY_ACTIONS, unknownFamilyAction } from "@/lib/api/local/family";
 
 /** Что получает обработчик записи. */
 export type WriteRequest = {
@@ -92,6 +99,42 @@ function actionOf(body: unknown): unknown {
   return (body as { action?: unknown } | null | undefined)?.action;
 }
 
+type WriteHandler = (request: WriteRequest) => unknown;
+
+/**
+ * Путь, который делает разные дела по полю `action` в теле.
+ *
+ * `action`, которого нет в таблице (или нет вовсе), — дело по умолчанию.
+ * Таблица остаётся на обработчике: по ней тип ответа выводится из того, какое
+ * `action` вызывающий положил в тело.
+ */
+export function byAction<
+  Actions extends Record<string, WriteHandler>,
+  Fallback extends WriteHandler
+>(actions: Actions, fallback: Fallback) {
+  const run = (request: WriteRequest) => {
+    const action = actionOf(request.body);
+    const handler = (typeof action === "string" && routeOf(actions, action)) || fallback;
+    return handler(request) as ReturnType<Actions[keyof Actions]> | ReturnType<Fallback>;
+  };
+  return Object.assign(run, { actions, fallback });
+}
+
+/**
+ * Таблица дел модуля — обработчиками запроса. Модуль про запросы не знает:
+ * его дела берут книгу, тело и что ещё нужно, а `args` достаёт это из запроса.
+ */
+function fromTable<
+  const Args extends unknown[],
+  Table extends Record<string, (...args: Args) => unknown>
+>(table: Table, args: (request: WriteRequest) => Args) {
+  const handlers: Record<string, WriteHandler> = {};
+  for (const [name, run] of Object.entries(table))
+    handlers[name] = (request) => run(...args(request));
+  // Каждое дело зовётся как есть, ответ его не меняется — меняется только вход.
+  return handlers as { [Name in keyof Table]: (request: WriteRequest) => ReturnType<Table[Name]> };
+}
+
 function saveTransaction({ state, body, method }: WriteRequest) {
   const tx = upsertTransaction(state, body, method);
   const budgetWarning = budgetWarningFor(state, tx);
@@ -106,74 +149,66 @@ function saveTransaction({ state, body, method }: WriteRequest) {
   return { ...tx, budgetWarning, ...(usual !== null ? { unusual: { usual } } : {}) };
 }
 
-function deductionsWrite({ state, body }: WriteRequest) {
-  const input = (body ?? {}) as Record<string, unknown>;
-  if (input.action === "mark") {
-    const kind = deductionKindOf(input.kind);
-    state.categories = state.categories.map((category) => {
-      if (category.id !== input.categoryId) return category;
-      const { deduction: _was, ...rest } = category;
-      void _was;
-      return kind ? { ...rest, deduction: kind } : rest;
-    });
-    return { categoryId: input.categoryId, kind };
-  }
-  return writeDeductionYear(state, input);
+function inputOf(body: unknown): Record<string, unknown> {
+  return (body ?? {}) as Record<string, unknown>;
 }
 
-function sheetWrite({ state, body }: WriteRequest) {
-  const input = (body ?? {}) as Record<string, unknown>;
+function markDeduction({ state, body }: WriteRequest) {
+  const input = inputOf(body);
+  const kind = deductionKindOf(input.kind);
+  state.categories = state.categories.map((category) => {
+    if (category.id !== input.categoryId) return category;
+    const { deduction: _was, ...rest } = category;
+    void _was;
+    return kind ? { ...rest, deduction: kind } : rest;
+  });
+  return { categoryId: input.categoryId, kind };
+}
+
+function importSheet({ state, body }: WriteRequest) {
+  const input = inputOf(body);
   const sheetId = input.sheetId ? String(input.sheetId) : MAIN_SHEET;
-  if (input.action === "import")
-    return importIntoSheet(
-      state,
-      sheetId,
-      withSheetCategories(state, input.payload),
-      () => id("col"),
-      new Date().toISOString()
-    );
-  return writeWorkbook(state, input, () => id("col"));
+  return importIntoSheet(
+    state,
+    sheetId,
+    withSheetCategories(state, input.payload),
+    () => id("col"),
+    new Date().toISOString()
+  );
 }
 
-function sheetsWrite({ state, body }: WriteRequest) {
-  const input = (body ?? {}) as Record<string, unknown>;
-  if (input.action === "importWorkbook") {
-    const sheets = (Array.isArray(input.sheets) ? input.sheets : []) as WorkbookImportSheet[];
-    for (const item of sheets)
-      if (item.kind === "budget") item.payload = withSheetCategories(state, item.payload);
-    return importWorkbook(state, sheets, () => id("sh"), new Date().toISOString());
-  }
-  return writeSheets(state, input, () => id("sh"));
+function importSheets({ state, body }: WriteRequest) {
+  const input = inputOf(body);
+  const sheets = (Array.isArray(input.sheets) ? input.sheets : []) as WorkbookImportSheet[];
+  for (const item of sheets)
+    if (item.kind === "budget") item.payload = withSheetCategories(state, item.payload);
+  return importWorkbook(state, sheets, () => id("sh"), new Date().toISOString());
 }
 
 /** Записи, которые меняют только документ; сохраняет его клиент. */
 export const STATE_WRITES = {
-  "/accounts": (request: WriteRequest) =>
-    actionOf(request.body) === "reconcile"
-      ? reconcileAccount(request.state, request.body)
-      : upsertAccount(request.state, request.body, request.method),
-  "/transactions": (request: WriteRequest) => {
-    const { state, body } = request;
-    switch (actionOf(body)) {
-      case "transfer":
-        return createTransfer(state, body);
-      case "restore":
-        return restoreTransaction(state, body);
-      case "split":
-        return createSplit(state, body);
-      case "linkTransfer":
-        return linkTransfer(state, body);
-      default:
-        return saveTransaction(request);
-    }
-  },
+  "/accounts": byAction(
+    { reconcile: ({ state, body }: WriteRequest) => reconcileAccount(state, body) },
+    ({ state, body, method }: WriteRequest) => upsertAccount(state, body, method)
+  ),
+  "/transactions": byAction(
+    {
+      transfer: ({ state, body }: WriteRequest) => createTransfer(state, body),
+      restore: ({ state, body }: WriteRequest) => restoreTransaction(state, body),
+      split: ({ state, body }: WriteRequest) => createSplit(state, body),
+      linkTransfer: ({ state, body }: WriteRequest) => linkTransfer(state, body)
+    },
+    saveTransaction
+  ),
   "/transactions/transfer": ({ state, body }: WriteRequest) => createTransfer(state, body),
   "/budgets": ({ state, body }: WriteRequest) => upsertBudget(state, body),
-  "/goals": ({ state, body, method }: WriteRequest) => {
-    if (actionOf(body) === "deposit") return depositToGoal(state, body);
-    if (actionOf(body) === "withdraw") return withdrawFromGoal(state, body);
-    return upsertGoal(state, body, method);
-  },
+  "/goals": byAction(
+    {
+      deposit: ({ state, body }: WriteRequest) => depositToGoal(state, body),
+      withdraw: ({ state, body }: WriteRequest) => withdrawFromGoal(state, body)
+    },
+    ({ state, body, method }: WriteRequest) => upsertGoal(state, body, method)
+  ),
   "/debts": ({ state, body, method }: WriteRequest) => upsertLiability(state, body, method),
   "/rules": ({ state, body }: WriteRequest) => addRule(state, body),
   "/recurring": ({ state, body, method }: WriteRequest) => upsertRecurring(state, body, method),
@@ -191,21 +226,58 @@ export const STATE_WRITES = {
   "/investments/dividends": ({ state, body }: WriteRequest) => addExpectedDividend(state, body),
   "/investments/targets": ({ state, body }: WriteRequest) => setTargetAllocations(state, body),
   "/market/alerts": ({ state, body }: WriteRequest) => addMarketAlert(state, body),
-  "/investments": ({ state, body }: WriteRequest) => updateInvestments(state, body),
+  "/investments": byAction(
+    fromTable(INVESTMENT_ACTIONS, ({ state, body }: WriteRequest) => [state, body]),
+    ({ state, body }: WriteRequest) => savePosition(state, body)
+  ),
   "/categories": ({ state, body, method }: WriteRequest) => upsertCategory(state, body, method),
   "/plan": ({ state, body }: WriteRequest) => savePlan(state, body),
-  "/cashback": ({ state, body }: WriteRequest) =>
-    writeCashback(state, (body ?? {}) as Record<string, unknown>, () => id("cb"), {
-      account: (accountId) =>
-        state.accounts.some((item) => item.id === accountId && !item.isArchived),
-      category: (categoryId) => state.categories.some((item) => item.id === categoryId)
-    }),
-  "/trips": ({ state, body }: WriteRequest) =>
-    writeTrips(state, (body ?? {}) as Record<string, unknown>, () => id("trip")),
-  "/deductions": deductionsWrite,
-  "/sheet": sheetWrite,
-  "/family": ({ state, body }: WriteRequest) => writeFamily(state, body),
-  "/sheets": sheetsWrite
+  "/cashback": byAction(
+    fromTable(CASHBACK_ACTIONS, ({ state, body }: WriteRequest) => [
+      state,
+      inputOf(body),
+      () => id("cb")
+    ]),
+    ({ state, body }: WriteRequest) =>
+      saveCashbackRule(state, inputOf(body), () => id("cb"), {
+        account: (accountId) =>
+          state.accounts.some((item) => item.id === accountId && !item.isArchived),
+        category: (categoryId) => state.categories.some((item) => item.id === categoryId)
+      })
+  ),
+  "/trips": byAction(
+    fromTable(TRIP_ACTIONS, ({ state, body }: WriteRequest) => [state, inputOf(body)]),
+    ({ state, body }: WriteRequest) => saveTrip(state, inputOf(body), () => id("trip"))
+  ),
+  "/deductions": byAction({ mark: markDeduction }, ({ state, body }: WriteRequest) =>
+    writeDeductionYear(state, inputOf(body))
+  ),
+  "/sheet": byAction(
+    {
+      import: importSheet,
+      ...fromTable(WORKBOOK_ACTIONS, ({ state, body }: WriteRequest) => [
+        state,
+        inputOf(body),
+        () => id("col")
+      ])
+    },
+    ({ state, body }: WriteRequest) => unknownWorkbookAction(state, inputOf(body))
+  ),
+  "/family": byAction(
+    fromTable(FAMILY_ACTIONS, ({ state, body }: WriteRequest) => [state, inputOf(body)]),
+    unknownFamilyAction
+  ),
+  "/sheets": byAction(
+    {
+      importWorkbook: importSheets,
+      ...fromTable(SHEETS_ACTIONS, ({ state, body }: WriteRequest) => [
+        state,
+        inputOf(body),
+        () => id("sh")
+      ])
+    },
+    ({ body }: WriteRequest) => unknownSheetsAction(inputOf(body))
+  )
 };
 
 /** Обработчик удаления, которому нужен `?id=`. */

@@ -131,7 +131,7 @@ export async function applyLoliItems(
     const accountId = loliAccount(item.currency, ledger.accounts, deps.lastAccount);
     if (deps.auto && accountId && categoryId) {
       dropSuggestion(item.id);
-      const created = await deps.api.post<{ id: string }>("/transactions", {
+      const created = await deps.api.post("/transactions", {
         amount: money(item.amountMinor),
         type: item.type,
         accountId,
