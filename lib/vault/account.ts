@@ -16,6 +16,7 @@ import {
   UNSEALED_KEYS
 } from "@/lib/storage/EncryptingStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
+import { fromBase64, toBase64 } from "@/lib/sync/bytes";
 import { BASE_SUFFIX } from "@/lib/storage/SyncingStorageAdapter";
 import {
   changePassword as rewrapWithNewPassword,
@@ -92,19 +93,6 @@ export type AccountState =
   | { status: "locked"; vault: Vault }
   /** Открыто и готово к работе. */
   | { status: "unlocked"; vault: Vault; remembered: boolean };
-
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function fromBase64(value: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
 
 /**
  * Служба учётной записи.
