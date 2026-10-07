@@ -291,13 +291,25 @@ export function NoteField({
   className?: string;
 }) {
   const [draft, setDraft] = useState(initial);
+  // Заметка, с которой поле выставлено. Приехала другая (с другого устройства,
+  // после перечитывания) — поле её и показывает, если в нём сейчас не пишут.
+  // Сравнивать набранное надо с ней, а не со свежей: иначе одно касание поля
+  // без правки записало бы старый текст поверх нового.
+  const [shown, setShown] = useState(initial);
+  const [editing, setEditing] = useState(false);
+  if (!editing && initial !== shown) {
+    setShown(initial);
+    setDraft(initial);
+  }
 
   return (
     <Input
       value={draft}
       onChange={(event) => setDraft(event.target.value)}
+      onFocus={() => setEditing(true)}
       onBlur={() => {
-        if (draft !== initial) onSave(draft);
+        setEditing(false);
+        if (draft !== shown) onSave(draft);
       }}
       placeholder={placeholder}
       maxLength={500}

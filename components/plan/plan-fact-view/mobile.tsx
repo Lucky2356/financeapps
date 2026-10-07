@@ -64,10 +64,9 @@ export function PlanFactMobile({
     return Math.max(0, past - 1);
   })();
   const [picked, setPicked] = useState<string | null>(null);
-  const index = Math.min(
-    Math.max(0, picked ? months.findIndex((month) => month.month === picked) : initial),
-    months.length - 1
-  );
+  // Выбранного месяца больше нет (его удалили) — обратно к текущему, а не к первому.
+  const pickedIndex = picked ? months.findIndex((month) => month.month === picked) : -1;
+  const index = Math.min(pickedIndex >= 0 ? pickedIndex : initial, months.length - 1);
   const month = months[index];
   if (!month) return null;
   const range = monthRange(month.month);
