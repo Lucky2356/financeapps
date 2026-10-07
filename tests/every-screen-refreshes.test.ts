@@ -59,7 +59,9 @@ const ON_DEMAND: Record<string, string> = {
   "components/investments/portfolio-value-chart.tsx":
     "котировки с биржи, а не книга; портфель приходит от подписанного экрана",
   "components/investments/rebalance-panel.tsx":
-    "форма целевых долей: перечитывание на каждую запись стирало бы набранное"
+    "форма целевых долей: перечитывание на каждую запись стирало бы набранное",
+  "components/transactions/transaction-manager/use-row-actions.ts":
+    "читает фото удаляемой операции по нажатию «Удалить», чтобы «Отменить» вернуло и его"
 };
 
 /**
