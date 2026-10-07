@@ -26,7 +26,7 @@ export function TargetDialog({
   onClose: () => void;
   onSave: (target: { label: string; date: string; amount: number }) => void;
 }) {
-  const [label, setLabel] = useState("Подушка");
+  const [label, setLabel] = useState(words.targetDefault);
   const [date, setDate] = useState("");
   const [amount, setAmount] = useState("");
   const value = evaluate(amount);

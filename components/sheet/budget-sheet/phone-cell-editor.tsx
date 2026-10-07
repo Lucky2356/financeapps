@@ -47,6 +47,9 @@ export function PhoneCellEditor({
   onSave: (input: string) => void;
   onFill: () => void;
 }) {
+  // Как в клетках на компьютере: разделители — по языку приложения.
+  const number = (value: number) =>
+    value.toLocaleString(locale === "en" ? "en-GB" : "ru-RU", { maximumFractionDigits: 2 });
   const cell = row.cells[column.id];
   const [draft, setDraft] = useState(cell?.input ?? "");
   const wordy = column.kind === "note";
@@ -79,12 +82,12 @@ export function PhoneCellEditor({
             : preview && !preview.ok
               ? format(words.cellError, { error: preview.error })
               : preview && preview.ok && draft.trim() !== String(preview.value)
-                ? `= ${preview.value.toLocaleString("ru-RU")}`
+                ? `= ${number(preview.value)}`
                 : words.inputHint}
         </p>
         {fact !== undefined ? (
           <p className="text-xs text-muted-foreground">
-            {words.fact}: {fact.toLocaleString("ru-RU")}
+            {words.fact}: {number(fact)}
           </p>
         ) : null}
       </div>
