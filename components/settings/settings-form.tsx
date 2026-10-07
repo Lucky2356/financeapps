@@ -9,6 +9,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { isAndroidShell } from "@/lib/platform/device";
 import type { AccountsPageData, SettingsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { useDataVersion } from "@/hooks/use-data-version";
 import { aboutSection } from "@/components/settings/settings-form/about-section";
 import { aiSection } from "@/components/settings/settings-form/ai-section";
 import { dataSection } from "@/components/settings/settings-form/data-section";
@@ -48,6 +49,9 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
   // Всё телефонное — здесь, а не в разделе: переживает переход между разделами.
   const phone = usePhoneFeatures();
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
+  // Счёт заводят и архивируют на других экранах и устройствах — список
+  // перечитывается с книгой, а не только при открытии настроек.
+  const version = useDataVersion();
   useEffect(() => {
     let alive = true;
     apiClient
@@ -59,7 +63,7 @@ export function SettingsForm({ data }: { data: SettingsPageData }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [version]);
   // Папку на диске выбрать можно только на компьютере: у телефона такого
   // окна нет. Через внешнее хранилище, а не проверкой при отрисовке, — чтобы
   // собранная заранее страница и живая не разошлись при оживлении.

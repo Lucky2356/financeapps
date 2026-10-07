@@ -11,6 +11,7 @@ import {
 } from "@/components/sheet/budget-sheet/helpers";
 import type { SheetFormat, SheetWords } from "@/components/sheet/sheet-types";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { useDataVersion } from "@/hooks/use-data-version";
 import { apiClient } from "@/lib/api/client";
 import type { SheetPageData } from "@/lib/api/local/sheet";
 import { clearMonth, copyMonth, factFill } from "@/lib/sheet/fill";
@@ -56,10 +57,12 @@ export function useSheetData({
   );
 
   // Факт из учёта нужен всегда: строка выбранной клетки сверяет с ним план, не
-  // только режим «Сравнить». Читается на весь размах таблицы и заново — только
-  // когда размах изменился, а не на каждую правку клетки.
+  // только режим «Сравнить». Читается на весь размах таблицы и заново — когда
+  // размах изменился или изменилась книга: операция из быстрой записи или с
+  // другого устройства меняет факт, а таблица оставалась при прежнем.
   const rangeFrom = computed.rows[0]?.month ?? "";
   const rangeTo = computed.rows[computed.rows.length - 1]?.month ?? "";
+  const version = useDataVersion();
   useEffect(() => {
     if (!rangeFrom) return;
     let alive = true;
@@ -70,7 +73,7 @@ export function useSheetData({
     return () => {
       alive = false;
     };
-  }, [rangeFrom, rangeTo]);
+  }, [rangeFrom, rangeTo, version]);
 
   // ── Запись ──────────────────────────────────────────────────────────────
 

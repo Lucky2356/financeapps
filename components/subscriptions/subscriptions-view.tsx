@@ -17,6 +17,7 @@ import {
 } from "@/lib/subscriptions/detect";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { useDataVersion } from "@/hooks/use-data-version";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,9 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
   );
 
   // Pull recent history and look for regular charges not already tracked as a
-  // manual recurring template.
+  // manual recurring template. Заново — с каждой правкой книги: новая операция
+  // может оказаться очередным списанием подписки.
+  const version = useDataVersion();
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -69,7 +72,7 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [version]);
 
   const detected = useMemo(() => {
     const tracked = new Set(
