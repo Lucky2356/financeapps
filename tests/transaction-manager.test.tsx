@@ -48,6 +48,37 @@ describe("TransactionManager", () => {
     expect(await screen.findByText("Операции не найдены")).toBeInTheDocument();
   });
 
+  it("сумма строки — в валюте её счёта, хотя заготовка страницы пустая", async () => {
+    // Так экран и открывается в приложении: заготовка из статической сборки
+    // без счетов и операций, настоящие данные приезжают запросом.
+    const shell = { ...data, accounts: [], transactions: [] } as TransactionsPageData;
+    const loaded = {
+      ...data,
+      accounts: [
+        ...data.accounts,
+        { id: "acc-usd", name: "Доллары", type: "DEBIT_CARD", balance: 100, currency: "USD" }
+      ],
+      transactions: [
+        {
+          id: "tx-usd",
+          type: "EXPENSE",
+          amount: 100,
+          baseAmount: 9000,
+          date: "2026-10-01T00:00:00.000Z",
+          description: "Подписка",
+          account: { id: "acc-usd", name: "Доллары" },
+          category: { id: "cat-fun", label: "Развлечения", color: "#7c3aed" }
+        }
+      ],
+      pagination: { ...data.pagination, total: 1 }
+    } as unknown as TransactionsPageData;
+    apiClientMock.get.mockResolvedValue(loaded);
+    renderWithConfirm(<TransactionManager data={shell} />);
+    const amounts = await screen.findAllByText(/\(9\s?000/);
+    expect(amounts[0].textContent).toMatch(/\$/);
+    expect(amounts[0].textContent).not.toMatch(/^100\s?₽/);
+  });
+
   // Creating an operation moved to the quick-add dialog (this screen's own add
   // button was a second door to the same room) — see tests/quick-add.test.tsx.
 });

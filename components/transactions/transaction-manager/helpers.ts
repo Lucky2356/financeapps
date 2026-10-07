@@ -17,8 +17,8 @@ export function isJustAdded(row: { createdAt?: string }): boolean {
 }
 
 /**
- * Сумма строки для показа. Счета берутся из исходных `data`, как и раньше,
- * поэтому вызывается на каждом рендере со свежим списком.
+ * Сумма строки для показа. Счета — из загруженных данных экрана: заготовка
+ * страницы в статической сборке пустая, и по ней любая строка выходила в ₽.
  */
 export function makeRowAmount(accounts: TransactionsPageData["accounts"]) {
   // A row shows the money as it was actually paid. When the account keeps

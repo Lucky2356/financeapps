@@ -45,7 +45,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
     useTransactionListView({ pageData, searchParams, paramsString, router, t });
   const { selectedIds, allVisibleSelected, toggleSelect, toggleSelectAll, clearSelection } =
     useTransactionSelection(visibleTransactions, paramsString);
-  const rowAmount = makeRowAmount(data.accounts);
+  const rowAmount = makeRowAmount(pageData.accounts);
 
   async function refresh() {
     await loadTransactions(true);
