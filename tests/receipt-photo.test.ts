@@ -14,9 +14,7 @@ async function setup() {
     type: "DEBIT_CARD",
     balance: "10000"
   });
-  const { categories } = await client.get<{
-    categories: Array<{ id: string; name: string }>;
-  }>("/categories");
+  const { categories } = await client.get("/categories");
   const food = categories.find((category) => category.name === "Продукты");
   const tx = await client.post<{ id: string }>("/transactions", {
     amount: "1250",
@@ -56,9 +54,7 @@ describe("фото чека у операции", () => {
     await client.post("/photos", { transactionId: tx.id, data: JPEG, width: 10, height: 20 });
 
     expect(await storage.getItem(photoKey(tx.id, "synced"))).toMatchObject({ data: JPEG });
-    const { transactions } = await client.get<{
-      transactions: Array<{ id: string; photo?: string }>;
-    }>("/transactions");
+    const { transactions } = await client.get("/transactions");
     expect(transactions.find((row) => row.id === tx.id)?.photo).toBe("synced");
     expect(await client.get(`/photos?id=${tx.id}`)).toEqual({
       photo: JPEG,

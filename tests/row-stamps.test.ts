@@ -159,9 +159,11 @@ describe("отметки в живом клиенте", () => {
     client = new LocalApiClient(new MemoryStorageAdapter());
   });
 
+  // Отметка правки — служебное поле строки, экрану его не обещают; здесь
+  // проверяется, что оно доезжает, поэтому тип расширен им явно.
   async function accounts() {
-    const data = await client.get<{ accounts: Array<Record<string, unknown>> }>("/accounts");
-    return data.accounts;
+    const data = await client.get("/accounts");
+    return data.accounts as Array<(typeof data.accounts)[number] & { updatedAt?: string }>;
   }
 
   it("счёт, заведённый через обработчик, выходит с отметкой", async () => {
@@ -205,10 +207,14 @@ describe("отметки в живом клиенте", () => {
   it("запись операции не переставляет отметки у счетов и статей", async () => {
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 5000 });
     const account = (await accounts())[0];
-    const categories = await client.get<{ categories: Array<Record<string, unknown>> }>(
-      "/categories"
-    );
-    const expense = categories.categories.find((row) => row.kind === "EXPENSE");
+    // Отметки — из самого документа: экран «Категории» строит свои строки и
+    // служебных полей в них не несёт. Прежде проверка брала их оттуда и
+    // сравнивала undefined с undefined — то есть не проверяла ничего. Статья —
+    // заведённая через обработчик: у встроенных отметки нет, пока их не правили.
+    await client.post("/categories", { name: "Обеды", kind: "EXPENSE", color: "#0d9488" });
+    const stampedCategories = async () => (await client.get("/backup")).categories;
+    const expense = (await stampedCategories()).find((row) => row.label === "Обеды");
+    expect(expense?.updatedAt).toBeTruthy();
 
     await new Promise((resolve) => setTimeout(resolve, 5));
     await client.post("/transactions", {
@@ -222,8 +228,7 @@ describe("отметки в живом клиенте", () => {
 
     // Баланс счёта операция меняет — эта отметка обязана сдвинуться. А вот
     // статья не менялась ничем, и её трогать не за что.
-    const after = await client.get<{ categories: Array<Record<string, unknown>> }>("/categories");
-    const sameCategory = after.categories.find((row) => row.id === expense?.id);
+    const sameCategory = (await stampedCategories()).find((row) => row.id === expense?.id);
     expect(sameCategory?.updatedAt).toBe(expense?.updatedAt);
   });
 
@@ -231,7 +236,7 @@ describe("отметки в живом клиенте", () => {
     // Трёхлетняя книга, вернувшаяся из копии, не становится свежей оттого, что
     // её сегодня развернули.
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 1000 });
-    const backup = await client.get<Record<string, unknown>>("/backup");
+    const backup = await client.get("/backup");
     const original = (backup.accounts as Array<Record<string, unknown>>)[0];
     (original as { updatedAt: string }).updatedAt = EARLIER;
 
@@ -248,7 +253,7 @@ describe("отметки в живом клиенте", () => {
       transactions: []
     });
     const upgraded = new LocalApiClient(storage);
-    const data = await upgraded.get<{ accounts: Array<Record<string, unknown>> }>("/accounts");
+    const data = await upgraded.get("/accounts");
 
     expect(data.accounts[0]).not.toHaveProperty("updatedAt");
     const stored = await storage.getItem<{ schemaVersion: number }>(

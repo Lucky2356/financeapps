@@ -65,7 +65,7 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   // it, which reads the real clock, already offered September. The device's own
   // date is the only one that means anything here.
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
-  const apiPath = `/budgets?month=${selectedMonth}`;
+  const apiPath = `/budgets?month=${selectedMonth}` as const;
   const { data: pageData, reload } = useApiPageData(data, apiPath);
 
   const { run } = useApiMutation();

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import { columnLetter, freeValue, type WorkbookPage } from "@/lib/api/local/sheets";
-import type { SheetPageData } from "@/lib/api/local/sheet";
+import { columnLetter, freeValue } from "@/lib/api/local/sheets";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 
 // Книга таблиц: несколько листов, перенос Excel целиком, корзина для листов.
@@ -13,7 +12,7 @@ describe("листы", () => {
   it("главная таблица есть всегда; новый бюджетный лист не трогает её", async () => {
     const api = client();
     await api.post("/sheet", { action: "start", from: "2026-10" });
-    const main = await api.get<SheetPageData>("/sheet");
+    const main = await api.get("/sheet");
     expect(main.months).toHaveLength(12);
 
     const tab = await api.post<{ id: string }>("/sheets", {
@@ -22,7 +21,7 @@ describe("листы", () => {
       kind: "budget"
     });
     await api.post("/sheet", { sheetId: tab.id, action: "start", from: "2027-01" });
-    const book = await api.get<WorkbookPage>(`/workbook?sheet=${tab.id}`);
+    const book = await api.get(`/workbook?sheet=${tab.id}`);
     expect(book.sheets.map((sheet) => sheet.name)).toEqual(["Бюджет", "Отпуск"]);
     expect(book.sheet.id).toBe(tab.id);
     expect(book.budget!.months[0]).toBe("2027-01");
@@ -34,9 +33,9 @@ describe("листы", () => {
       action: "setCells",
       cells: [{ month: "2027-01", columnId: column.id, input: "5000" }]
     });
-    const again = await api.get<WorkbookPage>(`/workbook?sheet=${tab.id}`);
+    const again = await api.get(`/workbook?sheet=${tab.id}`);
     expect(again.budget!.cells).toEqual([{ month: "2027-01", columnId: column.id, input: "5000" }]);
-    const mainAgain = await api.get<SheetPageData>("/sheet");
+    const mainAgain = await api.get("/sheet");
     expect(mainAgain.months[0]).toBe("2026-10");
     expect(mainAgain.cells).toEqual([]);
     expect(mainAgain.columns.map((item) => item.id)).not.toContain(column.id);
@@ -59,7 +58,7 @@ describe("листы", () => {
         { r: 2, c: 1, input: "=СУММ(" }
       ]
     });
-    const page = await api.get<WorkbookPage>(`/workbook?sheet=${tab.id}`);
+    const page = await api.get(`/workbook?sheet=${tab.id}`);
     const cell = (r: number, c: number) =>
       page.free!.cells.find((item) => item.r === r && item.c === c);
     expect(cell(0, 0)).toMatchObject({ value: null, error: false });
@@ -68,7 +67,7 @@ describe("листы", () => {
     expect(cell(2, 1)).toMatchObject({ error: true });
 
     await api.post("/sheet", { sheetId: tab.id, action: "removeFreeRow", index: 0 });
-    const after = await api.get<WorkbookPage>(`/workbook?sheet=${tab.id}`);
+    const after = await api.get(`/workbook?sheet=${tab.id}`);
     expect(after.free!.cells.find((item) => item.r === 0 && item.c === 1)?.input).toBe("1 500,50");
   });
 
@@ -99,13 +98,13 @@ describe("листы", () => {
         }
       ]
     });
-    const book = await api.get<WorkbookPage>("/workbook");
+    const book = await api.get("/workbook");
     expect(book.sheets.map((sheet) => `${sheet.name}:${sheet.kind}`)).toEqual([
       "Бюджет 2026:budget",
       "Кредиты:free"
     ]);
     expect(book.budget!.months).toEqual(["2026-08"]);
-    const loans = await api.get<WorkbookPage>(`/workbook?sheet=${book.sheets[1].id}`);
+    const loans = await api.get(`/workbook?sheet=${book.sheets[1].id}`);
     expect(loans.free!.cells.find((item) => item.r === 1 && item.c === 1)?.value).toBe(120000);
   });
 
@@ -122,19 +121,15 @@ describe("листы", () => {
       cells: [{ r: 0, c: 0, input: "важно" }]
     });
     await api.post("/sheets", { action: "remove", id: tab.id });
-    expect((await api.get<WorkbookPage>("/workbook")).sheets.map((sheet) => sheet.name)).toEqual([
-      "Бюджет"
-    ]);
+    expect((await api.get("/workbook")).sheets.map((sheet) => sheet.name)).toEqual(["Бюджет"]);
 
-    const trash = await api.get<{
-      entries: Array<{ id: string; collection: string; title: string }>;
-    }>("/trash");
+    const trash = await api.get("/trash");
     // Одна запись — сам лист, без россыпи клеток.
     expect(trash.entries.map((entry) => `${entry.collection}:${entry.title}`)).toEqual([
       "sheets:Лишний"
     ]);
     await api.post("/trash", { action: "restore", ids: [trash.entries[0].id] });
-    const back = await api.get<WorkbookPage>(`/workbook?sheet=${tab.id}`);
+    const back = await api.get(`/workbook?sheet=${tab.id}`);
     expect(back.sheet.name).toBe("Лишний");
     expect(back.free!.cells[0]).toMatchObject({ r: 0, c: 0, input: "важно" });
   });

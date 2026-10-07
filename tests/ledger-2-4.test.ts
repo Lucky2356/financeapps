@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { TransactionsPageData } from "@/lib/data";
 import { groupByDay } from "@/lib/transactions/day-groups";
 import { matchesCriteria } from "@/lib/transactions/filter";
 import { matchesSearch, parseSearch } from "@/lib/transactions/search";
@@ -147,7 +146,7 @@ describe("«Учёт» в книге", () => {
   it("sort и поиск по сумме доходят до списка", async () => {
     const client = new LocalApiClient(new MemoryStorageAdapter());
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "100000" });
-    const page = await client.get<TransactionsPageData>("/transactions");
+    const page = await client.get("/transactions");
     const account = page.accounts[0].id;
     const category = page.categories.find((item) => item.kind === "EXPENSE")!.id;
     for (const [amount, description] of [
@@ -165,9 +164,9 @@ describe("«Учёт» в книге", () => {
       });
     }
     const list = async (query: string) =>
-      (
-        await client.get<TransactionsPageData>(`/transactions?period=all&${query}`)
-      ).transactions.map((row) => row.description);
+      (await client.get(`/transactions?period=all&${query}`)).transactions.map(
+        (row) => row.description
+      );
     expect(await list("sort=amount-desc")).toEqual(["крупная", "средняя", "мелочь"]);
     expect(await list("sort=amount-asc")).toEqual(["мелочь", "средняя", "крупная"]);
     expect(await list("q=1500")).toEqual(["средняя"]);

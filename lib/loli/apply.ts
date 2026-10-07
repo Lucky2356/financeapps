@@ -3,6 +3,7 @@
 // Отдельно от экрана, с учётом и памятью устройства, переданными снаружи, —
 // чтобы проверки гоняли настоящий учёт (LocalApiClient), а не подделку.
 
+import type { ApiClient } from "@/lib/api/ApiClient";
 import {
   BANK_HANDLED_KEY,
   BANK_SUGGESTIONS_KEY,
@@ -21,12 +22,7 @@ import {
   type LoliItem
 } from "@/lib/loli/inbox";
 
-type Api = {
-  get<T>(path: string): Promise<T>;
-  post<T>(path: string, body: unknown): Promise<T>;
-  put<T>(path: string, body: unknown): Promise<T>;
-  delete<T>(path: string): Promise<T>;
-};
+type Api = Pick<ApiClient, "get" | "post" | "put" | "delete">;
 
 type Row = {
   id: string;
@@ -71,7 +67,7 @@ export async function applyLoliItems(
   const outcome: LoliOutcome = { recorded: [], suggested: 0, updated: 0, removed: 0 };
   if (items.length === 0) return outcome;
 
-  const ledger = await deps.api.get<Ledger>("/transactions?period=all&limit=all");
+  const ledger: Ledger = await deps.api.get("/transactions?period=all&limit=all");
   const rows = new Map(ledger.transactions.map((row) => [row.id, row]));
   const history = ledger.transactions.slice(0, 500).map((row) => ({
     description: row.description,

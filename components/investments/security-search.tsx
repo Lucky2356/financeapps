@@ -88,7 +88,7 @@ export function SecuritySearch({
       setLoading(true);
       void (async () => {
         try {
-          const data = await apiClient.get<{ results: MarketSecurity[] }>(
+          const data = await apiClient.get(
             `/investments/search?q=${encodeURIComponent(q)}${kind ? `&kind=${kind}` : ""}`
           );
           if (!cancelled) setFound({ query: q, items: data.results ?? [] });
@@ -130,9 +130,7 @@ export function SecuritySearch({
     // запросом, каким пользуется поиск, чтобы наверх ушла настоящая бумага.
     void (async () => {
       const data = await apiClient
-        .get<{
-          results: MarketSecurity[];
-        }>(`/investments/search?q=${encodeURIComponent(row.ticker)}`)
+        .get(`/investments/search?q=${encodeURIComponent(row.ticker)}`)
         .catch(() => null);
       const found = data?.results?.find((item) => item.ticker === row.ticker) ?? data?.results?.[0];
       if (found) onSelect(found);

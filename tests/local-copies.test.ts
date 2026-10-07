@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LOCAL_COPIES_KEEP, LocalApiClient, type LocalCopy } from "@/lib/api/LocalApiClient";
-import type { AccountsPageData } from "@/lib/data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { LOCAL_COPY_SUFFIX, SyncingStorageAdapter } from "@/lib/storage/SyncingStorageAdapter";
 import { FakeSyncServer } from "./helpers/fake-sync-server";
@@ -10,11 +9,11 @@ import { FakeSyncServer } from "./helpers/fake-sync-server";
 // чтобы вернуть их, если синхронизация однажды привезёт не то.
 
 async function names(client: LocalApiClient): Promise<string[]> {
-  const page = await client.get<AccountsPageData>("/accounts");
+  const page = await client.get("/accounts");
   return page.accounts.map((account) => account.name).sort();
 }
 
-const copies = (client: LocalApiClient) => client.get<LocalCopy[]>("/backup/local-copies");
+const copies = (client: LocalApiClient) => client.get("/backup/local-copies");
 
 afterEach(() => {
   vi.useRealTimers();

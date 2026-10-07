@@ -47,7 +47,7 @@ const EMPTY: Payouts = { currency: "RUB", upcoming: [], recent: [], yearAhead: 0
 
 export function UpcomingPayouts() {
   const { t, locale } = useI18n();
-  const { data, reload } = useApiPageData<Payouts>(EMPTY, "/investments/payouts");
+  const { data, reload } = useApiPageData(EMPTY, "/investments/payouts");
   const [busy, setBusy] = useState<string | null>(null);
   const money = (value: number) => formatCurrency(value, data.currency);
   const when = (iso: string) =>

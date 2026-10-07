@@ -20,7 +20,7 @@ const EMPTY: ProfileList = { profiles: [], activeProfileId: "" };
 
 export function SampleBanner() {
   const { t } = useI18n();
-  const { data } = useApiPageData<ProfileList>(EMPTY, "/profiles");
+  const { data } = useApiPageData(EMPTY, "/profiles");
   const [busy, setBusy] = useState(false);
 
   if (data.activeProfileId !== SAMPLE_PROFILE_ID) return null;

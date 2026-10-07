@@ -109,7 +109,7 @@ export function SheetWizard({
     const from = shiftMonth(current, -LOOKBACK);
     const to = shiftMonth(current, -1);
     apiClient
-      .get<{ months: Facts }>(`/sheet/facts?from=${from}&to=${to}`)
+      .get(`/sheet/facts?from=${from}&to=${to}`)
       .catch(() => ({ months: {} as Facts }))
       .then(({ months: facts }) => {
         if (!alive) return;
@@ -183,7 +183,7 @@ export function SheetWizard({
 
       if (history && ago > 0) {
         const facts = await apiClient
-          .get<{ months: Facts }>(`/sheet/facts?from=${from}&to=${shiftMonth(current, -1)}`)
+          .get(`/sheet/facts?from=${from}&to=${shiftMonth(current, -1)}`)
           .catch(() => ({ months: {} as Facts }));
         const changes = factFill(
           computeSheet(created).rows,

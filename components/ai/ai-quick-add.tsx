@@ -40,7 +40,7 @@ export function AiQuickAdd() {
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .get<SettingsPageData>("/settings")
+      .get("/settings")
       .then((data) => {
         if (!cancelled) setSettings(data);
       })
@@ -57,7 +57,7 @@ export function AiQuickAdd() {
   async function loadRefs(): Promise<ImportPageData | null> {
     if (refs) return refs;
     try {
-      const data = await apiClient.get<ImportPageData>("/import");
+      const data = await apiClient.get("/import");
       setRefs(data);
       return data;
     } catch {

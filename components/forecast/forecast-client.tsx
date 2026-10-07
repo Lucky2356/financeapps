@@ -8,7 +8,7 @@ import { apiClient } from "@/lib/api/client";
 import { goalDeadlineMarkers, type CalendarMarker } from "@/lib/calendar/markers";
 import { upcomingDividends } from "@/lib/investments/dividends";
 import { useApiPageData } from "@/hooks/use-api-page-data";
-import type { ExpectedDividend, ForecastData, GoalRow } from "@/types/finance";
+import type { ExpectedDividend, ForecastData } from "@/types/finance";
 
 // Re-fetches forecast from the active API client so desktop shows real data.
 export function ForecastClient({ initialData }: { initialData: ForecastData }) {
@@ -22,9 +22,9 @@ export function ForecastClient({ initialData }: { initialData: ForecastData }) {
     void (async () => {
       try {
         const [goals, dividends] = await Promise.all([
-          apiClient.get<{ goals: GoalRow[] }>("/goals"),
+          apiClient.get("/goals"),
           apiClient
-            .get<{ dividends: ExpectedDividend[] }>("/investments/dividends")
+            .get("/investments/dividends")
             .catch(() => ({ dividends: [] as ExpectedDividend[] }))
         ]);
         if (cancelled) return;

@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import { familyPicture, settleUp, type FamilyPicture, type Member } from "@/lib/family/family";
+import { familyPicture, settleUp, type Member } from "@/lib/family/family";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { TransactionsPageData } from "@/lib/data";
 
 // Семейный бюджет: кто сколько потратил, общие траты поровну, кто кому должен.
 
@@ -118,7 +117,7 @@ describe("семья — в книге", () => {
   async function setup() {
     const api = new LocalApiClient(new MemoryStorageAdapter());
     await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "50000" });
-    const page = await api.get<TransactionsPageData>("/transactions");
+    const page = await api.get("/transactions");
     const accountId = page.accounts[0].id;
     const categoryId = page.categories.find((item) => item.kind === "EXPENSE")!.id;
     const a = await api.post<Member>("/family", { action: "addMember", name: "Саша" });
@@ -143,9 +142,7 @@ describe("семья — в книге", () => {
       memberId: a.id,
       shared: "true"
     });
-    const family = await api.get<{ members: Member[]; picture: FamilyPicture }>(
-      "/family?month=2026-10"
-    );
+    const family = await api.get("/family?month=2026-10");
     expect(family.members.map((member) => member.name)).toEqual(["Саша", "Маша"]);
     expect(family.picture.debts).toEqual([{ from: b.id, to: a.id, amount: 2000 }]);
 
@@ -159,11 +156,11 @@ describe("семья — в книге", () => {
       description: "Продукты и хлеб",
       date: "2026-10-02"
     });
-    const kept = await api.get<{ picture: FamilyPicture }>("/family?month=2026-10");
+    const kept = await api.get("/family?month=2026-10");
     expect(kept.picture.sharedTotal).toBe(4000);
 
     await api.post("/family", { action: "settle", from: b.id, to: a.id, amount: "2 000" });
-    const settled = await api.get<{ picture: FamilyPicture }>("/family?month=2026-10");
+    const settled = await api.get("/family?month=2026-10");
     expect(settled.picture.debts).toEqual([]);
   });
 
@@ -171,15 +168,15 @@ describe("семья — в книге", () => {
     const { api, accountId, categoryId, a } = await setup();
     const base = { type: "EXPENSE", amount: "300", accountId, categoryId, date: "2026-10-03" };
     const tx = await api.post<{ id: string }>("/transactions", { ...base, memberId: "nobody" });
-    let family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-10");
+    let family = await api.get("/family?month=2026-10");
     expect(family.picture.unassigned).toBe(300);
 
     await api.put("/transactions", { ...base, id: tx.id, memberId: a.id });
-    family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-10");
+    family = await api.get("/family?month=2026-10");
     expect(family.picture.perMember[0].personal).toBe(300);
 
     await api.put("/transactions", { ...base, id: tx.id, memberId: "" });
-    family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-10");
+    family = await api.get("/family?month=2026-10");
     expect(family.picture.unassigned).toBe(300);
   });
 
@@ -199,12 +196,12 @@ describe("семья — в книге", () => {
     });
     const c = await api.post<Member>("/family", { action: "addMember", name: "Петя" });
     expect(c.since).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    let family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-09");
+    let family = await api.get("/family?month=2026-09");
     expect(family.picture.debts).toEqual([{ from: b.id, to: a.id, amount: 3000 }]);
 
     // «В семье с самого начала» — и сентябрьская трата делится на троих.
     await api.post("/family", { action: "renameMember", id: c.id, name: "Петя", since: "" });
-    family = await api.get<{ picture: FamilyPicture }>("/family?month=2026-09");
+    family = await api.get("/family?month=2026-09");
     expect(family.picture.debts).toEqual([
       { from: b.id, to: a.id, amount: 2000 },
       { from: c.id, to: a.id, amount: 2000 }
@@ -217,13 +214,13 @@ describe("семья — в книге", () => {
   it("удалённый участник — в корзине, и возвращается", async () => {
     const { api, b } = await setup();
     await api.post("/family", { action: "removeMember", id: b.id });
-    let family = await api.get<{ members: Member[] }>("/family");
+    let family = await api.get("/family");
     expect(family.members).toHaveLength(1);
-    const trash = await api.get<{ entries: Array<{ id: string; collection: string }> }>("/trash");
+    const trash = await api.get("/trash");
     const entry = trash.entries.find((item) => item.collection === "members")!;
     expect(entry).toBeTruthy();
     await api.post("/trash", { action: "restore", ids: [entry.id] });
-    family = await api.get<{ members: Member[] }>("/family");
+    family = await api.get("/family");
     expect(family.members.map((member) => member.name)).toEqual(["Саша", "Маша"]);
   });
 });

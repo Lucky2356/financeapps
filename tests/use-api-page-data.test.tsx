@@ -8,7 +8,13 @@ async function loadHook(get = vi.fn()) {
 
   const mod = await import("@/hooks/use-api-page-data");
   const cache = await import("@/lib/api/page-data-cache");
-  return { useApiPageData: mod.useApiPageData, get, cache };
+  // Здесь проверяется поведение хука, а не типы маршрутов: клиент подменён и
+  // отвечает чем угодно, поэтому и хук виден с простой сигнатурой.
+  const useApiPageData = mod.useApiPageData as unknown as <T>(
+    initialData: T,
+    path: string
+  ) => { data: T };
+  return { useApiPageData, get, cache };
 }
 
 describe("useApiPageData", () => {

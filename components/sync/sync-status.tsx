@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
-import type { ImportPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { SyncStatus } from "@/lib/storage/SyncingStorageAdapter";
@@ -89,7 +88,7 @@ function Comparison({
   const currency = (row: Record<string, unknown> | null) =>
     typeof row?.currency === "string" ? row.currency : "RUB";
   const members = useFamilyMembers();
-  const { data: refs } = useApiPageData<ImportPageData | null>(null, "/import");
+  const { data: refs } = useApiPageData(null, "/import");
   // Ссылки — названиями, а не номерами: «Карта», а не acc-3f2…
   const nameOf = (field: string, value: string): string | null => {
     if (field === "memberId") return members.find((member) => member.id === value)?.name ?? null;

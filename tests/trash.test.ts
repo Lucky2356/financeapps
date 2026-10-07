@@ -1,22 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { SheetPageData } from "@/lib/api/local/sheet";
-import type { AccountsPageData, TransactionsPageData } from "@/lib/data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { addToTrash, pruneTrash, vanishedRows, type TrashEntry } from "@/lib/trash/trash";
 
 // Корзина: удалённое — здесь или на другом устройстве — 30 дней можно вернуть.
-
-type TrashList = {
-  entries: Array<{
-    id: string;
-    collection: string;
-    title: string;
-    amount: number | null;
-    origin: string;
-  }>;
-};
 
 describe("корзина — чистые функции", () => {
   const row = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -73,7 +61,7 @@ describe("корзина в книге", () => {
   async function setup() {
     const client = new LocalApiClient(new MemoryStorageAdapter());
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "10000" });
-    const page = await client.get<TransactionsPageData>("/transactions");
+    const page = await client.get("/transactions");
     const account = page.accounts[0].id;
     const category = page.categories.find((item) => item.kind === "EXPENSE")!.id;
     await client.post("/transactions", {
@@ -85,10 +73,8 @@ describe("корзина в книге", () => {
       date: "2026-10-01"
     });
     const balance = async () =>
-      (await client.get<AccountsPageData>("/accounts")).accounts.find((a) => a.id === account)!
-        .balance;
-    const ledger = async () =>
-      (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+      (await client.get("/accounts")).accounts.find((a) => a.id === account)!.balance;
+    const ledger = async () => (await client.get("/transactions?period=all")).transactions;
     return { client, balance, ledger };
   }
 
@@ -99,7 +85,7 @@ describe("корзина в книге", () => {
     await client.delete(`/transactions?id=${row.id}`);
     expect(await balance()).toBe(10000);
 
-    const trash = await client.get<TrashList>("/trash");
+    const trash = await client.get("/trash");
     expect(trash.entries).toHaveLength(1);
     expect(trash.entries[0]).toMatchObject({
       collection: "transactions",
@@ -115,14 +101,14 @@ describe("корзина в книге", () => {
     expect(result.restored).toBe(1);
     expect((await ledger()).map((item) => item.description)).toEqual(["Ужин"]);
     expect(await balance()).toBe(8500);
-    expect((await client.get<TrashList>("/trash")).entries).toEqual([]);
+    expect((await client.get("/trash")).entries).toEqual([]);
   });
 
   it("удаление, пришедшее с другого устройства, тоже попадает в корзину", async () => {
     const storage = new MemoryStorageAdapter();
     const client = new LocalApiClient(storage);
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "10000" });
-    const page = await client.get<TransactionsPageData>("/transactions");
+    const page = await client.get("/transactions");
     await client.post("/transactions", {
       type: "EXPENSE",
       amount: "700",
@@ -141,7 +127,7 @@ describe("корзина в книге", () => {
     client.forgetCachedState();
 
     await client.get("/transactions");
-    const trash = await client.get<TrashList>("/trash");
+    const trash = await client.get("/trash");
     expect(trash.entries).toHaveLength(1);
     expect(trash.entries[0]).toMatchObject({ title: "Такси", origin: "elsewhere" });
   });
@@ -151,8 +137,8 @@ describe("корзина в книге", () => {
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "1000" });
     await client.post("/accounts", { name: "Наличные", type: "CASH", balance: "0" });
     const accounts = async () =>
-      (await client.get<AccountsPageData>("/accounts")).accounts.map((item) => item.balance);
-    const [from, to] = (await client.get<AccountsPageData>("/accounts")).accounts;
+      (await client.get("/accounts")).accounts.map((item) => item.balance);
+    const [from, to] = (await client.get("/accounts")).accounts;
     await client.post("/transactions", {
       action: "transfer",
       fromAccountId: from.id,
@@ -161,7 +147,7 @@ describe("корзина в книге", () => {
       date: "2026-10-01"
     });
     expect(await accounts()).toEqual([700, 300]);
-    const legs = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    const legs = (await client.get("/transactions?period=all")).transactions;
 
     // Правка одной строки (форма не присылает номер перевода) не отрывает её
     // от перевода.
@@ -174,23 +160,20 @@ describe("корзина в книге", () => {
       date: "2026-10-02",
       description: legs[0].description
     });
-    const edited = (await client.get<TransactionsPageData>("/transactions?period=all"))
-      .transactions;
+    const edited = (await client.get("/transactions?period=all")).transactions;
     expect(edited.every((item) => item.transferId === legs[1].transferId)).toBe(true);
 
     // Удалили одну строку перевода — ушёл весь перевод, оба счёта как были.
     await client.delete(`/transactions?id=${legs[0].id}`);
     expect(await accounts()).toEqual([1000, 0]);
-    expect(
-      (await client.get<TransactionsPageData>("/transactions?period=all")).transactions
-    ).toEqual([]);
+    expect((await client.get("/transactions?period=all")).transactions).toEqual([]);
 
     // Вернули одну запись корзины — вернулся весь перевод.
-    const trash = await client.get<TrashList>("/trash");
+    const trash = await client.get("/trash");
     expect(trash.entries).toHaveLength(2);
     await client.post("/trash", { action: "restore", ids: [trash.entries[0].id] });
     expect(await accounts()).toEqual([700, 300]);
-    expect((await client.get<TrashList>("/trash")).entries).toEqual([]);
+    expect((await client.get("/trash")).entries).toEqual([]);
   });
 
   it("старый перевод (до 1.10, только метка в описании) тоже удаляется целиком", async () => {
@@ -198,7 +181,7 @@ describe("корзина в книге", () => {
     const client = new LocalApiClient(storage);
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "1000" });
     await client.post("/accounts", { name: "Наличные", type: "CASH", balance: "0" });
-    const [from, to] = (await client.get<AccountsPageData>("/accounts")).accounts;
+    const [from, to] = (await client.get("/accounts")).accounts;
     await client.post("/transactions", {
       action: "transfer",
       fromAccountId: from.id,
@@ -214,14 +197,12 @@ describe("корзина в книге", () => {
       transactions: book.transactions.map(({ transferId: _id, ...row }) => (void _id, row))
     });
     client.forgetCachedState();
-    const legs = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    const legs = (await client.get("/transactions?period=all")).transactions;
     expect(legs).toHaveLength(2);
     expect(legs.every((row) => !row.transferId)).toBe(true);
 
     await client.delete(`/transactions?id=${legs[0].id}`);
-    expect(
-      (await client.get<TransactionsPageData>("/transactions?period=all")).transactions
-    ).toEqual([]);
+    expect((await client.get("/transactions?period=all")).transactions).toEqual([]);
   });
 
   it("удалённый столбец таблицы возвращается со своими числами", async () => {
@@ -239,13 +220,13 @@ describe("корзина в книге", () => {
       ]
     });
     await client.post("/sheet", { action: "removeColumn", id: column.id });
-    expect((await client.get<SheetPageData>("/sheet")).cells).toEqual([]);
+    expect((await client.get("/sheet")).cells).toEqual([]);
 
-    const trash = await client.get<TrashList>("/trash");
+    const trash = await client.get("/trash");
     expect(trash.entries).toHaveLength(1);
     expect(trash.entries[0]).toMatchObject({ collection: "sheetColumns", title: "Продукты" });
     await client.post("/trash", { action: "restore", ids: [trash.entries[0].id] });
-    const sheet = await client.get<SheetPageData>("/sheet");
+    const sheet = await client.get("/sheet");
     expect(sheet.columns.map((item) => item.name)).toContain("Продукты");
     expect(sheet.cells.map((cell) => cell.input).sort()).toEqual(["18000+500", "20000"]);
   });
@@ -254,8 +235,8 @@ describe("корзина в книге", () => {
     const { client, ledger } = await setup();
     const [row] = await ledger();
     await client.delete(`/transactions?id=${row.id}`);
-    const trash = await client.get<TrashList>("/trash");
+    const trash = await client.get("/trash");
     await client.post("/trash", { action: "purge", ids: [trash.entries[0].id] });
-    expect((await client.get<TrashList>("/trash")).entries).toEqual([]);
+    expect((await client.get("/trash")).entries).toEqual([]);
   });
 });

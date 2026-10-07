@@ -326,19 +326,15 @@ function DebtDialog({
     let cancelled = false;
     void (async () => {
       const [accountsData, categoriesData] = await Promise.all([
-        apiClient
-          .get<{ accounts?: Array<{ id: string; name: string }> }>("/accounts")
-          .catch(() => null),
-        apiClient
-          .get<{ categories?: Array<{ id: string; label: string; kind: string }> }>("/categories")
-          .catch(() => null)
+        apiClient.get("/accounts").catch(() => null),
+        apiClient.get("/categories").catch(() => null)
       ]);
       if (cancelled) return;
       setAccounts(accountsData?.accounts ?? []);
       setCategories(
         (categoriesData?.categories ?? [])
           .filter((category) => category.kind === "EXPENSE")
-          .map((category) => ({ id: category.id, label: category.label }))
+          .map((category) => ({ id: category.id, label: category.name }))
       );
     })();
     return () => {

@@ -49,7 +49,7 @@ function Change({ now, before, goodWhenUp }: { now: number; before: number; good
 export function YearRecapCard({ currency }: { currency: string }) {
   const { t, locale } = useI18n();
   const [year, setYear] = useState(thisYear);
-  const { data } = useApiPageData<YearRecap>(EMPTY, `/year-recap?year=${year}`);
+  const { data } = useApiPageData(EMPTY, `/year-recap?year=${year}`);
   const money = (value: number) => formatCurrency(value, currency);
   const monthName = (month: string) =>
     new Date(`${month}-01T12:00:00`).toLocaleDateString(locale === "en" ? "en-GB" : "ru-RU", {

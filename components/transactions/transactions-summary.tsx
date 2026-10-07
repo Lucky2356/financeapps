@@ -22,7 +22,7 @@ const EMPTY: Summary = { currency: "RUB", monthlyCashflow: [], categoryExpenses:
 // would only see a page of them.
 export function TransactionsSummary() {
   const { t } = useI18n();
-  const { data } = useApiPageData<Summary>(EMPTY, "/dashboard");
+  const { data } = useApiPageData(EMPTY, "/dashboard");
   const currency = data.currency;
 
   const months = data.monthlyCashflow;

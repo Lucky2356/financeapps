@@ -149,7 +149,7 @@ describe("книга через запертое хранилище", () => {
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 1000 });
     await client.post("/accounts", { name: "Наличные", type: "CASH", balance: 500 });
 
-    const data = await client.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const data = await client.get("/accounts");
     expect(data.accounts.map((row) => row.name).sort()).toEqual(["Карта", "Наличные"]);
 
     // И при этом на диске — шифротекст.
@@ -172,9 +172,7 @@ describe("книга через запертое хранилище", () => {
     storage.lock();
     storage.unlock(key);
 
-    const after = await new LocalApiClient(storage).get<{ accounts: Array<{ name: string }> }>(
-      "/accounts"
-    );
+    const after = await new LocalApiClient(storage).get("/accounts");
     expect(after.accounts.map((row) => row.name)).toContain("Вклад");
   });
 

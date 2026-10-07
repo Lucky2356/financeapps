@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { TransactionsPageData } from "@/lib/data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { annuity, simulate, type WhatIfBase } from "@/lib/whatif/simulate";
 
@@ -111,7 +110,7 @@ describe("«Что если»", () => {
   it("платёж по долгу не считается дважды: он уже в «платежах по долгам», не в расходах", async () => {
     const api = new LocalApiClient(new MemoryStorageAdapter());
     await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "50000" });
-    const page = await api.get<TransactionsPageData>("/transactions");
+    const page = await api.get("/transactions");
     const accountId = page.accounts[0].id;
     const categoryId = page.categories.find((item) => item.kind === "EXPENSE")!.id;
     const now = new Date();
@@ -136,7 +135,7 @@ describe("«Что если»", () => {
     // Кредитка без минимального платежа — в «платежах по долгам» её нет, и
     // её погашение остаётся обычным расходом, а не пропадает.
     await expense("5000", { liabilityId: card.id });
-    const whatIf = await api.get<WhatIfBase>("/what-if");
+    const whatIf = await api.get("/what-if");
     expect(whatIf.avgExpense).toBe(35_000);
     expect(whatIf.debtPayments).toBe(12_000);
   });

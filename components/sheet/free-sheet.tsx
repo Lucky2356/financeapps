@@ -33,10 +33,7 @@ const EMPTY: WorkbookPage = {
 
 export function FreeSheet({ sheetId, onChanged }: { sheetId: string; onChanged: () => void }) {
   const { t, locale } = useI18n();
-  const { data, reload } = useApiPageData<WorkbookPage>(
-    EMPTY,
-    `/workbook?sheet=${encodeURIComponent(sheetId)}`
-  );
+  const { data, reload } = useApiPageData(EMPTY, `/workbook?sheet=${encodeURIComponent(sheetId)}`);
   const free = data.free ?? EMPTY.free!;
 
   // Правки видны сразу, в книгу уходят следом.

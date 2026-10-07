@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { AccountsPageData, TransactionsPageData } from "@/lib/data";
 import { limitHint } from "@/lib/budget-limit-hint";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { quickDates } from "@/lib/transactions/quick-dates";
@@ -118,7 +117,7 @@ describe("«Отменить» после удаления операции", ()
   async function setup() {
     const client = new LocalApiClient(new MemoryStorageAdapter());
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "10000" });
-    const page = await client.get<TransactionsPageData>("/transactions");
+    const page = await client.get("/transactions");
     const account = page.accounts[0].id;
     const category = page.categories.find((item) => item.kind === "EXPENSE")!.id;
     const created = await client.post<{ id: string }>("/transactions", {
@@ -131,10 +130,8 @@ describe("«Отменить» после удаления операции", ()
       date: new Date().toISOString().slice(0, 10)
     });
     const balance = async () =>
-      (await client.get<AccountsPageData>("/accounts")).accounts.find((a) => a.id === account)!
-        .balance;
-    const list = async () =>
-      (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+      (await client.get("/accounts")).accounts.find((a) => a.id === account)!.balance;
+    const list = async () => (await client.get("/transactions?period=all")).transactions;
     return { client, account, category, id: created.id, balance, list };
   }
 

@@ -36,9 +36,7 @@ describe("which limit is in force", () => {
 describe("setting a limit while looking at a month", () => {
   async function seeded() {
     const api = new LocalApiClient(new MemoryStorageAdapter());
-    const categories = await api.get<{ categories: Array<{ id: string; name: string }> }>(
-      "/categories"
-    );
+    const categories = await api.get("/categories");
     const food = categories.categories.find((category) => category.name === "Продукты");
     return { api, foodId: food?.id ?? "" };
   }
@@ -52,9 +50,9 @@ describe("setting a limit while looking at a month", () => {
     await api.post("/budgets", { categoryId: foodId, limitAmount: "20000", month: "2026-07" });
     await api.post("/budgets", { categoryId: foodId, limitAmount: "30000", month: "2026-09" });
 
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-07"), foodId)).toBe(20_000);
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-08"), foodId)).toBe(20_000);
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-09"), foodId)).toBe(30_000);
+    expect(limitOf(await api.get("/budgets?month=2026-07"), foodId)).toBe(20_000);
+    expect(limitOf(await api.get("/budgets?month=2026-08"), foodId)).toBe(20_000);
+    expect(limitOf(await api.get("/budgets?month=2026-09"), foodId)).toBe(30_000);
   });
 
   it("leaves a limit set before limits had months alone", async () => {
@@ -64,9 +62,7 @@ describe("setting a limit while looking at a month", () => {
     // fell to no limit — the opposite of what the migration promises.
     const storage = new MemoryStorageAdapter();
     const first = new LocalApiClient(storage);
-    const categories = await first.get<{ categories: Array<{ id: string; name: string }> }>(
-      "/categories"
-    );
+    const categories = await first.get("/categories");
     const foodId = categories.categories.find((category) => category.name === "Продукты")?.id ?? "";
     await first.post("/budgets", { categoryId: foodId, limitAmount: "20000" });
 
@@ -83,9 +79,9 @@ describe("setting a limit while looking at a month", () => {
     const api = new LocalApiClient(storage);
     await api.post("/budgets", { categoryId: foodId, limitAmount: "30000", month: "2026-09" });
 
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-05"), foodId)).toBe(20_000);
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-09"), foodId)).toBe(30_000);
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-11"), foodId)).toBe(30_000);
+    expect(limitOf(await api.get("/budgets?month=2026-05"), foodId)).toBe(20_000);
+    expect(limitOf(await api.get("/budgets?month=2026-09"), foodId)).toBe(30_000);
+    expect(limitOf(await api.get("/budgets?month=2026-11"), foodId)).toBe(30_000);
   });
 
   it("a zero means no limit that month, not the earlier one coming back", async () => {
@@ -94,7 +90,7 @@ describe("setting a limit while looking at a month", () => {
     await api.post("/budgets", { categoryId: foodId, limitAmount: "20000", month: "2026-07" });
     await api.post("/budgets", { categoryId: foodId, limitAmount: "0", month: "2026-09" });
 
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-07"), foodId)).toBe(20_000);
-    expect(limitOf(await api.get<BudgetsPageData>("/budgets?month=2026-09"), foodId)).toBe(0);
+    expect(limitOf(await api.get("/budgets?month=2026-07"), foodId)).toBe(20_000);
+    expect(limitOf(await api.get("/budgets?month=2026-09"), foodId)).toBe(0);
   });
 });

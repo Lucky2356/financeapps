@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { todayDay } from "@/lib/transactions/date";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type { AnalyticsData, BudgetsPageData, TransactionsPageData } from "@/lib/data";
-import type { ForecastData, PlanFactPageData } from "@/types/finance";
 
 // An operation is recorded in the currency of its account: a dollar card stores
 // 100, not what that is worth. Balances were converted before being summed;
@@ -25,9 +23,7 @@ async function ledgerInTwoCurrencies() {
     balance: "1000",
     currency: "USD"
   });
-  const categories = await client.get<{
-    categories: Array<{ id: string; name: string; kind: string }>;
-  }>("/categories");
+  const categories = await client.get("/categories");
   const food = categories.categories.find((category) => category.name === "Продукты");
   const today = todayDay();
 
@@ -60,11 +56,7 @@ describe("money in more than one currency", () => {
     // without touching the amounts, so 100 000 ₽ started reading as 100 000 $.
     await client.put("/settings", { currency: "USD" });
 
-    const accounts = await client.get<{
-      accounts: Array<{ name: string; currency: string; balance: number }>;
-      totalBalance: number;
-      currency: string;
-    }>("/accounts");
+    const accounts = await client.get("/accounts");
     expect(accounts.currency).toBe("USD");
     expect(accounts.accounts.find((account) => account.name === "Рублёвая карта")?.currency).toBe(
       "RUB"
@@ -77,7 +69,7 @@ describe("money in more than one currency", () => {
     expect(accounts.totalBalance).toBeCloseTo(99_000 / USD_RATE + 900, 2);
 
     // And the same for the operations: the month is now counted in dollars.
-    const analytics = await client.get<AnalyticsData>("/analytics");
+    const analytics = await client.get("/analytics");
     const thisMonth = analytics.monthlyCashflow[analytics.monthlyCashflow.length - 1];
     expect(thisMonth.expense).toBeCloseTo(expected / USD_RATE, 2);
   });
@@ -85,7 +77,7 @@ describe("money in more than one currency", () => {
   it("adds up the month on the analytics screen by converting first", async () => {
     const { client, expected } = await ledgerInTwoCurrencies();
 
-    const analytics = await client.get<AnalyticsData>("/analytics");
+    const analytics = await client.get("/analytics");
     const thisMonth = analytics.monthlyCashflow[analytics.monthlyCashflow.length - 1];
     expect(thisMonth.expense).toBe(expected);
 
@@ -98,7 +90,7 @@ describe("money in more than one currency", () => {
   it("fills the plan/fact cell with the converted amount", async () => {
     const { client, food, expected } = await ledgerInTwoCurrencies();
 
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const plan = await client.get("/plan");
     const month = plan.months.find((entry) => entry.month === todayDay().slice(0, 7));
     expect(month?.cells[food?.id ?? ""]?.fact).toBe(expected);
     expect(month?.expense.fact).toBe(expected);
@@ -109,7 +101,7 @@ describe("money in more than one currency", () => {
     // The limit is set in the base currency, so the spending has to be in it too.
     await client.post("/budgets", { categoryId: food?.id, limitAmount: "9000" });
 
-    const budgets = await client.get<BudgetsPageData>("/budgets");
+    const budgets = await client.get("/budgets");
     const budget = budgets.budgets.find((item) => item.categoryId === food?.id);
     expect(budget?.spent).toBe(expected);
     expect(budget?.isExceeded).toBe(true);
@@ -118,7 +110,7 @@ describe("money in more than one currency", () => {
   it("hands the ledger row its worth in the base currency, keeping the original", async () => {
     const { client } = await ledgerInTwoCurrencies();
 
-    const ledger = await client.get<TransactionsPageData>("/transactions");
+    const ledger = await client.get("/transactions");
     const abroad = ledger.transactions.find((row) => row.description === "Продукты в поездке");
     const home = ledger.transactions.find((row) => row.description === "Продукты дома");
 
@@ -148,7 +140,7 @@ describe("money in more than one currency", () => {
       isActive: "true"
     });
 
-    const forecast = await client.get<ForecastData>("/forecast");
+    const forecast = await client.get("/forecast");
     // 50 $ a month is 4 500 ₽ of planned spending, not 50 ₽.
     expect(forecast.plannedExpense30d).toBe(50 * USD_RATE);
   });

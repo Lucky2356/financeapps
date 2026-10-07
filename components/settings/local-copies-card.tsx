@@ -19,7 +19,7 @@ import { useI18n } from "@/lib/i18n/context";
 export function LocalCopiesCard() {
   const { t, locale } = useI18n();
   const confirm = useConfirm();
-  const { data: copies, reload } = useApiPageData<LocalCopy[]>([], "/backup/local-copies");
+  const { data: copies, reload } = useApiPageData([], "/backup/local-copies");
   const [main, setMain] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 

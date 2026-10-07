@@ -23,8 +23,6 @@ import { FakeSyncServer } from "./helpers/fake-sync-server";
 const FAST = { iterations: 1 };
 const BOOK = "localFinanceState_profile-default";
 
-type Row = { id: string; balance: number; name: string };
-
 async function device() {
   const { bookKey } = await createVault("пароль", FAST);
   const disk = new MemoryStorageAdapter();
@@ -45,10 +43,8 @@ async function device() {
 
 /** Сколько прошло по счёту и сколько на нём числится. */
 async function money(app: LocalApiClient) {
-  const { accounts } = await app.get<{ accounts: Row[] }>("/accounts");
-  const { transactions } = await app.get<{
-    transactions: Array<{ amount: number; type: string; account: { id: string } }>;
-  }>("/transactions?limit=500");
+  const { accounts } = await app.get("/accounts");
+  const { transactions } = await app.get("/transactions?limit=500");
 
   const card = accounts[0];
   const passed = transactions
@@ -67,11 +63,9 @@ describe("остаток счёта равен тому, что по нему п
 
     const pc = await device();
     await pc.app.post("/accounts", { name: "Тинька", type: "DEBIT_CARD", balance: 0 });
-    const { categories } = await pc.app.get<{ categories: Array<{ id: string; kind: string }> }>(
-      "/categories"
-    );
+    const { categories } = await pc.app.get("/categories");
     const spend = categories.find((row) => row.kind === "EXPENSE")!;
-    const { accounts } = await pc.app.get<{ accounts: Row[] }>("/accounts");
+    const { accounts } = await pc.app.get("/accounts");
     const card = accounts[0];
 
     const add = async (app: LocalApiClient, amount: number, what: string) =>
@@ -132,11 +126,9 @@ describe("остаток счёта равен тому, что по нему п
       const server = new FakeSyncServer();
       const pc = await device();
       await pc.app.post("/accounts", { name: "Тинька", type: "DEBIT_CARD", balance: 0 });
-      const { categories } = await pc.app.get<{ categories: Array<{ id: string; kind: string }> }>(
-        "/categories"
-      );
+      const { categories } = await pc.app.get("/categories");
       const spend = categories.find((row) => row.kind === "EXPENSE")!;
-      const { accounts } = await pc.app.get<{ accounts: Row[] }>("/accounts");
+      const { accounts } = await pc.app.get("/accounts");
       const card = accounts[0];
 
       await pc.sync.start(server, pc.merge);

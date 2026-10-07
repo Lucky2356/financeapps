@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import { MARKET_READS, STATE_READS } from "@/lib/api/local/reads";
+import type { ReadPath } from "@/lib/api/routes";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 
 // Reads hand out the cached document itself instead of a copy — that is what
@@ -10,23 +12,24 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 // cache to disk, which is exactly what this test makes visible.
 const STATE_KEY = "localFinanceState_profile-default";
 
-const READ_ROUTES = [
-  "/accounts",
-  "/transactions",
-  "/budgets",
-  "/goals",
-  "/debts",
-  "/rules",
-  "/recurring",
-  "/forecast",
-  "/dashboard",
-  "/settings",
-  "/import",
+// Все чтения из таблиц маршрутов — а не список, который надо помнить
+// пополнять: новый путь попадает под проверку тем, что появился в таблице.
+// Чтения хранилища (копии, корзина, профили, фото) живут в самом клиенте и
+// перечислены здесь.
+const STORE_READS: ReadPath[] = [
   "/backup",
-  "/categories",
-  "/analytics",
-  "/plan",
-  "/profiles"
+  "/backup/before-upgrade",
+  "/backup/before-clear",
+  "/backup/local-copies",
+  "/trash",
+  "/profiles",
+  "/photos",
+  "/investments"
+];
+const READ_ROUTES = [
+  ...(Object.keys(STATE_READS) as ReadPath[]),
+  ...(Object.keys(MARKET_READS) as ReadPath[]),
+  ...STORE_READS
 ];
 
 describe("read routes leave the stored document alone", () => {

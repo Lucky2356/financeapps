@@ -8,7 +8,7 @@ import { apiClient } from "@/lib/api/client";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { buildRealizedTaxReport } from "@/services/InvestmentTaxReportService";
-import { convert, DEFAULT_CURRENCY_RATES, type CurrencyRates } from "@/lib/currency";
+import { convert, DEFAULT_CURRENCY_RATES } from "@/lib/currency";
 import type { RealizedInvestmentEvent } from "@/types/finance";
 import type { AccountsPageData } from "@/lib/data";
 import { Button } from "@/components/ui/button";
@@ -23,12 +23,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-
-type EventsResponse = {
-  events: RealizedInvestmentEvent[];
-  currency: string;
-  rates?: CurrencyRates;
-};
+import { useDataVersion } from "@/hooks/use-data-version";
 
 // Desktop-only realized-income ledger + tax report: record sells and dividends,
 // see the year-by-year НДФЛ estimate on actually realized income. Kept separate
@@ -45,9 +40,13 @@ export function RealizedTaxReport() {
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
   const [accountId, setAccountId] = useState("none");
 
+  // Журнал продаж и дивидендов меняет не только эта карточка — и синхронизация
+  // с другим устройством тоже.
+  const version = useDataVersion();
+
   const load = () =>
     apiClient
-      .get<EventsResponse>("/investments/events")
+      .get("/investments/events")
       .then((data) => {
         setEvents(data.events);
         setCurrency(data.currency || "RUB");
@@ -60,12 +59,12 @@ export function RealizedTaxReport() {
   useEffect(() => {
     void load();
     void apiClient
-      .get<AccountsPageData>("/accounts")
+      .get("/accounts")
       .then((data) => setAccounts(data.accounts))
       .catch(() => {
         /* offline or empty — the sale is recorded without an account */
       });
-  }, []);
+  }, [version]);
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

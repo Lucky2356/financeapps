@@ -31,7 +31,6 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import type { CashbackPageData } from "@/lib/api/local/extras";
 import { ANY_CATEGORY, type CashbackRule } from "@/lib/cashback/cashback";
-import type { AccountsPageData, CategoriesPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -46,12 +45,12 @@ const EMPTY: CashbackPageData = {
 export function CashbackScreen() {
   const { words, format, locale } = useExtrasText();
   const [month, setMonth] = useState(thisMonth);
-  const { data, reload } = useApiPageData<CashbackPageData>(EMPTY, `/cashback?month=${month}`);
-  const { data: accountsData } = useApiPageData<AccountsPageData>(
+  const { data, reload } = useApiPageData(EMPTY, `/cashback?month=${month}`);
+  const { data: accountsData } = useApiPageData(
     { source: "database", accounts: [], totalBalance: 0, currency: "RUB" },
     "/accounts"
   );
-  const { data: categoriesData } = useApiPageData<CategoriesPageData>(
+  const { data: categoriesData } = useApiPageData(
     { source: "database", categories: [] },
     "/categories"
   );

@@ -152,11 +152,11 @@ function lastDay(month: string): string {
 
 export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
   const { words, format, locale } = useSheetText();
-  const { data: loaded, reload } = useApiPageData<SheetPageData>(
+  const { data: loaded, reload } = useApiPageData(
     EMPTY,
     `/sheet?sheet=${encodeURIComponent(sheetId)}`
   );
-  const { data: refs, reload: reloadRefs } = useApiPageData<ImportPageData>(EMPTY_REFS, "/import");
+  const { data: refs, reload: reloadRefs } = useApiPageData(EMPTY_REFS, "/import");
   const phone = useMediaQuery("(max-width: 767px)");
 
   // Правки видны сразу, а в книгу уходят следом — ждать ответа на каждую
@@ -253,9 +253,7 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
     if (!rangeFrom) return;
     let alive = true;
     apiClient
-      .get<{
-        months: Record<string, Record<string, number>>;
-      }>(`/sheet/facts?from=${rangeFrom}&to=${rangeTo}`)
+      .get(`/sheet/facts?from=${rangeFrom}&to=${rangeTo}`)
       .then((result) => alive && setFacts(result.months))
       .catch(() => undefined);
     return () => {
@@ -573,9 +571,7 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
   async function fillFromLedger() {
     if (computed.rows.length === 0) return;
     try {
-      const result = await apiClient.get<{ months: Record<string, Record<string, number>> }>(
-        `/sheet/facts?from=${rangeFrom}&to=${rangeTo}`
-      );
+      const result = await apiClient.get(`/sheet/facts?from=${rangeFrom}&to=${rangeTo}`);
       const changes = factFill(computed.rows, sheet.columns, result.months, {
         before: current,
         incomeCategoryIds: new Set(

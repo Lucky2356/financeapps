@@ -45,9 +45,9 @@ export function Workbook() {
   const router = useRouter();
   const params = useSearchParams();
   const wanted = params.get("sheet");
-  const { data, reload } = useApiPageData<WorkbookPage>(
+  const { data, reload } = useApiPageData(
     EMPTY,
-    `/workbook${wanted ? `?sheet=${encodeURIComponent(wanted)}` : ""}`
+    wanted ? `/workbook?sheet=${encodeURIComponent(wanted)}` : "/workbook"
   );
   const confirm = useConfirm();
   const [dialog, setDialog] = useState<

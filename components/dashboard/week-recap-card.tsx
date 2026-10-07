@@ -31,7 +31,7 @@ const EMPTY: WeekRecap = {
 
 export function WeekRecapCard({ currency }: { currency: string }) {
   const { t, locale } = useI18n();
-  const { data } = useApiPageData<WeekRecap>(EMPTY, "/week-recap");
+  const { data } = useApiPageData(EMPTY, "/week-recap");
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {

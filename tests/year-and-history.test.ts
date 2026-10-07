@@ -45,9 +45,7 @@ describe("история остатка", () => {
       amount: "5000",
       accountId: card.id
     });
-    const history = await api.get<{ total: number[]; cushion: number[]; months: string[] }>(
-      "/balance-history?months=2"
-    );
+    const history = await api.get("/balance-history?months=2");
     expect(history.months).toHaveLength(2);
     expect(history.total[history.total.length - 1]).toBe(20000);
     expect(history.cushion[history.cushion.length - 1]).toBe(5000);

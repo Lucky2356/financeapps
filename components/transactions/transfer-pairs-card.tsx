@@ -38,7 +38,7 @@ export function TransferPairsCard() {
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const { data, reload } = useApiPageData<{ pairs: TransferPair[] }>(
+  const { data, reload } = useApiPageData(
     { pairs: [] },
     `/transfer-pairs?dismissed=${encodeURIComponent(dismissed.join(","))}`
   );

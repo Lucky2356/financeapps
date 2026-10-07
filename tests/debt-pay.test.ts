@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { AccountsPageData, LiabilitiesPageData, TransactionsPageData } from "@/lib/data";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 
 // «Внести платёж» по долгу: расход со счёта и такое же уменьшение долга.
@@ -9,7 +8,7 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 async function setup(extra: Record<string, string> = {}) {
   const client = new LocalApiClient(new MemoryStorageAdapter());
   await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "50000" });
-  const account = (await client.get<AccountsPageData>("/accounts")).accounts[0].id;
+  const account = (await client.get("/accounts")).accounts[0].id;
   await client.post("/debts", {
     name: "Кредитка",
     kind: "CREDIT_CARD",
@@ -20,12 +19,10 @@ async function setup(extra: Record<string, string> = {}) {
     dueDay: "5",
     ...extra
   });
-  const debt = async () => (await client.get<LiabilitiesPageData>("/debts")).liabilities[0];
+  const debt = async () => (await client.get("/debts")).liabilities[0];
   const balance = async () =>
-    (await client.get<AccountsPageData>("/accounts")).accounts.find((a) => a.id === account)!
-      .balance;
-  const ledger = async () =>
-    (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    (await client.get("/accounts")).accounts.find((a) => a.id === account)!.balance;
+  const ledger = async () => (await client.get("/transactions?period=all")).transactions;
   return { client, account, debt, balance, ledger };
 }
 

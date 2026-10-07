@@ -470,9 +470,7 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
         const from = formatInputDate(addMonths(new Date(), -13));
         // Весь год, а не сто последних строк: при полусотне операций в месяц
         // сотня покрывала два месяца, и «обычно» считалось по огрызку.
-        const result = await apiClient.get<TransactionsPageData>(
-          `/transactions?limit=all&from=${from}`
-        );
+        const result = await apiClient.get(`/transactions?limit=all&from=${from}`);
         if (!cancelled) setTransactions(result.transactions);
       } catch {
         /* offline / unavailable — section stays empty */

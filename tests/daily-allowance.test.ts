@@ -66,9 +66,7 @@ describe("ручка /allowance", () => {
       type: "CASH",
       balance: "0"
     });
-    const categories = await api.get<{ categories: Array<{ id: string; kind: string }> }>(
-      "/categories"
-    );
+    const categories = await api.get("/categories");
     const income = categories.categories.find((c) => c.kind === "INCOME")!;
     const expense = categories.categories.find((c) => c.kind === "EXPENSE")!;
     const today = formatInputDate(new Date());
@@ -94,7 +92,7 @@ describe("ручка /allowance", () => {
       date: today
     });
 
-    const allowance = await api.get<{ income: number; spentToday: number }>("/allowance");
+    const allowance = await api.get("/allowance");
     expect(allowance.income).toBe(50000);
     expect(allowance.spentToday).toBe(700);
   });

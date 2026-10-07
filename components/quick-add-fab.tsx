@@ -15,7 +15,7 @@ import { suggestCategoryId } from "@/lib/category-suggest";
 import { parseEntry, type ParsedEntry } from "@/lib/transactions/parse-entry";
 import type { TransactionsPageData } from "@/lib/data";
 import { useApiPageData } from "@/hooks/use-api-page-data";
-import type { BudgetsPageData, ImportPageData, SettingsPageData } from "@/lib/data";
+import type { BudgetsPageData, ImportPageData } from "@/lib/data";
 import { limitHint } from "@/lib/budget-limit-hint";
 import { quickDates } from "@/lib/transactions/quick-dates";
 import {
@@ -29,7 +29,6 @@ import { formatCurrency, formatInputDate } from "@/lib/format";
 import { parseFnsReceipt } from "@/lib/receipts/fns-qr";
 import { ReceiptPhotoDialog } from "@/components/transactions/receipt-photo-dialog";
 import { bestCard, rateFor, type CashbackRule } from "@/lib/cashback/cashback";
-import type { CashbackPageData, TripsPageData } from "@/lib/api/local/extras";
 import type { TripView } from "@/lib/trips/trips";
 import { cameraPossible, scanQr, waitForNoModal } from "@/lib/sync/scan-qr";
 import {
@@ -166,7 +165,7 @@ export function QuickAddFab({
     data: refs,
     reload: reloadRefs,
     setData: setRefs
-  } = useApiPageData<ImportPageData>(initialRefs, "/import");
+  } = useApiPageData(initialRefs, "/import");
 
   async function openDialog(request: QuickAddRequest = {}) {
     // Rules and recent operations feed the category guess. Fetched when the
@@ -174,16 +173,14 @@ export function QuickAddFab({
     //
     // Ждём его здесь же: из него берутся категория и счёт последней операции,
     // и они должны стоять в полях, когда диалог появится.
-    const recent = await apiClient
-      .get<TransactionsPageData>("/transactions?limit=100")
-      .catch(() => null);
+    const recent = await apiClient.get("/transactions?limit=100").catch(() => null);
     setLedger(recent);
     void apiClient
-      .get<CashbackPageData>("/cashback")
+      .get("/cashback")
       .then((result) => setCashback(result?.rules ?? []))
       .catch(() => setCashback([]));
     void apiClient
-      .get<TripsPageData>("/trips")
+      .get("/trips")
       .then((result) => setTrip(result?.active ?? null))
       .catch(() => setTrip(null));
     setSkipTrip(false);
@@ -197,7 +194,7 @@ export function QuickAddFab({
     const last = readMine(LAST_ACCOUNT_KEY);
     // Read the accounts here rather than waiting for the shared state to
     // update: the default has to be decided before the dialog is on screen.
-    const fresh = await apiClient.get<ImportPageData>("/import").catch(() => null);
+    const fresh = await apiClient.get("/import").catch(() => null);
     if (fresh) setRefs(fresh);
     const available = (fresh ?? refs).accounts.filter(
       (account) => !(account as AccountOption & { isArchived?: boolean }).isArchived
@@ -207,7 +204,7 @@ export function QuickAddFab({
     // Honour the default transaction type from settings.
     let openedType = type;
     try {
-      const settings = await apiClient.get<SettingsPageData>("/settings");
+      const settings = await apiClient.get("/settings");
       if (settings.defaultTransactionType) openedType = settings.defaultTransactionType;
     } catch {
       /* settings unavailable — keep current type */
@@ -338,7 +335,7 @@ export function QuickAddFab({
     if (!open || type !== "EXPENSE") return;
     let alive = true;
     void apiClient
-      .get<BudgetsPageData>(`/budgets?month=${operationMonth}`)
+      .get(`/budgets?month=${operationMonth}`)
       .then((result) => {
         if (alive) setLimits({ month: operationMonth, rows: result.budgets });
       })

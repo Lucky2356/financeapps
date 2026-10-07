@@ -200,7 +200,7 @@ describe("приложение через службу", () => {
     await desktop.sync.start(new HttpSyncTransport({ base, token }), desktop.merge);
     await desktop.sync.flush();
 
-    const seen = await desktop.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const seen = await desktop.app.get("/accounts");
     expect(seen.accounts.map((row) => row.name)).toContain("Карта");
   });
 
@@ -259,7 +259,7 @@ describe("приложение через службу", () => {
 
     expect(await phone.resume()).toBe(true);
 
-    const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const seen = await phone.app.get("/accounts");
     expect(seen.accounts.map((row) => row.name)).toContain("Карта");
   });
 
@@ -286,13 +286,9 @@ describe("приложение через службу", () => {
     // Книга с содержимым: счета, операции разных видов, долг, цель, лимит.
     await pc.app.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 50000 });
     await pc.app.post("/accounts", { name: "Копилка", type: "SAVINGS", balance: 120000 });
-    const { categories } = await pc.app.get<{ categories: Array<{ id: string; kind: string }> }>(
-      "/categories"
-    );
+    const { categories } = await pc.app.get("/categories");
     const expense = categories.find((row) => row.kind === "EXPENSE")!;
-    const { accounts } = await pc.app.get<{ accounts: Array<{ id: string; name: string }> }>(
-      "/accounts"
-    );
+    const { accounts } = await pc.app.get("/accounts");
     const card = accounts.find((row) => row.name === "Карта")!;
 
     for (const [description, amount] of [
@@ -360,12 +356,12 @@ describe("приложение через службу", () => {
       "/rules",
       "/settings",
       "/transactions"
-    ];
+    ] as const;
 
     const different: string[] = [];
     for (const screen of SCREENS) {
-      const here = await pc.app.get<unknown>(screen);
-      const there = await phone.app.get<unknown>(screen);
+      const here = await pc.app.get(screen);
+      const there = await phone.app.get(screen);
       if (JSON.stringify(here) !== JSON.stringify(there)) different.push(screen);
     }
 
@@ -646,7 +642,7 @@ describe("двое на одном устройстве — через наст�
     await phone.account.adopt(joined.vault, password);
     expect(await phone.resume()).toBe(true);
 
-    const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const seen = await phone.app.get("/accounts");
     expect(seen.accounts.map((row) => row.name)).toContain("Её карта");
   });
 
@@ -678,8 +674,8 @@ describe("двое на одном устройстве — через наст�
       expect(await who.resume()).toBe(true);
     }
 
-    const his = await vasya.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
-    const hers = await masha.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const his = await vasya.app.get("/accounts");
+    const hers = await masha.app.get("/accounts");
 
     expect(his.accounts.map((row) => row.name)).toContain("Его карта");
     expect(his.accounts.map((row) => row.name)).not.toContain("Её карта");
@@ -817,7 +813,7 @@ describe("двое на одном устройстве — через наст�
       await phone.account.adopt(joined.vault, password);
       expect(await phone.resume()).toBe(true);
 
-      const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+      const seen = await phone.app.get("/accounts");
       expect(seen.accounts.map((row) => row.name)).toContain("Карта");
     });
 
@@ -857,7 +853,7 @@ describe("двое на одном устройстве — через наст�
       await second.account.adopt(joined.vault, password);
       await second.resume();
 
-      const there = await second.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+      const there = await second.app.get("/accounts");
       expect(there.accounts.map((row) => row.name)).toContain("Карта");
     });
 
@@ -960,7 +956,7 @@ describe("«Очистить все данные» при подключённо
     await phone.app.delete("/storage/clear");
     await phone.sync.flush();
 
-    const accounts = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const accounts = await phone.app.get("/accounts");
     expect(accounts.accounts.map((account) => account.name)).not.toContain("Карта");
   });
 
@@ -980,9 +976,7 @@ describe("«Очистить все данные» при подключённо
     await again.start(new HttpSyncTransport({ base, token }), phone.merge);
     await again.flush();
 
-    const accounts = await new LocalApiClient(vault).get<{ accounts: Array<{ name: string }> }>(
-      "/accounts"
-    );
+    const accounts = await new LocalApiClient(vault).get("/accounts");
     expect(accounts.accounts.map((account) => account.name)).not.toContain("Карта");
   });
 
@@ -995,21 +989,17 @@ describe("«Очистить все данные» при подключённо
     await phone.sync.flush();
     await desktop.sync.start(new HttpSyncTransport({ base, token }), desktop.merge);
     await desktop.sync.flush();
-    expect(
-      (await desktop.app.get<{ accounts: Array<{ name: string }> }>("/accounts")).accounts.map(
-        (a) => a.name
-      )
-    ).toContain("Карта");
+    expect((await desktop.app.get("/accounts")).accounts.map((a) => a.name)).toContain("Карта");
 
     await phone.app.delete("/storage/clear");
     await phone.sync.flush();
     await desktop.sync.flush();
 
-    const onDesktop = await desktop.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const onDesktop = await desktop.app.get("/accounts");
     expect(onDesktop.accounts.map((account) => account.name)).not.toContain("Карта");
     // И обратно не приезжает: компьютер не переотправил старое на телефон.
     await phone.sync.flush();
-    const onPhone = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const onPhone = await phone.app.get("/accounts");
     expect(onPhone.accounts.map((account) => account.name)).not.toContain("Карта");
   });
 });
@@ -1069,7 +1059,7 @@ describe("начал без пароля — и подключил телефо�
     await phone.account.adopt(joined.vault, password);
     expect(await phone.resume()).toBe(true);
 
-    const seen = await phone.app.get<{ accounts: Array<{ name: string }> }>("/accounts");
+    const seen = await phone.app.get("/accounts");
     expect(seen.accounts.map((row) => row.name)).toContain("Карта Маши");
   });
 });

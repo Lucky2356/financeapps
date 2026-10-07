@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
-import type { AccountsPageData, TransactionsPageData } from "@/lib/data";
-import type { PlanFactPageData } from "@/types/finance";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import {
   findTransferPairs,
@@ -92,7 +90,7 @@ describe("связать в перевод", () => {
       type: "SAVINGS",
       balance: "100000"
     });
-    const page = await api.get<TransactionsPageData>("/transactions");
+    const page = await api.get("/transactions");
     const income = page.categories.find((item) => item.kind === "INCOME")!.id;
     const expense = page.categories.find((item) => item.kind === "EXPENSE")!.id;
     const today = new Date().toISOString().slice(0, 10);
@@ -112,11 +110,10 @@ describe("связать в перевод", () => {
       date: today,
       description: "Пополнение"
     });
-    const balances = async () =>
-      (await api.get<AccountsPageData>("/accounts")).accounts.map((item) => item.balance);
+    const balances = async () => (await api.get("/accounts")).accounts.map((item) => item.balance);
     const before = await balances();
 
-    const { pairs } = await api.get<{ pairs: TransferPair[] }>("/transfer-pairs");
+    const { pairs } = await api.get("/transfer-pairs");
     expect(pairs).toHaveLength(1);
     await api.post("/transactions", {
       action: "linkTransfer",
@@ -125,11 +122,11 @@ describe("связать в перевод", () => {
     });
 
     expect(await balances()).toEqual(before);
-    const ledger = (await api.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    const ledger = (await api.get("/transactions?period=all")).transactions;
     expect(new Set(ledger.map((item) => item.transferId)).size).toBe(1);
     expect(ledger.every((item) => item.transferId)).toBe(true);
-    expect((await api.get<{ pairs: TransferPair[] }>("/transfer-pairs")).pairs).toEqual([]);
-    const plan = await api.get<PlanFactPageData>("/plan");
+    expect((await api.get("/transfer-pairs")).pairs).toEqual([]);
+    const plan = await api.get("/plan");
     const month = plan.months.find((item) => item.month === today.slice(0, 7))!;
     expect(month.income.fact).toBe(0);
     expect(month.expense.fact).toBe(0);
@@ -137,9 +134,7 @@ describe("связать в перевод", () => {
 
     // Связанное удаляется и возвращается как перевод — целиком.
     await api.delete(`/transactions?id=${ledger[0].id}`);
-    expect((await api.get<TransactionsPageData>("/transactions?period=all")).transactions).toEqual(
-      []
-    );
+    expect((await api.get("/transactions?period=all")).transactions).toEqual([]);
   });
 
   it("не то, что можно связать, — понятный отказ", async () => {

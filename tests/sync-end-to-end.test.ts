@@ -47,18 +47,14 @@ class Device {
 }
 
 async function transactions(device: Device): Promise<string[]> {
-  const data = await device.app.get<{ transactions: Array<{ description: string }> }>(
-    "/transactions"
-  );
-  return data.transactions.map((row) => row.description).sort();
+  const data = await device.app.get("/transactions");
+  return data.transactions.map((row) => row.description ?? "").sort();
 }
 
 async function addExpense(device: Device, description: string, amount: number): Promise<void> {
   const app = device.app;
-  const { accounts } = await app.get<{ accounts: Array<{ id: string }> }>("/accounts");
-  const { categories } = await app.get<{ categories: Array<{ id: string; kind: string }> }>(
-    "/categories"
-  );
+  const { accounts } = await app.get("/accounts");
+  const { categories } = await app.get("/categories");
   await app.post("/transactions", {
     amount,
     type: "EXPENSE",
@@ -138,9 +134,7 @@ describe("две машины через сервер", () => {
     await phone.sync.flush();
 
     const shown = async (device: Device) => {
-      const { accounts } = await device.app.get<{ accounts: Array<{ balance: number }> }>(
-        "/accounts"
-      );
+      const { accounts } = await device.app.get("/accounts");
       return accounts[0].balance;
     };
 
@@ -154,9 +148,7 @@ describe("две машины через сервер", () => {
     await desktop.sync.flush();
     expect(await transactions(desktop)).toEqual(["обед"]);
 
-    const { transactions: rows } = await phone.app.get<{ transactions: Array<{ id: string }> }>(
-      "/transactions"
-    );
+    const { transactions: rows } = await phone.app.get("/transactions");
     await phone.app.delete(`/transactions?id=${rows[0].id}`);
     await phone.sync.flush();
     await desktop.sync.flush();

@@ -22,7 +22,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
-import type { AccountsPageData, CategoriesPageData, TransactionsPageData } from "@/lib/data";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
 import { useHiddenSections } from "@/hooks/use-hidden-sections";
 import { useI18n } from "@/lib/i18n/context";
@@ -144,8 +143,8 @@ export function CommandPalette() {
     void (async () => {
       try {
         const [accounts, categories] = await Promise.all([
-          apiClient.get<AccountsPageData>("/accounts"),
-          apiClient.get<CategoriesPageData>("/categories")
+          apiClient.get("/accounts"),
+          apiClient.get("/categories")
         ]);
         if (cancelled) return;
         setDynamic([
@@ -186,9 +185,7 @@ export function CommandPalette() {
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const data = await apiClient.get<TransactionsPageData>(
-            `/transactions?q=${encodeURIComponent(q)}&limit=6`
-          );
+          const data = await apiClient.get(`/transactions?q=${encodeURIComponent(q)}&limit=6`);
           if (cancelled) return;
           setTxResults(
             data.transactions.map((tx) => ({

@@ -1,5 +1,12 @@
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import type { ApiClient, ApiRequestOptions } from "@/lib/api/ApiClient";
+import type {
+  DeletePath,
+  PathWithQuery,
+  ReadPath,
+  ReadResponses,
+  WritePath
+} from "@/lib/api/routes";
 import { emitDataChanged } from "@/lib/api/data-events";
 import { clearPageData } from "@/lib/api/page-data-cache";
 import { syncStorage } from "@/lib/vault/runtime";
@@ -29,12 +36,15 @@ function forgetShownScreensIfIdentityChanged(path: string): void {
 export class NotifyingApiClient implements ApiClient {
   constructor(private readonly inner: ApiClient) {}
 
-  get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
-    return this.inner.get<T>(path, options);
+  get<P extends ReadPath>(
+    path: PathWithQuery<P>,
+    options?: ApiRequestOptions
+  ): Promise<ReadResponses[P]> {
+    return this.inner.get(path, options);
   }
 
-  async post<TResponse, TBody = unknown>(
-    path: string,
+  async post<TResponse = unknown, TBody = unknown>(
+    path: WritePath,
     body?: TBody,
     options?: ApiRequestOptions
   ): Promise<TResponse> {
@@ -44,8 +54,8 @@ export class NotifyingApiClient implements ApiClient {
     return result;
   }
 
-  async put<TResponse, TBody = unknown>(
-    path: string,
+  async put<TResponse = unknown, TBody = unknown>(
+    path: WritePath,
     body?: TBody,
     options?: ApiRequestOptions
   ): Promise<TResponse> {
@@ -55,11 +65,10 @@ export class NotifyingApiClient implements ApiClient {
     return result;
   }
 
-  async delete<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+  async delete(path: DeletePath, options?: ApiRequestOptions): Promise<void> {
     forgetShownScreensIfIdentityChanged(path);
-    const result = await this.inner.delete<T>(path, options);
+    await this.inner.delete(path, options);
     emitDataChanged();
-    return result;
   }
 }
 

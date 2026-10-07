@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LocalApiClient, type PreUpgradeBackup } from "@/lib/api/LocalApiClient";
+import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { LATEST_LOCAL_STATE_VERSION } from "@/lib/storage/migrations/runLocalStateMigrations";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import { PRE_UPGRADE_SUFFIX } from "@/lib/storage/SyncingStorageAdapter";
@@ -75,7 +75,7 @@ describe("копия книги до перевода на новую схему
   it("отдаётся наружу готовой к развёртыванию прежней версией", async () => {
     const { client } = await openWith(oldBook(15));
 
-    const copy = await client.get<PreUpgradeBackup | null>("/backup/before-upgrade");
+    const copy = await client.get("/backup/before-upgrade");
 
     expect(copy).not.toBeNull();
     expect(copy?.fromVersion).toBe(15);
@@ -89,7 +89,7 @@ describe("копия книги до перевода на новую схему
     // его из копии никому не нужно.
     const { client } = await openWith(oldBook(15, { aiApiKey: "секретный-ключ" }));
 
-    const copy = await client.get<PreUpgradeBackup | null>("/backup/before-upgrade");
+    const copy = await client.get("/backup/before-upgrade");
 
     expect(copy?.backup.aiApiKey).toBeUndefined();
     expect(JSON.stringify(copy)).not.toContain("секретный-ключ");
@@ -112,7 +112,7 @@ describe("копия книги до перевода на новую схему
   it("копии нет — отдаётся пустота, а не поломка", async () => {
     const { client } = await openWith(oldBook(LATEST_LOCAL_STATE_VERSION));
 
-    expect(await client.get<PreUpgradeBackup | null>("/backup/before-upgrade")).toBeNull();
+    expect(await client.get("/backup/before-upgrade")).toBeNull();
   });
 
   it("следующий перевод заменяет копию, а не копит их рядом", async () => {

@@ -65,7 +65,7 @@ export function PortfolioValueChart({
         const series = await Promise.all(
           portfolio.map((position) =>
             apiClient
-              .get<{ points: StockPricePoint[] }>(
+              .get(
                 `/investments/history?ticker=${encodeURIComponent(position.ticker)}&range=${range}`
               )
               .then((res) => ({ quantity: position.quantity, points: res.points ?? [] }))
@@ -87,7 +87,7 @@ export function PortfolioValueChart({
     if (mode !== "index" || portfolio.length === 0) return;
     let cancelled = false;
     apiClient
-      .get<{ points: StockPricePoint[] }>(`/investments/index?range=${range}`)
+      .get(`/investments/index?range=${range}`)
       .then((res) => {
         if (!cancelled) setIndex(res.points ?? []);
       })

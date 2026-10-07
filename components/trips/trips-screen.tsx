@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/select";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
-import type { TripsPageData } from "@/lib/api/local/extras";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { formatCurrency } from "@/lib/format";
 import type { TripView } from "@/lib/trips/trips";
@@ -46,7 +45,7 @@ const today = () => {
 
 export function TripsScreen() {
   const { words, format, locale } = useExtrasText();
-  const { data, reload } = useApiPageData<TripsPageData>({ trips: [], active: null }, "/trips");
+  const { data, reload } = useApiPageData({ trips: [], active: null }, "/trips");
   const [editing, setEditing] = useState<Partial<TripView> | null>(null);
   const confirm = useConfirm();
 

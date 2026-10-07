@@ -46,11 +46,8 @@ export function TransactionsCalendar() {
   const lastDay = new Date(cursor.year, cursor.month + 1, 0).getDate();
   const from = dayKey(cursor.year, cursor.month, 1);
   const to = dayKey(cursor.year, cursor.month, lastDay);
-  const { data } = useApiPageData<TransactionsPageData>(
-    EMPTY_TX,
-    `/transactions?from=${from}&to=${to}&limit=all`
-  );
-  const { data: forecast } = useApiPageData<ForecastData>(EMPTY_FORECAST, "/forecast");
+  const { data } = useApiPageData(EMPTY_TX, `/transactions?from=${from}&to=${to}&limit=all`);
+  const { data: forecast } = useApiPageData(EMPTY_FORECAST, "/forecast");
 
   const byDay = useMemo(() => {
     const map = new Map<string, { expense: number; income: number }>();

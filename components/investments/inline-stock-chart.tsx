@@ -52,7 +52,7 @@ export function InlineStockChart({ seed, currency }: { seed: StockDetailSeed; cu
     void (async () => {
       setLoading(true);
       try {
-        const data = await apiClient.get<{ points: StockPricePoint[] }>(
+        const data = await apiClient.get(
           `/investments/history?ticker=${encodeURIComponent(ticker)}&range=${range}`
         );
         if (!cancelled) setPoints(data.points ?? []);

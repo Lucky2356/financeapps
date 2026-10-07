@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
-import type { TransactionsPageData } from "@/lib/data";
 import type { TransactionRow } from "@/types/finance";
 
 /**
@@ -60,9 +59,7 @@ export function AmountDrilldown({
 
     void (async () => {
       try {
-        const data = await apiClient.get<TransactionsPageData>(
-          `/transactions?${query}${query ? "&" : ""}limit=all`
-        );
+        const data = await apiClient.get(`/transactions?${query}${query ? "&" : ""}limit=all`);
         if (cancelled) return;
         setFailed(false);
         setRows(

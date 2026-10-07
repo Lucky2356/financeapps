@@ -56,11 +56,7 @@ describe("ручка /investments/payouts", () => {
     const api = new LocalApiClient(new MemoryStorageAdapter());
     await api.post("/investments", { ticker: "SBER", quantity: "10", averageBuyPrice: "250" });
 
-    type Answer = {
-      upcoming: Array<{ perShare: number; amount: number; date: string }>;
-      recent: Array<{ ticker: string; date: string; amount: number }>;
-    };
-    const first = await api.get<Answer>("/investments/payouts");
+    const first = await api.get("/investments/payouts");
     expect(first.upcoming).toHaveLength(1);
     expect(first.upcoming[0].amount).toBeCloseTo(first.upcoming[0].perShare * 10, 2);
     expect(first.recent).toHaveLength(1);
@@ -72,7 +68,7 @@ describe("ручка /investments/payouts", () => {
       amount: String(first.recent[0].amount),
       date: new Date().toISOString().slice(0, 10)
     });
-    const second = await api.get<Answer>("/investments/payouts");
+    const second = await api.get("/investments/payouts");
     expect(second.recent).toHaveLength(0);
   });
 });

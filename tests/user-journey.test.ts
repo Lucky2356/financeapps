@@ -2,15 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type {
-  AccountsPageData,
-  BudgetsPageData,
-  CategoriesPageData,
-  GoalsPageData,
-  RecurringTransactionsPageData,
-  TransactionsPageData
-} from "@/lib/data";
-import type { DashboardData, ForecastData } from "@/types/finance";
+import type { AccountsPageData, GoalsPageData } from "@/lib/data";
 
 function todayInput() {
   // Local date (matches the app's formatInputDate) to avoid UTC/local month-boundary drift.
@@ -28,11 +20,11 @@ describe("new user journey", () => {
     // 0. Fresh install — empty, and health explicitly says there is nothing to
     // score yet rather than inventing a number (neither a phantom 60 nor a
     // flattering 100).
-    const emptyDashboard = await client.get<DashboardData>("/dashboard");
+    const emptyDashboard = await client.get("/dashboard");
     expect(emptyDashboard.netWorth).toBe(0);
     expect(emptyDashboard.health.noData).toBe(true);
     expect(emptyDashboard.health.score).toBe(0);
-    const emptyAccounts = await client.get<AccountsPageData>("/accounts");
+    const emptyAccounts = await client.get("/accounts");
     expect(emptyAccounts.accounts).toHaveLength(0);
 
     // 1. Create accounts.
@@ -70,7 +62,7 @@ describe("new user journey", () => {
       date: todayInput()
     });
 
-    const afterTx = await client.get<DashboardData>("/dashboard");
+    const afterTx = await client.get("/dashboard");
     // Net worth = card (100000+150000-28000) + savings (120000) = 342000.
     expect(afterTx.netWorth).toBe(342000);
     expect(afterTx.health.score).toBeGreaterThan(0);
@@ -79,7 +71,7 @@ describe("new user journey", () => {
 
     // 3. Budget with an overrun warning.
     await client.post("/budgets", { categoryId: "cat-food", limitAmount: "10000" });
-    const budgets = await client.get<BudgetsPageData>("/budgets");
+    const budgets = await client.get("/budgets");
     const food = budgets.budgets.find((b) => b.categoryId === "cat-food");
     expect(food?.isExceeded).toBe(true);
     expect(food?.suggestedLimit).toBeGreaterThan(0); // suggestion from history
@@ -91,16 +83,16 @@ describe("new user journey", () => {
       currentAmount: "0",
       deadline: "2027-06-01"
     });
-    const beforeDeposit = await client.get<DashboardData>("/dashboard");
+    const beforeDeposit = await client.get("/dashboard");
     await client.post("/goals", {
       action: "deposit",
       goalId: goal.id,
       amount: "30000",
       accountId: savings.id
     });
-    const afterDeposit = await client.get<DashboardData>("/dashboard");
+    const afterDeposit = await client.get("/dashboard");
     expect(afterDeposit.netWorth).toBe(beforeDeposit.netWorth);
-    const goalsAfter = await client.get<GoalsPageData>("/goals");
+    const goalsAfter = await client.get("/goals");
     expect(goalsAfter.goals[0].currentAmount).toBe(30000);
 
     // 5. Recurring payment → forecast events exist and the full event list is exposed.
@@ -113,36 +105,36 @@ describe("new user journey", () => {
       nextDate: todayInput(),
       isActive: "true"
     });
-    const forecast = await client.get<ForecastData>("/forecast");
+    const forecast = await client.get("/forecast");
     expect(forecast.events.length).toBeGreaterThan(0);
     expect(forecast.events.length).toBeGreaterThanOrEqual(forecast.upcomingEvents.length);
     // A plan is not an operation: net worth is untouched until the payment posts…
-    let beforeInvest = await client.get<DashboardData>("/dashboard");
+    let beforeInvest = await client.get("/dashboard");
     expect(beforeInvest.netWorth).toBe(afterDeposit.netWorth);
     // …and posting the due occurrence is what actually lowers it.
     await client.post("/recurring/materialize-all", {});
-    beforeInvest = await client.get<DashboardData>("/dashboard");
+    beforeInvest = await client.get("/dashboard");
     expect(beforeInvest.netWorth).toBeLessThan(afterDeposit.netWorth);
 
     // 6. Investments: add a position by ticker; it lifts net worth.
     await client.post("/investments", { ticker: "SBER", quantity: "10", averageBuyPrice: "250" });
-    const withInvest = await client.get<DashboardData>("/dashboard");
+    const withInvest = await client.get("/dashboard");
     expect(withInvest.netWorth).toBeGreaterThan(beforeInvest.netWorth);
 
     // 7. Categories CRUD still consistent.
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     expect(categories.categories.length).toBeGreaterThan(0);
 
     // 8. Transactions list reflects everything entered.
-    const transactions = await client.get<TransactionsPageData>("/transactions");
+    const transactions = await client.get("/transactions");
     expect(transactions.transactions.length).toBeGreaterThanOrEqual(3);
 
     // 9. Clear all data → back to neutral empty state.
     await client.delete("/storage/clear");
-    const cleared = await client.get<DashboardData>("/dashboard");
+    const cleared = await client.get("/dashboard");
     expect(cleared.netWorth).toBe(0);
     expect(cleared.health.noData).toBe(true);
-    const clearedRecurring = await client.get<RecurringTransactionsPageData>("/recurring");
+    const clearedRecurring = await client.get("/recurring");
     expect(clearedRecurring.recurringTransactions).toHaveLength(0);
   });
 });

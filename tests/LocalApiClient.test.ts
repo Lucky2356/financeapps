@@ -6,15 +6,11 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 import type {
   AccountsPageData,
   AnalyticsData,
-  BudgetsPageData,
-  CategoriesPageData,
   GoalsPageData,
   LiabilitiesPageData,
-  RecurringTransactionsPageData,
-  SettingsPageData,
-  TransactionsPageData
+  RecurringTransactionsPageData
 } from "@/lib/data";
-import type { DashboardData, InvestmentData, PlanFactPageData } from "@/types/finance";
+import type { InvestmentData } from "@/types/finance";
 
 function todayInput() {
   // Local date (matches the app's formatInputDate), so month bucketing stays
@@ -55,8 +51,8 @@ describe("LocalApiClient", () => {
       description: "Test transfer"
     });
 
-    const after = await client.get<AccountsPageData>("/accounts");
-    const transactions = await client.get<TransactionsPageData>("/transactions?q=Test%20transfer");
+    const after = await client.get("/accounts");
+    const transactions = await client.get("/transactions?q=Test%20transfer");
 
     expect(after.accounts.find((account) => account.id === fromAccount.id)?.balance).toBe(
       fromAccount.balance - 1250
@@ -75,7 +71,7 @@ describe("LocalApiClient", () => {
     const client = createClient();
     const from = await seedAccount(client, { name: "Счёт А", balance: "100000" });
     const to = await seedAccount(client, { name: "Счёт Б", balance: "0" });
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const salary = categories.categories.find((category) => category.kind === "INCOME");
 
     // One real income, and a transfer of five times as much between own
@@ -98,8 +94,8 @@ describe("LocalApiClient", () => {
       description: "В накопления"
     });
 
-    const withoutTransfers = await client.get<AnalyticsData>("/analytics");
-    const withTransfers = await client.get<AnalyticsData>("/analytics?transfers=1");
+    const withoutTransfers = await client.get("/analytics");
+    const withTransfers = await client.get("/analytics?transfers=1");
     const month = (data: AnalyticsData) => data.monthlyCashflow[data.monthlyCashflow.length - 1];
 
     expect(month(withoutTransfers).income).toBe(30000);
@@ -122,8 +118,8 @@ describe("LocalApiClient", () => {
       description: "В накопления"
     });
 
-    const plain = await client.get<DashboardData>("/dashboard");
-    const counted = await client.get<DashboardData>("/dashboard?transfers=1");
+    const plain = await client.get("/dashboard");
+    const counted = await client.get("/dashboard?transfers=1");
 
     // Nothing was earned or spent, so neither ring has a slice to draw.
     expect(plain.categoryIncome).toHaveLength(0);
@@ -138,7 +134,7 @@ describe("LocalApiClient", () => {
   it("reports plan against fact for a month, and the gap between them", async () => {
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта", balance: "0" });
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const salary = categories.categories.find((category) => category.kind === "INCOME");
     const food = categories.categories.find((category) => category.name === "Продукты");
     const month = todayInput().slice(0, 7);
@@ -165,7 +161,7 @@ describe("LocalApiClient", () => {
     await client.post("/plan", { month, note: "Гасим рассрочку" });
     await client.post("/plan", { month, factNote: "Саша в отпуске" });
 
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const plan = await client.get("/plan");
     const row = plan.months.find((entry) => entry.month === month);
 
     // The gap is plan − fact in every cell, so the whole grid reads one way.
@@ -193,14 +189,14 @@ describe("LocalApiClient", () => {
 
   it("clears a planned amount when it is set back to zero", async () => {
     const client = createClient();
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const food = categories.categories.find((category) => category.name === "Продукты");
     const month = todayInput().slice(0, 7);
 
     await client.post("/plan", { month, categoryId: food?.id, amount: "25000" });
     await client.post("/plan", { month, categoryId: food?.id, amount: "0" });
 
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const plan = await client.get("/plan");
     const row = plan.months.find((entry) => entry.month === month);
     expect(row?.cells[food?.id ?? ""]?.plan).toBe(0);
     expect(row?.expense.plan).toBe(0);
@@ -208,14 +204,14 @@ describe("LocalApiClient", () => {
 
   it("keeps each month's plan to itself, newest month first", async () => {
     const client = createClient();
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const food = categories.categories.find((category) => category.name === "Продукты");
     const key = food?.id ?? "";
 
     await client.post("/plan", { month: "2026-03", categoryId: key, amount: "11000" });
     await client.post("/plan", { month: "2026-04", categoryId: key, amount: "12000" });
 
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const plan = await client.get("/plan");
     const months = plan.months.map((entry) => entry.month);
     expect(plan.months.find((entry) => entry.month === "2026-03")?.cells[key]?.plan).toBe(11000);
     expect(plan.months.find((entry) => entry.month === "2026-04")?.cells[key]?.plan).toBe(12000);
@@ -229,7 +225,7 @@ describe("LocalApiClient", () => {
     // picked up on the second computer was refused as "invalid".
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта", balance: "1000" });
-    const document = await client.get<Record<string, unknown>>("/backup");
+    const document = await client.get("/backup");
 
     const fresh = createClient();
     // A file that is not a backup at all is still refused, or a wrong pick
@@ -241,14 +237,14 @@ describe("LocalApiClient", () => {
     await fresh.post("/backup", {
       backup: { exportedAt: new Date().toISOString(), backup: document }
     });
-    const restored = await fresh.get<AccountsPageData>("/accounts");
+    const restored = await fresh.get("/accounts");
     expect(restored.accounts.map((item) => item.name)).toEqual(["Карта"]);
     expect(restored.accounts[0].id).toBe(account.id);
 
     // And the bare document, the way the button writes it.
     const bare = createClient();
     await bare.post("/backup", { backup: document });
-    const fromBare = await bare.get<AccountsPageData>("/accounts");
+    const fromBare = await bare.get("/accounts");
     expect(fromBare.accounts.map((item) => item.name)).toEqual(["Карта"]);
   });
 
@@ -258,7 +254,7 @@ describe("LocalApiClient", () => {
     // to — and then refused with "Create an account before importing CSV.",
     // in English, on an otherwise Russian screen.
     const client = createClient();
-    const before = await client.get<AccountsPageData>("/accounts");
+    const before = await client.get("/accounts");
     expect(before.accounts).toHaveLength(0);
 
     const result = await client.post<{ imported: number; skipped: number }>("/import", {
@@ -274,7 +270,7 @@ describe("LocalApiClient", () => {
     });
 
     expect(result.imported).toBe(3);
-    const after = await client.get<AccountsPageData>("/accounts");
+    const after = await client.get("/accounts");
     expect(after.accounts.map((account) => account.name).sort()).toEqual(["Лариса", "Саша"]);
     // The balance is what was imported onto it: +300 for one, -924 for the other.
     const larisa = after.accounts.find((account) => account.name === "Лариса");
@@ -306,7 +302,7 @@ describe("LocalApiClient", () => {
 
       expect(first.imported).toBe(2);
       expect(second).toEqual(expect.objectContaining({ imported: 0, skipped: 2 }));
-      const accounts = await client.get<AccountsPageData>("/accounts");
+      const accounts = await client.get("/accounts");
       expect(accounts.accounts.find((account) => account.name === "Саша")?.balance).toBe(-924);
     } finally {
       if (zone === undefined) delete process.env.TZ;
@@ -345,7 +341,7 @@ describe("LocalApiClient", () => {
     expect(first).toEqual(expect.objectContaining({ imported: 2, skipped: 0 }));
     const second = await client.post<{ imported: number; skipped: number }>("/import", body);
     expect(second).toEqual(expect.objectContaining({ imported: 0, skipped: 2 }));
-    const accounts = await client.get<AccountsPageData>("/accounts");
+    const accounts = await client.get("/accounts");
     expect(accounts.accounts.find((account) => account.name === "Карта")?.balance).toBe(-400);
   });
 
@@ -359,7 +355,7 @@ describe("LocalApiClient", () => {
         { date: "2026-08-24", amount: "-200" }
       ])
     });
-    const accounts = await client.get<AccountsPageData>("/accounts");
+    const accounts = await client.get("/accounts");
     expect(accounts.accounts).toHaveLength(1);
     expect(accounts.accounts[0].name).toBe("Импорт");
     expect(accounts.accounts[0].balance).toBe(-300);
@@ -371,13 +367,13 @@ describe("LocalApiClient", () => {
     // all — and the row vanished on reload, because "how many months ahead"
     // lived in the screen rather than in the data.
     const client = createClient();
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const key = categories.categories.find((category) => category.name === "Продукты")?.id ?? "";
 
     await client.post("/plan", { action: "addMonth", month: "2020-01" });
     await client.post("/plan", { month: "2020-01", categoryId: key, amount: "5000" });
 
-    const pinned = await client.get<PlanFactPageData>("/plan");
+    const pinned = await client.get("/plan");
     expect(pinned.months.map((entry) => entry.month)).toContain("2020-01");
     expect(pinned.months.find((entry) => entry.month === "2020-01")?.cells[key]?.plan).toBe(5000);
 
@@ -387,7 +383,7 @@ describe("LocalApiClient", () => {
       month: "2020-01"
     });
     expect(removed.hasFacts).toBe(false);
-    const after = await client.get<PlanFactPageData>("/plan");
+    const after = await client.get("/plan");
     expect(after.months.map((entry) => entry.month)).not.toContain("2020-01");
   });
 
@@ -397,7 +393,7 @@ describe("LocalApiClient", () => {
     await seedAccount(client, { name: "Накопительный", type: "SAVINGS", balance: "300000" });
     const month = todayInput().slice(0, 7);
 
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const food = categories.categories.find((category) => category.name === "Продукты");
     await client.post("/transactions", {
       amount: "10000",
@@ -408,7 +404,7 @@ describe("LocalApiClient", () => {
       description: "Продукты"
     });
 
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const plan = await client.get("/plan");
     const row = plan.months.find((entry) => entry.month === month);
 
     // The month opened with 50 000 on the card (40 000 left after the spending)
@@ -433,8 +429,8 @@ describe("LocalApiClient", () => {
       description: "В накопления"
     });
 
-    const plain = await client.get<PlanFactPageData>("/plan");
-    const counted = await client.get<PlanFactPageData>("/plan?transfers=1");
+    const plain = await client.get("/plan");
+    const counted = await client.get("/plan?transfers=1");
 
     // Nothing was earned or spent, so the column would have been two rows of a
     // number the owner had already said not to count.
@@ -467,7 +463,7 @@ describe("LocalApiClient", () => {
 
     // The name alone is not evidence: money sent to relatives is spending, and
     // dropping the column would take it out of the month's totals too.
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const plan = await client.get("/plan");
     expect(plan.columns.some((column) => column.categoryId === category.id)).toBe(true);
     const month = plan.months.find((entry) => entry.month === todayInput().slice(0, 7));
     expect(month?.cells[category.id]?.fact).toBe(7000);
@@ -478,7 +474,7 @@ describe("LocalApiClient", () => {
     const client = createClient();
     const kept = await seedAccount(client, { name: "Карта", balance: "80000" });
     const closed = await seedAccount(client, { name: "Старый счёт", balance: "30000" });
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const food = categories.categories.find((category) => category.name === "Продукты");
 
     await client.post("/transactions", {
@@ -493,7 +489,7 @@ describe("LocalApiClient", () => {
 
     // The archived account is outside every other total on the screen, so its
     // spending must not be wound back out of a balance that never held it.
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const plan = await client.get("/plan");
     const month = plan.months.find((entry) => entry.month === todayInput().slice(0, 7));
     expect(month?.opening.fact).toBe(80000);
     expect(kept.id).toBeTruthy();
@@ -511,7 +507,7 @@ describe("LocalApiClient", () => {
       balance: "1000",
       currency: "USD"
     });
-    const categories = await client.get<CategoriesPageData>("/categories");
+    const categories = await client.get("/categories");
     const food = categories.categories.find((category) => category.name === "Продукты");
 
     await client.post("/transactions", {
@@ -523,8 +519,8 @@ describe("LocalApiClient", () => {
       description: "Продукты"
     });
 
-    const accounts = await client.get<AccountsPageData>("/accounts");
-    const plan = await client.get<PlanFactPageData>("/plan");
+    const accounts = await client.get("/accounts");
+    const plan = await client.get("/plan");
     const month = plan.months.find((entry) => entry.month === todayInput().slice(0, 7));
 
     // 800 $ left of 1000 $, so the month opened with 1000 $ — in roubles, at
@@ -543,10 +539,10 @@ describe("LocalApiClient", () => {
       new Date(year, index, 1).getMonth() + 1
     ).padStart(2, "0")}`;
 
-    const now = await client.get<PlanFactPageData>("/plan");
+    const now = await client.get("/plan");
     expect(now.months.map((entry) => entry.month)).not.toContain(next);
 
-    const ahead = await client.get<PlanFactPageData>("/plan?ahead=1");
+    const ahead = await client.get("/plan?ahead=1");
     expect(ahead.months[0]?.month).toBe(next);
   });
 
@@ -570,7 +566,7 @@ describe("LocalApiClient", () => {
     });
 
     // A top-up used to rebuild the goal from five fields and drop the rest.
-    const goals = await client.get<GoalsPageData>("/goals");
+    const goals = await client.get("/goals");
     const updated = goals.goals.find((item) => item.id === goal.id);
     expect(updated?.currentAmount).toBe(1000);
     expect(updated?.linkedAccountId).toBe(account.id);
@@ -579,7 +575,7 @@ describe("LocalApiClient", () => {
 
   it("manages watchlist and portfolio positions in desktop local mode", async () => {
     const client = createClient();
-    const initial = await client.get<InvestmentData>("/investments");
+    const initial = await client.get("/investments");
 
     expect(initial.securities.length).toBeGreaterThan(0);
     // A fresh install starts with an empty watchlist — the user adds their own.
@@ -589,7 +585,7 @@ describe("LocalApiClient", () => {
     await client.post("/investments", { action: "addWatchlist", ticker: "SBER" });
     await client.post("/investments", { ticker: "SBER", quantity: "10", averageBuyPrice: "250" });
 
-    const updated = await client.get<InvestmentData>("/investments");
+    const updated = await client.get("/investments");
     expect(updated.watchlist.map((item) => item.ticker)).toContain("SBER");
     expect(updated.portfolio).toHaveLength(1);
     expect(updated.portfolio[0]).toMatchObject({
@@ -602,7 +598,7 @@ describe("LocalApiClient", () => {
     expect(updated.risks.length).toBeGreaterThan(0);
 
     await client.post("/investments", { action: "delete", ticker: "SBER" });
-    const afterDelete = await client.get<InvestmentData>("/investments");
+    const afterDelete = await client.get("/investments");
     expect(afterDelete.portfolio).toHaveLength(0);
   });
 
@@ -613,7 +609,7 @@ describe("LocalApiClient", () => {
     // later read, or the next price refresh would quietly undo it.
     const client = createClient();
     await client.post("/investments", { ticker: "SBER", quantity: "1", averageBuyPrice: "100" });
-    const known = await client.get<InvestmentData>("/investments");
+    const known = await client.get("/investments");
     expect(known.portfolio[0].sector).toBe("Финансы и Банки");
 
     await client.post("/investments", {
@@ -622,7 +618,7 @@ describe("LocalApiClient", () => {
       averageBuyPrice: "100",
       sector: "Разное"
     });
-    const overruled = await client.get<InvestmentData>("/investments");
+    const overruled = await client.get("/investments");
     expect(overruled.portfolio[0].sector).toBe("Разное");
     expect(overruled.sectorStructure.map((slice) => slice.name)).toEqual(["Разное"]);
 
@@ -633,7 +629,7 @@ describe("LocalApiClient", () => {
       averageBuyPrice: "100",
       sector: "Финансы и Банки"
     });
-    const back = await client.get<InvestmentData>("/investments");
+    const back = await client.get("/investments");
     expect(back.portfolio[0].sector).toBe("Финансы и Банки");
   });
 
@@ -645,7 +641,7 @@ describe("LocalApiClient", () => {
     const client = createClient();
     await client.post("/investments", { ticker: "SBER", quantity: "10", averageBuyPrice: "250" });
 
-    const backup = await client.get<Record<string, unknown>>("/backup");
+    const backup = await client.get("/backup");
     const investments = backup.investments as InvestmentData;
     const offBoard = {
       ...investments.portfolio[0],
@@ -662,7 +658,7 @@ describe("LocalApiClient", () => {
       backup: { ...backup, investments: { ...investments, portfolio: [offBoard] } }
     });
 
-    const restored = await client.get<InvestmentData>("/investments");
+    const restored = await client.get("/investments");
     expect(restored.portfolio).toHaveLength(1);
     expect(restored.portfolio[0]).toMatchObject({
       ticker: "ETLN",
@@ -676,7 +672,7 @@ describe("LocalApiClient", () => {
 
     // And it must still be there after a second read (the read path persists the
     // rebuilt portfolio back into the local state).
-    const again = await client.get<InvestmentData>("/investments");
+    const again = await client.get("/investments");
     expect(again.portfolio.map((position) => position.ticker)).toEqual(["ETLN"]);
   });
 
@@ -693,7 +689,7 @@ describe("LocalApiClient", () => {
       averageBuyPrice: "999"
     });
 
-    const data = await client.get<InvestmentData>("/investments");
+    const data = await client.get("/investments");
     expect(data.portfolio[0]).toMatchObject({
       ticker: "SBER",
       quantity: 40,
@@ -714,16 +710,14 @@ describe("LocalApiClient", () => {
       averageBuyPrice: "123.45"
     });
 
-    const data = await client.get<InvestmentData>("/investments");
+    const data = await client.get("/investments");
     expect(data.portfolio[0]).toMatchObject({ quantity: 5, averageBuyPrice: 123.45 });
     expect(data.portfolio[0].lots).toBeUndefined();
   });
 
   it("validates local backups before restore", async () => {
     const client = createClient();
-    const backup = await client.get<{ schemaVersion: number; lastBackupAt: string | null }>(
-      "/backup"
-    );
+    const backup = await client.get("/backup");
 
     expect(backup.schemaVersion).toBe(LATEST_LOCAL_STATE_VERSION);
     expect(backup.lastBackupAt).toEqual(expect.any(String));
@@ -735,16 +729,14 @@ describe("LocalApiClient", () => {
 
   it("restores compatible v1 local backups through the state migration", async () => {
     const client = createClient();
-    const backup = await client.get<Record<string, unknown>>("/backup");
+    const backup = await client.get("/backup");
     const legacyBackup = { ...backup, schemaVersion: 1 };
 
     await expect(client.post("/backup", { backup: legacyBackup })).resolves.toEqual({
       restored: true
     });
 
-    const migrated = await client.get<{ schemaVersion: number; lastBackupAt: string | null }>(
-      "/backup"
-    );
+    const migrated = await client.get("/backup");
     expect(migrated.schemaVersion).toBe(LATEST_LOCAL_STATE_VERSION);
     expect(migrated.lastBackupAt).toEqual(expect.any(String));
   });
@@ -766,7 +758,7 @@ describe("LocalApiClient", () => {
       date: todayInput()
     });
 
-    const transactions = await client.get<TransactionsPageData>("/transactions");
+    const transactions = await client.get("/transactions");
     expect(
       transactions.transactions.some((t) => t.account.id === account.id && t.amount === 1200)
     ).toBe(true);
@@ -786,7 +778,7 @@ describe("LocalApiClient", () => {
     // Then save ONLY the theme (what the sidebar toggle does).
     await client.put("/settings", { theme: "dark" });
 
-    const settings = await client.get<SettingsPageData>("/settings");
+    const settings = await client.get("/settings");
     expect(settings.theme).toBe("dark");
     // The single-field save must not clobber the rest.
     expect(settings.riskProfileCode).toBe("AGGRESSIVE");
@@ -802,7 +794,7 @@ describe("LocalApiClient", () => {
     await client.post("/investments", { action: "addWatchlist", ticker: "SBER" });
     await client.post("/investments", { ticker: "SBER", quantity: "10", averageBuyPrice: "250" });
 
-    const dashboard = await client.get<DashboardData>("/dashboard");
+    const dashboard = await client.get("/dashboard");
     // 10 000 in cash + 10 SBER shares at a positive market price.
     expect(dashboard.netWorth).toBeGreaterThan(10000);
     expect(dashboard.netWorthTrend.length).toBeGreaterThanOrEqual(1);
@@ -819,7 +811,7 @@ describe("LocalApiClient", () => {
       deadline: "2027-01-01"
     });
 
-    const before = await client.get<DashboardData>("/dashboard");
+    const before = await client.get("/dashboard");
 
     await client.post("/goals", {
       action: "deposit",
@@ -828,10 +820,10 @@ describe("LocalApiClient", () => {
       accountId: account.id
     });
 
-    const accounts = await client.get<AccountsPageData>("/accounts");
-    const goals = await client.get<GoalsPageData>("/goals");
-    const transactions = await client.get<TransactionsPageData>("/transactions");
-    const after = await client.get<DashboardData>("/dashboard");
+    const accounts = await client.get("/accounts");
+    const goals = await client.get("/goals");
+    const transactions = await client.get("/transactions");
+    const after = await client.get("/dashboard");
 
     expect(accounts.accounts.find((a) => a.id === account.id)?.balance).toBe(15000);
     expect(goals.goals.find((g) => g.id === goal.id)?.currentAmount).toBe(5000);
@@ -868,9 +860,9 @@ describe("LocalApiClient", () => {
 
     await client.delete("/storage/clear");
 
-    const accounts = await client.get<AccountsPageData>("/accounts");
-    const categories = await client.get<CategoriesPageData>("/categories");
-    const investments = await client.get<InvestmentData>("/investments");
+    const accounts = await client.get("/accounts");
+    const categories = await client.get("/categories");
+    const investments = await client.get("/investments");
 
     expect(accounts.accounts).toHaveLength(0);
     // Стандартные категории очистку переживают: без них первую же операцию
@@ -891,13 +883,13 @@ describe("LocalApiClient", () => {
     });
     await client.post("/categories", { name: "Хобби", kind: "EXPENSE", color: "#654321" });
     // Удалённая прежней версией стандартная — очистка её возвращает.
-    const stored = await client.get<CategoriesPageData>("/categories");
+    const stored = await client.get("/categories");
     const standardCount = stored.categories.filter((category) => category.isStandard).length;
     expect(stored.categories.some((category) => category.name === "Хобби")).toBe(true);
 
     await client.delete("/storage/clear");
 
-    const after = await client.get<CategoriesPageData>("/categories");
+    const after = await client.get("/categories");
     expect(after.categories).toHaveLength(standardCount);
     expect(after.categories.some((category) => category.name === "Хобби")).toBe(false);
     const food = after.categories.find((category) => category.id === "cat-food");
@@ -914,7 +906,7 @@ describe("LocalApiClient", () => {
       color: "#654321"
     });
     await client.delete(`/categories?id=${own.id}`);
-    const page = await client.get<CategoriesPageData>("/categories");
+    const page = await client.get("/categories");
     expect(page.categories.some((category) => category.id === own.id)).toBe(false);
     expect(page.categories.some((category) => category.id === "cat-food")).toBe(true);
   });
@@ -933,8 +925,8 @@ describe("LocalApiClient", () => {
       isActive: "true"
     });
 
-    const transactions = await client.get<TransactionsPageData>("/transactions");
-    const recurring = await client.get<RecurringTransactionsPageData>("/recurring");
+    const transactions = await client.get("/transactions");
+    const recurring = await client.get("/recurring");
 
     // Planning is not bookkeeping: the ledger stays untouched…
     expect(transactions.transactions.some((t) => t.category.id === "cat-food")).toBe(false);
@@ -971,7 +963,7 @@ describe("LocalApiClient", () => {
       balance: "0"
     });
 
-    const page = await client.get<RecurringTransactionsPageData>("/recurring");
+    const page = await client.get("/recurring");
     expect(page.recurringTransactions[0].category).toMatchObject({
       label: "Еда",
       color: "#123456"
@@ -980,7 +972,7 @@ describe("LocalApiClient", () => {
 
     // Проведённая по шаблону операция без описания получает НЫНЕШНЕЕ имя.
     await client.post("/recurring/materialize", { id: template.id });
-    const ledger = await client.get<TransactionsPageData>("/transactions");
+    const ledger = await client.get("/transactions");
     expect(ledger.transactions[0].description).toBe("Еда");
   });
 
@@ -1002,11 +994,9 @@ describe("LocalApiClient", () => {
 
     // The user posts today's occurrence…
     await client.post("/recurring/materialize", { id: created.id });
-    expect(
-      (await client.get<TransactionsPageData>("/transactions")).transactions.some(
-        (t) => t.amount === 5000
-      )
-    ).toBe(true);
+    expect((await client.get("/transactions")).transactions.some((t) => t.amount === 5000)).toBe(
+      true
+    );
 
     // …then raises the planned amount: the posted operation is a fact, it stays 5000.
     await client.put("/recurring", {
@@ -1020,17 +1010,15 @@ describe("LocalApiClient", () => {
       isActive: "true"
     });
 
-    let transactions = await client.get<TransactionsPageData>("/transactions");
+    let transactions = await client.get("/transactions");
     expect(transactions.transactions.some((t) => t.amount === 5000)).toBe(true);
     expect(transactions.transactions.some((t) => t.amount === 8000)).toBe(false);
 
     // Deleting the plan does not erase the payment that already happened.
     await client.delete(`/recurring?id=${created.id}`);
-    transactions = await client.get<TransactionsPageData>("/transactions");
+    transactions = await client.get("/transactions");
     expect(transactions.transactions.some((t) => t.amount === 5000)).toBe(true);
-    expect(
-      (await client.get<RecurringTransactionsPageData>("/recurring")).recurringTransactions
-    ).toHaveLength(0);
+    expect((await client.get("/recurring")).recurringTransactions).toHaveLength(0);
   });
 
   it("returns a budget warning when an expense exceeds its limit", async () => {
@@ -1053,7 +1041,7 @@ describe("LocalApiClient", () => {
     expect(result.budgetWarning?.limit).toBe(1000);
     expect(result.budgetWarning?.spent).toBe(1500);
 
-    const budgets = await client.get<BudgetsPageData>("/budgets");
+    const budgets = await client.get("/budgets");
     const food = budgets.budgets.find((b) => b.categoryId === "cat-food");
     expect(food?.isExceeded).toBe(true);
   });
@@ -1064,16 +1052,16 @@ describe("LocalApiClient currency (plan C7)", () => {
     const client = createClient();
     await seedAccount(client, { name: "Карта", balance: "1000" });
 
-    let accounts = await client.get<AccountsPageData>("/accounts");
+    let accounts = await client.get("/accounts");
     expect(accounts.currency).toBe("RUB");
     expect(accounts.accounts[0].currency).toBe("RUB");
 
     await client.put("/settings", { currency: "USD" });
 
-    const settings = await client.get<SettingsPageData>("/settings");
+    const settings = await client.get("/settings");
     expect(settings.currency).toBe("USD");
 
-    accounts = await client.get<AccountsPageData>("/accounts");
+    accounts = await client.get("/accounts");
     // The app's currency is what totals are shown in; the account keeps holding
     // roubles, and the total is converted through the rate table rather than
     // relabelled — 1 000 ₽ is not 1 000 $.
@@ -1086,7 +1074,7 @@ describe("LocalApiClient currency (plan C7)", () => {
   it("ignores an unsupported currency code", async () => {
     const client = createClient();
     await client.put("/settings", { currency: "ZZZ" });
-    const settings = await client.get<SettingsPageData>("/settings");
+    const settings = await client.get("/settings");
     expect(settings.currency).toBe("RUB");
   });
 });
@@ -1096,18 +1084,18 @@ describe("LocalApiClient state cache (plan A4)", () => {
     const client = createClient();
 
     await seedAccount(client, { name: "Карта", balance: "500" });
-    let accounts = await client.get<AccountsPageData>("/accounts");
+    let accounts = await client.get("/accounts");
     expect(accounts.accounts).toHaveLength(1);
 
     // A second mutation must be visible on the next read (no stale cache).
     await seedAccount(client, { name: "Наличные", balance: "100" });
-    accounts = await client.get<AccountsPageData>("/accounts");
+    accounts = await client.get("/accounts");
     expect(accounts.accounts).toHaveLength(2);
     expect(accounts.totalBalance).toBe(600);
 
     // Clearing wipes the cache too — the next read sees an empty state.
     await client.delete("/storage/clear");
-    accounts = await client.get<AccountsPageData>("/accounts");
+    accounts = await client.get("/accounts");
     expect(accounts.accounts).toHaveLength(0);
   });
 });
@@ -1127,7 +1115,7 @@ describe("LocalApiClient debts (plan D1)", () => {
     // 70k of 100k repaid → 70% progress.
     expect(created.progress).toBe(70);
 
-    const page = await client.get<LiabilitiesPageData>("/debts");
+    const page = await client.get("/debts");
     expect(page.liabilities).toHaveLength(1);
     expect(page.total).toBe(30000);
   });
@@ -1136,9 +1124,9 @@ describe("LocalApiClient debts (plan D1)", () => {
     const client = createClient();
     await seedAccount(client, { name: "Карта", balance: "100000" });
 
-    const before = await client.get<DashboardData>("/dashboard");
+    const before = await client.get("/dashboard");
     await client.post("/debts", { name: "Кредит", kind: "LOAN", balance: "40000" });
-    const after = await client.get<DashboardData>("/dashboard");
+    const after = await client.get("/dashboard");
 
     expect(after.liabilitiesTotal).toBe(40000);
     expect(after.netWorth).toBe(before.netWorth - 40000);
@@ -1152,7 +1140,7 @@ describe("LocalApiClient debts (plan D1)", () => {
       balance: "12000"
     });
     await client.delete(`/debts?id=${encodeURIComponent(created.id)}`);
-    const page = await client.get<LiabilitiesPageData>("/debts");
+    const page = await client.get("/debts");
     expect(page.liabilities).toHaveLength(0);
   });
 });
@@ -1161,7 +1149,7 @@ describe("LocalApiClient automation (plan D2c)", () => {
   it("persists the automation toggles", async () => {
     const client = createClient();
     await client.put("/settings", { autoMaterializeRecurring: "true", paymentReminders: "on" });
-    const settings = await client.get<SettingsPageData>("/settings");
+    const settings = await client.get("/settings");
     expect(settings.autoMaterializeRecurring).toBe(true);
     expect(settings.paymentReminders).toBe(true);
   });
@@ -1175,7 +1163,7 @@ describe("LocalApiClient automation (plan D2c)", () => {
       aiApiKey: "  sk-ant-test  ",
       aiModel: " claude-opus-4-8 "
     });
-    const settings = await client.get<SettingsPageData>("/settings");
+    const settings = await client.get("/settings");
     expect(settings.aiEnabled).toBe(true);
     expect(settings.aiProvider).toBe("openai");
     expect(settings.aiEffort).toBe("high");
@@ -1195,11 +1183,11 @@ describe("LocalApiClient automation (plan D2c)", () => {
 
     // Before a refresh the built-in default rate applies; set an explicit one.
     await client.post("/fx", { rates: { USD: 90 } });
-    const accounts = await client.get<AccountsPageData>("/accounts");
+    const accounts = await client.get("/accounts");
     // 1000 RUB + 100 USD * 90 = 10 000 RUB
     expect(accounts.totalBalance).toBe(10000);
 
-    const settings = await client.get<SettingsPageData>("/settings");
+    const settings = await client.get("/settings");
     expect(settings.currencyRatesUpdatedAt).toBeTruthy();
   });
 
@@ -1216,7 +1204,7 @@ describe("LocalApiClient automation (plan D2c)", () => {
       dueDay: "10"
     });
 
-    const recurring = await client.get<RecurringTransactionsPageData>("/recurring");
+    const recurring = await client.get("/recurring");
 
     expect(recurring.debtPayments).toHaveLength(1);
     expect(recurring.debtPayments[0]).toMatchObject({ name: "Ипотека", amount: 25000 });
@@ -1249,9 +1237,8 @@ describe("LocalApiClient automation (plan D2c)", () => {
     expect(second.created).toBe(0);
 
     // Каждая записанная операция помнит свой шаблон.
-    const template = (await client.get<RecurringTransactionsPageData>("/recurring"))
-      .recurringTransactions[0];
-    const rows = (await client.get<TransactionsPageData>("/transactions?period=all")).transactions;
+    const template = (await client.get("/recurring")).recurringTransactions[0];
+    const rows = (await client.get("/transactions?period=all")).transactions;
     expect(rows.length).toBe(first.created);
     for (const row of rows) expect((row as { recurringId?: string }).recurringId).toBe(template.id);
   });

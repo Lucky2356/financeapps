@@ -48,8 +48,8 @@ export function DistributeCashflow({ freeCashflowLabel }: { freeCashflowLabel: s
     void (async () => {
       try {
         const [goalsData, accountsData] = await Promise.all([
-          apiClient.get<GoalsPageData>("/goals"),
-          apiClient.get<AccountsPageData>("/accounts")
+          apiClient.get("/goals"),
+          apiClient.get("/accounts")
         ]);
         if (cancelled) return;
         setGoals(goalsData.goals);

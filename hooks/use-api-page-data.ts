@@ -1,10 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from "react";
 
 import { apiClient } from "@/lib/api/client";
 import { onDataChanged } from "@/lib/api/data-events";
 import { readPageData, writePageData } from "@/lib/api/page-data-cache";
+import type { PathWithQuery, ReadPath, ReadResponses } from "@/lib/api/routes";
+
+type PageData<T> = {
+  data: T;
+  reload: () => Promise<void>;
+  setData: Dispatch<SetStateAction<T>>;
+};
 
 // The server-rendered shell is always empty (see lib/data.ts), so every screen
 // loads its real numbers here, from the device's IndexedDB through
@@ -15,7 +29,25 @@ import { readPageData, writePageData } from "@/lib/api/page-data-cache";
 // каждый переход начинался с пустой оболочки: числа появлялись через кадр, и
 // возврат туда, где только что был, снова показывал нули. Считается всё быстро,
 // но пустой кадр от этого не перестаёт быть пустым.
-export function useApiPageData<T>(initialData: T, path: string) {
+//
+// Тип данных выводится из пути (lib/api/routes.ts). Три вида заготовки:
+// - того же типа, что ответ пути, — данные этого типа;
+// - `null` — экрану до первого ответа честнее не показывать ничего;
+// - своего, более узкого типа (экрану нужна часть ответа) — данные этого типа,
+//   и компилятор проверяет, что ответ пути под него подходит.
+export function useApiPageData<P extends ReadPath>(
+  initialData: ReadResponses[P],
+  path: PathWithQuery<P>
+): PageData<ReadResponses[P]>;
+export function useApiPageData<P extends ReadPath>(
+  initialData: null,
+  path: PathWithQuery<P>
+): PageData<ReadResponses[P] | null>;
+export function useApiPageData<P extends ReadPath, View>(
+  initialData: View & ([ReadResponses[P]] extends [View] ? unknown : never),
+  path: PathWithQuery<P>
+): PageData<View>;
+export function useApiPageData<T>(initialData: T, path: string): PageData<T> {
   const [data, setData] = useState<T>(() => readPageData<T>(path) ?? initialData);
   // Track the latest initialData for error fallback without adding it to
   // effect/callback dependency arrays — avoids a double-fetch on every
@@ -40,7 +72,8 @@ export function useApiPageData<T>(initialData: T, path: string) {
 
   const load = useCallback(async () => {
     try {
-      const next = await apiClient.get<T>(path);
+      // Путь проверен сигнатурой выше; здесь он уже просто строка.
+      const next = (await apiClient.get(path as ReadPath)) as T;
       writePageData(path, next);
       return next;
     } catch {

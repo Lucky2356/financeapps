@@ -26,7 +26,7 @@ export function AiInsightPanel() {
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .get<SettingsPageData>("/settings")
+      .get("/settings")
       .then((data) => {
         if (!cancelled) setSettings(data);
       })
@@ -46,7 +46,7 @@ export function AiInsightPanel() {
 
     let analytics: AnalyticsData;
     try {
-      analytics = await apiClient.get<AnalyticsData>("/analytics");
+      analytics = await apiClient.get("/analytics");
     } catch {
       return toast.error(t("aiq.err.loadData"));
     }

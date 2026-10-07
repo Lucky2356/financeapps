@@ -117,29 +117,28 @@ export function ImportExportPanel({
 }) {
   const { t, locale } = useI18n();
   const { data: pageData, reload: reloadReferences } = useApiPageData(data, "/import");
-  const { data: transactionData, reload: reloadTransactions } =
-    useApiPageData<TransactionsPageData>(
-      {
-        source: data.source,
-        transactions,
-        accounts: data.accounts,
-        categories: data.categories,
-        rules: [],
-        futureDated: { count: 0, net: 0 },
-        filters: {},
-        pagination: {
-          page: 1,
-          limit: 20,
-          total: transactions.length,
-          hasPreviousPage: false,
-          hasNextPage: false
-        }
-      },
-      // The whole ledger, not the first page of it: this panel exports it and
-      // looks through it for duplicates, and a page of twenty made a CSV export
-      // twenty rows long and «пропустить дубликаты» find nothing.
-      "/transactions?limit=all"
-    );
+  const { data: transactionData, reload: reloadTransactions } = useApiPageData(
+    {
+      source: data.source,
+      transactions,
+      accounts: data.accounts,
+      categories: data.categories,
+      rules: [],
+      futureDated: { count: 0, net: 0 },
+      filters: {},
+      pagination: {
+        page: 1,
+        limit: 20,
+        total: transactions.length,
+        hasPreviousPage: false,
+        hasNextPage: false
+      }
+    },
+    // The whole ledger, not the first page of it: this panel exports it and
+    // looks through it for duplicates, and a page of twenty made a CSV export
+    // twenty rows long and «пропустить дубликаты» find nothing.
+    "/transactions?limit=all"
+  );
   const [fields, setFields] = useState<string[]>([]);
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [errors, setErrors] = useState<string[]>([]);
@@ -222,7 +221,7 @@ export function ImportExportPanel({
 
   async function exportBackup() {
     try {
-      const backup = await apiClient.get<unknown>("/backup");
+      const backup = await apiClient.get("/backup");
       const stamp = todayDay();
       await fileSystem.saveTextFile(
         `financial-assistant-backup-${stamp}.json`,
@@ -241,7 +240,7 @@ export function ImportExportPanel({
   useEffect(() => {
     let alive = true;
     void apiClient
-      .get<PreUpgradeBackup | null>("/backup/before-upgrade")
+      .get("/backup/before-upgrade")
       .then((found) => {
         if (alive) setPreUpgrade(found);
       })

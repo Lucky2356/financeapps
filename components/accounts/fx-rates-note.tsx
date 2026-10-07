@@ -6,9 +6,10 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import type { AccountsPageData, SettingsPageData } from "@/lib/data";
+import type { AccountsPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 // Desktop-only note showing how fresh the cached CBR exchange rates are, with a
 // manual refresh. Only relevant when the user holds a non-RUB account — with a
@@ -21,12 +22,15 @@ export function FxRatesNote({ accounts }: { accounts: AccountsPageData["accounts
   const [refreshing, setRefreshing] = useState(false);
 
   const hasForeign = accounts.some((a) => a.currency && a.currency !== "RUB");
+  // Курсы обновляет и фоновый прогон при загрузке — уже после того, как эта
+  // строка прочитала дату; без перечитывания она показывала бы вчерашнюю.
+  const version = useDataVersion();
 
   useEffect(() => {
     if (!hasForeign) return;
     let cancelled = false;
     apiClient
-      .get<SettingsPageData>("/settings")
+      .get("/settings")
       .then((data) => {
         if (!cancelled) setUpdatedAt(data.currencyRatesUpdatedAt ?? null);
       })
@@ -36,7 +40,7 @@ export function FxRatesNote({ accounts }: { accounts: AccountsPageData["accounts
     return () => {
       cancelled = true;
     };
-  }, [hasForeign]);
+  }, [hasForeign, version]);
 
   if (!hasForeign) return null;
 

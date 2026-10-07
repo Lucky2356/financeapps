@@ -132,9 +132,7 @@ describe("удаление через приложение", () => {
       type: "DEBIT_CARD",
       balance: 1000
     });
-    const { categories } = await client.get<{ categories: Array<{ id: string; kind: string }> }>(
-      "/categories"
-    );
+    const { categories } = await client.get("/categories");
     const expense = categories.find((row) => row.kind === "EXPENSE");
     const created = await client.post<{ id: string }>("/transactions", {
       amount: 700,
