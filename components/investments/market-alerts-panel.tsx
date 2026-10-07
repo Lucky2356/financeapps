@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 const OPERATORS = [">", ">=", "<", "<="] as const;
 
@@ -35,6 +36,9 @@ export function MarketAlertsPanel() {
   const [checking, setChecking] = useState(false);
   const [latest, setLatest] = useState<Record<string, SmartLabFundamentals | null>>({});
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  // Список сигналов — из книги: его меняет и другое устройство. Поля формы
+  // добавления — своё состояние, перечитывание их не трогает.
+  const version = useDataVersion();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +53,7 @@ export function MarketAlertsPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [version]);
 
   async function addAlert() {
     const cleanTicker = ticker.trim().toUpperCase();

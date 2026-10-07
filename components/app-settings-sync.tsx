@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 
 import { apiClient } from "@/lib/api/client";
 import { themeChosenThisSession } from "@/lib/theme-preference";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 // Applies interface density globally by scaling the root font size.
 // Tailwind spacing/typography is rem-based, so this proportionally tightens
@@ -23,8 +24,14 @@ export function applyDensity(density: "comfortable" | "compact") {
 
 // On load, reads persisted settings and applies theme + density everywhere.
 // In web/dev mode the settings request fails silently (no DB) and nothing breaks.
+//
+// И перечитывает при каждом изменении книги: тему и плотность, выбранные на
+// другом устройстве, приносит синхронизация — без этого они применялись бы
+// только после перезапуска. Выбор, сделанный здесь в этом сеансе, по-прежнему
+// главнее (themeChosenThisSession).
 export function AppSettingsSync() {
   const { setTheme } = useTheme();
+  const version = useDataVersion();
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +52,7 @@ export function AppSettingsSync() {
     return () => {
       cancelled = true;
     };
-  }, [setTheme]);
+  }, [setTheme, version]);
 
   return null;
 }

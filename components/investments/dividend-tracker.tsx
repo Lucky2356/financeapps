@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 // Desktop-only dividend tracker: annual income from the realized-dividend journal
 // plus a small list of upcoming expected payouts (which also surface on the
@@ -23,6 +24,9 @@ export function DividendTracker() {
   const [realized, setRealized] = useState<RealizedInvestmentEvent[]>([]);
   const [currency, setCurrency] = useState("RUB");
   const [saving, setSaving] = useState(false);
+  // Выплаты пишет не только эта карточка: «Получено» в ближайших выплатах и
+  // синхронизация с другим устройством меняют тот же журнал.
+  const version = useDataVersion();
 
   const load = () =>
     apiClient
@@ -38,7 +42,7 @@ export function DividendTracker() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [version]);
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

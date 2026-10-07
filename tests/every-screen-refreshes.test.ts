@@ -51,8 +51,28 @@ const ON_DEMAND: Record<string, string> = {
   "components/sync/replace-local.tsx": "снимает копию по нажатию «Сохранить копию и заменить»",
   "components/investments/security-search.tsx": "поиск бумаги по набранному",
   "components/transactions/favorite-chips.tsx":
-    "внутри окна быстрой записи: читает при каждом его открытии"
+    "внутри окна быстрой записи: читает при каждом его открытии",
+  "components/sheet/sheet-wizard.tsx": "мастер таблицы: читает факт, когда окно открыли",
+  "components/transactions/receipt-photo-dialog.tsx": "окно фото чека: читает при открытии",
+  "components/debts/pay-debt-dialog.tsx": "окно платежа по долгу: читает счета при открытии",
+  "components/accounts/reconcile-dialog.tsx": "окно сверки: читает операции счёта при открытии",
+  "components/investments/portfolio-value-chart.tsx":
+    "котировки с биржи, а не книга; портфель приходит от подписанного экрана",
+  "components/investments/rebalance-panel.tsx":
+    "форма целевых долей: перечитывание на каждую запись стирало бы набранное"
 };
+
+/**
+ * Читает ли исходник книгу.
+ *
+ * Не подстрокой «apiClient.get»: вызов, разбитый Prettier на две строки
+ * («apiClient» и «.get(…)» под ним), подстроку не содержит, и сторож его не
+ * видел. Так дюжина мест читала книгу мимо сторожа — нашлось, когда удаление
+ * `get<T>` склеило один такой вызов обратно в строку.
+ */
+export function readsBook(source: string): boolean {
+  return /apiClient\s*\.get\b/.test(source);
+}
 
 /**
  * Путь — всегда с прямым слэшем, на любой системе.
@@ -95,13 +115,21 @@ describe("каждый экран перечитывает себя", () => {
     expect(toPosix("components/ai/ai-quick-add.tsx")).toBe("components/ai/ai-quick-add.tsx");
   });
 
+  it("вызов, разбитый на строки, — тоже чтение", () => {
+    // Сама проверка проверяема: верни поиск подстроки — и краснеет эта строка.
+    expect(readsBook('await apiClient.get("/accounts")')).toBe(true);
+    expect(readsBook('apiClient\n      .get("/accounts")\n      .then(show)')).toBe(true);
+    expect(readsBook('apiClient.post("/accounts", body)')).toBe(false);
+    expect(readsBook("apiClient.getter")).toBe(false);
+  });
+
   it("читающий книгу либо подписан, либо назван читающим по требованию", () => {
     const unsubscribed: string[] = [];
 
     for (const root of ROOTS) {
       for (const file of walk(root)) {
         const source = readFileSync(file, "utf8");
-        if (!source.includes("apiClient.get")) continue;
+        if (!readsBook(source)) continue;
         if (SUBSCRIPTIONS.some((mark) => source.includes(mark))) continue;
         unsubscribed.push(file);
       }
@@ -122,7 +150,7 @@ describe("каждый экран перечитывает себя", () => {
       } catch {
         return true; // файла больше нет
       }
-      if (!source.includes("apiClient.get")) return true; // больше не читает
+      if (!readsBook(source)) return true; // больше не читает
       return SUBSCRIPTIONS.some((mark) => source.includes(mark)); // уже подписан
     });
 

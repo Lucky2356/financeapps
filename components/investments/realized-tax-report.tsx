@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { useDataVersion } from "@/hooks/use-data-version";
 
 // Desktop-only realized-income ledger + tax report: record sells and dividends,
 // see the year-by-year НДФЛ estimate on actually realized income. Kept separate
@@ -38,6 +39,10 @@ export function RealizedTaxReport() {
   // land on an account, which is where the owner will look for it.
   const [accounts, setAccounts] = useState<AccountsPageData["accounts"]>([]);
   const [accountId, setAccountId] = useState("none");
+
+  // Журнал продаж и дивидендов меняет не только эта карточка — и синхронизация
+  // с другим устройством тоже.
+  const version = useDataVersion();
 
   const load = () =>
     apiClient
@@ -59,7 +64,7 @@ export function RealizedTaxReport() {
       .catch(() => {
         /* offline or empty — the sale is recorded without an account */
       });
-  }, []);
+  }, [version]);
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
