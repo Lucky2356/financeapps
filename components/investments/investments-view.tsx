@@ -13,7 +13,7 @@ import {
   Trash2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { RecommendationList } from "@/components/recommendation-list";
@@ -131,17 +131,21 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
   for (const s of [...data.securities, ...data.watchlist])
     dayChangeByTicker.set(s.ticker, s.changeDay);
 
+  // Silent: refresh prices in the background without a toast on every visit.
+  const refreshSilently = useEffectEvent(() => void refreshMarketPrices(true));
+
   // Auto-refresh only when the user has investments to update (avoids confusing
-  // "updated 10 stocks" toast when user has never added any data)
+  // "updated 10 stocks" toast when user has never added any data). Once per
+  // visit: the data present when the screen opened decides.
   const autoRefreshed = useRef(false);
+  const refreshOnOpen = useEffectEvent(() => {
+    if (hasMarketData) refreshSilently();
+  });
   useEffect(() => {
     if (autoRefreshed.current) return;
     autoRefreshed.current = true;
-    if (hasMarketData) {
-      // Silent: refresh prices in the background without a toast on every visit
-      void refreshMarketPrices(true);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    refreshOnOpen();
+  }, []);
 
   // Real-time updates: keep prices fresh while the page is VISIBLE. Polling is
   // paused when the tab/window is hidden (other tab, minimized desktop) to save
@@ -150,7 +154,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     if (!hasMarketData) return;
     let id: ReturnType<typeof setInterval> | null = null;
     const start = () => {
-      if (id === null) id = setInterval(() => void refreshMarketPrices(true), REFRESH_INTERVAL_MS);
+      if (id === null) id = setInterval(() => refreshSilently(), REFRESH_INTERVAL_MS);
     };
     const stop = () => {
       if (id !== null) {
@@ -160,7 +164,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
     };
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        void refreshMarketPrices(true);
+        refreshSilently();
         start();
       } else {
         stop();
@@ -172,7 +176,7 @@ export function InvestmentsView({ data: initialData }: { data: InvestmentData })
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [hasMarketData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasMarketData]);
 
   function computeSuggestions() {
     const value = Number(budget);

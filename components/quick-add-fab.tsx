@@ -6,7 +6,7 @@ import { FavoriteChips } from "@/components/transactions/favorite-chips";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
@@ -290,19 +290,19 @@ export function QuickAddFab({
     setOpen(true);
   }
 
+  const openOnRequest = useEffectEvent((request: QuickAddRequest) => openDialog(request));
   useEffect(() => {
     // Открыть по просьбе снаружи: ярлык на значке, кнопка «Операция» и т. п.
     // Просьба могла прийти раньше, чем эта кнопка появилась, — тогда она ждёт.
     const handler = () => {
       const request = takeQuickAddRequest();
-      void openDialog(request ?? {});
+      void openOnRequest(request ?? {});
     };
     window.addEventListener(QUICK_ADD_OPEN, handler);
     const early = takeQuickAddRequest();
     // На микрозадачу, а не прямо в эффекте: окно открывается состоянием.
-    if (early) void Promise.resolve().then(() => openDialog(early));
+    if (early) void Promise.resolve().then(() => openOnRequest(early));
     return () => window.removeEventListener(QUICK_ADD_OPEN, handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activeAccounts = refs.accounts.filter(
@@ -346,13 +346,8 @@ export function QuickAddFab({
   }, [open, type, operationMonth]);
 
   // Окно закрыли не записью — набранное откладывается. Записью — стирается.
-  useEffect(() => {
-    if (open) {
-      wasOpen.current = true;
-      return;
-    }
-    if (!wasOpen.current) return;
-    wasOpen.current = false;
+  // Набранное читается из того же рендера, в котором окно закрылось.
+  const keepDraft = useEffectEvent(() => {
     if (recorded.current) {
       recorded.current = false;
       removeMine(DRAFT_KEY);
@@ -374,8 +369,15 @@ export function QuickAddFab({
     } catch {
       /* черновик — удобство, а не данные */
     }
-    // Только момент закрытия: остальное читается из этого же рендера.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
+  useEffect(() => {
+    if (open) {
+      wasOpen.current = true;
+      return;
+    }
+    if (!wasOpen.current) return;
+    wasOpen.current = false;
+    keepDraft();
   }, [open]);
 
   // Сколько осталось в лимите категории — до траты, с уже набранной суммой.
