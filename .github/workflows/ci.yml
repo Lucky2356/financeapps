@@ -46,6 +46,15 @@ jobs:
       - name: Проверки службы
         run: npm run test:server
 
+      # Арифметика окна (src-tauri/src/window_fit.rs) нарочно без Tauri: тесты
+      # собираются одним rustc за секунды. Весь Rust-проект здесь не строится —
+      # он собирается только при выпуске, и ошибка в подгонке окна иначе
+      # всплыла бы лишь там.
+      - name: Подгонка окна под экран (Rust)
+        run: |
+          rustc --edition 2021 --test src-tauri/src/window_fit.rs -o "$RUNNER_TEMP/window_fit"
+          "$RUNNER_TEMP/window_fit"
+
       - name: Build static shell
         run: npm run build:static
 

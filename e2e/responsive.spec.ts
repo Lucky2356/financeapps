@@ -13,7 +13,11 @@ const VIEWPORTS = [
   { name: "tablet", width: 820, height: 1180 },
   // `lg` is where the sidebar and the single-row tab strip both appear — the
   // narrowest layout in which every section tab has to fit one line.
-  { name: "laptop", width: 1024, height: 768 }
+  { name: "laptop", width: 1024, height: 768 },
+  // Самое узкое окно, какое даёт приложение (minWidth в tauri.conf.json), и
+  // монитор 4K при 150 %: на нём содержимое упирается в max-w-[1760px].
+  { name: "app minimum window", width: 960, height: 640 },
+  { name: "4K at 150%", width: 2560, height: 1400 }
 ];
 
 const ROUTES = [
