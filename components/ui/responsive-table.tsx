@@ -41,6 +41,13 @@ export type ResponsiveColumn<T> = {
   className?: string;
 };
 
+/**
+ * Ячейка таблицы. Отступ справа — у всех, кроме последней: без него колонки
+ * стояли вплотную, и длинное имя счёта сливалось с категорией рядом
+ * («Лариса Продукты»).
+ */
+const CELL = "py-2 pr-4 last:pr-0";
+
 export function ResponsiveTable<T>({
   columns,
   rows,
@@ -78,7 +85,7 @@ export function ResponsiveTable<T>({
               {columns.map((column) => (
                 <th
                   key={column.header}
-                  className={cn("py-2", column.align === "right" && "text-right", column.className)}
+                  className={cn(CELL, column.align === "right" && "text-right", column.className)}
                 >
                   {column.header}
                 </th>
@@ -92,7 +99,7 @@ export function ResponsiveTable<T>({
                 {columns.map((column) => (
                   <td
                     key={column.header}
-                    className={cn("py-2", column.align === "right" && "text-right")}
+                    className={cn(CELL, column.align === "right" && "text-right")}
                   >
                     {column.cell(row)}
                   </td>
