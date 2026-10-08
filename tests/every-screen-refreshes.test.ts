@@ -22,8 +22,19 @@ import { describe, expect, it } from "vitest";
 
 const ROOTS = ["components", "app", "hooks"];
 
-/** Как место может узнать, что книга изменилась. Любого из трёх достаточно. */
-const SUBSCRIPTIONS = ["useApiPageData", "onDataChanged", "useDataVersion"];
+/**
+ * Как место со своим запросом узнаёт, что книга изменилась.
+ *
+ * useApiPageData сюда не входит, хотя и перечитывает себя сам: он отвечает за
+ * свой запрос, а не за соседний. Файл, где рядом с ним стоял ещё и свой
+ * `apiClient.get`, проходил сторожа «за компанию» — так «Сравнить с учётом» в
+ * таблице и список счетов в настройках оставались со старыми числами.
+ */
+const SUBSCRIPTIONS = ["onDataChanged", "useDataVersion"];
+
+export function subscribed(source: string): boolean {
+  return SUBSCRIPTIONS.some((mark) => source.includes(mark));
+}
 
 /**
  * Места, которые читают по требованию, а не показывают книгу.
@@ -59,7 +70,16 @@ const ON_DEMAND: Record<string, string> = {
   "components/investments/portfolio-value-chart.tsx":
     "котировки с биржи, а не книга; портфель приходит от подписанного экрана",
   "components/investments/rebalance-panel.tsx":
-    "форма целевых долей: перечитывание на каждую запись стирало бы набранное"
+    "форма целевых долей: перечитывание на каждую запись стирало бы набранное",
+  "components/transactions/transaction-manager/use-row-actions.ts":
+    "читает фото удаляемой операции по нажатию «Удалить», чтобы «Отменить» вернуло и его",
+  "components/goals/goal-manager.tsx":
+    "окна цели (правка, пополнение, удаление): читают счета, когда окно открыли",
+  "components/debts/debt-manager.tsx": "окно долга: читает счета и категории при открытии",
+  "components/quick-add-fab.tsx":
+    "окно быстрой записи: читает при открытии, лимиты — пока оно открыто (зависимость open)",
+  "components/import/import-export-panel.tsx":
+    "копия — по нажатию «Скачать»; отложенная перед обновлением книга меняется только с обновлением"
 };
 
 /**
@@ -123,6 +143,13 @@ describe("каждый экран перечитывает себя", () => {
     expect(readsBook("apiClient.getter")).toBe(false);
   });
 
+  it("свой запрос рядом с useApiPageData не подписан «за компанию»", () => {
+    const page = 'const { data } = useApiPageData(initial, "/sheet");';
+    const own = 'apiClient.get("/sheet/facts").then(setFacts)';
+    expect(subscribed(`${page}\n${own}`)).toBe(false);
+    expect(subscribed(`${page}\nconst version = useDataVersion();\n${own}`)).toBe(true);
+  });
+
   it("читающий книгу либо подписан, либо назван читающим по требованию", () => {
     const unsubscribed: string[] = [];
 
@@ -130,7 +157,7 @@ describe("каждый экран перечитывает себя", () => {
       for (const file of walk(root)) {
         const source = readFileSync(file, "utf8");
         if (!readsBook(source)) continue;
-        if (SUBSCRIPTIONS.some((mark) => source.includes(mark))) continue;
+        if (subscribed(source)) continue;
         unsubscribed.push(file);
       }
     }
@@ -151,7 +178,7 @@ describe("каждый экран перечитывает себя", () => {
         return true; // файла больше нет
       }
       if (!readsBook(source)) return true; // больше не читает
-      return SUBSCRIPTIONS.some((mark) => source.includes(mark)); // уже подписан
+      return subscribed(source); // уже подписан
     });
 
     expect(stale, "лишние строки в списке читающих по требованию").toEqual([]);

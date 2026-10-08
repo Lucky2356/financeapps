@@ -9,14 +9,14 @@ const JPEG = `data:image/jpeg;base64,${"A".repeat(2000)}`;
 async function setup() {
   const storage = new MemoryStorageAdapter();
   const client = new LocalApiClient(storage);
-  const account = await client.post<{ id: string }>("/accounts", {
+  const account = await client.post("/accounts", {
     name: "Карта",
     type: "DEBIT_CARD",
     balance: "10000"
   });
   const { categories } = await client.get("/categories");
   const food = categories.find((category) => category.name === "Продукты");
-  const tx = await client.post<{ id: string }>("/transactions", {
+  const tx = await client.post("/transactions", {
     amount: "1250",
     type: "EXPENSE",
     accountId: account.id,

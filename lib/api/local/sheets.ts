@@ -20,7 +20,7 @@ import { evaluate } from "@/lib/sheet/formula";
 import {
   importSheet,
   readSheet,
-  writeSheet,
+  SHEET_ACTIONS,
   type SheetBackup,
   type SheetCellRow,
   type SheetImport,
@@ -323,37 +323,84 @@ export function readWorkbook(state: BookState, sheetId: string | null): Workbook
   };
 }
 
-/** Правка листа. Бюджетные действия идут через окно, свободные — здесь. */
-export function writeWorkbook(state: BookState, body: Body, makeId: () => string): unknown {
-  const sheetId = body.sheetId ? String(body.sheetId) : MAIN_SHEET;
-  const sheet = findSheet(state, sheetId);
-  if (sheet.kind === "free") {
-    switch (String(body.action ?? "")) {
-      case "setFree":
-        setFreeCells(state, sheetId, Array.isArray(body.cells) ? (body.cells as Body[]) : []);
-        return readFree(state, sheetId);
-      case "resizeFree": {
-        const rows = Math.min(MAX_FREE_ROWS, Math.max(1, Math.trunc(Number(body.rows) || 0)));
-        const cols = Math.min(MAX_FREE_COLS, Math.max(1, Math.trunc(Number(body.cols) || 0)));
-        state.sheets = (state.sheets ?? []).map((item) =>
-          item.id === sheetId ? { ...item, rows, cols } : item
-        );
-        return readFree(state, sheetId);
-      }
-      case "removeFreeRow":
-        removeFreeLine(state, sheetId, "r", Math.trunc(Number(body.index)));
-        return readFree(state, sheetId);
-      case "removeFreeCol":
-        removeFreeLine(state, sheetId, "c", Math.trunc(Number(body.index)));
-        return readFree(state, sheetId);
-      default:
-        throw new Error("Это действие — для бюджетного листа.");
-    }
-  }
-  const scoped = sheetScope(state, sheetId);
-  const result = writeSheet(scoped, body, makeId);
-  putScope(state, sheetId, scoped);
-  return result;
+/** Лист, к которому обращена правка: `sheetId` в теле, без него — главный. */
+function targetSheet(body: Body): string {
+  return body.sheetId ? String(body.sheetId) : MAIN_SHEET;
+}
+
+/**
+ * Дело бюджетного листа — на его срезе книги. Свободному листу оно не по
+ * адресу.
+ */
+function onBudgetSheet<Result>(
+  run: (state: SheetState, body: Body, makeId: () => string) => Result
+) {
+  return (state: BookState, body: Body, makeId: () => string): Result => {
+    const sheetId = targetSheet(body);
+    if (findSheet(state, sheetId).kind === "free")
+      throw new Error("Это действие — для бюджетного листа.");
+    const scoped = sheetScope(state, sheetId);
+    const result = run(scoped, body, makeId);
+    putScope(state, sheetId, scoped);
+    return result;
+  };
+}
+
+/** Дело свободного листа. Бюджетному оно незнакомо. */
+function onFreeSheet<Result>(run: (state: BookState, sheetId: string, body: Body) => Result) {
+  return (state: BookState, body: Body): Result => {
+    const sheetId = targetSheet(body);
+    if (findSheet(state, sheetId).kind !== "free")
+      throw new Error(`Неизвестное действие с таблицей: ${String(body.action ?? "")}`);
+    return run(state, sheetId, body);
+  };
+}
+
+type WorkbookAction = (state: BookState, body: Body, makeId: () => string) => unknown;
+
+/**
+ * Правка листа — по полю `action` в теле. Бюджетные действия идут через окно,
+ * свободные — здесь.
+ */
+export const WORKBOOK_ACTIONS = {
+  setFree: onFreeSheet((state, sheetId, body) => {
+    setFreeCells(state, sheetId, Array.isArray(body.cells) ? (body.cells as Body[]) : []);
+    return readFree(state, sheetId);
+  }),
+  resizeFree: onFreeSheet((state, sheetId, body) => {
+    const rows = Math.min(MAX_FREE_ROWS, Math.max(1, Math.trunc(Number(body.rows) || 0)));
+    const cols = Math.min(MAX_FREE_COLS, Math.max(1, Math.trunc(Number(body.cols) || 0)));
+    state.sheets = (state.sheets ?? []).map((item) =>
+      item.id === sheetId ? { ...item, rows, cols } : item
+    );
+    return readFree(state, sheetId);
+  }),
+  removeFreeRow: onFreeSheet((state, sheetId, body) => {
+    removeFreeLine(state, sheetId, "r", Math.trunc(Number(body.index)));
+    return readFree(state, sheetId);
+  }),
+  removeFreeCol: onFreeSheet((state, sheetId, body) => {
+    removeFreeLine(state, sheetId, "c", Math.trunc(Number(body.index)));
+    return readFree(state, sheetId);
+  }),
+  start: onBudgetSheet(SHEET_ACTIONS.start),
+  setCells: onBudgetSheet(SHEET_ACTIONS.setCells),
+  addColumn: onBudgetSheet(SHEET_ACTIONS.addColumn),
+  updateColumn: onBudgetSheet(SHEET_ACTIONS.updateColumn),
+  moveColumn: onBudgetSheet(SHEET_ACTIONS.moveColumn),
+  removeColumn: onBudgetSheet(SHEET_ACTIONS.removeColumn),
+  addMonth: onBudgetSheet(SHEET_ACTIONS.addMonth),
+  removeMonth: onBudgetSheet(SHEET_ACTIONS.removeMonth),
+  setTarget: onBudgetSheet(SHEET_ACTIONS.setTarget),
+  removeTarget: onBudgetSheet(SHEET_ACTIONS.removeTarget),
+  undoImport: onBudgetSheet(SHEET_ACTIONS.undoImport)
+} satisfies Record<keyof typeof SHEET_ACTIONS, WorkbookAction> & Record<string, WorkbookAction>;
+
+/** Действие, которого нет ни у одного листа, — та же ошибка, что и прежде. */
+export function unknownWorkbookAction(state: BookState, body: Body): never {
+  if (findSheet(state, targetSheet(body)).kind === "free")
+    throw new Error("Это действие — для бюджетного листа.");
+  throw new Error(`Неизвестное действие с таблицей: ${String(body.action ?? "")}`);
 }
 
 /** Перенос из Excel в бюджетный лист — через то же окно. */
@@ -371,54 +418,59 @@ export function importIntoSheet(
 }
 
 /** Действия с самими листами: завести, переименовать, сдвинуть, удалить. */
-export function writeSheets(state: BookState, body: Body, makeId: () => string): unknown {
-  const action = String(body.action ?? "");
-  switch (action) {
-    case "create":
-      return createSheet(state, { name: body.name, kind: body.kind }, makeId);
-    case "rename": {
-      const id = String(body.id ?? "");
-      findSheet(state, id);
-      ensureOrders(state);
-      const name = sheetName(body.name);
-      state.sheets = (state.sheets ?? []).map((row) => (row.id === id ? { ...row, name } : row));
-      return { saved: true };
-    }
-    case "move": {
-      ensureOrders(state);
-      const ordered = [...(state.sheets ?? [])].sort((a, b) => a.order - b.order);
-      const index = ordered.findIndex((row) => row.id === body.id);
-      const target = index + (Number(body.direction) < 0 ? -1 : 1);
-      if (index < 0 || target < 0 || target >= ordered.length) return { saved: false };
-      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
-      state.sheets = ordered.map((row, position) =>
-        row.order === position * 10 ? row : { ...row, order: position * 10 }
-      );
-      return { saved: true };
-    }
-    case "remove": {
-      const id = String(body.id ?? "");
-      if (id === MAIN_SHEET) throw new Error("Главную таблицу удалить нельзя — её можно очистить.");
-      findSheet(state, id);
-      // Всё, что принадлежит листу, уходит вместе с ним; корзина (lib/trash)
-      // соберёт это в одну запись «лист», чтобы вернуть целиком.
-      putScope(state, id, {
-        sheetColumns: [],
-        sheetCells: [],
-        sheetMonths: [],
-        sheetTargets: [],
-        sheetBackup: null
-      });
-      state.freeCells = (state.freeCells ?? []).filter((cell) => cell.sheetId !== id);
-      state.sheets = (state.sheets ?? []).filter((row) => row.id !== id);
-      const backups = { ...(state.sheetBackups ?? {}) };
-      delete backups[id];
-      state.sheetBackups = backups;
-      return { removed: true };
-    }
-    default:
-      throw new Error(`Неизвестное действие с листами: ${action}`);
+/** Дела с листами книги — по полю `action` в теле. */
+export const SHEETS_ACTIONS = {
+  create: (state: BookState, body: Body, makeId: () => string) => {
+    return createSheet(state, { name: body.name, kind: body.kind }, makeId);
+  },
+
+  rename: (state: BookState, body: Body) => {
+    const id = String(body.id ?? "");
+    findSheet(state, id);
+    ensureOrders(state);
+    const name = sheetName(body.name);
+    state.sheets = (state.sheets ?? []).map((row) => (row.id === id ? { ...row, name } : row));
+    return { saved: true };
+  },
+
+  move: (state: BookState, body: Body) => {
+    ensureOrders(state);
+    const ordered = [...(state.sheets ?? [])].sort((a, b) => a.order - b.order);
+    const index = ordered.findIndex((row) => row.id === body.id);
+    const target = index + (Number(body.direction) < 0 ? -1 : 1);
+    if (index < 0 || target < 0 || target >= ordered.length) return { saved: false };
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    state.sheets = ordered.map((row, position) =>
+      row.order === position * 10 ? row : { ...row, order: position * 10 }
+    );
+    return { saved: true };
+  },
+
+  remove: (state: BookState, body: Body) => {
+    const id = String(body.id ?? "");
+    if (id === MAIN_SHEET) throw new Error("Главную таблицу удалить нельзя — её можно очистить.");
+    findSheet(state, id);
+    // Всё, что принадлежит листу, уходит вместе с ним; корзина (lib/trash)
+    // соберёт это в одну запись «лист», чтобы вернуть целиком.
+    putScope(state, id, {
+      sheetColumns: [],
+      sheetCells: [],
+      sheetMonths: [],
+      sheetTargets: [],
+      sheetBackup: null
+    });
+    state.freeCells = (state.freeCells ?? []).filter((cell) => cell.sheetId !== id);
+    state.sheets = (state.sheets ?? []).filter((row) => row.id !== id);
+    const backups = { ...(state.sheetBackups ?? {}) };
+    delete backups[id];
+    state.sheetBackups = backups;
+    return { removed: true };
   }
+};
+
+/** Действие с листами, которого нет. */
+export function unknownSheetsAction(body: Body): never {
+  throw new Error(`Неизвестное действие с листами: ${String(body.action ?? "")}`);
 }
 
 /** Лист из Excel для переноса книги целиком. */

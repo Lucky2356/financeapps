@@ -80,12 +80,12 @@ describe("поиск пар", () => {
 describe("связать в перевод", () => {
   it("две операции становятся переводом: остатки те же, в доходах и расходах их больше нет", async () => {
     const api = new LocalApiClient(new MemoryStorageAdapter());
-    const card = await api.post<{ id: string }>("/accounts", {
+    const card = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "0"
     });
-    const deposit = await api.post<{ id: string }>("/accounts", {
+    const deposit = await api.post("/accounts", {
       name: "Вклад",
       type: "SAVINGS",
       balance: "100000"

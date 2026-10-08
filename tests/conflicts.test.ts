@@ -144,13 +144,13 @@ describe("решение по спорной строке", () => {
     );
 
   async function seedTransaction(): Promise<string> {
-    const account = await client.post<{ id: string }>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: 1000
     });
     const { categories } = await client.get("/categories");
-    const created = await client.post<{ id: string }>("/transactions", {
+    const created = await client.post("/transactions", {
       amount: 700,
       type: "EXPENSE",
       accountId: account.id,

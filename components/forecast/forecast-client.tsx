@@ -8,12 +8,15 @@ import { apiClient } from "@/lib/api/client";
 import { goalDeadlineMarkers, type CalendarMarker } from "@/lib/calendar/markers";
 import { upcomingDividends } from "@/lib/investments/dividends";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { useDataVersion } from "@/hooks/use-data-version";
 import type { ExpectedDividend, ForecastData } from "@/types/finance";
 
 // Re-fetches forecast from the active API client so desktop shows real data.
 export function ForecastClient({ initialData }: { initialData: ForecastData }) {
   const { data } = useApiPageData(initialData, "/forecast");
   const [markers, setMarkers] = useState<CalendarMarker[]>([]);
+  // Цели и дивиденды правят на своих экранах и на других устройствах.
+  const version = useDataVersion();
 
   // Goal deadlines overlay the cashflow calendar as milestone markers, turning
   // it into a unified financial calendar (bills + goal deadlines + budget reset).
@@ -44,7 +47,7 @@ export function ForecastClient({ initialData }: { initialData: ForecastData }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [version]);
 
   return (
     <>

@@ -8,7 +8,7 @@
 // PairWait). Поле для ссылки остаётся запасным путём на обоих.
 
 import { Camera } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PairWait } from "@/components/sync/pair-wait";
@@ -81,16 +81,15 @@ export function PairJoin({
   // Приложение открыли ссылкой из QR — камера и поле не нужны, код уже здесь.
   // Через таймер, а не прямо в эффекте: подключение меняет состояние экрана.
   const opened = useRef(false);
+  const joinOpened = useEffectEvent((link: string) => {
+    setLink(link);
+    void join(link);
+  });
   useEffect(() => {
     if (!initialLink || opened.current) return;
     opened.current = true;
-    const timer = window.setTimeout(() => {
-      setLink(initialLink);
-      void join(initialLink);
-    }, 0);
+    const timer = window.setTimeout(() => joinOpened(initialLink), 0);
     return () => window.clearTimeout(timer);
-    // join — обычная функция экрана; повторять по её смене незачем.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialLink]);
 
   async function openCamera() {

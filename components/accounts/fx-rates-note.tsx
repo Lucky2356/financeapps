@@ -49,7 +49,7 @@ export function FxRatesNote({ accounts }: { accounts: AccountsPageData["accounts
     try {
       const { fetchCbrRates } = await import("@/services/market/FxRatesProvider");
       const rates = await fetchCbrRates();
-      const res = await apiClient.post<{ updatedAt: string }>("/fx", { rates });
+      const res = await apiClient.post("/fx", { rates });
       setUpdatedAt(res.updatedAt);
       toast.success(t("fx.refreshed"));
       router.refresh();

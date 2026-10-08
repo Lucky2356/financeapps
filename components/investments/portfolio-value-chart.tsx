@@ -10,7 +10,7 @@
 // «Против индекса»: ваши бумаги и индекс Мосбиржи в процентах от начала
 // периода — обогнали рынок или нет.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { StockPriceChart, type StockPricePoint } from "@/components/charts/stock-price-chart";
 import { TwoLinesChart } from "@/components/charts/two-lines-chart";
@@ -54,16 +54,18 @@ export function PortfolioValueChart({
   // Stable dependency: re-fetch only when the holdings (ticker/qty) or range change,
   // not on every parent re-render (the portfolio array identity is unstable).
   const holdingsKey = portfolio.map((p) => `${p.ticker}:${p.quantity}`).join(",");
+  const currentPortfolio = useEffectEvent(() => portfolio);
 
   useEffect(() => {
+    const positions = currentPortfolio();
     // Nothing to plot for an empty portfolio (the component renders null below).
-    if (portfolio.length === 0) return;
+    if (positions.length === 0) return;
     let cancelled = false;
     void (async () => {
       setLoading(true);
       try {
         const series = await Promise.all(
-          portfolio.map((position) =>
+          positions.map((position) =>
             apiClient
               .get(
                 `/investments/history?ticker=${encodeURIComponent(position.ticker)}&range=${range}`
@@ -80,7 +82,7 @@ export function PortfolioValueChart({
     return () => {
       cancelled = true;
     };
-  }, [holdingsKey, range]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [holdingsKey, range]);
 
   // Индекс — только когда его попросили: лишний запрос к бирже ни к чему.
   useEffect(() => {

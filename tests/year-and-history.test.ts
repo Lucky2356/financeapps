@@ -28,12 +28,12 @@ describe("история остатка", () => {
 
   it("через API: пополнение цели переносит деньги со счёта в цели, итог не меняется", async () => {
     const api = new LocalApiClient(new MemoryStorageAdapter());
-    const card = await api.post<{ id: string }>("/accounts", {
+    const card = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "20000"
     });
-    const goal = await api.post<{ id: string }>("/goals", {
+    const goal = await api.post("/goals", {
       title: "Отпуск",
       targetAmount: "100000",
       currentAmount: "0",

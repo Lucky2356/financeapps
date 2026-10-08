@@ -80,9 +80,9 @@ export function FamilyScreen() {
     { month: "long", year: "numeric" }
   );
 
-  async function act(body: Record<string, unknown>) {
+  async function act<const Body extends { action: string }>(body: Body) {
     try {
-      const result = await apiClient.post<Member>("/family", body);
+      const result = await apiClient.post("/family", body);
       await reload();
       return result;
     } catch (cause) {

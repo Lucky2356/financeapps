@@ -92,10 +92,7 @@ function PayForm({
   async function submit() {
     setBusy(true);
     try {
-      const result = await apiClient.post<{ paid: number; balance: number; closed: boolean }>(
-        "/debts/pay",
-        { id: debt.id, amount, accountId, date }
-      );
+      const result = await apiClient.post("/debts/pay", { id: debt.id, amount, accountId, date });
       toast.success(
         result.closed
           ? t("debt.pay.closed")

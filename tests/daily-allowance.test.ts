@@ -56,12 +56,12 @@ describe("ручка /allowance", () => {
     const { MemoryStorageAdapter } = await import("@/lib/storage/MemoryStorageAdapter");
     const { formatInputDate } = await import("@/lib/format");
     const api = new LocalApiClient(new MemoryStorageAdapter());
-    const card = await api.post<{ id: string }>("/accounts", {
+    const card = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "0"
     });
-    const cash = await api.post<{ id: string }>("/accounts", {
+    const cash = await api.post("/accounts", {
       name: "Наличные",
       type: "CASH",
       balance: "0"

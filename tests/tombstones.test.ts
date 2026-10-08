@@ -127,14 +127,14 @@ describe("удаление через приложение", () => {
     storage.getItem<{ deletions?: Tombstone[] }>("localFinanceState_profile-default");
 
   it("удалённая операция оставляет след в книге", async () => {
-    const account = await client.post<{ id: string }>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: 1000
     });
     const { categories } = await client.get("/categories");
     const expense = categories.find((row) => row.kind === "EXPENSE");
-    const created = await client.post<{ id: string }>("/transactions", {
+    const created = await client.post("/transactions", {
       amount: 700,
       type: "EXPENSE",
       accountId: account.id,

@@ -30,10 +30,11 @@ describe("платёж по долгу", () => {
   it("записывает расход со счёта и уменьшает долг", async () => {
     const { client, account, debt, balance, ledger } = await setup();
     const before = await debt();
-    const result = await client.post<{ paid: number; balance: number; closed: boolean }>(
-      "/debts/pay",
-      { id: before.id, amount: "5000", accountId: account }
-    );
+    const result = await client.post("/debts/pay", {
+      id: before.id,
+      amount: "5000",
+      accountId: account
+    });
     expect(result).toMatchObject({ paid: 5000, balance: 25000, closed: false });
     expect((await debt()).balance).toBe(25000);
     expect(await balance()).toBe(45000);
@@ -60,7 +61,7 @@ describe("платёж по долгу", () => {
   it("заплатили больше остатка — долг нулевой, со счёта ушла вся сумма", async () => {
     const { client, account, debt, balance } = await setup();
     const { id } = await debt();
-    const result = await client.post<{ closed: boolean }>("/debts/pay", {
+    const result = await client.post("/debts/pay", {
       id,
       amount: "31000",
       accountId: account
@@ -74,7 +75,7 @@ describe("платёж по долгу", () => {
     const { client, account, debt } = await setup({ autoPay: "true", dueDay: "1" });
     const { id } = await debt();
     await client.post("/debts/pay", { id, amount: "3000", accountId: account });
-    const posted = await client.post<{ posted: number }>("/debts/auto-pay", {});
+    const posted = await client.post("/debts/auto-pay", {});
     expect(posted.posted).toBe(0);
     expect((await debt()).balance).toBe(27000);
   });

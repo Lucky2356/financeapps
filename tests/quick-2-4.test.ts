@@ -120,7 +120,7 @@ describe("«Отменить» после удаления операции", ()
     const page = await client.get("/transactions");
     const account = page.accounts[0].id;
     const category = page.categories.find((item) => item.kind === "EXPENSE")!.id;
-    const created = await client.post<{ id: string }>("/transactions", {
+    const created = await client.post("/transactions", {
       type: "EXPENSE",
       amount: "1500",
       accountId: account,

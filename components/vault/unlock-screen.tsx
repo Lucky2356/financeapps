@@ -3,7 +3,7 @@
 // Экран замка: пароль при запуске и путь назад для того, кто его забыл.
 
 import { Fingerprint, Lock, LifeBuoy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Head, Problem, Shell } from "@/components/vault/shell";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -48,16 +48,16 @@ export function UnlockScreen({ onDone }: { onDone: () => void }) {
 
   // Вход по отпечатку включён — окно отпечатка сразу, один раз за показ
   // экрана; отменил — остаётся пароль и кнопка «Войти по отпечатку».
+  const askFingerprint = useEffectEvent(byFingerprint);
   useEffect(() => {
     void Promise.resolve().then(async () => {
       const ready = (await accountService.biometricEnabled()) && (await biometricAvailable());
       setBiometric(ready);
       if (ready && !asked.current) {
         asked.current = true;
-        await byFingerprint();
+        await askFingerprint();
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function attempt(run: () => Promise<void>) {

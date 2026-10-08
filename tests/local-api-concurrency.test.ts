@@ -48,7 +48,7 @@ describe("LocalApiClient under concurrent writes", () => {
 
   it("does not let a background snapshot swallow an operation saved beside it", async () => {
     const client = new LocalApiClient(slowStorage(5));
-    const account = await client.post<{ id: string }>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "10000"

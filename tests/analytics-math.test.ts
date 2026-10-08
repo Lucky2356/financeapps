@@ -12,7 +12,7 @@ function createClient() {
 }
 
 async function seed(client: LocalApiClient) {
-  const account = await client.post<{ id: string }>("/accounts", {
+  const account = await client.post("/accounts", {
     name: "Карта",
     type: "DEBIT_CARD",
     balance: "100000"
@@ -64,7 +64,7 @@ describe("analytics figures", () => {
     // to keep — the three smallest were nowhere, while the total above the ring
     // still counted them.
     for (let index = 0; index < 9; index += 1) {
-      const category = await client.post<{ id: string }>("/categories", {
+      const category = await client.post("/categories", {
         name: `Категория ${index}`,
         kind: "EXPENSE",
         color: "#64748b"
@@ -149,7 +149,7 @@ describe("analytics figures", () => {
   it("counts a transfer as neither income nor spending on the budgets screen", async () => {
     const client = createClient();
     const { account, salary, food } = await seed(client);
-    const savings = await client.post<{ id: string }>("/accounts", {
+    const savings = await client.post("/accounts", {
       name: "Накопительный",
       type: "SAVINGS",
       balance: "0"

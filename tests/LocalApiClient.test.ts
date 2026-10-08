@@ -3,13 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { LATEST_LOCAL_STATE_VERSION } from "@/lib/storage/migrations/runLocalStateMigrations";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import type {
-  AccountsPageData,
-  AnalyticsData,
-  GoalsPageData,
-  LiabilitiesPageData,
-  RecurringTransactionsPageData
-} from "@/lib/data";
+import type { AnalyticsData } from "@/lib/data";
 import type { InvestmentData } from "@/types/finance";
 
 function todayInput() {
@@ -29,7 +23,7 @@ async function seedAccount(
   client: LocalApiClient,
   overrides: { name?: string; type?: string; balance?: string } = {}
 ) {
-  return client.post<AccountsPageData["accounts"][number]>("/accounts", {
+  return client.post("/accounts", {
     name: overrides.name ?? "Карта",
     type: overrides.type ?? "DEBIT_CARD",
     balance: overrides.balance ?? "0"
@@ -257,7 +251,7 @@ describe("LocalApiClient", () => {
     const before = await client.get("/accounts");
     expect(before.accounts).toHaveLength(0);
 
-    const result = await client.post<{ imported: number; skipped: number }>("/import", {
+    const result = await client.post("/import", {
       dateColumn: "date",
       amountColumn: "amount",
       categoryColumn: "category",
@@ -297,8 +291,8 @@ describe("LocalApiClient", () => {
           { date: "2026-08-22", amount: "-544", category: "Бытовая химия", account: "Саша" }
         ])
       };
-      const first = await client.post<{ imported: number; skipped: number }>("/import", body);
-      const second = await client.post<{ imported: number; skipped: number }>("/import", body);
+      const first = await client.post("/import", body);
+      const second = await client.post("/import", body);
 
       expect(first.imported).toBe(2);
       expect(second).toEqual(expect.objectContaining({ imported: 0, skipped: 2 }));
@@ -337,9 +331,9 @@ describe("LocalApiClient", () => {
         }
       ])
     };
-    const first = await client.post<{ imported: number; skipped: number }>("/import", body);
+    const first = await client.post("/import", body);
     expect(first).toEqual(expect.objectContaining({ imported: 2, skipped: 0 }));
-    const second = await client.post<{ imported: number; skipped: number }>("/import", body);
+    const second = await client.post("/import", body);
     expect(second).toEqual(expect.objectContaining({ imported: 0, skipped: 2 }));
     const accounts = await client.get("/accounts");
     expect(accounts.accounts.find((account) => account.name === "Карта")?.balance).toBe(-400);
@@ -378,7 +372,7 @@ describe("LocalApiClient", () => {
     expect(pinned.months.find((entry) => entry.month === "2020-01")?.cells[key]?.plan).toBe(5000);
 
     // Removing takes the plan with it — that is what the grid owns.
-    const removed = await client.post<{ hasFacts?: boolean }>("/plan", {
+    const removed = await client.post("/plan", {
       action: "removeMonth",
       month: "2020-01"
     });
@@ -447,7 +441,7 @@ describe("LocalApiClient", () => {
   it("keeps a category called «Переводы» that holds real spending", async () => {
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта", balance: "50000" });
-    const category = await client.post<{ id: string }>("/categories", {
+    const category = await client.post("/categories", {
       name: "Переводы",
       kind: "EXPENSE"
     });
@@ -501,7 +495,7 @@ describe("LocalApiClient", () => {
     // Seeded in roubles first, then re-created in dollars: the helper posts the
     // base currency, and the point here is the conversion.
     await client.delete(`/accounts?id=${account.id}`);
-    const usd = await client.post<{ id: string }>("/accounts", {
+    const usd = await client.post("/accounts", {
       name: "Долларовый",
       type: "DEBIT_CARD",
       balance: "1000",
@@ -549,7 +543,7 @@ describe("LocalApiClient", () => {
   it("keeps the funding account and the planned contribution when a goal is topped up", async () => {
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта", balance: "50000" });
-    const goal = await client.post<{ id: string }>("/goals", {
+    const goal = await client.post("/goals", {
       title: "Отпуск",
       targetAmount: "100000",
       currentAmount: "0",
@@ -743,7 +737,7 @@ describe("LocalApiClient", () => {
 
   it("creates a transaction against a freshly created account", async () => {
     const client = createClient();
-    const account = await client.post<AccountsPageData["accounts"][number]>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Новая карта",
       type: "DEBIT_CARD",
       balance: "0"
@@ -804,7 +798,7 @@ describe("LocalApiClient", () => {
   it("goal deposit debits the account, grows the goal, and keeps net worth conserved", async () => {
     const client = createClient();
     const account = await seedAccount(client, { balance: "20000" });
-    const goal = await client.post<GoalsPageData["goals"][number]>("/goals", {
+    const goal = await client.post("/goals", {
       title: "Отпуск",
       targetAmount: "100000",
       currentAmount: "0",
@@ -837,7 +831,7 @@ describe("LocalApiClient", () => {
   it("rejects a goal deposit larger than the account balance", async () => {
     const client = createClient();
     const account = await seedAccount(client, { balance: "1000" });
-    const goal = await client.post<GoalsPageData["goals"][number]>("/goals", {
+    const goal = await client.post("/goals", {
       title: "Тест",
       targetAmount: "100000",
       currentAmount: "0",
@@ -900,7 +894,7 @@ describe("LocalApiClient", () => {
     const client = createClient();
     await expect(client.delete("/categories?id=cat-food")).rejects.toThrow(/Стандартную/);
 
-    const own = await client.post<{ id: string }>("/categories", {
+    const own = await client.post("/categories", {
       name: "Хобби",
       kind: "EXPENSE",
       color: "#654321"
@@ -938,9 +932,7 @@ describe("LocalApiClient", () => {
   it("shows a template under the category's and account's current names after a rename", async () => {
     const client = createClient();
     const account = await seedAccount(client, { name: "Карта" });
-    const template = await client.post<
-      RecurringTransactionsPageData["recurringTransactions"][number]
-    >("/recurring", {
+    const template = await client.post("/recurring", {
       amount: "5000",
       type: "EXPENSE",
       accountId: account.id,
@@ -980,9 +972,7 @@ describe("LocalApiClient", () => {
     const client = createClient();
     const account = await seedAccount(client);
 
-    const created = await client.post<
-      RecurringTransactionsPageData["recurringTransactions"][number]
-    >("/recurring", {
+    const created = await client.post("/recurring", {
       amount: "5000",
       type: "EXPENSE",
       accountId: account.id,
@@ -1027,9 +1017,7 @@ describe("LocalApiClient", () => {
 
     await client.post("/budgets", { categoryId: "cat-food", limitAmount: "1000" });
 
-    const result = await client.post<{
-      budgetWarning: { category: string; spent: number; limit: number } | null;
-    }>("/transactions", {
+    const result = await client.post("/transactions", {
       amount: "1500",
       type: "EXPENSE",
       accountId: account.id,
@@ -1103,7 +1091,7 @@ describe("LocalApiClient state cache (plan A4)", () => {
 describe("LocalApiClient debts (plan D1)", () => {
   it("creates a liability, derives repayment progress, and totals balances", async () => {
     const client = createClient();
-    const created = await client.post<LiabilitiesPageData["liabilities"][number]>("/debts", {
+    const created = await client.post("/debts", {
       name: "Кредитка",
       kind: "CREDIT_CARD",
       balance: "30000",
@@ -1134,7 +1122,7 @@ describe("LocalApiClient debts (plan D1)", () => {
 
   it("deletes a liability", async () => {
     const client = createClient();
-    const created = await client.post<LiabilitiesPageData["liabilities"][number]>("/debts", {
+    const created = await client.post("/debts", {
       name: "Рассрочка",
       kind: "INSTALLMENT",
       balance: "12000"
@@ -1229,11 +1217,11 @@ describe("LocalApiClient automation (plan D2c)", () => {
       isActive: "true"
     });
 
-    const first = await client.post<{ created: number }>("/recurring/materialize-all", {});
+    const first = await client.post("/recurring/materialize-all", {});
     expect(first.created).toBeGreaterThanOrEqual(1);
 
     // Second run finds nothing due — no duplicates created.
-    const second = await client.post<{ created: number }>("/recurring/materialize-all", {});
+    const second = await client.post("/recurring/materialize-all", {});
     expect(second.created).toBe(0);
 
     // Каждая записанная операция помнит свой шаблон.

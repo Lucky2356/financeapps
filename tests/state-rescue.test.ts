@@ -12,7 +12,7 @@ const STATE_KEY = "localFinanceState_profile-default";
 async function seeded() {
   const storage = new MemoryStorageAdapter();
   const client = new LocalApiClient(storage);
-  const account = await client.post<{ id: string }>("/accounts", {
+  const account = await client.post("/accounts", {
     name: "Карта",
     type: "DEBIT_CARD",
     balance: "50000"
@@ -88,7 +88,7 @@ describe("amounts are checked before they are stored", () => {
   it("refuses an operation that would make the document unreadable", async () => {
     const storage = new MemoryStorageAdapter();
     const client = new LocalApiClient(storage);
-    const account = await client.post<{ id: string }>("/accounts", {
+    const account = await client.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "50000"

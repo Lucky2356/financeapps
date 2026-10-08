@@ -8,7 +8,7 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 describe("сверка с банком", () => {
   async function setup() {
     const api = new LocalApiClient(new MemoryStorageAdapter());
-    const card = await api.post<{ id: string }>("/accounts", {
+    const card = await api.post("/accounts", {
       name: "Карта",
       type: "DEBIT_CARD",
       balance: "10000"
@@ -20,7 +20,7 @@ describe("сверка с банком", () => {
 
   it("в банке меньше — записывается трата «Сверка с банком», остаток становится банковским", async () => {
     const { api, card, balance } = await setup();
-    const result = await api.post<{ recorded: boolean; difference: number }>("/accounts", {
+    const result = await api.post("/accounts", {
       action: "reconcile",
       id: card.id,
       balance: "9 250,50"
@@ -36,7 +36,7 @@ describe("сверка с банком", () => {
     const { api, card, balance } = await setup();
     await api.post("/accounts", { action: "reconcile", id: card.id, balance: "10500" });
     expect(await balance()).toBe(10500);
-    const again = await api.post<{ recorded: boolean }>("/accounts", {
+    const again = await api.post("/accounts", {
       action: "reconcile",
       id: card.id,
       balance: "10500"

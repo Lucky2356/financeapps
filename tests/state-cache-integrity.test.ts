@@ -42,7 +42,7 @@ describe("кэш книги не расходится с хранилищем", 
     const accountId = accounts.accounts[0].id;
     const categoryId = categories.categories.find((c) => c.kind === "EXPENSE")!.id;
 
-    const created = await api.post<{ id: string }>("/transactions", {
+    const created = await api.post("/transactions", {
       amount: "500",
       type: "EXPENSE",
       accountId,

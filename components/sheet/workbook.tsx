@@ -78,7 +78,7 @@ export function Workbook() {
     if (!dialog) return;
     try {
       if (dialog.mode === "create") {
-        const tab = await apiClient.post<SheetTab>("/sheets", {
+        const tab = await apiClient.post("/sheets", {
           action: "create",
           name: dialog.name,
           kind: dialog.kind

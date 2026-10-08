@@ -102,7 +102,7 @@ export function FavoriteChips({
   async function record(item: Favorite) {
     setBusy(true);
     try {
-      const created = await apiClient.post<{ id: string }>("/transactions", {
+      const created = await apiClient.post("/transactions", {
         type: item.type,
         accountId: accountId || item.accountId,
         categoryId: item.categoryId,

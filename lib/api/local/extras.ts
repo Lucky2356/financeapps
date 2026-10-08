@@ -73,24 +73,31 @@ export function readCashback(
   };
 }
 
-export function writeCashback(
-  state: ExtrasState,
-  body: Body,
-  makeId: () => string,
-  exists: { account: (id: string) => boolean; category: (id: string) => boolean }
-): unknown {
-  if (body.action === "remove") {
+/** Дела с кешбэком по полю `action`; без него — правило записывается. */
+export const CASHBACK_ACTIONS = {
+  remove: (state: ExtrasState, body: Body) => {
     state.cashbackRules = state.cashbackRules.filter((rule) => rule.id !== body.id);
     return { removed: true };
-  }
-  if (body.action === "copyPrevious") {
+  },
+  copyPrevious: (state: ExtrasState, body: Body, makeId: () => string) => {
     const month = String(body.month ?? "");
     if (!MONTH.test(month)) throw new Error("Не тот месяц.");
     const copied = copyRules(state.cashbackRules, previousMonthOf(month), month, makeId);
     state.cashbackRules = [...state.cashbackRules, ...copied];
     return { copied: copied.length };
   }
+};
 
+/** Есть ли такие карта и категория — проверяет вызывающий: книга у него. */
+export type CashbackRefs = { account: (id: string) => boolean; category: (id: string) => boolean };
+
+/** Правило кешбэка: новое или правка. */
+export function saveCashbackRule(
+  state: ExtrasState,
+  body: Body,
+  makeId: () => string,
+  exists: CashbackRefs
+): CashbackRule {
   const month = String(body.month ?? "");
   const accountId = String(body.accountId ?? "");
   const categoryId = String(body.categoryId ?? "");
@@ -147,12 +154,13 @@ export function readTrips(
   return { trips: views, active: activeTrip(views, today) };
 }
 
-export function writeTrips(state: ExtrasState, body: Body, makeId: () => string): unknown {
-  if (body.action === "remove") {
+/** Дела с поездками по полю `action`; без него — поездка записывается. */
+export const TRIP_ACTIONS = {
+  remove: (state: ExtrasState, body: Body) => {
     state.trips = state.trips.filter((trip) => trip.id !== body.id);
     return { removed: true };
-  }
-  if (body.action === "finish") {
+  },
+  finish: (state: ExtrasState, body: Body) => {
     const yesterday = String(body.today ?? "");
     state.trips = state.trips.map((trip) =>
       trip.id === body.id && DAY.test(yesterday)
@@ -161,6 +169,10 @@ export function writeTrips(state: ExtrasState, body: Body, makeId: () => string)
     );
     return { finished: true };
   }
+};
+
+/** Поездка: новая или правка. */
+export function saveTrip(state: ExtrasState, body: Body, makeId: () => string): Trip {
   const name = String(body.name ?? "").trim();
   const from = String(body.from ?? "");
   const to = String(body.to ?? "");

@@ -8,12 +8,12 @@ import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
 
 async function device(account: string, category: string, spent: string) {
   const client = new LocalApiClient(new MemoryStorageAdapter());
-  const acc = await client.post<{ id: string }>("/accounts", {
+  const acc = await client.post("/accounts", {
     name: account,
     type: "DEBIT_CARD",
     balance: "1000"
   });
-  const cat = await client.post<{ id: string }>("/categories", {
+  const cat = await client.post("/categories", {
     name: category,
     kind: "EXPENSE",
     color: "#64748b",
@@ -37,7 +37,7 @@ describe("объединение записей", () => {
     const phone = await device("Карта", "Кофе", "300");
 
     const backup = await laptop.get("/backup");
-    const result = await phone.post<{ merged: number }>("/backup/merge", { backup });
+    const result = await phone.post("/backup/merge", { backup });
     expect(result.merged).toBeGreaterThan(0);
 
     const accounts = (await phone.get("/accounts")).accounts.map((a) => a.name);

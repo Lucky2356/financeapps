@@ -12,12 +12,12 @@ const USD_RATE = 90;
 
 async function ledgerInTwoCurrencies() {
   const client = new LocalApiClient(new MemoryStorageAdapter());
-  const roubles = await client.post<{ id: string }>("/accounts", {
+  const roubles = await client.post("/accounts", {
     name: "Рублёвая карта",
     type: "DEBIT_CARD",
     balance: "100000"
   });
-  const dollars = await client.post<{ id: string }>("/accounts", {
+  const dollars = await client.post("/accounts", {
     name: "Долларовая карта",
     type: "DEBIT_CARD",
     balance: "1000",

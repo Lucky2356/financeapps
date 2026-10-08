@@ -94,7 +94,7 @@ describe("корзина в книге", () => {
       origin: "here"
     });
 
-    const result = await client.post<{ restored: number }>("/trash", {
+    const result = await client.post("/trash", {
       action: "restore",
       ids: [trash.entries[0].id]
     });
@@ -207,7 +207,7 @@ describe("корзина в книге", () => {
 
   it("удалённый столбец таблицы возвращается со своими числами", async () => {
     const client = new LocalApiClient(new MemoryStorageAdapter());
-    const column = await client.post<{ id: string }>("/sheet", {
+    const column = await client.post("/sheet", {
       action: "addColumn",
       name: "Продукты",
       kind: "expense"

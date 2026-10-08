@@ -5,7 +5,8 @@ import type {
   PathWithQuery,
   ReadPath,
   ReadResponses,
-  WritePath
+  WriteResponse,
+  WriteRoute
 } from "@/lib/api/routes";
 import { emitDataChanged } from "@/lib/api/data-events";
 import { clearPageData } from "@/lib/api/page-data-cache";
@@ -43,24 +44,24 @@ export class NotifyingApiClient implements ApiClient {
     return this.inner.get(path, options);
   }
 
-  async post<TResponse = unknown, TBody = unknown>(
-    path: WritePath,
-    body?: TBody,
+  async post<P extends WriteRoute, const Body = undefined>(
+    path: PathWithQuery<P>,
+    body?: Body,
     options?: ApiRequestOptions
-  ): Promise<TResponse> {
+  ): Promise<WriteResponse<P, Body>> {
     forgetShownScreensIfIdentityChanged(path);
-    const result = await this.inner.post<TResponse, TBody>(path, body, options);
+    const result = await this.inner.post<P, Body>(path, body, options);
     emitDataChanged();
     return result;
   }
 
-  async put<TResponse = unknown, TBody = unknown>(
-    path: WritePath,
-    body?: TBody,
+  async put<P extends WriteRoute, const Body = undefined>(
+    path: PathWithQuery<P>,
+    body?: Body,
     options?: ApiRequestOptions
-  ): Promise<TResponse> {
+  ): Promise<WriteResponse<P, Body>> {
     forgetShownScreensIfIdentityChanged(path);
-    const result = await this.inner.put<TResponse, TBody>(path, body, options);
+    const result = await this.inner.put<P, Body>(path, body, options);
     emitDataChanged();
     return result;
   }
