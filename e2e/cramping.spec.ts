@@ -93,7 +93,11 @@ const SHORT_SCREENS = [
   { name: "телефон", width: 360, height: 640 },
   // Альбомная ориентация — тот случай, на котором командная строка теряла
   // список: высоты вдвое меньше, а диалог тот же.
-  { name: "телефон боком", width: 640, height: 360 }
+  { name: "телефон боком", width: 640, height: 360 },
+  // Ноутбук 1366×768 при масштабе 125 %: развёрнутое окно — это 1093×540
+  // логических пикселей. Окно на таком экране открывается развёрнутым
+  // (src-tauri/src/window_fit.rs), и ниже по высоте компьютер не бывает.
+  { name: "ноутбук 1366×768 при 125 %", width: 1093, height: 540 }
 ];
 
 for (const screen of SHORT_SCREENS) {
@@ -157,6 +161,23 @@ test("окно приложения получает широкую раскла
   expect(columns, `В окне ${APP_WINDOW.width}px плиток в ряду: ${columns}`).toBeGreaterThanOrEqual(
     4
   );
+});
+
+test("широкий монитор: плитки «Обзора» занимают весь ряд", async ({ page }) => {
+  // Окно, развёрнутое на мониторе Full HD. С 2xl (1536) сетка плиток была
+  // шестиколоночной, а плиток четыре — две трети ряда, справа пустота.
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  await seedExampleData(page);
+  await openSettled(page, "/");
+
+  const gap = await page
+    .getByTestId("stat-grid")
+    .first()
+    .evaluate((grid) => {
+      const last = grid.lastElementChild as HTMLElement;
+      return Math.round(grid.getBoundingClientRect().right - last.getBoundingClientRect().right);
+    });
+  expect(gap, `Справа от последней плитки пусто: ${gap}px`).toBeLessThanOrEqual(1);
 });
 
 // Пара дат — один орган: «с» и «по» читаются вместе. Внутри неё перенос был

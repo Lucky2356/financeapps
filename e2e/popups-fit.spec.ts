@@ -15,7 +15,10 @@ import { openSettled, seedExampleData } from "./helpers";
 
 const VIEWPORTS = [
   { name: "телефон", width: 360, height: 740 },
-  { name: "ПК", width: 1265, height: 780 }
+  { name: "ПК", width: 1265, height: 780 },
+  // Ноутбук 1366×768 при 125 %, окно развёрнуто: по высоте всего 540, и
+  // выпадающему списку под полем в низу экрана места нет.
+  { name: "ноутбук", width: 1093, height: 540 }
 ];
 
 const ROUTES = [
