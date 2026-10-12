@@ -489,22 +489,63 @@ export function deleteTransaction(state: LocalState, transactionId: string) {
  * больше (sign = 1), вернули из корзины или поправили сумму — меньше (−1).
  * Раньше удаление возвращало деньги на счёт, а долг оставался уменьшенным.
  * Сумма операции — в валюте счёта, долг — в своей: пересчёт по курсу.
+ *
+ * Долг не уходит ниже нуля, поэтому платёж уменьшает его не всегда на всю
+ * свою сумму: долг 100, заплатили 150 — долг 0, а уменьшился он на 100.
+ * Сколько платёж снял на самом деле, операция помнит (`debtApplied`, в
+ * валюте долга), и при удалении долгу возвращается ровно это. Возврат всей
+ * суммы делал из долга 100 после удаления переплаты долг 150.
  */
 export function applyDebtPayment(
   state: LocalState,
-  row: Pick<TransactionRow, "amount" | "type" | "account" | "liabilityId">,
+  row: Pick<TransactionRow, "id" | "amount" | "type" | "account" | "liabilityId" | "debtApplied">,
   sign: 1 | -1
 ) {
   if (!row.liabilityId || row.type !== "EXPENSE") return;
   const liability = state.liabilities.find((item) => item.id === row.liabilityId);
   if (!liability) return;
+  const setBalance = (balance: number) => {
+    state.liabilities = state.liabilities.map((item) =>
+      item.id === liability.id ? { ...item, balance: Math.max(0, roundMoney(balance)) } : item
+    );
+  };
+
+  if (sign === 1) {
+    if (row.debtApplied !== undefined) {
+      setBalance(liability.balance + row.debtApplied);
+      return;
+    }
+    // Операция записана до того, как платежи стали помнить свою долю, —
+    // сколько она сняла, не узнать. Возвращается вся сумма, как раньше, но не
+    // выше исходной суммы долга: переплата 150 по долгу в 100 не превратит
+    // его в 150. Исходная сумма неизвестна (0) — без потолка, как было.
+    const back = liability.balance + debtCurrencyAmount(state, row, liability.currency);
+    setBalance(liability.originalAmount > 0 ? Math.min(back, liability.originalAmount) : back);
+    return;
+  }
+
+  const applied = roundMoney(
+    Math.min(debtCurrencyAmount(state, row, liability.currency), Math.max(liability.balance, 0))
+  );
+  setBalance(liability.balance - applied);
+  recordDebtApplied(state, row.id, applied);
+}
+
+/** Сумма платежа в валюте долга: операция записана в валюте своего счёта. */
+function debtCurrencyAmount(
+  state: LocalState,
+  row: Pick<TransactionRow, "amount" | "account">,
+  debtCurrency: string
+) {
   const currency =
-    state.accounts.find((item) => item.id === row.account.id)?.currency ?? liability.currency;
-  const amount = convert(row.amount, currency, liability.currency, ratesOf(state));
-  state.liabilities = state.liabilities.map((item) =>
-    item.id === liability.id
-      ? { ...item, balance: Math.max(0, roundMoney(item.balance + sign * amount)) }
-      : item
+    state.accounts.find((item) => item.id === row.account.id)?.currency ?? debtCurrency;
+  return convert(row.amount, currency, debtCurrency, ratesOf(state));
+}
+
+/** Запомнить у операции, на сколько она уменьшила долг (см. applyDebtPayment). */
+export function recordDebtApplied(state: LocalState, transactionId: string, applied: number) {
+  state.transactions = state.transactions.map((item) =>
+    item.id === transactionId ? { ...item, debtApplied: roundMoney(applied) } : item
   );
 }
 

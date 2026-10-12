@@ -78,6 +78,7 @@ const RU = {
   dNoOperations: "За этот год трат в вычет нет. Отметьте категории выше.",
   dExport: "Выгрузить для декларации",
   dExported: "Файл сохранён.",
+  dCsvHeader: ["Дата", "Вид вычета", "Категория", "Описание", "Сумма"],
   dNote:
     "Ставка 13 %; с дохода свыше 5 млн — 15 %, здесь это не учитывается. Вернуть можно за три последних года.",
   group: {
@@ -168,6 +169,7 @@ const EN: Text = {
   dNoOperations: "No qualifying spending this year. Mark the categories above.",
   dExport: "Export for the tax return",
   dExported: "File saved.",
+  dCsvHeader: ["Date", "Deduction kind", "Category", "Description", "Amount"],
   dNote:
     "Rate 13%; 15% above 5 million income is not accounted for. Refunds can be claimed for the last three years.",
   group: {

@@ -13,6 +13,7 @@
 import {
   BookLockedError,
   EncryptingStorageAdapter,
+  isSealedBook,
   UNSEALED_KEYS
 } from "@/lib/storage/EncryptingStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
@@ -385,17 +386,29 @@ export class AccountService {
   private async ownLedgerKeys(): Promise<string[]> {
     const found: string[] = [];
     for (const key of await sealableKeys(this.plain)) {
-      let book: Record<string, unknown> | null = null;
+      let book: unknown;
       try {
-        book = await this.sealed.getItem<Record<string, unknown>>(key);
+        // Открытая книга читается как есть, мимо замка. Так лежат данные на
+        // устройстве, которое ни разу не запирали (состояние «fresh»): там
+        // нет ни шкатулки, ни ключа, и запечатанное хранилище на любое чтение
+        // отвечает «заперто». Раньше это «заперто» глоталось — проверка не
+        // видела ни одной своей записи, и первый запуск с «подключиться» или
+        // связка по QR стирали счета и операции, заведённые до замка.
+        const stored = await this.plain.getItem<unknown>(key);
+        book = isSealedBook(stored) ? await this.sealed.getItem<unknown>(key) : stored;
       } catch {
-        // Не прочиталась — значит и потерять нечего: открыть её всё равно нечем.
+        // Не прочиталась — значит, ЗНАТЬ, что в ней, нечем, а не «терять
+        // нечего». Следом идёт clear(): посчитать её пустой значит стереть
+        // вслепую. Безопаснее отказать — человек выгрузит копию и очистит
+        // данные сам, понимая, что делает.
+        found.push(key);
         continue;
       }
-      if (!book) continue;
+      if (book === null || typeof book !== "object") continue;
 
+      const record = book as Record<string, unknown>;
       const rows = LEDGER_FIELDS.some(
-        (field) => Array.isArray(book[field]) && (book[field] as unknown[]).length > 0
+        (field) => Array.isArray(record[field]) && (record[field] as unknown[]).length > 0
       );
       if (rows) found.push(key);
     }

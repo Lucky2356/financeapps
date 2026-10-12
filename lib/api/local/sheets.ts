@@ -212,11 +212,24 @@ export function freeValue(input: string): { value: number | null; error: boolean
   const text = input.trim();
   if (!text) return { value: null, error: false };
   const looksLikeMath = /^[=+\-]?[\d\s.,()+\-*/%=;А-Яа-яA-Za-z]*$/.test(text) && /\d/.test(text);
-  if (!text.startsWith("=") && !looksLikeMath) return { value: null, error: false };
+  if (!text.startsWith("=") && (!looksLikeMath || looksLikeTextNumber(text))) {
+    return { value: null, error: false };
+  }
   const result = evaluate(text);
   if (!result) return { value: null, error: false };
   if (result.ok) return { value: result.value, error: false };
   return { value: null, error: text.startsWith("=") };
+}
+
+/**
+ * Телефон, дата, номер документа — цифры с дефисами, а не вычитание:
+ * «+7 912 345-67-89» считался как 7912189, «2026-08-01» — как 2017. Такое
+ * без «=» в начале остаётся текстом; посчитать можно, начав с «=».
+ */
+function looksLikeTextNumber(text: string): boolean {
+  if (/^\+\s*\d/.test(text)) return true;
+  if (/\d\s*-\s*\d+\s*-\s*\d/.test(text)) return true;
+  return /^\d{4}-\d{1,2}(-\d{1,2})?$/.test(text);
 }
 
 function makeSheetId(state: BookState, makeId: () => string): string {

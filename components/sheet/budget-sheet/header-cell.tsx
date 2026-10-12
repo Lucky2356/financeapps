@@ -3,8 +3,8 @@
 import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 
-import { TINT } from "@/components/sheet/budget-sheet/helpers";
-import type { useSheetText } from "@/components/sheet/sheet-text";
+import { PINNED_TOTAL, TINT } from "@/components/sheet/budget-sheet/helpers";
+import { kindCaption, type useSheetText } from "@/components/sheet/sheet-text";
 import type { DisplayColumn } from "@/components/sheet/sheet-types";
 import { isSavingsKind } from "@/lib/sheet/model";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ export function HeaderCell({
         className={cn(
           "border-b px-2 py-2.5 text-right text-[13px] font-bold",
           active ? cn(TINT.ink14, "text-foreground") : TINT.warning25,
+          item.type === "total" && cn(PINNED_TOTAL, "md:z-10"),
           !last && "border-r"
         )}
       >
@@ -41,6 +42,7 @@ export function HeaderCell({
     );
   }
   const { column } = item;
+  const caption = kindCaption(column, words.kinds);
   return (
     <th
       className={cn(
@@ -85,13 +87,9 @@ export function HeaderCell({
           <ChevronDown className="size-3.5" />
         </button>
       </span>
-      {/* Вид столбца — подписью, если название его не повторяет («Подушка на
-          начало» под «Подушкой на начало» читалась как опечатка). */}
-      {column.kind !== "expense" &&
-      words.kinds[column.kind].toLowerCase() !== column.name.trim().toLowerCase() ? (
-        <span className="block text-[10px] font-normal text-muted-foreground">
-          {words.kinds[column.kind]}
-        </span>
+      {/* Вид столбца — подписью, если название его не повторяет. */}
+      {caption ? (
+        <span className="block text-[10px] font-normal text-muted-foreground">{caption}</span>
       ) : null}
     </th>
   );

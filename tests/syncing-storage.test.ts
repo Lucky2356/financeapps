@@ -610,6 +610,23 @@ describe("синхронизирующее хранилище", () => {
       expect(await device.getItem(SLOT)).toEqual(box("с телефона"));
     });
 
+    it("сверка во время идущей отправки всё равно спрашивает перечень", async () => {
+      // Запись приложения заводит прогонку сразу. Сверка, позванная следом,
+      // раньше возвращала обещание ЭТОЙ прогонки — а та перечень уже не
+      // спрашивала, и ячейка, заведённая другим устройством, не доезжала.
+      await storage.start(server, glue);
+      await storage.flush();
+      // Событие потеряно — узнать о ячейке можно только сверкой.
+      server.events = false;
+      server.seed("localFinanceState_второй", box("с компьютера"));
+
+      void storage.setItem(SLOT, box("моё"));
+      await Promise.resolve();
+      await storage.catchUp();
+
+      expect(await device.getItem("localFinanceState_второй")).toEqual(box("с компьютера"));
+    });
+
     it("сверка не ходит за тем, что уже видела", async () => {
       await server.push(SLOT, { baseVersion: 0, body: box("а") });
       await storage.start(server, glue);

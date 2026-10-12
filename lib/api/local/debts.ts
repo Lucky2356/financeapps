@@ -11,7 +11,7 @@ import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
 import type { LiabilityRow } from "@/types/finance";
 import { type LocalState, recomputeLiability } from "@/lib/api/local/state";
 import { ratesOf, sumInBase } from "@/lib/api/local/money";
-import { upsertTransaction } from "@/lib/api/local/ledger";
+import { recordDebtApplied, upsertTransaction } from "@/lib/api/local/ledger";
 
 export function upsertLiability(state: LocalState, body: unknown, method: "POST" | "PUT") {
   const input = toFormObject(body);
@@ -117,7 +117,11 @@ export function payDebt(state: LocalState, body: unknown) {
     "POST"
   );
 
-  const balance = Math.max(0, roundMoney(liability.balance - amount));
+  // Долг уменьшается не больше, чем его осталось, и платёж помнит, на сколько
+  // именно: удаление переплаты вернёт долгу эту долю, а не всю сумму.
+  const applied = roundMoney(Math.min(amount, Math.max(liability.balance, 0)));
+  const balance = Math.max(0, roundMoney(liability.balance - applied));
+  recordDebtApplied(state, tx.id, applied);
   // Заплатили в этом месяце — автоплатёж второй раз не спишет.
   const month = tx.date.slice(0, 7);
   state.liabilities = state.liabilities.map((item) =>
@@ -158,7 +162,7 @@ export function autoPayDebts(state: LocalState) {
       convert(amount, liability.currency, currency ?? liability.currency, ratesOf(state))
     );
 
-    upsertTransaction(
+    const tx = upsertTransaction(
       state,
       {
         amount: String(spent),
@@ -171,6 +175,8 @@ export function autoPayDebts(state: LocalState) {
       },
       "POST"
     );
+    // paymentAmount не больше остатка — платёж снимает с долга всю сумму.
+    recordDebtApplied(state, tx.id, amount);
 
     state.liabilities = state.liabilities.map((item) =>
       item.id === liability.id

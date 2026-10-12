@@ -3,6 +3,8 @@
 // financial calendar. Pure helpers; the UI supplies localized titles for the
 // kind-based markers (budget reset), while goal/dividend markers carry their own.
 
+import { localDayOf } from "@/lib/transactions/date";
+
 export type CalendarMarkerKind = "goal" | "budget-reset" | "dividend";
 
 export type CalendarMarker = {
@@ -27,7 +29,8 @@ export function goalDeadlineMarkers(goals: MarkerGoal[]): CalendarMarker[] {
     .filter((goal) => goal.deadline && (goal.progress ?? 0) < 100)
     .map((goal) => ({
       id: `goal-${goal.id}`,
-      date: goal.deadline.slice(0, 10),
+      // Местный день срока, а не первые десять знаков строки — см. localDayOf.
+      date: localDayOf(goal.deadline),
       kind: "goal" as const,
       title: goal.title
     }));

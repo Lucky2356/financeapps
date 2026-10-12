@@ -1,6 +1,7 @@
-import { format, isValid } from "date-fns";
+import { isValid } from "date-fns";
 import Papa from "papaparse";
 
+import { formatInputDate } from "@/lib/format";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { translate, type Locale } from "@/lib/i18n/catalog";
 
@@ -10,11 +11,14 @@ export type ExistingTransactionLike = {
   description?: string | null;
 };
 
-// Stable key for duplicate detection. Amount sign is ignored because imported
-// rows are often signed (-1200) while stored transactions keep a positive amount
-// plus a separate INCOME/EXPENSE type.
-function dedupKey(date: Date, amount: number, description: string): string {
-  return `${format(date, "yyyy-MM-dd")}|${Math.abs(Math.round(amount))}|${description.trim().toLowerCase()}`;
+// Ключ для поиска повторов. Знак суммы не учитывается: в файле строки со знаком
+// (−1200), а в учёте сумма положительная и отдельно тип расход/доход. Сумма —
+// в копейках: округление до рубля склеивало −199,90 и −200, а Math.round(−1200,5)
+// даёт −1200, тогда как 1200,5 из учёта — 1201, и такая пара не сходилась вовсе.
+// День — тот, что хранится (formatInputDate читает полночь UTC как день): через
+// местное время к западу от Гринвича операция из учёта числилась вчерашней.
+function dedupKey(date: string | Date, amount: number, description: string): string {
+  return `${formatInputDate(date)}|${Math.round(Math.abs(amount) * 100)}|${description.trim().toLowerCase()}`;
 }
 
 export type ParsedCsv = {
@@ -212,9 +216,13 @@ export class CsvImportMapper {
     };
   }
 
-  // Returns the indices of imported rows that look like duplicates — either of an
-  // already-stored transaction or of an earlier row in the same file — keyed on
-  // (date, |amount|, description). Rows that cannot be parsed are never flagged.
+  // Номера строк файла, которые уже есть в учёте, по ключу (день, |сумма|,
+  // описание). Повтор считается так же, как при самом импорте (importCsvRows):
+  // строка — повтор, только пока таких же в учёте больше, чем уже встречено в
+  // файле. Два кофе по 200 ₽ за день в выписке — две покупки, а не одна; а если
+  // в учёте уже лежит один, повтором будет только первый из двух. Раньше вторая
+  // одинаковая строка файла отсекалась всегда, и включённый по умолчанию фильтр
+  // молча терял настоящие траты. Строки, которые не разобрались, не отмечаются.
   findDuplicateRows(
     rows: Array<Record<string, unknown>>,
     mapping: CsvColumnMapping,
@@ -223,14 +231,14 @@ export class CsvImportMapper {
     const duplicates = new Set<number>();
     if (!mapping.dateColumn || !mapping.amountColumn) return duplicates;
 
-    const existingKeys = new Set<string>();
+    const stored = new Map<string, number>();
     for (const transaction of existing) {
-      const date = transaction.date instanceof Date ? transaction.date : new Date(transaction.date);
-      if (!isValid(date)) continue;
-      existingKeys.add(dedupKey(date, transaction.amount, transaction.description ?? ""));
+      if (!isValid(new Date(transaction.date))) continue;
+      const key = dedupKey(transaction.date, transaction.amount, transaction.description ?? "");
+      stored.set(key, (stored.get(key) ?? 0) + 1);
     }
 
-    const seen = new Set<string>();
+    const seen = new Map<string, number>();
     rows.forEach((row, index) => {
       const amount = parseImportedAmount(row[mapping.amountColumn]);
       const date = parseImportedDate(row[mapping.dateColumn]);
@@ -241,11 +249,9 @@ export class CsvImportMapper {
         : "";
       const key = dedupKey(date, amount, description);
 
-      if (existingKeys.has(key) || seen.has(key)) {
-        duplicates.add(index);
-      } else {
-        seen.add(key);
-      }
+      const count = seen.get(key) ?? 0;
+      seen.set(key, count + 1);
+      if (count < (stored.get(key) ?? 0)) duplicates.add(index);
     });
 
     return duplicates;

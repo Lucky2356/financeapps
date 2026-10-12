@@ -176,6 +176,42 @@ describe("корзина в книге", () => {
     expect((await client.get("/trash")).entries).toEqual([]);
   });
 
+  it("перевод на убранный счёт не возвращается половиной — деньги не пропадают", async () => {
+    // Половины проверялись по одной: расход возвращался (со счёта снова
+    // уходили 300), доход падал на убранном счёте и оставался в корзине, а
+    // одинокая половина перевода в итоги не входит — 300 исчезали.
+    const client = new LocalApiClient(new MemoryStorageAdapter());
+    await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "1000" });
+    await client.post("/accounts", { name: "Копилка", type: "DEBIT_CARD", balance: "0" });
+    const [from, to] = (await client.get("/accounts")).accounts;
+    await client.post("/transactions", {
+      action: "transfer",
+      fromAccountId: from.id,
+      toAccountId: to.id,
+      amount: "300",
+      date: "2026-10-01"
+    });
+    const [leg] = (await client.get("/transactions?period=all")).transactions;
+    await client.delete(`/transactions?id=${leg.id}`);
+    await client.delete(`/accounts?id=${to.id}`);
+
+    const trash = await client.get("/trash");
+    expect(trash.entries).toHaveLength(2);
+    const result = await client.post("/trash", {
+      action: "restore",
+      ids: [trash.entries[0].id]
+    });
+    expect(result.restored).toBe(0);
+    expect(result.failed).toEqual([
+      "Счёт или категория этой операции уже удалены — вернуть её нельзя."
+    ]);
+    const card = (await client.get("/accounts")).accounts.find((item) => item.id === from.id);
+    expect(card?.balance).toBe(1000);
+    expect((await client.get("/transactions?period=all")).transactions).toEqual([]);
+    // Обе половины ждут в корзине — вернуть их можно, когда счёт вернётся.
+    expect((await client.get("/trash")).entries).toHaveLength(2);
+  });
+
   it("старый перевод (до 1.10, только метка в описании) тоже удаляется целиком", async () => {
     const storage = new MemoryStorageAdapter();
     const client = new LocalApiClient(storage);

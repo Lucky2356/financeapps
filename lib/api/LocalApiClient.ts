@@ -517,7 +517,15 @@ export class LocalApiClient implements ApiClient {
     const current = await this.state();
     if (!restored.aiApiKey) restored.aiApiKey = current.aiApiKey ?? "";
 
-    await this.save(restored, { stamp: false });
+    // С новой отметкой, как и «Вернуть» местную копию (restoreLocalCopy):
+    // восстановление — это правка, сделанная СЕЙЧАС. С отметками из файла
+    // возвращённая операция «обед» оставалась старше следа своего удаления на
+    // компьютере, и первая же синхронизация удаляла её снова — а счёт при этом
+    // оставался с остатком из копии: 4900 при пустом списке операций вместо
+    // 5000. Отметку получают только строки, которые восстановление и правда
+    // меняет; совпавшие с нынешними сохраняют свою, так что старая книга
+    // целиком «свежей» не становится.
+    await this.save(restored);
     return { restored: true };
   }
 
@@ -971,53 +979,81 @@ export class LocalApiClient implements ApiClient {
     // Счёт, возвращаемый вместе со своими операциями, уже несёт остаток с ними:
     // провести операции по нему ещё раз значило бы удвоить деньги.
     const accountsBack = new Set<string>();
-    for (const entry of entries) {
+    const restoreOne = (entry: TrashEntry) => {
       const { updatedAt: _stamp, ...row } = entry.row;
       void _stamp;
-      try {
-        if (entry.collection === "transactions") {
-          const accountId = (row.account as { id?: unknown } | undefined)?.id;
-          if (typeof accountId === "string" && accountsBack.has(accountId)) {
-            if (!state.transactions.some((item) => item.id === row.id))
-              state.transactions = [
-                transactionRowSchema.omit({ updatedAt: true }).parse(row) as TransactionRow,
-                ...state.transactions
-              ];
-          } else {
-            restoreTransaction(state, { transaction: row });
-          }
+      if (entry.collection === "transactions") {
+        const accountId = (row.account as { id?: unknown } | undefined)?.id;
+        if (typeof accountId === "string" && accountsBack.has(accountId)) {
+          if (!state.transactions.some((item) => item.id === row.id))
+            state.transactions = [
+              transactionRowSchema.omit({ updatedAt: true }).parse(row) as TransactionRow,
+              ...state.transactions
+            ];
         } else {
-          // Лист (и столбец) возвращается вместе со всем, что на нём было.
-          const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
-          delete row[SHEET_ARCHIVE];
-          if (content) {
-            for (const [collection, list] of Object.entries(content)) {
-              const present = Array.isArray(holder[collection])
-                ? (holder[collection] as Array<Record<string, unknown>>)
-                : [];
-              const ids = new Set(present.map((item) => item.id));
-              holder[collection] = [
-                ...present,
-                ...(list as Array<Record<string, unknown>>)
-                  .filter((item) => !ids.has(item.id))
-                  .map(({ updatedAt: _at, ...rest }) => (void _at, rest))
-              ];
-            }
-          }
-          const rows = Array.isArray(holder[entry.collection])
-            ? (holder[entry.collection] as Array<Record<string, unknown>>)
-            : [];
-          if (!rows.some((item) => item.id === row.id)) {
-            // Цель при удалении отдала деньги на счёт (см. remove, /goals): вернуть
-            // её с прежней суммой значило бы посчитать эти деньги дважды.
-            if (entry.collection === "goals") Object.assign(row, { currentAmount: 0, progress: 0 });
-            holder[entry.collection] = [...rows, row];
-            if (entry.collection === "accounts" && typeof row.id === "string")
-              accountsBack.add(row.id);
+          restoreTransaction(state, { transaction: row });
+        }
+      } else {
+        // Лист (и столбец) возвращается вместе со всем, что на нём было.
+        const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
+        delete row[SHEET_ARCHIVE];
+        if (content) {
+          for (const [collection, list] of Object.entries(content)) {
+            const present = Array.isArray(holder[collection])
+              ? (holder[collection] as Array<Record<string, unknown>>)
+              : [];
+            const ids = new Set(present.map((item) => item.id));
+            holder[collection] = [
+              ...present,
+              ...(list as Array<Record<string, unknown>>)
+                .filter((item) => !ids.has(item.id))
+                .map(({ updatedAt: _at, ...rest }) => (void _at, rest))
+            ];
           }
         }
-        restored.push(entry.id);
+        const rows = Array.isArray(holder[entry.collection])
+          ? (holder[entry.collection] as Array<Record<string, unknown>>)
+          : [];
+        if (!rows.some((item) => item.id === row.id)) {
+          // Цель при удалении отдала деньги на счёт (см. remove, /goals): вернуть
+          // её с прежней суммой значило бы посчитать эти деньги дважды.
+          if (entry.collection === "goals") Object.assign(row, { currentAmount: 0, progress: 0 });
+          holder[entry.collection] = [...rows, row];
+          if (entry.collection === "accounts" && typeof row.id === "string")
+            accountsBack.add(row.id);
+        }
+      }
+    };
+    // Перевод возвращается целиком или никак. Половины проверялись по одной:
+    // счёт получателя за это время убрали — расход возвращался (со счёта
+    // снова уходили 300), доход падал с «счёт удалён» и оставался в корзине,
+    // а одинокая половина перевода не входит в итоги — 300 просто исчезали.
+    // Поэтому половины одного перевода — одна группа: упала одна — документ
+    // возвращается к состоянию до группы, и обе остаются в корзине.
+    const groups: TrashEntry[][] = [];
+    const byTransfer = new Map<string, TrashEntry[]>();
+    for (const entry of entries) {
+      const transfer = transferOf(entry);
+      const group = transfer === null ? undefined : byTransfer.get(transfer);
+      if (group) {
+        group.push(entry);
+        continue;
+      }
+      const fresh = [entry];
+      if (transfer !== null) byTransfer.set(transfer, fresh);
+      groups.push(fresh);
+    }
+    for (const group of groups) {
+      // Возврат меняет документ, заменяя массивы целиком (state.transactions =
+      // [...], applyBalance), а не правя их на месте, — поэтому для отката
+      // достаточно запомнить прежние ссылки.
+      const before = { ...holder };
+      try {
+        for (const entry of group) restoreOne(entry);
+        restored.push(...group.map((entry) => entry.id));
       } catch (error) {
+        for (const key of Object.keys(holder)) if (!(key in before)) delete holder[key];
+        Object.assign(holder, before);
         failed.push(error instanceof Error ? error.message : String(error));
       }
     }
@@ -1208,6 +1244,18 @@ export class LocalApiClient implements ApiClient {
       const key = profileStateKey(id);
       const existing = await this.storage.getItem<unknown>(key);
       await this.storage.setItem(key, createBlankState(standardCategoriesFrom(existing)));
+    }
+    // Книги профилей, которых в списке уже нет. Так выглядит профиль, удалённый
+    // прежней версией: та убирала его только с устройства, служба держала
+    // полную копию и привозила её обратно при сверке. По списку профилей её не
+    // найти, а «удалить всё» обязано удалить и её — пустотой поверх, чтобы
+    // исчезла и на службе. В копию до очистки она не идёт: возвращать профиль,
+    // который человек уже удалял, незачем.
+    const profilePrefix = profileStateKey("");
+    for (const key of await this.storage.keys()) {
+      if (!key.startsWith(profilePrefix) || key.includes(":")) continue;
+      if (ids.has(key.slice(profilePrefix.length))) continue;
+      await this.storage.setItem(key, createBlankState([]));
     }
     await this.storage.setItem(PROFILE_LIST_KEY, {
       profiles: [DEFAULT_PROFILE],
@@ -1406,7 +1454,24 @@ export class LocalApiClient implements ApiClient {
     list.profiles = list.profiles.filter((p) => p.id !== profileId);
     if (list.activeProfileId === profileId) list.activeProfileId = list.profiles[0].id;
     await this.storage.setItem(PROFILE_LIST_KEY, list);
-    await this.storage.removeItem(profileStateKey(profileId));
+    // Пустая книга ПОВЕРХ, а не removeItem — по той же причине, что и в
+    // clearEverything. removeItem убирает только с этого устройства: профиль
+    // «Секрет» оставался на службе целиком, следующая же сверка привозила его
+    // обратно, «Очистить все данные» его не видело (в списке профилей его уже
+    // нет), а новое устройство получало его при первом подключении. Пустота,
+    // записанная как правка, уезжает на службу и затирает книгу и там.
+    // Есть ли книга, смотрим по перечню ключей, а не чтением: испорченная
+    // книга не прочитается, а затереть её пустотой нужно всё равно.
+    const key = profileStateKey(profileId);
+    if ((await this.storage.keys()).includes(key)) {
+      await this.storage.setItem(key, createBlankState([]));
+    }
+    // Местные копии этой книги — корзина, копия до обновления схемы, копия при
+    // поломке — держат её содержимое целиком; удалённый профиль не должен
+    // переживать удаление в них.
+    for (const suffix of [TRASH_SUFFIX, PRE_UPGRADE_SUFFIX, RESCUE_SUFFIX]) {
+      await this.storage.removeItem(`${key}${suffix}`);
+    }
     this.invalidateStateCache();
   }
 }

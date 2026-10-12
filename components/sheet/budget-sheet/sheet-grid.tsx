@@ -12,6 +12,7 @@ import type {
 
 import { HeaderCell } from "@/components/sheet/budget-sheet/header-cell";
 import {
+  PINNED_TOTAL,
   TINT,
   cellValue,
   operationsHref,
@@ -28,7 +29,7 @@ import type {
   SheetWords
 } from "@/components/sheet/sheet-types";
 import type { ImportPageData } from "@/lib/data";
-import type { ComputedSheet } from "@/lib/sheet/model";
+import { isBalanceKind, type ComputedSheet } from "@/lib/sheet/model";
 import { cn } from "@/lib/utils";
 
 /** Сама таблица: шапка и месяц липкие, прокрутка — внутри. */
@@ -223,7 +224,8 @@ export function SheetGrid({
                         pad,
                         wordy ? "min-w-[11rem] max-w-[16rem] text-left" : "text-right",
                         !isTotal && "cursor-cell",
-                        isTotal && "bg-warning/10 font-semibold",
+                        isTotal && cn(TINT.warning10, "font-semibold"),
+                        item.type === "total" && cn(PINNED_TOTAL, "md:z-[6]"),
                         item.type === "column" && item.column.hidden && "opacity-50",
                         now && !isTotal && "bg-foreground/[0.04]",
                         crosshair && !isTotal && "bg-foreground/[0.07]",
@@ -324,9 +326,14 @@ export function SheetGrid({
               {display.map((item) => (
                 <td
                   key={item.type === "column" ? item.column.id : item.type}
-                  className="border-r border-t bg-muted px-2 py-1.5 text-right text-xs font-semibold tabular-nums"
+                  className={cn(
+                    "border-r border-t bg-muted px-2 py-1.5 text-right text-xs font-semibold tabular-nums",
+                    item.type === "total" && cn(PINNED_TOTAL, "md:z-[6]")
+                  )}
                 >
-                  {item.type === "column" && computed.totals[item.column.id]?.filled
+                  {item.type === "column" &&
+                  !isBalanceKind(item.column.kind) &&
+                  computed.totals[item.column.id]?.filled
                     ? plain(computed.totals[item.column.id][kind])
                     : ""}
                 </td>

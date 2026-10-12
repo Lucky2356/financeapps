@@ -14,6 +14,10 @@
 // подсказки «сколько примерно вернут» это честное упрощение, оно сказано на
 // экране).
 
+import Papa from "papaparse";
+
+import { escapeCsvField } from "@/services/export/ExportService";
+
 export const DEDUCTION_KINDS = [
   "MEDICAL",
   "EXPENSIVE_MEDICAL",
@@ -116,23 +120,42 @@ export function taxFromNetSalary(net: number): number {
   return round((net / (1 - TAX_RATE)) * TAX_RATE);
 }
 
-/** Для декларации: операции года одним файлом, с ; и BOM — Excel откроет по-русски. */
+/** Заголовок файла для декларации по умолчанию — русский, как и сама декларация. */
+export const DEDUCTION_CSV_HEADER = [
+  "Дата",
+  "Вид вычета",
+  "Категория",
+  "Описание",
+  "Сумма"
+] as const;
+
+/**
+ * Для декларации: операции года одним файлом, с ; и BOM — Excel откроет по-русски.
+ *
+ * Поля собирает Papa: категория «Аптека; оптика» раньше делила строку на лишнюю
+ * колонку, а теперь берётся в кавычки. Название категории и описание набирает
+ * человек (или приносит импорт из чужой выписки), поэтому они проходят через
+ * escapeCsvField — иначе «=HYPERLINK(...)» Excel выполнил бы как формулу.
+ * Заголовок передаёт экран на языке интерфейса.
+ */
 export function deductionCsv(
   spends: readonly DeductionSpend[],
   year: number,
-  labels: Record<DeductionKind, string>
+  labels: Record<DeductionKind, string>,
+  header: readonly string[] = DEDUCTION_CSV_HEADER
 ): string {
   const rows = spends
     .filter((spend) => spend.date.startsWith(String(year)))
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((spend) =>
-      [
-        spend.date.slice(0, 10),
-        labels[spend.kind],
-        spend.category,
-        (spend.description ?? "").replace(/[;\n\r]/g, " "),
-        spend.amount.toFixed(2).replace(".", ",")
-      ].join(";")
-    );
-  return `﻿Дата;Вид вычета;Категория;Описание;Сумма\n${rows.join("\n")}\n`;
+    .map((spend) => [
+      spend.date.slice(0, 10),
+      escapeCsvField(labels[spend.kind]),
+      escapeCsvField(spend.category),
+      // Одна операция — одна строка таблицы: перевод строки внутри описания
+      // Excel показал бы, но строку высотой в абзац в декларацию не перепишешь.
+      escapeCsvField((spend.description ?? "").replace(/[\n\r]+/g, " ")),
+      spend.amount.toFixed(2).replace(".", ",")
+    ]);
+  const csv = Papa.unparse({ fields: [...header], data: rows }, { delimiter: ";", newline: "\n" });
+  return `\uFEFF${csv}\n`;
 }

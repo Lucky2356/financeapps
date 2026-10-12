@@ -17,7 +17,7 @@
 
 import Papa from "papaparse";
 
-import { evaluate } from "@/lib/sheet/formula";
+import { evaluate, roundHalfAway } from "@/lib/sheet/formula";
 import { computeSheet, type SheetColumn, type SheetColumnKind } from "@/lib/sheet/model";
 
 export type Grid = string[][];
@@ -49,12 +49,58 @@ export type ImportPlan = {
 
 export type CategoryRef = { id: string; label: string; kind: "INCOME" | "EXPENSE" };
 
-/** Текст из буфера обмена или CSV-файла → клетки. Разделитель угадывается. */
+/**
+ * Разделитель CSV-файла — по первой непустой строке, и только вне кавычек.
+ * Раньше хватало одной точки с запятой где угодно в файле: «"кофе; торт"» в
+ * комментарии делал разделителем «;», и файл с запятыми разваливался.
+ */
+function guessDelimiter(text: string): "\t" | ";" | "," {
+  const line = text.split(/\r?\n/).find((item) => item.trim()) ?? "";
+  const counts = { "\t": 0, ";": 0, ",": 0 };
+  let quoted = false;
+  for (const char of line) {
+    if (char === '"') quoted = !quoted;
+    else if (!quoted && char in counts) counts[char as keyof typeof counts] += 1;
+  }
+  if (counts["\t"] > 0) return "\t";
+  return counts[";"] >= counts[","] && counts[";"] > 0 ? ";" : ",";
+}
+
+/** Пустые строки и столбцы в конце: Excel дописывает перевод строки после блока. */
+function trimGrid(grid: Grid): Grid {
+  const rows = [...grid];
+  while (rows.length > 0 && rows[rows.length - 1].every((cell) => cell === "")) rows.pop();
+  const width = Math.max(
+    0,
+    ...rows.map((row) => {
+      let end = row.length;
+      while (end > 0 && row[end - 1] === "") end -= 1;
+      return end;
+    })
+  );
+  return rows.map((row) => row.slice(0, width));
+}
+
+/** CSV-файл → клетки. Разделитель угадывается. */
 export function gridFromText(text: string): Grid {
-  const clean = text.replace(/^﻿/, "");
-  const delimiter = clean.includes("\t") ? "\t" : clean.includes(";") ? ";" : ",";
+  const clean = text.replace(/^\uFEFF/, "");
+  const delimiter = guessDelimiter(clean);
   const parsed = Papa.parse<string[]>(clean, { delimiter, skipEmptyLines: false });
   return parsed.data.map((row) => row.map((cell) => String(cell ?? "").trim()));
+}
+
+/**
+ * Вставка из буфера обмена → клетки. Excel и Google Таблицы разделяют клетки
+ * табуляцией — и только ею: запятая в «1500,50» или в «молоко, хлеб» — часть
+ * значения, а не граница клетки. Пустые строки в конце (Excel добавляет
+ * перевод строки после блока) отбрасываются, в середине — остаются: пустая
+ * клетка в скопированном столбце должна попасть в свой месяц, а не сдвинуть
+ * всё, что ниже.
+ */
+export function gridFromClipboard(text: string): Grid {
+  const clean = text.replace(/^\uFEFF/, "");
+  const parsed = Papa.parse<string[]>(clean, { delimiter: "\t", skipEmptyLines: false });
+  return trimGrid(parsed.data.map((row) => row.map((cell) => String(cell ?? "").trim())));
 }
 
 /** Клетки из xlsx (read-excel-file): даты и числа — в текст, как их видно в Excel. */
@@ -106,12 +152,23 @@ const pad = (value: number) => String(value).padStart(2, "0");
 export function parseMonth(raw: string): string | null {
   const text = raw.trim().toLowerCase();
   if (!text) return null;
-  let match = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/.exec(text);
-  if (match) return `${match[3]}-${pad(Number(match[2]))}`;
+  // Месяц — только 1–12: «15.13.2026» не месяц, а опечатка, и пропускать её
+  // в таблицу значило бы завести строку «2026-13».
+  const valid = (year: number, month: number) =>
+    month >= 1 && month <= 12 ? `${year}-${pad(month)}` : null;
+  let match = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})(?!\d)/.exec(text);
+  if (match) {
+    const year = match[3].length === 2 ? 2000 + Number(match[3]) : Number(match[3]);
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    // «08/15/2026» — американский порядок: месяц впереди, день за ним.
+    if (second > 12 && first <= 12) return valid(year, first);
+    return valid(year, second);
+  }
   match = /^(\d{4})[./-](\d{1,2})/.exec(text);
-  if (match) return `${match[1]}-${pad(Number(match[2]))}`;
+  if (match) return valid(Number(match[1]), Number(match[2]));
   match = /^(\d{1,2})[./](\d{4})$/.exec(text);
-  if (match) return `${match[2]}-${pad(Number(match[1]))}`;
+  if (match) return valid(Number(match[2]), Number(match[1]));
   match = /^([a-zа-яё]+)\.?\s*[’']?(\d{2,4})/.exec(text);
   if (match) {
     const index = MONTH_NAMES[match[1].slice(0, 3)];
@@ -171,6 +228,8 @@ function mostlyText(values: readonly string[]): boolean {
   const filled = values.map((value) => value.trim()).filter(Boolean);
   if (filled.length === 0) return false;
   const words = filled.filter((value) => {
+    // «1 234,00р.» и «500 руб.» — суммы, хоть формулой и не считаются.
+    if (parseAmount(value) !== null) return false;
     const result = evaluate(value);
     return !result || !result.ok;
   });
@@ -269,6 +328,10 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
   }
 
   if (rows.length === 0) warnings.push("Под шапкой не нашлось ни одного месяца.");
+  // Таблицу ведут и сверху вниз, и свежим месяцем вверх. Дальше всё — Остаток
+  // из прошлого Итога, сверка с Итогом файла, отметки сбережений — считает
+  // строки по порядку, и порядок должен быть порядком месяцев.
+  rows.sort((a, b) => a.month.localeCompare(b.month));
   return { columns, rows, markers, warnings };
 }
 
@@ -359,7 +422,7 @@ export function buildPayload(plan: ImportPlan): ImportPayload {
     const key = hasSavingsOpening
       ? columns.find((column) => column.kind === "savingsOpening")!.key
       : SAVINGS_OPENING_KEY;
-    rows[index].values[key] = String(Math.round((marker.amount - movement) * 100) / 100);
+    rows[index].values[key] = String(roundHalfAway(marker.amount - movement));
   }
 
   return { columns, rows, targets };

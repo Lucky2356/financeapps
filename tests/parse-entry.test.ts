@@ -141,6 +141,31 @@ describe("разбор строки: дата", () => {
     expect(parsed.amount).toBe(300);
     expect(parsed.date).toBe("2026-09-05");
   });
+
+  it("не склеивает сумму с соседним числом через пробел", () => {
+    // Пробел внутри суммы — только разделитель тысяч. Раньше «250 5.09»
+    // читалось одним числом, калькулятор его не понимал, и сумма пропадала.
+    const coffee = parseEntry("кофе 250 5.09", context());
+    expect(coffee.amount).toBe(250);
+    expect(coffee.date).toBe("2026-09-05");
+    expect(coffee.description).toBe("кофе");
+
+    const cups = parseEntry("350 2 капучино", context());
+    expect(cups.amount).toBe(350);
+    expect(cups.description).toBe("2 капучино");
+
+    expect(parseEntry("1 200 продукты 2 шт", context()).amount).toBe(1200);
+    expect(parseEntry("3 * 400 продукты", context()).amount).toBe(1200);
+  });
+
+  it("дата впереди суммы: «5.09 1200 кофе»", () => {
+    const parsed = parseEntry("5.09 1200 кофе", context());
+    expect(parsed.amount).toBe(1200);
+    expect(parsed.date).toBe("2026-09-05");
+    expect(parsed.description).toBe("кофе");
+    // «12.50» датой быть не может — это сумма, а второе число остаётся в описании.
+    expect(parseEntry("12.50 2 кофе", context()).amount).toBeCloseTo(12.5, 2);
+  });
 });
 
 describe("разбор строки: теги", () => {

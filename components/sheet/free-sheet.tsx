@@ -18,7 +18,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { columnLetter, freeValue, type WorkbookPage } from "@/lib/api/local/sheets";
 import { useI18n } from "@/lib/i18n/context";
-import { gridFromText } from "@/lib/sheet/import";
+import { gridFromClipboard } from "@/lib/sheet/import";
 import { cn } from "@/lib/utils";
 
 type Cell = { r: number; c: number; input: string };
@@ -144,7 +144,7 @@ export function FreeSheet({ sheetId, onChanged }: { sheetId: string; onChanged: 
     const text = event.clipboardData.getData("text/plain");
     if (!text) return;
     event.preventDefault();
-    const grid = gridFromText(text);
+    const grid = gridFromClipboard(text);
     const cells: Cell[] = [];
     grid.forEach((line, dr) =>
       line.forEach((input, dc) => cells.push({ r: selected.r + dr, c: selected.c + dc, input }))

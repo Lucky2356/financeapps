@@ -181,19 +181,52 @@ function signOf(raw: string): "+" | "-" | null {
 }
 
 /**
- * Сумма и её знак. Берётся первое число строки вместе с тем, что к нему
- * приклеено арифметикой: «3*400» — это тоже сумма, её умеет калькулятор.
+ * Одно число: «1200», «1 200», «1 234,56», «1.234,56», «12.50». Пробел внутри
+ * числа — только перед тройкой цифр, как пишут тысячи. Раньше любой пробел
+ * считался частью числа, и сумма проглатывала соседей: «кофе 250 5.09» давало
+ * «250 5.09», «350 2 капучино» — «350 2», калькулятор такого не понимал, и сумма
+ * оставалась пустой.
  */
-function takeAmount(line: string): {
+const NUMBER = String.raw`(?:\d{1,3}(?:[ \u00A0]\d{3})+|\d+)(?:[.,]\d+)*`;
+
+/**
+ * Число со знаком и с тем, что к нему приклеено арифметикой: «3*400» и
+ * «3 × 400» — тоже сумма, её умеет калькулятор.
+ */
+const AMOUNT = new RegExp(
+  String.raw`(^|\s)([+-]?${NUMBER}(?:\s*[*/×÷x:]\s*${NUMBER})*)(?=\s|$)`,
+  "gu"
+);
+
+/** «5.09», «15.10» — по виду голая дата, если такой день в календаре есть. */
+function looksLikeBareDate(raw: string, today: Date): boolean {
+  const match = /^(\d{1,2})\.(\d{2})$/.exec(raw);
+  if (!match) return false;
+  return nearestPastYear(today, Number(match[2]), Number(match[1])) !== null;
+}
+
+/**
+ * Сумма и её знак. Берётся первое число строки — кроме случая, когда оно похоже
+ * на голую дату, а за ним есть ещё число: «5.09 1200 кофе» — это 1200 рублей
+ * пятого сентября, а не 5,09 ₽ с «1200» в описании. Единственное число строки
+ * остаётся суммой, даже если похоже на дату («5.09 кофе»).
+ */
+function takeAmount(
+  line: string,
+  today: Date
+): {
   amount: number | null;
   type: "INCOME" | "EXPENSE" | null;
   rest: string;
 } {
-  const pattern = /(^|\s)([+-]?\d[\d\s.,]*(?:[*/×÷x:][\d\s.,]+)*)(?=\s|$)/u;
-  const match = pattern.exec(line);
-  if (!match) return { amount: null, type: null, rest: line };
+  const candidates = [...line.matchAll(AMOUNT)];
+  if (candidates.length === 0) return { amount: null, type: null, rest: line };
+  const chosen =
+    candidates.length > 1 && looksLikeBareDate(candidates[0][2], today)
+      ? candidates[1]
+      : candidates[0];
 
-  const raw = match[2].trim();
+  const raw = chosen[2].trim();
   const sign = signOf(raw);
   const value = calculatedValue(sign ? raw.slice(1) : raw);
   if (value === null || value <= 0) return { amount: null, type: null, rest: line };
@@ -202,7 +235,11 @@ function takeAmount(line: string): {
   if (sign === "+") type = "INCOME";
   else if (sign === "-") type = "EXPENSE";
 
-  return { amount: value, type, rest: cut(line, pattern).rest.trim() };
+  const start = (chosen.index ?? 0) + chosen[1].length;
+  const rest = (line.slice(0, start) + " " + line.slice(start + chosen[2].length))
+    .replace(/\s+/g, " ")
+    .trim();
+  return { amount: value, type, rest };
 }
 
 /** Голое «5.09» — уже после того, как сумма своё взяла. */
@@ -287,7 +324,7 @@ export function parseEntry(line: string, context: ParseEntryContext): ParsedEntr
 
   const withoutTags = takeTags(source);
   const namedDate = takeUnambiguousDate(withoutTags.rest, context.today);
-  const amount = takeAmount(namedDate.rest);
+  const amount = takeAmount(namedDate.rest, context.today);
   const bareDate = namedDate.date
     ? { date: null, rest: amount.rest }
     : takeBareDate(amount.rest, context.today);

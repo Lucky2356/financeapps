@@ -6,7 +6,7 @@ import type { PeriodReport } from "@/lib/reports/period-report";
 // CSV formula-injection guard: a spreadsheet treats a cell starting with = + - @
 // (or a leading tab/CR) as a formula, so a description like `=cmd|'/c calc'!A1`
 // would execute on open. Prefix such values with a single quote to neutralize them.
-function escapeCsvField(value: string): string {
+export function escapeCsvField(value: string): string {
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 

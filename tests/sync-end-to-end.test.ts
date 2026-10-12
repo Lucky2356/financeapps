@@ -187,4 +187,151 @@ describe("две машины через сервер", () => {
 
     expect(server.peek("localFinanceState_profile-default")?.version).toBe(settled);
   });
+  describe("сервер вернули из ночной копии", () => {
+    // Хозяин службы восстановил базу из вчерашней копии. Сервер снова на
+    // старой версии, а оба устройства помнят более новую — и держат основой
+    // книгу, в которой есть всё написанное после копии. Слияние с такой основой
+    // сочло бы эти строки удалёнными на сервере и выбросило бы их у всех.
+    const balance = async (device: Device) =>
+      (await device.app.get("/accounts")).accounts[0].balance;
+
+    beforeEach(async () => {
+      await addExpense(phone, "до копии", 700);
+      await phone.sync.flush();
+      await desktop.sync.flush();
+    });
+
+    it("написанное после копии остаётся на устройствах и уезжает обратно", async () => {
+      const nightly = server.backup();
+      await addExpense(phone, "после копии 1", 300);
+      await phone.sync.flush();
+      await desktop.sync.flush();
+      await addExpense(desktop, "после копии 2", 200);
+      await desktop.sync.flush();
+      await phone.sync.flush();
+
+      server.restore(nightly);
+      for (let i = 0; i < 2; i++) {
+        await phone.sync.catchUp();
+        await desktop.sync.catchUp();
+      }
+
+      const all = ["до копии", "после копии 1", "после копии 2"];
+      expect(await transactions(phone)).toEqual(all);
+      expect(await transactions(desktop)).toEqual(all);
+      // И не только на устройствах: третье, подключённое завтра, возьмёт с сервера.
+      const onServer = await phone.vault.open<{ transactions: Array<{ description: string }> }>(
+        server.peek("localFinanceState_profile-default")!.body!
+      );
+      expect(onServer.transactions.map((row) => row.description).sort()).toEqual(all);
+      // Остаток — от тех же операций, а не вчерашний с сервера.
+      expect(await balance(phone)).toBe(50000 - 700 - 300 - 200);
+      expect(await balance(desktop)).toBe(50000 - 700 - 300 - 200);
+    });
+
+    it("отказ на запись после возврата тоже не теряет новое", async () => {
+      // Устройство узнаёт о возврате не сверкой, а отказом на свою отправку:
+      // предъявило номер, которого у сервера больше нет.
+      const nightly = server.backup();
+      await addExpense(phone, "после копии", 300);
+      await phone.sync.flush();
+
+      server.restore(nightly);
+      await addExpense(phone, "после возврата", 100);
+      await phone.sync.flush();
+      await desktop.sync.catchUp();
+
+      const all = ["до копии", "после возврата", "после копии"];
+      expect(await transactions(phone)).toEqual(all);
+      expect(await transactions(desktop)).toEqual(all);
+      expect(await balance(desktop)).toBe(50000 - 700 - 300 - 100);
+    });
+  });
+  it("восстановленное из файла копии не удаляется снова первой же синхронизацией", async () => {
+    // Копия сделана, когда «обед» был; потом его удалили на телефоне, и след
+    // удаления доехал до компьютера. Восстановление возвращает «обед» и
+    // остаток счёта из копии. С отметками из файла строка оставалась старше
+    // следа удаления, и синхронизация удаляла её опять — а остаток счёта
+    // оставался из копии: минус 700 при пустом списке операций.
+    await addExpense(phone, "обед", 700);
+    await phone.sync.flush();
+    await desktop.sync.flush();
+    const backup = await phone.app.get("/backup");
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const { transactions: rows } = await phone.app.get("/transactions");
+    await phone.app.delete(`/transactions?id=${rows[0].id}`);
+    await phone.sync.flush();
+    await desktop.sync.flush();
+    expect(await transactions(desktop)).toEqual([]);
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await phone.app.post("/backup", { backup });
+    for (let i = 0; i < 3; i++) {
+      await phone.sync.flush();
+      await desktop.sync.flush();
+    }
+
+    expect(await transactions(phone)).toEqual(["обед"]);
+    expect(await transactions(desktop)).toEqual(["обед"]);
+    for (const device of [phone, desktop]) {
+      const { accounts } = await device.app.get("/accounts");
+      expect(accounts[0].balance).toBe(50000 - 700);
+    }
+  });
+  describe("удалённый профиль", () => {
+    // Раньше профиль удалялся только с устройства (removeItem): служба
+    // держала книгу целиком, сверка привозила её обратно, «Очистить все
+    // данные» её не видело, а новое устройство получало её при подключении.
+    async function secretProfile(): Promise<string> {
+      const created = await phone.app.post("/profiles/create", { name: "Секрет" });
+      const id = (created as { id: string }).id;
+      await phone.app.post("/profiles/switch", { profileId: id });
+      await phone.app.post("/accounts", { name: "Тайный счёт", type: "DEBIT_CARD", balance: 777 });
+      await phone.sync.flush();
+      await phone.app.post("/profiles/switch", { profileId: "profile-default" });
+      return `localFinanceState_${id}`;
+    }
+
+    async function onServer(slot: string): Promise<string> {
+      const cell = server.peek(slot);
+      return cell?.body ? JSON.stringify(await phone.vault.open(cell.body)) : "";
+    }
+
+    it("уходит и со службы, и не возвращается сверкой", async () => {
+      const slot = await secretProfile();
+      expect(await onServer(slot)).toContain("Тайный счёт");
+
+      const id = slot.slice("localFinanceState_".length);
+      await phone.app.delete(`/profiles?id=${id}`);
+      await phone.sync.flush();
+      await phone.sync.catchUp();
+      await desktop.sync.catchUp();
+
+      expect(await onServer(slot)).not.toContain("Тайный счёт");
+      expect(JSON.stringify(await phone.vault.getItem(slot))).not.toContain("Тайный счёт");
+      expect(JSON.stringify(await desktop.vault.getItem(slot))).not.toContain("Тайный счёт");
+    });
+
+    it("«Очистить все данные» стирает и книгу профиля, удалённого прежней версией", async () => {
+      const slot = await secretProfile();
+      // Так удаляла прежняя версия: из списка и с устройства, но не со службы.
+      const list = await phone.app.get("/profiles");
+      await phone.vault.setItem("profileList", {
+        ...list,
+        profiles: list.profiles.filter((profile) => `localFinanceState_${profile.id}` !== slot)
+      });
+      await phone.vault.removeItem(slot);
+      await phone.sync.flush();
+      await phone.sync.catchUp();
+      expect(JSON.stringify(await phone.vault.getItem(slot))).toContain("Тайный счёт");
+
+      await phone.app.delete("/storage/clear");
+      await phone.sync.flush();
+      await phone.sync.catchUp();
+
+      expect(await onServer(slot)).not.toContain("Тайный счёт");
+      expect(JSON.stringify(await phone.vault.getItem(slot))).not.toContain("Тайный счёт");
+    });
+  });
 });
