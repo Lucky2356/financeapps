@@ -39,7 +39,15 @@ export const SYNC_STATE_KEY = "financeSync";
 /** Чем оканчивается ключ основы — версии, которую устройство видело последней. */
 export const BASE_SUFFIX = ":base";
 
-type Bookkeeping = { v: 1; versions: Record<SlotName, number> };
+type Bookkeeping = {
+  v: 1;
+  versions: Record<SlotName, number>;
+  /**
+   * Когда сервер записал ту версию, что в `versions`. Необязательное: записи,
+   * сделанные до него, читаются как раньше, без этой проверки.
+   */
+  stamps?: Record<SlotName, string>;
+};
 
 /**
  * Итог слияния.
@@ -232,6 +240,16 @@ export class SyncingStorageAdapter implements StorageAdapter {
   private readonly inbox = new Set<SlotName>();
 
   private versions: Record<SlotName, number> = {};
+  /**
+   * Время, которым сервер пометил известную нам версию.
+   *
+   * Номер версии сам по себе не отличает «та же самая пятая» от «другая
+   * пятая». Другая пятая появляется после возврата службы из ночной копии:
+   * сервер откатился на третью, соседнее устройство дважды записало — и снова
+   * пятая, но уже не наша. По номеру устройство решило бы, что всё видело, не
+   * забрало бы чужое и не отправило бы своё. Время записи у двух пятых разное.
+   */
+  private stamps: Record<SlotName, string> = {};
   private loaded = false;
   /**
    * Надо ли спросить у сервера перечень ячеек.
@@ -357,6 +375,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
     this.outbox.delete(key);
     if (this.versions[key] !== undefined) {
       delete this.versions[key];
+      delete this.stamps[key];
       await this.persist();
     }
   }
@@ -366,6 +385,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
     this.outbox.clear();
     this.inbox.clear();
     this.versions = {};
+    this.stamps = {};
     await this.persist();
   }
 
@@ -539,16 +559,70 @@ export class SyncingStorageAdapter implements StorageAdapter {
     return sealed(stored) ? stored : null;
   }
 
+  /** Та ли это версия, что мы уже видели: тот же номер и то же время записи. */
+  private same(slot: SlotName, version: number, updatedAt: string | null): boolean {
+    if (this.versions[slot] !== version) return false;
+    const stamp = this.stamps[slot];
+    return stamp === undefined || updatedAt === null || stamp === updatedAt;
+  }
+
+  /**
+   * Ушёл ли сервер НАЗАД от того, что мы видели.
+   *
+   * Номер версии на сервере растёт и назад не ходит — кроме одного случая:
+   * хозяин службы вернул базу из ночной копии. Тогда сервер отдаёт версию 3,
+   * а устройство помнит 5 и держит основой книгу пятой версии. Слей мы с ней —
+   * строки, записанные после копии (они есть в основе и у нас, но нет на
+   * сервере), сочлись бы УДАЛЁННЫМИ на сервере: слияние выбросило бы их и у
+   * нас, отправлять было бы нечего, и всё написанное на обоих устройствах с
+   * ночи пропало бы молча. Тот же номер с другим временем записи — то же
+   * самое, только соседнее устройство успело дописать до нашего номера.
+   */
+  private rewound(slot: SlotName, version: number, updatedAt: string | null): boolean {
+    const known = this.versions[slot];
+    if (known === undefined) return false;
+    return version < known || (version === known && !this.same(slot, version, updatedAt));
+  }
+
+  /**
+   * Общий предок для слияния с тем, что лежит на сервере.
+   *
+   * После возврата сервера назад (см. rewound) общий предок неизвестен —
+   * основы нет, как при первой встрече. Слияние без основы ничего не считает
+   * удалённым без следа удаления: свои строки остаются, серверные добавляются,
+   * а `differs` отправляет слитое обратно на сервер.
+   */
+  private async ancestor(
+    slot: SlotName,
+    version: number,
+    updatedAt: string | null
+  ): Promise<SealedBook | null> {
+    if (this.rewound(slot, version, updatedAt)) return null;
+    return this.base(slot);
+  }
+
+  /** Запомнить версию сервера, которую мы теперь знаем. */
+  private seen(slot: SlotName, version: number, updatedAt: string | null): void {
+    this.versions[slot] = version;
+    if (updatedAt === null) delete this.stamps[slot];
+    else this.stamps[slot] = updatedAt;
+  }
+
   private async load(): Promise<void> {
     if (this.loaded) return;
     const stored = await this.inner.getItem<Bookkeeping>(SYNC_STATE_KEY);
     this.versions = stored?.v === 1 ? { ...stored.versions } : {};
+    this.stamps = stored?.v === 1 && stored.stamps ? { ...stored.stamps } : {};
     this.loaded = true;
   }
 
   private async persist(): Promise<void> {
     if (!this.loaded) return;
-    await this.inner.setItem<Bookkeeping>(SYNC_STATE_KEY, { v: 1, versions: this.versions });
+    await this.inner.setItem<Bookkeeping>(SYNC_STATE_KEY, {
+      v: 1,
+      versions: this.versions,
+      stamps: this.stamps
+    });
   }
 
   /**
@@ -578,7 +652,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
           // Только то, что ушло вперёд: забирать заново уже виденное незачем, а
           // ячеек с фото чеков у человека могут быть сотни.
           if (!syncableKey(summary.slot)) continue;
-          if (this.versions[summary.slot] === summary.version) continue;
+          if (this.same(summary.slot, summary.version, summary.updatedAt)) continue;
           this.inbox.add(summary.slot);
         }
         // Спрошено. Не вышло — флаг остаётся, и следующий заход спросит снова.
@@ -650,7 +724,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
       if (sealed(await this.inner.getItem(slot))) this.queue(slot);
       return;
     }
-    if (snapshot.version === this.versions[slot]) return;
+    if (this.same(slot, snapshot.version, snapshot.updatedAt)) return;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const mark = this.writes;
@@ -659,7 +733,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
         slot,
         sealed(mine) ? mine : null,
         snapshot.body,
-        await this.base(slot)
+        await this.ancestor(slot, snapshot.version, snapshot.updatedAt)
       );
 
       // Пока мы сливали, человек что-то записал. Положи мы слитое как есть —
@@ -673,7 +747,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
       // при слиянии: общий предок — это последняя общая точка, а слитое своё
       // второе устройство ещё не видело.
       await this.inner.setItem(baseKey(slot), snapshot.body);
-      this.versions[slot] = snapshot.version;
+      this.seen(slot, snapshot.version, snapshot.updatedAt);
       await this.persist();
 
       // Отправляем обратно, только если в слитом есть что-то наше. Иначе два
@@ -705,7 +779,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
       if (result.ok) {
         // Сервер принял наше — теперь общая точка это оно.
         await this.inner.setItem(baseKey(slot), body);
-        this.versions[slot] = result.version;
+        this.seen(slot, result.version, result.updatedAt);
         await this.persist();
         return;
       }
@@ -714,17 +788,25 @@ export class SyncingStorageAdapter implements StorageAdapter {
       // вернули вместе с отказом, кладём слитое на устройство и пробуем снова
       // уже поверх их версии.
       if (result.current.body === null) {
-        this.versions[slot] = result.current.version;
+        this.seen(slot, result.current.version, result.current.updatedAt);
         await this.persist();
         continue;
       }
 
       const mark = this.writes;
-      const merged = await merge(slot, body, result.current.body, await this.base(slot));
+      // Отказ тоже бывает «из прошлого»: сервер вернули из копии, а мы
+      // предъявили номер, которого у него больше нет. Основа тогда та же, что и
+      // при приёме, — никакая (см. ancestor).
+      const merged = await merge(
+        slot,
+        body,
+        result.current.body,
+        await this.ancestor(slot, result.current.version, result.current.updatedAt)
+      );
       if (this.writes !== mark) {
         // Та же гонка, что и при приёме: записанное человеком, пока мы сливали,
         // затирать нельзя. Заходим на круг заново.
-        this.versions[slot] = result.current.version;
+        this.seen(slot, result.current.version, result.current.updatedAt);
         await this.inner.setItem(baseKey(slot), result.current.body);
         await this.persist();
         continue;
@@ -732,7 +814,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
       this.remember(slot, merged.body, body);
       await this.inner.setItem(slot, merged.body);
       await this.inner.setItem(baseKey(slot), result.current.body);
-      this.versions[slot] = result.current.version;
+      this.seen(slot, result.current.version, result.current.updatedAt);
       await this.persist();
       if (!merged.differs) return;
     }

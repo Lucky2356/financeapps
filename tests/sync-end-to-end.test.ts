@@ -187,4 +187,64 @@ describe("две машины через сервер", () => {
 
     expect(server.peek("localFinanceState_profile-default")?.version).toBe(settled);
   });
+  describe("сервер вернули из ночной копии", () => {
+    // Хозяин службы восстановил базу из вчерашней копии. Сервер снова на
+    // старой версии, а оба устройства помнят более новую — и держат основой
+    // книгу, в которой есть всё написанное после копии. Слияние с такой основой
+    // сочло бы эти строки удалёнными на сервере и выбросило бы их у всех.
+    const balance = async (device: Device) =>
+      (await device.app.get("/accounts")).accounts[0].balance;
+
+    beforeEach(async () => {
+      await addExpense(phone, "до копии", 700);
+      await phone.sync.flush();
+      await desktop.sync.flush();
+    });
+
+    it("написанное после копии остаётся на устройствах и уезжает обратно", async () => {
+      const nightly = server.backup();
+      await addExpense(phone, "после копии 1", 300);
+      await phone.sync.flush();
+      await desktop.sync.flush();
+      await addExpense(desktop, "после копии 2", 200);
+      await desktop.sync.flush();
+      await phone.sync.flush();
+
+      server.restore(nightly);
+      for (let i = 0; i < 2; i++) {
+        await phone.sync.catchUp();
+        await desktop.sync.catchUp();
+      }
+
+      const all = ["до копии", "после копии 1", "после копии 2"];
+      expect(await transactions(phone)).toEqual(all);
+      expect(await transactions(desktop)).toEqual(all);
+      // И не только на устройствах: третье, подключённое завтра, возьмёт с сервера.
+      const onServer = await phone.vault.open<{ transactions: Array<{ description: string }> }>(
+        server.peek("localFinanceState_profile-default")!.body!
+      );
+      expect(onServer.transactions.map((row) => row.description).sort()).toEqual(all);
+      // Остаток — от тех же операций, а не вчерашний с сервера.
+      expect(await balance(phone)).toBe(50000 - 700 - 300 - 200);
+      expect(await balance(desktop)).toBe(50000 - 700 - 300 - 200);
+    });
+
+    it("отказ на запись после возврата тоже не теряет новое", async () => {
+      // Устройство узнаёт о возврате не сверкой, а отказом на свою отправку:
+      // предъявило номер, которого у сервера больше нет.
+      const nightly = server.backup();
+      await addExpense(phone, "после копии", 300);
+      await phone.sync.flush();
+
+      server.restore(nightly);
+      await addExpense(phone, "после возврата", 100);
+      await phone.sync.flush();
+      await desktop.sync.catchUp();
+
+      const all = ["до копии", "после возврата", "после копии"];
+      expect(await transactions(phone)).toEqual(all);
+      expect(await transactions(desktop)).toEqual(all);
+      expect(await balance(desktop)).toBe(50000 - 700 - 300 - 100);
+    });
+  });
 });
