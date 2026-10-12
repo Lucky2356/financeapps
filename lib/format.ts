@@ -19,6 +19,15 @@ export function currencySign(currency = "RUB") {
     .replace(/[\d\s.,]/g, "");
 }
 
+/**
+ * Ноль, если на экране число всё равно станет нулём. Intl честно пишет знак у
+ * −0 и у −0,004 — и остаток долга после копеечной поправки выглядел как
+ * «-0 ₽», будто что-то ещё не сходится.
+ */
+function withoutNegativeZero(value: number, fractionDigits: number) {
+  return Math.abs(value) < 0.5 / 10 ** fractionDigits ? 0 : value;
+}
+
 export function formatCurrency(value: number, currency = "RUB") {
   if (areAmountsHidden()) return hiddenAmount(currency);
   // Копейки — только там, где они есть: «149,90 ₽», но «150 ₽», а не «150,00 ₽».
@@ -28,7 +37,7 @@ export function formatCurrency(value: number, currency = "RUB") {
     currency,
     minimumFractionDigits: fraction,
     maximumFractionDigits: fraction
-  }).format(value);
+  }).format(withoutNegativeZero(value, fraction));
 }
 
 export function formatCompactCurrency(value: number, currency = "RUB") {
@@ -38,7 +47,7 @@ export function formatCompactCurrency(value: number, currency = "RUB") {
     currency,
     notation: "compact",
     maximumFractionDigits: 1
-  }).format(value);
+  }).format(withoutNegativeZero(value, 1));
 }
 
 export function formatPercent(value: number, maximumFractionDigits = 1) {
