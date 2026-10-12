@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCompactCurrency, formatCurrency, formatPercent } from "@/lib/format";
 import { clamp, percent, roundMoney, toNumber } from "@/lib/utils";
 
 describe("formatCurrency", () => {
@@ -19,6 +19,18 @@ describe("formatCurrency", () => {
     // Intl may use hyphen-minus or Unicode minus depending on environment
     expect(result).toMatch(/[-−]/);
     expect(result).toContain("500");
+  });
+
+  it("never shows a minus in front of zero", () => {
+    // Остаток после копеечной поправки (−0,004) и честный −0 из вычитания
+    // выглядели как «-0 ₽», будто что-то ещё не сошлось.
+    for (const value of [-0, -0.004]) {
+      const result = formatCurrency(value, "RUB");
+      expect(result).not.toMatch(/[-−]/);
+      expect(result).toContain("0");
+    }
+    expect(formatCompactCurrency(-0.01, "RUB")).not.toMatch(/[-−]/);
+    expect(formatCurrency(-0.5, "RUB")).toMatch(/[-−]/);
   });
 });
 

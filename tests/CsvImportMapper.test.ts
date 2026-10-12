@@ -93,15 +93,51 @@ describe("CsvImportMapper", () => {
       expect(duplicates.size).toBe(1);
     });
 
-    it("flags repeated rows within the same file", () => {
+    it("keeps identical rows within the same file — two coffees are two purchases", () => {
+      // Как и сам импорт (importCsvRows): одинаковые строки выписки — обычное
+      // дело, повтором считается только то, что уже лежит в учёте.
       const { rows } = mapper.parse(
-        "Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-1200,Кофе,Рестораны,Карта\n27.05.2026,-1200,Кофе,Рестораны,Карта"
+        "Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-200,Кофе,Рестораны,Карта\n27.05.2026,-200,Кофе,Рестораны,Карта"
       );
 
       const duplicates = mapper.findDuplicateRows(rows, mapping, []);
-      // First occurrence is kept; the second is a duplicate.
-      expect(duplicates.has(0)).toBe(false);
-      expect(duplicates.has(1)).toBe(true);
+      expect(duplicates.size).toBe(0);
+    });
+
+    it("flags only as many rows as there are stored copies", () => {
+      const { rows } = mapper.parse(
+        "Дата,Сумма,Описание,Категория,Счет\n27.05.2026,-200,Кофе,Рестораны,Карта\n27.05.2026,-200,Кофе,Рестораны,Карта\n27.05.2026,-200,Кофе,Рестораны,Карта"
+      );
+      const one = [{ date: "2026-05-27T00:00:00.000Z", amount: 200, description: "Кофе" }];
+
+      expect([...mapper.findDuplicateRows(rows, mapping, one)]).toEqual([0]);
+      expect([...mapper.findDuplicateRows(rows, mapping, [...one, ...one])]).toEqual([0, 1]);
+    });
+
+    it("compares amounts to the kopeck", () => {
+      const { rows } = mapper.parse(
+        'Дата,Сумма,Описание,Категория,Счет\n27.05.2026,"-199,90",Кофе,,\n27.05.2026,"-1200,50",Обед,,'
+      );
+      const existing = [
+        { date: "2026-05-27T00:00:00.000Z", amount: 200, description: "Кофе" },
+        { date: "2026-05-27T00:00:00.000Z", amount: 1200.5, description: "Обед" }
+      ];
+
+      // −199,90 — не 200, а −1200,50 — те самые 1200,50 из учёта.
+      expect([...mapper.findDuplicateRows(rows, mapping, existing)]).toEqual([1]);
+    });
+
+    it("matches a stored day west of Greenwich", () => {
+      const zone = process.env.TZ;
+      process.env.TZ = "America/New_York";
+      try {
+        const { rows } = mapper.parse("Дата,Сумма,Описание\n01.09.2026,-1200,Кофе");
+        const existing = [{ date: "2026-09-01T00:00:00.000Z", amount: 1200, description: "Кофе" }];
+        expect([...mapper.findDuplicateRows(rows, mapping, existing)]).toEqual([0]);
+      } finally {
+        if (zone === undefined) delete process.env.TZ;
+        else process.env.TZ = zone;
+      }
     });
 
     it("returns nothing when date or amount column is unmapped", () => {

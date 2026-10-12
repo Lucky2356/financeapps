@@ -81,7 +81,7 @@ export function DeductionsScreen() {
   }
 
   async function exportCsv() {
-    const csv = deductionCsv(data.operations, year, words.kind);
+    const csv = deductionCsv(data.operations, year, words.kind, words.dCsvHeader);
     try {
       const saved = await createFileSystemAdapter().saveTextFile(
         `vychety-${year}.csv`,
