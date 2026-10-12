@@ -279,4 +279,59 @@ describe("две машины через сервер", () => {
       expect(accounts[0].balance).toBe(50000 - 700);
     }
   });
+  describe("удалённый профиль", () => {
+    // Раньше профиль удалялся только с устройства (removeItem): служба
+    // держала книгу целиком, сверка привозила её обратно, «Очистить все
+    // данные» её не видело, а новое устройство получало её при подключении.
+    async function secretProfile(): Promise<string> {
+      const created = await phone.app.post("/profiles/create", { name: "Секрет" });
+      const id = (created as { id: string }).id;
+      await phone.app.post("/profiles/switch", { profileId: id });
+      await phone.app.post("/accounts", { name: "Тайный счёт", type: "DEBIT_CARD", balance: 777 });
+      await phone.sync.flush();
+      await phone.app.post("/profiles/switch", { profileId: "profile-default" });
+      return `localFinanceState_${id}`;
+    }
+
+    async function onServer(slot: string): Promise<string> {
+      const cell = server.peek(slot);
+      return cell?.body ? JSON.stringify(await phone.vault.open(cell.body)) : "";
+    }
+
+    it("уходит и со службы, и не возвращается сверкой", async () => {
+      const slot = await secretProfile();
+      expect(await onServer(slot)).toContain("Тайный счёт");
+
+      const id = slot.slice("localFinanceState_".length);
+      await phone.app.delete(`/profiles?id=${id}`);
+      await phone.sync.flush();
+      await phone.sync.catchUp();
+      await desktop.sync.catchUp();
+
+      expect(await onServer(slot)).not.toContain("Тайный счёт");
+      expect(JSON.stringify(await phone.vault.getItem(slot))).not.toContain("Тайный счёт");
+      expect(JSON.stringify(await desktop.vault.getItem(slot))).not.toContain("Тайный счёт");
+    });
+
+    it("«Очистить все данные» стирает и книгу профиля, удалённого прежней версией", async () => {
+      const slot = await secretProfile();
+      // Так удаляла прежняя версия: из списка и с устройства, но не со службы.
+      const list = await phone.app.get("/profiles");
+      await phone.vault.setItem("profileList", {
+        ...list,
+        profiles: list.profiles.filter((profile) => `localFinanceState_${profile.id}` !== slot)
+      });
+      await phone.vault.removeItem(slot);
+      await phone.sync.flush();
+      await phone.sync.catchUp();
+      expect(JSON.stringify(await phone.vault.getItem(slot))).toContain("Тайный счёт");
+
+      await phone.app.delete("/storage/clear");
+      await phone.sync.flush();
+      await phone.sync.catchUp();
+
+      expect(await onServer(slot)).not.toContain("Тайный счёт");
+      expect(JSON.stringify(await phone.vault.getItem(slot))).not.toContain("Тайный счёт");
+    });
+  });
 });
