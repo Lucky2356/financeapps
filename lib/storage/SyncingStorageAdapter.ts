@@ -515,7 +515,14 @@ export class SyncingStorageAdapter implements StorageAdapter {
    */
   catchUp(): Promise<void> {
     this.askForSlots = true;
-    return this.pump();
+    // Идущая прямо сейчас прогонка могла уже пройти место, где спрашивают
+    // перечень: её завела, например, запись приложения мгновением раньше.
+    // Вернуть её обещание значило бы ответить «сверено», не спросив сервер
+    // ни о чём, — а именно сверка замечает, что сервер вернули из копии или
+    // что другое устройство завело ячейку. Поэтому дожидаемся её и прогоняем
+    // ещё раз; флаг к этому времени ещё стоит, если она его не застала.
+    const running = this.running;
+    return running ? running.then(() => this.pump()) : this.pump();
   }
 
   private set(status: SyncStatus): void {
