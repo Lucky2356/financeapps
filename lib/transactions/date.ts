@@ -49,9 +49,14 @@ export function localCalendarDate(value: string): Date {
  * моментом времени (см. localCalendarDate), и `slice(0, 10)` к востоку от
  * Гринвича читал из «2026-12-30T21:00:00.000Z» (полночь 31-го по Москве)
  * 30-е. Голый день из формы — уже ответ.
+ *
+ * Ровно UTC-полночь — так сроки записывались до localCalendarDate: день из
+ * формы, разобранный как UTC. Это и есть выбранный день, и в Нью-Йорке
+ * «2026-08-01T00:00:00.000Z» остаётся 1 августа, а не 31 июля.
  */
 export function localDayOf(value: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}-\d{2}T00:00:00(\.000)?Z$/.test(value)) return value.slice(0, 10);
   return todayDay(new Date(value));
 }
 
