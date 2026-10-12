@@ -92,6 +92,11 @@ async function offscreenPopups(page: Page) {
       if (style.display === "none" || style.visibility === "hidden") continue;
       // Всплывающие подсказки о сохранении живут своей жизнью.
       if (el.closest("[data-sonner-toaster]")) continue;
+      // Украшения (волна тренда в карточке «Обзора») — не выпадающее: они
+      // появляются, когда догрузятся данные, иногда уже после нажатия, и на
+      // прокрученной странице лежат выше экрана. Панель никогда не бывает
+      // одновременно скрытой от экранного диктора и некликабельной.
+      if (el.getAttribute("aria-hidden") === "true" && style.pointerEvents === "none") continue;
       const rect = el.getBoundingClientRect();
       if (rect.width < 40 || rect.height < 20) continue;
       const scrolls =
