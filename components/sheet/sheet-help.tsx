@@ -6,14 +6,20 @@
 
 import { X } from "lucide-react";
 
+import { monthLabel } from "@/components/sheet/sheet-text";
 import type { SheetWords } from "@/components/sheet/sheet-types";
 
 export function SheetHelp({
   words,
+  locale,
+  current,
   showKeys,
   onClose
 }: {
   words: SheetWords;
+  locale: string;
+  /** Текущий месяц «ГГГГ-ММ» — в обозначениях он такой же, как в таблице. */
+  current: string;
   /** Клавиши — только там, где есть клавиатура. */
   showKeys: boolean;
   onClose: () => void;
@@ -61,7 +67,7 @@ export function SheetHelp({
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="rounded bg-foreground/10 px-1.5 py-0.5 font-bold text-foreground">
-            Сен 2026
+            {monthLabel(current, locale)}
           </span>
           {words.legendNow}
         </span>

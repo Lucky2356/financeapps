@@ -44,9 +44,21 @@ export const TINT = {
     "bg-card [background-image:linear-gradient(hsl(var(--success)/0.1),hsl(var(--success)/0.1))]",
   success15:
     "bg-card [background-image:linear-gradient(hsl(var(--success)/0.15),hsl(var(--success)/0.15))]",
+  warning10:
+    "bg-card [background-image:linear-gradient(hsl(var(--warning)/0.1),hsl(var(--warning)/0.1))]",
   warning25:
     "bg-card [background-image:linear-gradient(hsl(var(--warning)/0.25),hsl(var(--warning)/0.25))]"
 } as const;
+
+/**
+ * «Итог» прибит к правому краю таблицы. Он — ответ, ради которого таблицу
+ * ведут, а в окне 1280 статей хватает на всю ширину, и Итог уезжал вправо за
+ * край: видеть его можно было только прокруткой. Тень слева отделяет его от
+ * статей, которые прокручиваются под ним. На телефоне не прибит: там узко, а
+ * Итог есть в виде «По месяцам».
+ */
+export const PINNED_TOTAL =
+  "md:sticky md:right-0 md:shadow-[-6px_0_6px_-6px_hsl(var(--foreground)/0.35)]";
 
 export type Density = "comfort" | "compact";
 export type PhoneView = "table" | "months";

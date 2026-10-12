@@ -6,7 +6,7 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { monthLabel } from "@/components/sheet/sheet-text";
+import { kindCaption, monthLabel } from "@/components/sheet/sheet-text";
 import type { DisplayColumn, Position, SheetWords } from "@/components/sheet/sheet-types";
 import { isSavingsKind, type ComputedRow } from "@/lib/sheet/model";
 import { cn } from "@/lib/utils";
@@ -123,9 +123,9 @@ export function SheetMonthView({
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{column.name}</span>
-                  {column.kind !== "expense" ? (
+                  {kindCaption(column, words.kinds) ? (
                     <span className="block text-xs text-muted-foreground">
-                      {words.kinds[column.kind]}
+                      {kindCaption(column, words.kinds)}
                     </span>
                   ) : null}
                 </span>

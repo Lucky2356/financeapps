@@ -45,7 +45,7 @@ export type SheetPageData = {
   canUndoImport: boolean;
 };
 
-const MONTH = /^\d{4}-\d{2}$/;
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const MAX_INPUT = 500;
 
 function strip<T extends object>(row: Stamped<T>): T {
@@ -184,15 +184,13 @@ function fillWizard(state: SheetState, wizard: Wizard, months: string[]) {
   };
   put(byKind("opening"), months[0], wizard.opening);
   put(byKind("savingsOpening"), months[0], wizard.savingsOpening);
+  // Статья мастера — столбец расхода с тем же номером по порядку, а не с тем
+  // же именем: две категории «Другое» давали один столбец с суммой второй и
+  // пустой второй столбец.
+  const expenses = orderedColumns(columns).filter((column) => column.kind === "expense");
   for (const month of months) {
     put(byKind("income"), month, wizard.income);
-    for (const article of wizard.articles) {
-      put(
-        columns.find((column) => column.kind === "expense" && column.name === article.name),
-        month,
-        article.monthly
-      );
-    }
+    wizard.articles.forEach((article, index) => put(expenses[index], month, article.monthly));
   }
 }
 

@@ -200,6 +200,8 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
       {helpOpen ? (
         <SheetHelp
           words={words}
+          locale={locale}
+          current={current}
           showKeys={!phone}
           onClose={() => {
             setHelpOpen(false);

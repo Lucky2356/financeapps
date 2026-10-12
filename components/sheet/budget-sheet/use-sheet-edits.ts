@@ -18,7 +18,7 @@ import type {
   SheetFormat,
   SheetWords
 } from "@/components/sheet/sheet-types";
-import { gridFromText } from "@/lib/sheet/import";
+import { gridFromClipboard } from "@/lib/sheet/import";
 import { nextMonth, type ComputedSheet, type SheetColumn } from "@/lib/sheet/model";
 
 /**
@@ -103,7 +103,7 @@ export function useSheetEdits({
   }
 
   async function paste(text: string, at: Position) {
-    const grid = gridFromText(text).filter((row) => row.some((cell) => cell !== ""));
+    const grid = gridFromClipboard(text);
     if (grid.length === 0) return;
     // Столбцы для вставки — только настоящие, итоги пропускаются, как в Excel
     // пропускались бы защищённые клетки.

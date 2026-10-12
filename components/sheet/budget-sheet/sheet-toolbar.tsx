@@ -160,21 +160,6 @@ export function SheetToolbar({
           <ChevronDown className={cn("size-4 transition-transform", more && "rotate-180")} />
           {words.more}
         </Button>
-        {!phone ? (
-          <Segmented<Density>
-            ariaLabel={words.density}
-            className="ml-auto w-56"
-            value={density}
-            options={[
-              { value: "comfort", label: words.densityComfort },
-              { value: "compact", label: words.densityCompact }
-            ]}
-            onChange={(next) => {
-              setDensity(next);
-              remember(DENSITY_KEY, next);
-            }}
-          />
-        ) : null}
       </div>
       <div className={cn("flex-wrap items-center gap-2", more ? "flex" : "hidden")}>
         {phone ? (
@@ -274,6 +259,24 @@ export function SheetToolbar({
             <Eye className="size-4" />
             {words.showHidden} · {hiddenCount}
           </Button>
+        ) : null}
+        {/* Размер клеток — под «Ещё», а не в главной панели: меняют его раз и
+            навсегда, а в окне 1280 он сваливался на отдельную строку и
+            отодвигал таблицу вниз. */}
+        {!phone ? (
+          <Segmented<Density>
+            ariaLabel={words.density}
+            className="w-48"
+            value={density}
+            options={[
+              { value: "comfort", label: words.densityComfort },
+              { value: "compact", label: words.densityCompact }
+            ]}
+            onChange={(next) => {
+              setDensity(next);
+              remember(DENSITY_KEY, next);
+            }}
+          />
         ) : null}
         <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm">
           <input

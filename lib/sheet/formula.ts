@@ -11,6 +11,18 @@
 
 export type FormulaResult = { ok: true; value: number } | { ok: false; error: string };
 
+/**
+ * Округлить до `digits` знаков, как Excel: половина — от нуля. Через запись
+ * числа, а не умножением: 1,005 в двоичном виде чуть меньше себя, и
+ * Math.round(1,005 × 100) давал 1,00 вместо 1,01, а −0,125 — −0,12 вместо −0,13.
+ */
+export function roundHalfAway(value: number, digits = 2): number {
+  if (!Number.isFinite(value)) return value;
+  const scaled = Math.round(Number(`${Math.abs(value).toPrecision(15)}e${digits}`));
+  const result = Number(`${scaled}e${-digits}`);
+  return result === 0 ? 0 : Math.sign(value) * result;
+}
+
 const FUNCTIONS: Record<string, (args: number[]) => number> = {
   SUM: (args) => args.reduce((sum, value) => sum + value, 0),
   СУММ: (args) => args.reduce((sum, value) => sum + value, 0),
@@ -18,14 +30,8 @@ const FUNCTIONS: Record<string, (args: number[]) => number> = {
   МИН: (args) => Math.min(...args),
   MAX: (args) => Math.max(...args),
   МАКС: (args) => Math.max(...args),
-  ROUND: ([value, digits = 0]) => {
-    const factor = 10 ** digits;
-    return Math.round(value * factor) / factor;
-  },
-  ОКРУГЛ: ([value, digits = 0]) => {
-    const factor = 10 ** digits;
-    return Math.round(value * factor) / factor;
-  }
+  ROUND: ([value, digits = 0]) => roundHalfAway(value, digits),
+  ОКРУГЛ: ([value, digits = 0]) => roundHalfAway(value, digits)
 };
 
 type Token =
@@ -48,6 +54,13 @@ function tokenize(source: string): Token[] {
       at += 1;
       continue;
     }
+    // «=SUM(1, 2)» — запятая с пробелом за ней разделяет числа (так пишут в
+    // английском Excel), а не десятичная: иначе выходило 1,2 вместо 3.
+    if (char === "," && /\s/.test(source[at + 1] ?? "")) {
+      tokens.push({ kind: "sep" });
+      at += 1;
+      continue;
+    }
     if (/[0-9.,]/.test(char)) {
       // Число: цифры, пробелы-разделители тысяч внутри («20 000»), десятичная
       // запятая или точка. Пробел — часть числа, только если за ним цифра.
@@ -55,6 +68,7 @@ function tokenize(source: string): Token[] {
       while (at < source.length) {
         const next = source[at];
         if (/[0-9]/.test(next)) raw += next;
+        else if (next === "," && /\s/.test(source[at + 1] ?? "")) break;
         else if (next === "," || next === ".") raw += ".";
         else if (/\s/.test(next) && /[0-9]/.test(source[at + 1] ?? "")) {
           /* разделитель тысяч */
@@ -214,7 +228,7 @@ export function evaluate(input: string): FormulaResult | null {
   try {
     const value = parse(tokenize(source));
     if (!Number.isFinite(value)) return { ok: false, error: "Не число" };
-    return { ok: true, value: Math.round(value * 100) / 100 };
+    return { ok: true, value: roundHalfAway(value) };
   } catch (cause) {
     return {
       ok: false,

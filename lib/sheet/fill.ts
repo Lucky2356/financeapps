@@ -2,6 +2,7 @@
 // прошлое фактом из учёта. Каждая возвращает список правок ячеек — экран
 // отдаёт их одной записью, и одно «Отменить» возвращает всё как было.
 
+import { roundHalfAway } from "@/lib/sheet/formula";
 import type { ComputedRow, SheetColumn } from "@/lib/sheet/model";
 
 export type CellChange = { month: string; columnId: string; input: string };
@@ -13,7 +14,7 @@ export type CellChange = { month: string; columnId: string; input: string };
  */
 const CARRIED = new Set(["opening", "savingsOpening"]);
 
-const money = (value: number) => String(Math.round(value * 100) / 100);
+const money = (value: number) => String(roundHalfAway(value));
 
 const rowOf = (rows: readonly ComputedRow[], month: string) =>
   rows.find((row) => row.month === month);

@@ -11,7 +11,7 @@
 // Основные деньги и сбережения разведены, как в план/факте: перевод «в
 // сбережения» уменьшает основной Итог и увеличивает подушку.
 
-import { evaluate } from "@/lib/sheet/formula";
+import { evaluate, roundHalfAway } from "@/lib/sheet/formula";
 
 export const SHEET_COLUMN_KINDS = [
   "opening",
@@ -84,7 +84,7 @@ export type ComputedSheet = {
 
 export const cellKey = (month: string, columnId: string) => `${month}|${columnId}`;
 
-const round = (value: number) => Math.round(value * 100) / 100;
+const round = (value: number) => roundHalfAway(value);
 
 /** Столбцы в порядке показа. */
 export function orderedColumns(columns: readonly SheetColumn[]): SheetColumn[] {
@@ -93,6 +93,16 @@ export function orderedColumns(columns: readonly SheetColumn[]): SheetColumn[] {
 
 export function isSavingsKind(kind: SheetColumnKind): boolean {
   return SAVINGS_KINDS.includes(kind);
+}
+
+/**
+ * Остаток на начало и подушка на начало — состояние на дату, а не движение
+ * денег: складывать их по месяцам бессмысленно («Всего» Остатков — не сумма
+ * чего-то), а среднее считалось бы только по вписанным руками клеткам и
+ * вводило в заблуждение.
+ */
+export function isBalanceKind(kind: SheetColumnKind): boolean {
+  return kind === "opening" || kind === "savingsOpening";
 }
 
 /** «2026-08» → «2026-09». */

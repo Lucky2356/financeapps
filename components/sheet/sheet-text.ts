@@ -440,3 +440,19 @@ export function monthLabel(month: string, locale: string, style: "short" | "long
     .replace(".", "");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+/**
+ * Подпись вида столбца под его названием — или null, если она только
+ * повторяет название. «В сбережения» под «В сбережения» и «Доход» под
+ * «Доходами» читались как опечатка: подпись нужна там, где название вид не
+ * называет («Зарплата» → «Доход», «Копилка» → «В сбережения»).
+ */
+export function kindCaption(
+  column: { kind: SheetColumnKind; name: string },
+  kinds: Record<SheetColumnKind, string>
+): string | null {
+  if (column.kind === "expense") return null;
+  const label = kinds[column.kind];
+  const stem = (text: string) => text.trim().toLowerCase().replace(/ё/g, "е").slice(0, 4);
+  return stem(label) === stem(column.name) ? null : label;
+}
