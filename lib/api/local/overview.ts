@@ -142,13 +142,21 @@ export function allowancePage(state: LocalState): Allowance {
         event.date.slice(0, 10) <= monthEnd
     )
     .reduce((total, event) => total + event.amount, 0);
+  // Операции месяца, записанные вперёд, считаются в обе стороны одинаково.
+  // Формула на экране — «доходы месяца − плановые платежи − потрачено»:
+  // доход, записанный на 25-е, — доход этого месяца, и он в бюджете был. А
+  // расход на 25-е не попадал никуда — ни в «потрачено» (только до сегодня),
+  // ни в «впереди» (только прогноз): 12-го при доходе 100 000 аренда 30 000,
+  // записанная на 25-е, оставляла бюджет 100 000. Такой расход — тот же
+  // плановый платёж до конца месяца, ему место в «впереди».
+  const aheadThisMonth = sum(expenses.filter((row) => row.date.slice(0, 10) > today));
   return computeDailyAllowance({
     today,
     income: sum(monthRows.filter((row) => row.type === "INCOME")),
     averageIncome: previous.length
       ? previous.reduce((total, item) => total + item.income, 0) / previous.length
       : 0,
-    upcoming,
+    upcoming: upcoming + aheadThisMonth,
     spentBeforeToday: sum(expenses.filter((row) => row.date.slice(0, 10) < today)),
     spentToday: sum(expenses.filter((row) => row.date.slice(0, 10) === today)),
     spentYesterday: sum(expenses.filter((row) => row.date.slice(0, 10) === yesterday))
