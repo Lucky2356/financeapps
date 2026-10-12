@@ -31,6 +31,25 @@ export function storedDay(value: string): string {
   return value.slice(0, 10);
 }
 
+/**
+ * Хранимый день как местная полночь — чтобы показать его или положить в поле
+ * ввода тем же числом, что считают бюджеты через `slice(0, 10)`.
+ *
+ * Днём считается только то, что днём и записано: «2026-09-01» и полночь UTC
+ * «2026-09-01T00:00:00.000Z». Настоящий момент вроде «2026-09-01T21:30:00Z»
+ * (когда сделана копия, когда пришла синхронизация) и старые записи, сделанные
+ * до storedTransactionDate, читаются по-прежнему в местном времени: в Москве
+ * «2026-08-31T21:00:00.000Z» — это 1 сентября, и так и должно остаться.
+ * Date приходит уже местным днём и не трогается.
+ */
+export function dayAsLocalDate(value: string | Date): Date {
+  if (typeof value === "string") {
+    const day = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00(?::00(?:\.0+)?)?Z)?$/.exec(value.trim());
+    if (day) return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
+  }
+  return new Date(value);
+}
+
 /** Today as "YYYY-MM-DD" in the local calendar — the day a person is living in. */
 export function todayDay(now: Date = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(

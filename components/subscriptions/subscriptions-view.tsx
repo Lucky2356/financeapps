@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import type { RecurringTransactionsPageData, TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { dayAsLocalDate } from "@/lib/transactions/date";
 import { summarizeSubscriptions } from "@/lib/subscriptions";
 import { subscriptionHistory } from "@/lib/subscriptions/history";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -29,7 +30,9 @@ import { StatGrid } from "@/components/ui/stat-grid";
 import { StatTile } from "@/components/ui/stat-tile";
 
 function nextDateAfter(lastIso: string, frequency: DetectedSubscription["frequency"]): string {
-  const last = new Date(lastIso);
+  // Полночь UTC через `new Date` к западу от Гринвича — это ещё вчера, и
+  // следующая дата подписки выходила на день раньше.
+  const last = dayAsLocalDate(lastIso);
   const next =
     frequency === "WEEKLY"
       ? addDays(last, 7)
@@ -147,7 +150,7 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
           accountId: item.account.id,
           categoryId: item.category.id,
           frequency: item.frequency,
-          nextDate: formatInputDate(new Date(item.nextDate)),
+          nextDate: formatInputDate(item.nextDate),
           description: item.description ?? "",
           isActive: "false"
         }),

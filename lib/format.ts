@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 
 import { areAmountsHidden, areKopecksShown } from "@/lib/preferences";
+import { dayAsLocalDate } from "@/lib/transactions/date";
 
 /**
  * Сумма вместо цифр — точками, со знаком валюты. Длина одна на все суммы:
@@ -47,14 +48,19 @@ export function formatPercent(value: number, maximumFractionDigits = 1) {
   }).format(value / 100);
 }
 
+// Даты операций хранятся полночью UTC своего дня (см. storedTransactionDate),
+// а показывались в местном времени. В Москве это то же число, а в Нью-Йорке
+// «2026-09-01T00:00:00Z» — вечер 31 августа: операция на экране уезжала на день
+// назад, а каждое сохранение формы и массовая смена категории записывали её
+// уже 31-м. Поэтому строка с днём читается как день, а не как момент.
 export function formatDate(date: Date | string) {
-  return format(new Date(date), "dd MMM yyyy", { locale: ru });
+  return format(dayAsLocalDate(date), "dd MMM yyyy", { locale: ru });
 }
 
 export function formatInputDate(date: Date | string) {
-  return format(new Date(date), "yyyy-MM-dd");
+  return format(dayAsLocalDate(date), "yyyy-MM-dd");
 }
 
 export function formatMonth(date: Date | string) {
-  return format(new Date(date), "LLL yyyy", { locale: ru });
+  return format(dayAsLocalDate(date), "LLL yyyy", { locale: ru });
 }
