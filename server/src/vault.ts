@@ -161,7 +161,8 @@ function tooMuch(
   }
 
   if (limits.bytes !== null) {
-    const after = mine.bytes - (existing?.bytes ?? 0) + Buffer.byteLength(text);
+    const before = existing ? costOf(slot, existing.bytes) : 0;
+    const after = mine.bytes - before + costOf(slot, Buffer.byteLength(text));
     if (after > limits.bytes) {
       return (
         `Не хватает места на службе: разрешено ${megabytes(limits.bytes)}, ` +
@@ -206,18 +207,56 @@ const SIZE_OF_ONE =
  */
 export const ATTACHMENT_MARK = "receiptPhoto_";
 
+/**
+ * Имя ячейки фото — ровно то, что строит приложение: `receiptPhoto_<id
+ * операции>`, с приставкой В НАЧАЛЕ.
+ *
+ * Раньше хватало, чтобы приставка встречалась где угодно: `slot.includes`.
+ * Ячейка `книга-1-receiptPhoto_` числилась фото, и предел «две книги на
+ * человека» обходился дописыванием этих тринадцати знаков к любому имени —
+ * проверка нашла полсотни «книг» у человека с пределом в две. Пробелы и `/`
+ * в id операции приложение не кладёт, длину держит предел имени ячейки.
+ */
+const ATTACHMENT_SLOT = /^receiptPhoto_[^\s/]{1,128}$/;
+
 export function isAttachment(slot: string): boolean {
-  return slot.includes(ATTACHMENT_MARK);
+  return ATTACHMENT_SLOT.test(slot);
 }
 
-/** Сколько места занимают книги человека — для страницы управления. */
+/**
+ * Во что обходится службе одна ячейка сверх содержимого: строка в таблице,
+ * запись в указателе по (человек, ячейка), номер версии и время записи.
+ *
+ * Без этого место считалось одним содержимым, и фото с телом из одного байта
+ * не стоило почти ничего: имя ячейки в двести знаков и служебная часть строки
+ * в предел не входили вовсе, и мелкими ячейками базу можно было раздувать
+ * сколько угодно при любом пределе по мегабайтам.
+ */
+export const ROW_OVERHEAD_BYTES = 256;
+
+/** Сколько ячейка занимает с учётом имени и служебной части строки. */
+function costOf(slot: string, bodyBytes: number): number {
+  return bodyBytes + Buffer.byteLength(slot) + ROW_OVERHEAD_BYTES;
+}
+
+/**
+ * Сколько места занимают книги человека — для страницы управления и для
+ * пределов.
+ *
+ * Разбор «фото или книга» делается ЗДЕСЬ, тем же isAttachment, что и при
+ * проверке предела, а не отдельным условием в запросе. Два разных правила —
+ * одно в SQL, другое в коде — однажды разошлись бы, и ячейка, которую запись
+ * считает книгой, а подсчёт фото, проходила бы предел книг бесконечно.
+ */
 export function usageOf(db: DatabaseSync, personId: string): { slots: number; bytes: number } {
-  const row = db
-    .prepare(
-      "select coalesce(sum(case when instr(slot, ?) > 0 then 0 else 1 end), 0) as slots," +
-        " coalesce(sum(length(cast(body as blob))), 0) as bytes" +
-        " from books where person_id = ?"
-    )
-    .get<{ slots: number; bytes: number }>(ATTACHMENT_MARK, personId);
-  return { slots: row?.slots ?? 0, bytes: row?.bytes ?? 0 };
+  const rows = db
+    .prepare("select slot, length(cast(body as blob)) as bytes from books where person_id = ?")
+    .all<{ slot: string; bytes: number }>(personId);
+  let slots = 0;
+  let bytes = 0;
+  for (const row of rows) {
+    if (!isAttachment(row.slot)) slots += 1;
+    bytes += costOf(row.slot, row.bytes);
+  }
+  return { slots, bytes };
 }
