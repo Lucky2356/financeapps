@@ -137,6 +137,21 @@ export class FakeSyncServer implements SyncTransport {
     return version;
   }
 
+  /**
+   * Ночная копия базы и возврат из неё — то, что хозяин службы делает после
+   * поломки диска. Номера версий при этом уходят НАЗАД: устройство помнит
+   * пятую, а сервер снова на третьей. Событий нет — служба перезапускалась, и
+   * устройства узнают о возврате только при следующей сверке.
+   */
+  backup(): Map<SlotName, Cell> {
+    return new Map([...this.cells].map(([slot, cell]) => [slot, structuredClone(cell)]));
+  }
+
+  restore(copy: Map<SlotName, Cell>): void {
+    this.cells.clear();
+    for (const [slot, cell] of copy) this.cells.set(slot, structuredClone(cell));
+  }
+
   /** Что сейчас лежит в ячейке — для проверок, не для приложения. */
   peek(slot: SlotName): Cell | null {
     return this.cells.get(slot) ?? null;

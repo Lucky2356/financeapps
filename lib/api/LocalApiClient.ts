@@ -517,7 +517,15 @@ export class LocalApiClient implements ApiClient {
     const current = await this.state();
     if (!restored.aiApiKey) restored.aiApiKey = current.aiApiKey ?? "";
 
-    await this.save(restored, { stamp: false });
+    // С новой отметкой, как и «Вернуть» местную копию (restoreLocalCopy):
+    // восстановление — это правка, сделанная СЕЙЧАС. С отметками из файла
+    // возвращённая операция «обед» оставалась старше следа своего удаления на
+    // компьютере, и первая же синхронизация удаляла её снова — а счёт при этом
+    // оставался с остатком из копии: 4900 при пустом списке операций вместо
+    // 5000. Отметку получают только строки, которые восстановление и правда
+    // меняет; совпавшие с нынешними сохраняют свою, так что старая книга
+    // целиком «свежей» не становится.
+    await this.save(restored);
     return { restored: true };
   }
 
@@ -1237,6 +1245,18 @@ export class LocalApiClient implements ApiClient {
       const existing = await this.storage.getItem<unknown>(key);
       await this.storage.setItem(key, createBlankState(standardCategoriesFrom(existing)));
     }
+    // Книги профилей, которых в списке уже нет. Так выглядит профиль, удалённый
+    // прежней версией: та убирала его только с устройства, служба держала
+    // полную копию и привозила её обратно при сверке. По списку профилей её не
+    // найти, а «удалить всё» обязано удалить и её — пустотой поверх, чтобы
+    // исчезла и на службе. В копию до очистки она не идёт: возвращать профиль,
+    // который человек уже удалял, незачем.
+    const profilePrefix = profileStateKey("");
+    for (const key of await this.storage.keys()) {
+      if (!key.startsWith(profilePrefix) || key.includes(":")) continue;
+      if (ids.has(key.slice(profilePrefix.length))) continue;
+      await this.storage.setItem(key, createBlankState([]));
+    }
     await this.storage.setItem(PROFILE_LIST_KEY, {
       profiles: [DEFAULT_PROFILE],
       activeProfileId: DEFAULT_PROFILE.id
@@ -1434,7 +1454,24 @@ export class LocalApiClient implements ApiClient {
     list.profiles = list.profiles.filter((p) => p.id !== profileId);
     if (list.activeProfileId === profileId) list.activeProfileId = list.profiles[0].id;
     await this.storage.setItem(PROFILE_LIST_KEY, list);
-    await this.storage.removeItem(profileStateKey(profileId));
+    // Пустая книга ПОВЕРХ, а не removeItem — по той же причине, что и в
+    // clearEverything. removeItem убирает только с этого устройства: профиль
+    // «Секрет» оставался на службе целиком, следующая же сверка привозила его
+    // обратно, «Очистить все данные» его не видело (в списке профилей его уже
+    // нет), а новое устройство получало его при первом подключении. Пустота,
+    // записанная как правка, уезжает на службу и затирает книгу и там.
+    // Есть ли книга, смотрим по перечню ключей, а не чтением: испорченная
+    // книга не прочитается, а затереть её пустотой нужно всё равно.
+    const key = profileStateKey(profileId);
+    if ((await this.storage.keys()).includes(key)) {
+      await this.storage.setItem(key, createBlankState([]));
+    }
+    // Местные копии этой книги — корзина, копия до обновления схемы, копия при
+    // поломке — держат её содержимое целиком; удалённый профиль не должен
+    // переживать удаление в них.
+    for (const suffix of [TRASH_SUFFIX, PRE_UPGRADE_SUFFIX, RESCUE_SUFFIX]) {
+      await this.storage.removeItem(`${key}${suffix}`);
+    }
     this.invalidateStateCache();
   }
 }

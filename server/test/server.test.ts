@@ -934,6 +934,36 @@ describe("служба", () => {
     });
   });
 
+  describe("негодные тела запросов", () => {
+    // Всё это — ошибки того, кто прислал, а не службы. Раньше каждое из них
+    // падало внутри обработчика и отвечалось 500 с записью «сбой запроса» в
+    // журнале: по журналу служба выглядела сломанной, хотя сломан был запрос.
+
+    it("тело-не-объект отвечается 400, а не 500", async () => {
+      const { token } = await signUp("петя");
+      for (const [path, method, body] of [
+        ["/auth/login", "POST", null],
+        ["/auth/register", "POST", []],
+        ["/auth/login", "POST", 5],
+        ["/vault/книга", "PUT", null],
+        ["/vault/книга", "PUT", "строка"]
+      ] as const) {
+        const answer = await call(path, { method, token, body });
+        assert.equal(answer.status, 400, `${method} ${path} ${JSON.stringify(body)}`);
+      }
+    });
+
+    it("запись без книги отвечается 400 и ничего не заводит", async () => {
+      const { token } = await signUp("петя");
+      for (const body of [{ baseVersion: 0 }, { baseVersion: 0, body: null }]) {
+        const answer = await call("/vault/книга", { method: "PUT", token, body });
+        assert.equal(answer.status, 400, JSON.stringify(body));
+      }
+      const stored = await call("/vault/книга", { token });
+      assert.equal((stored.body as { version: number }).version, 0);
+    });
+  });
+
   describe("пределы на человека", () => {
     // Пределы появились вместе с открытой регистрацией и только ради неё. До
     // того единственным, кто мог переполнить службу, был её хозяин; с открытой
@@ -1000,6 +1030,50 @@ describe("служба", () => {
         [200, 200]
       );
       assert.equal(second.status, 507);
+    });
+
+    it("приставка фото в середине имени книгу фото не делает", async () => {
+      // Раньше фото считалась любая ячейка, в имени которой ВСТРЕЧАЕТСЯ
+      // «receiptPhoto_», и предел «одна книга» обходился дописыванием этих
+      // знаков к любому имени: проверка завела полсотни таких «книг».
+      await restart({ limits: { slots: 1, bytes: null } });
+      const { token } = await signUp("петя");
+      await call("/vault/первая", { method: "PUT", token, body: { baseVersion: 0, body: BOOK } });
+
+      for (const slot of ["вторая-receiptPhoto_1", `${"x".repeat(150)}receiptPhoto_2`]) {
+        const put = await call(`/vault/${slot}`, {
+          method: "PUT",
+          token,
+          body: { baseVersion: 0, body: BOOK }
+        });
+        assert.equal(put.status, 507, slot);
+      }
+    });
+
+    it("мелкие ячейки не раздувают базу мимо предела по месту", async () => {
+      // Тело в один байт стоило почти ничего: ни имя ячейки, ни служебная
+      // часть строки в предел не входили, и фото из одного байта можно было
+      // заводить без счёта при любом пределе по мегабайтам.
+      await restart({ limits: { slots: null, bytes: 4 * 1024 } });
+      const { token } = await signUp("петя");
+
+      let accepted = 0;
+      for (let i = 0; i < 50; i++) {
+        const put = await call(`/vault/receiptPhoto_tx-${"x".repeat(100)}-${i}`, {
+          method: "PUT",
+          token,
+          body: { baseVersion: 0, body: 1 }
+        });
+        if (put.status === 200) accepted += 1;
+        else assert.equal(put.status, 507);
+      }
+      // 4096 байт на ячейки по ~120 байт имени и 256 служебных — около десятка.
+      assert.ok(accepted < 15, `принято ${accepted}`);
+
+      const response = await call("/admin/people", { token: ADMIN });
+      const [person] = response.body as Array<{ usage: { slots: number; bytes: number } }>;
+      assert.equal(person.usage.slots, 0);
+      assert.ok(person.usage.bytes <= 4 * 1024);
     });
 
     it("уже заведённая книга правится и тогда, когда предел книг исчерпан", async () => {
