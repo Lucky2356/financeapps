@@ -247,4 +247,36 @@ describe("две машины через сервер", () => {
       expect(await balance(desktop)).toBe(50000 - 700 - 300 - 100);
     });
   });
+  it("восстановленное из файла копии не удаляется снова первой же синхронизацией", async () => {
+    // Копия сделана, когда «обед» был; потом его удалили на телефоне, и след
+    // удаления доехал до компьютера. Восстановление возвращает «обед» и
+    // остаток счёта из копии. С отметками из файла строка оставалась старше
+    // следа удаления, и синхронизация удаляла её опять — а остаток счёта
+    // оставался из копии: минус 700 при пустом списке операций.
+    await addExpense(phone, "обед", 700);
+    await phone.sync.flush();
+    await desktop.sync.flush();
+    const backup = await phone.app.get("/backup");
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const { transactions: rows } = await phone.app.get("/transactions");
+    await phone.app.delete(`/transactions?id=${rows[0].id}`);
+    await phone.sync.flush();
+    await desktop.sync.flush();
+    expect(await transactions(desktop)).toEqual([]);
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await phone.app.post("/backup", { backup });
+    for (let i = 0; i < 3; i++) {
+      await phone.sync.flush();
+      await desktop.sync.flush();
+    }
+
+    expect(await transactions(phone)).toEqual(["обед"]);
+    expect(await transactions(desktop)).toEqual(["обед"]);
+    for (const device of [phone, desktop]) {
+      const { accounts } = await device.app.get("/accounts");
+      expect(accounts[0].balance).toBe(50000 - 700);
+    }
+  });
 });

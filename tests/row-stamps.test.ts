@@ -232,16 +232,35 @@ describe("отметки в живом клиенте", () => {
     expect(sameCategory?.updatedAt).toBe(expense?.updatedAt);
   });
 
-  it("восстановление из копии сохраняет отметки файла, а не ставит «сейчас»", async () => {
-    // Трёхлетняя книга, вернувшаяся из копии, не становится свежей оттого, что
-    // её сегодня развернули.
+  it("восстановление из копии отмечает «сейчас» только то, что меняет", async () => {
+    // Раньше восстановление брало отметки из файла как есть. Вернувшаяся
+    // операция оставалась старше следа своего удаления на другом устройстве и
+    // удалялась первой же синхронизацией (см. sync-end-to-end). Теперь
+    // восстановление — правка, сделанная сейчас, как и возврат местной копии.
+    // Но книга целиком свежей не становится: строка, которую восстановление не
+    // меняет, сохраняет свою отметку.
     await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: 1000 });
     const backup = await client.get("/backup");
-    const original = (backup.accounts as Array<Record<string, unknown>>)[0];
-    (original as { updatedAt: string }).updatedAt = EARLIER;
+    const kept = (await accounts())[0].updatedAt;
 
+    await new Promise((resolve) => setTimeout(resolve, 5));
     await client.post("/backup", { backup });
-    expect((await accounts())[0].updatedAt).toBe(EARLIER);
+    expect((await accounts())[0].updatedAt).toBe(kept);
+
+    const [account] = await accounts();
+    await client.put("/accounts", {
+      id: account.id,
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: 5
+    });
+    const edited = (await accounts())[0].updatedAt as string;
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await client.post("/backup", { backup });
+    const [restored] = await accounts();
+    expect(restored.balance).toBe(1000);
+    expect(Date.parse(restored.updatedAt as string)).toBeGreaterThan(Date.parse(edited));
   });
 
   it("книга, дожившая до v15, старым строкам времени не сочиняет", async () => {
