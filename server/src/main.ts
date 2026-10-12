@@ -264,11 +264,21 @@ export function createApp(options: AppOptions) {
       chunks.push(chunk as Buffer);
     }
     if (chunks.length === 0) return {};
+    let parsed: unknown;
     try {
-      return JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+      parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     } catch {
       throw new AuthError(400, "Тело запроса — не JSON.");
     }
+    // `null`, `[]`, `5` — тоже JSON, и разбор их пропускает. Дальше каждый
+    // обработчик читает поля (`body.login`), и `null.login` падал бы с 500 —
+    // запрос `/auth/login` с телом `null` выглядел в журнале как сбой службы,
+    // хотя виноват в нём тот, кто прислал. Тело у всех ручек — объект; всё
+    // прочее — ошибка запроса, 400.
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new AuthError(400, "Тело запроса — не объект JSON.");
+    }
+    return parsed as Record<string, unknown>;
   }
 
   function bearer(req: IncomingMessage): string | null {
@@ -509,6 +519,16 @@ export function createApp(options: AppOptions) {
         const baseVersion = Number(body.baseVersion);
         if (!Number.isInteger(baseVersion) || baseVersion < 0) {
           return send(res, 400, { error: "Неверная версия." });
+        }
+
+        // Без книги писать нечего. `{"baseVersion":0}` без поля body раньше
+        // доходил до записи и падал там с 500 (JSON.stringify(undefined) — не
+        // строка). `null` не пускаем тоже: приложение его не шлёт никогда, а
+        // ячейка с номером версии и пустым телом для устройства выглядит как
+        // «на сервере ничего нет» — то есть книга, стёртая таким запросом,
+        // пропала бы с сервера молча, без единого отказа.
+        if (body.body === undefined || body.body === null) {
+          return send(res, 400, { error: "Нет данных для записи." });
         }
 
         const outcome = writeSlot(db, who.personId, slot, baseVersion, body.body, now(), LIMITS);
