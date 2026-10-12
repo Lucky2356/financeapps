@@ -68,7 +68,7 @@ export function isBookLocked(error: unknown): boolean {
   return error instanceof BookLockedError;
 }
 
-function sealed(value: unknown): value is SealedBook {
+export function isSealedBook(value: unknown): value is SealedBook {
   // Сначала null, потом typeof, а не наоборот: после первой проверки значение
   // уже сужено до объекта, и сравнение сужённого с null читается как сравнение
   // несопоставимых типов — на это и указал разбор кода.
@@ -133,7 +133,7 @@ export class EncryptingStorageAdapter implements StorageAdapter {
     // Ещё не запечатанная книга читается как есть: так выглядит книга, которая
     // лежала здесь до появления замка, и так же — книга посреди перевода в
     // запечатанный вид, если он оборвался. Читать её надо, а не терять.
-    if (!sealed(stored)) return stored as T;
+    if (!isSealedBook(stored)) return stored as T;
 
     return JSON.parse(await openBook(stored, bookKey)) as T;
   }

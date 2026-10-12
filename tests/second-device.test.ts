@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LocalApiClient } from "@/lib/api/LocalApiClient";
 import { EncryptingStorageAdapter } from "@/lib/storage/EncryptingStorageAdapter";
 import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
-import { AccountService } from "@/lib/vault/account";
+import { AccountService, OwnRecordsError } from "@/lib/vault/account";
 import { ServerAccount, SERVER_KEY, type ServerLink } from "@/lib/vault/server-account";
 
 // Второе устройство: телефон подключается к учётной записи, заведённой на ПК.
@@ -145,6 +145,44 @@ describe("второе устройство принимает учётную з
     await app.delete("/storage/clear");
 
     await expect(phone.account.adopt(fromServer!, PASSWORD)).resolves.toBeUndefined();
+  });
+
+  it("книгу, заведённую до замка, видит и не стирает", async () => {
+    // Устройство ни разу не запирали: шкатулки нет, книга лежит открытой.
+    // Запечатанное хранилище на любое чтение отвечает здесь «заперто», и
+    // проверка раньше это «заперто» глотала — своих записей не находилось, и
+    // подключение (первый запуск → «подключиться», связка по QR) стирало их.
+    const pc = device();
+    await pc.account.create(PASSWORD, FAST);
+    const fromServer = await pc.account.vault();
+
+    const phone = device();
+    await new LocalApiClient(phone.disk).post("/accounts", {
+      name: "Карта до замка",
+      type: "DEBIT_CARD",
+      balance: 12000
+    });
+    expect((await phone.account.state()).status).toBe("fresh");
+
+    await expect(phone.account.assertCanAdopt()).rejects.toBeInstanceOf(OwnRecordsError);
+    await expect(phone.account.adopt(fromServer!, PASSWORD)).rejects.toThrow(/резервную копию/);
+    expect(JSON.stringify(await phone.disk.getItem(BOOK))).toContain("Карта до замка");
+  });
+
+  it("книгу, которую нечем прочитать, считает своей, а не пустой", async () => {
+    // Запертое устройство: книга запечатана, ключа в памяти нет. Что в ней —
+    // неизвестно, а следом идёт clear(). Стереть вслепую хуже, чем отказать.
+    const phone = device();
+    await phone.account.create("свой-пароль", FAST);
+    await new LocalApiClient(phone.sealed).post("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: 12000
+    });
+    const locked = new AccountService(phone.disk, new EncryptingStorageAdapter(phone.disk));
+
+    await expect(locked.assertCanAdopt()).rejects.toBeInstanceOf(OwnRecordsError);
+    expect(await phone.disk.getItem(BOOK)).not.toBeNull();
   });
 
   it("билет сервера переживает подключение — иначе синхронизация не поднимется", async () => {
