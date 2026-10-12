@@ -85,6 +85,36 @@ export function sumInBase(
   );
 }
 
+type LiabilityInBase = {
+  balance: number;
+  originalAmount: number;
+  minPayment: number;
+  currency: string;
+};
+
+/**
+ * Долг, пересчитанный в основную валюту: остаток, исходная сумма и платёж.
+ *
+ * Долг хранится в своей валюте, и прогноз с планом брали его числа как есть:
+ * кредит 500 $ в месяц при рублёвом учёте ложился в прогноз платежом 500 ₽
+ * вместо 45 000 ₽ (по 90), и «до зарплаты» с «можно тратить» обещали лишние
+ * 44 500 ₽. Строки операций и шаблонов пересчитываются при чтении (inBase),
+ * долги туда не входили.
+ */
+export function debtInBase<T extends LiabilityInBase>(state: LocalState, liability: T): T {
+  if (liability.currency === state.currency) return liability;
+  const rates = ratesOf(state);
+  const inBase = (amount: number) =>
+    roundMoney(convert(amount, liability.currency, state.currency, rates));
+  return {
+    ...liability,
+    balance: inBase(liability.balance),
+    originalAmount: inBase(liability.originalAmount),
+    minPayment: inBase(liability.minPayment),
+    currency: state.currency
+  };
+}
+
 // The same state with transfers between own accounts left out of the
 // operations, so everything derived downstream — month totals, category
 // breakdowns, budget spending, the health score — counts the same rows. The

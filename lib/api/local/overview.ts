@@ -23,7 +23,7 @@ import { computeDailyAllowance, type Allowance } from "@/lib/analytics/daily-all
 import type { DashboardData, TransactionRow } from "@/types/finance";
 import type { WhatIfBase } from "@/lib/whatif/simulate";
 import { type LocalState, recomputeLiability, monthStart } from "@/lib/api/local/state";
-import { ratesOf, sumInBase } from "@/lib/api/local/money";
+import { debtInBase, ratesOf, sumInBase } from "@/lib/api/local/money";
 import { accountsPage } from "@/lib/api/local/ledger";
 import { budgetRows } from "@/lib/api/local/budgets";
 import { goalsPage } from "@/lib/api/local/goals";
@@ -64,7 +64,9 @@ export function forecastPage(state: LocalState): ForecastPageData {
       })),
       recurringTransactions: recurringPage(state).recurringTransactions,
       goals: goalsPage(state).goals,
-      liabilities: state.liabilities.map(recomputeLiability)
+      // Долги — тоже в основной валюте, как счета выше и шаблоны (inBase):
+      // платёж 500 $ — это 45 000 ₽ расхода, а не 500.
+      liabilities: state.liabilities.map((item) => debtInBase(state, recomputeLiability(item)))
     },
     getClientLocale()
   );

@@ -14,7 +14,7 @@ import {
   RecurringTransactionService
 } from "@/services/RecurringTransactionService";
 import { type LocalState, withCurrentNames } from "@/lib/api/local/state";
-import { ratesOf } from "@/lib/api/local/money";
+import { debtInBase, ratesOf } from "@/lib/api/local/money";
 import { upsertTransaction, accountsPage } from "@/lib/api/local/ledger";
 import { budgetRows } from "@/lib/api/local/budgets";
 
@@ -245,7 +245,11 @@ export function recurringPage(state: LocalState): RecurringTransactionsPageData 
       );
   // Debts with a due day are scheduled obligations — they belong here too,
   // otherwise the due day entered on the debts page has no visible effect.
-  const debtPayments = plannedDebtPayments(activeDebts(state.liabilities ?? []));
+  // В основной валюте, как и шаблоны: экран подписывает суммы её знаком и
+  // складывает их с шаблонами в итоги месяца и недели.
+  const debtPayments = plannedDebtPayments(
+    activeDebts(state.liabilities ?? []).map((item) => debtInBase(state, item))
+  );
   // Savings interest is the mirror image: money the plan will ADD, on dates
   // that follow from the rate and the capitalisation period.
   const interestAccruals = upcomingInterest(accountsPage(state).accounts);
@@ -268,7 +272,9 @@ export function recurringPage(state: LocalState): RecurringTransactionsPageData 
       nextSevenDaysAmount: roundMoney(
         active
           .filter((row) => row.isDue || row.daysUntilNext <= 7)
-          .reduce((sum, row) => sum + row.amount, 0) +
+          // countableAmount, как у итогов месяца ниже: 100 $ — это 9 000 ₽,
+          // а не 100, сложенные с рублями.
+          .reduce((sum, row) => sum + countableAmount(row), 0) +
           debtPayments
             .filter((payment) => payment.isDue || payment.daysUntilNext <= 7)
             .reduce((sum, payment) => sum + payment.amount, 0)
