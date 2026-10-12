@@ -197,6 +197,12 @@ export type TransactionRow = {
    * the capital chart leaves it out of its flow reconstruction.
    */
   liabilityId?: string;
+  /**
+   * На сколько этот платёж уменьшил долг, в валюте долга. Долг не уходит ниже
+   * нуля, и переплата снимает с него только остаток — удаление платежа
+   * возвращает долгу ровно эту долю. У старых операций поля нет.
+   */
+  debtApplied?: number;
   /** Есть фото чека: уезжает на другие устройства или лежит только здесь. */
   photo?: "synced" | "device";
   /** Кто из семьи платил — см. lib/family/family.ts. */

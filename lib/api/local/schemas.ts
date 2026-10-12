@@ -106,6 +106,9 @@ export const transactionRowSchema = z.object({
   // AND reduces what is owed by the same amount, so it leaves net worth exactly
   // where it was — the capital chart has to know not to count it as spending.
   liabilityId: z.string().optional(),
+  // На сколько платёж уменьшил долг, в валюте долга. Меньше суммы платежа,
+  // когда заплатили больше остатка: удаление возвращает долгу именно это.
+  debtApplied: z.number().finite().min(0).optional(),
   // Когда операцию записали — порядок внутри одного дня.
   createdAt: z.string().optional(),
   // Где фото чека: уезжает на другие устройства или лежит только здесь.

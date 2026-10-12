@@ -105,4 +105,96 @@ describe("платёж по долгу и долг", () => {
     await client.delete(`/transactions?id=${row.id}`);
     expect((await debt()).balance).toBe(1000);
   });
+
+  // Долг не уходит ниже нуля: переплата снимает с него только остаток. Удаление
+  // возвращало всю сумму платежа — долг 100 после удаления переплаты 150
+  // становился 150.
+  it("удалили переплату — долг как был, а не больше", async () => {
+    const { client, account, debt, ledger, cash } = await setup({
+      balance: "100",
+      originalAmount: "100"
+    });
+    const { id } = await debt();
+    await client.post("/debts/pay", { id, amount: "150", accountId: account.id });
+    expect((await debt()).balance).toBe(0);
+    const [row] = await ledger();
+    expect(row.debtApplied).toBe(100);
+    await client.delete(`/transactions?id=${row.id}`);
+    expect((await debt()).balance).toBe(100);
+    expect(await cash()).toBe(50000);
+  });
+
+  it("переплату вернули из корзины и удалили снова — долг сходится", async () => {
+    const { client, account, debt, ledger } = await setup({
+      balance: "100",
+      originalAmount: "100"
+    });
+    const { id } = await debt();
+    await client.post("/debts/pay", { id, amount: "150", accountId: account.id });
+    const [row] = await ledger();
+    await client.delete(`/transactions?id=${row.id}`);
+    const trash = await client.get("/trash");
+    await client.post("/trash", { action: "restore", ids: trash.entries.map((e) => e.id) });
+    expect((await debt()).balance).toBe(0);
+    await client.delete(`/transactions?id=${row.id}`);
+    expect((await debt()).balance).toBe(100);
+  });
+
+  it("поправили сумму переплаты — долг считается от того, что сняли", async () => {
+    const { client, account, debt, ledger } = await setup({
+      balance: "100",
+      originalAmount: "100"
+    });
+    const { id } = await debt();
+    await client.post("/debts/pay", { id, amount: "150", accountId: account.id });
+    const [row] = await ledger();
+    const edit = (amount: string) =>
+      client.put("/transactions", {
+        id: row.id,
+        amount,
+        type: "EXPENSE",
+        accountId: account.id,
+        categoryId: row.category.id,
+        date: row.date
+      });
+    await edit("60");
+    expect((await debt()).balance).toBe(40);
+    await edit("200");
+    expect((await debt()).balance).toBe(0);
+    await client.delete(`/transactions?id=${row.id}`);
+    expect((await debt()).balance).toBe(100);
+  });
+
+  it("старый платёж без доли — долг возвращается, но не выше исходной суммы", async () => {
+    const storage = new MemoryStorageAdapter();
+    const client = new LocalApiClient(storage);
+    const account = await client.post("/accounts", {
+      name: "Карта",
+      type: "DEBIT_CARD",
+      balance: "1000"
+    });
+    const created = await client.post("/debts", {
+      name: "Друг",
+      kind: "OTHER",
+      balance: "100",
+      originalAmount: "100",
+      minPayment: "0"
+    });
+    await client.post("/debts/pay", { id: created.id, amount: "150", accountId: account.id });
+    // Такой платёж записала прежняя версия: поля `debtApplied` у него нет.
+    const fresh = new LocalApiClient(storage);
+    const [row] = (await fresh.get("/transactions?period=all")).transactions;
+    const { debtApplied: _applied, ...legacy } = row;
+    void _applied;
+    await fresh.delete(`/transactions?id=${row.id}`);
+    await fresh.post("/debts/pay", { id: created.id, amount: "100", accountId: account.id });
+    const [paid] = (await fresh.get("/transactions?period=all")).transactions;
+    await fresh.delete(`/transactions?id=${paid.id}`);
+    expect((await fresh.get("/debts")).liabilities[0].balance).toBe(100);
+    await fresh.post("/transactions", {
+      action: "restore",
+      transaction: JSON.stringify({ ...legacy, debtApplied: undefined })
+    });
+    expect((await fresh.get("/debts")).liabilities[0].balance).toBe(0);
+  });
 });
