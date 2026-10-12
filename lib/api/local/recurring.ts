@@ -2,7 +2,7 @@
 
 import type { RecurringTransactionsPageData } from "@/lib/data";
 import { id, toFormObject } from "@/lib/api/local/helpers";
-import { todayDay } from "@/lib/transactions/date";
+import { localCalendarDate, todayDay } from "@/lib/transactions/date";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts } from "@/lib/debts/settled";
@@ -37,7 +37,9 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
     : null;
   const accountRef = { id: account.id, label: account.name };
   const categoryRef = { id: category.id, label: category.label, color: category.color };
-  const nextDateInput = new Date(input.nextDate);
+  // Местный день, а не UTC-полночь: западнее Гринвича «2026-01-31» иначе
+  // становился 30-м (см. localCalendarDate).
+  const nextDateInput = localCalendarDate(input.nextDate);
   // Дату в форме не трогали — число остаётся прежним. Иначе правка одной
   // суммы у платежа на 31-е, стоящего сейчас на 28 февраля, перевела бы его
   // на 28-е навсегда.

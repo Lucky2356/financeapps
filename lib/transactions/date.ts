@@ -26,6 +26,35 @@ export function storedTransactionDate(value: string | Date | undefined | null): 
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())).toISOString();
 }
 
+/**
+ * Дата из формы («2026-01-31») как МЕСТНЫЙ календарный день — для плановых
+ * дат, которые потом читаются в местном времени (`new Date(...)`, date-fns):
+ * следующий раз у шаблона, срок цели.
+ *
+ * `new Date("2026-01-31")` по стандарту — UTC-полночь. В Москве это 31-е,
+ * 03:00, и всё сходилось; в Нью-Йорке — 30-е, 19:00: аренда на 31-е
+ * проводилась 30-го, а зарплата, заведённая в сам день выплаты на 1 марта,
+ * получала «через −1 день», и автопроведение записывало её дважды — 28
+ * февраля и 1 марта. Местная полночь того же числа — тот день в любом поясе.
+ * Не дата операции: у той свой формат хранения (storedTransactionDate).
+ */
+export function localCalendarDate(value: string): Date {
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? "").trim());
+  if (plain) return new Date(Number(plain[1]), Number(plain[2]) - 1, Number(plain[3]));
+  return new Date(value);
+}
+
+/**
+ * Местный календарный день плановой даты, «YYYY-MM-DD». Срок цели хранится
+ * моментом времени (см. localCalendarDate), и `slice(0, 10)` к востоку от
+ * Гринвича читал из «2026-12-30T21:00:00.000Z» (полночь 31-го по Москве)
+ * 30-е. Голый день из формы — уже ответ.
+ */
+export function localDayOf(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return todayDay(new Date(value));
+}
+
 /** The day an already-stored date belongs to, as "YYYY-MM-DD". */
 export function storedDay(value: string): string {
   return value.slice(0, 10);

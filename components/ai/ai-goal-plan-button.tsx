@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
+import { localDayOf } from "@/lib/transactions/date";
 import type { AiProvider } from "@/lib/ai/models";
 import { useAiSettings } from "@/hooks/use-ai-settings";
 import { useI18n } from "@/lib/i18n/context";
@@ -51,7 +52,7 @@ export function AiGoalPlanButton({ goal, currency }: { goal: GoalLike; currency:
       title: goal.title,
       targetAmount: goal.targetAmount,
       currentAmount: goal.currentAmount,
-      deadline: goal.deadline ? goal.deadline.slice(0, 10) : "",
+      deadline: goal.deadline ? localDayOf(goal.deadline) : "",
       monthlyFreeCashflow: freeCashflow,
       currency
     };

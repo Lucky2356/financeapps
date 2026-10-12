@@ -2,7 +2,7 @@
 
 import type { GoalsPageData } from "@/lib/data";
 import { id, toFormObject } from "@/lib/api/local/helpers";
-import { storedTransactionDate } from "@/lib/transactions/date";
+import { localCalendarDate, storedTransactionDate } from "@/lib/transactions/date";
 import { convert } from "@/lib/currency";
 import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
 import { goalFamily } from "@/lib/family/goal-shares";
@@ -30,7 +30,9 @@ export function upsertGoal(state: LocalState, body: unknown, method: "POST" | "P
     targetAmount: Number(input.targetAmount),
     // The money side is settled below, never here.
     currentAmount: held,
-    deadline: new Date(input.deadline).toISOString(),
+    // Срок — местный день: в Нью-Йорке «31 декабря» из формы иначе хранился
+    // как 30-е, и каждая правка цели сдвигала срок ещё на день назад.
+    deadline: localCalendarDate(input.deadline).toISOString(),
     linkedAccountId,
     plannedContribution: Math.max(Number(input.plannedContribution ?? 0), 0),
     ...goalSharesFrom(input.shares, previous?.shares)
