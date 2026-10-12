@@ -2,7 +2,7 @@
 
 import type { RecurringTransactionsPageData } from "@/lib/data";
 import { id, toFormObject } from "@/lib/api/local/helpers";
-import { todayDay } from "@/lib/transactions/date";
+import { localCalendarDate, todayDay } from "@/lib/transactions/date";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts } from "@/lib/debts/settled";
@@ -14,7 +14,7 @@ import {
   RecurringTransactionService
 } from "@/services/RecurringTransactionService";
 import { type LocalState, withCurrentNames } from "@/lib/api/local/state";
-import { ratesOf } from "@/lib/api/local/money";
+import { debtInBase, ratesOf } from "@/lib/api/local/money";
 import { upsertTransaction, accountsPage } from "@/lib/api/local/ledger";
 import { budgetRows } from "@/lib/api/local/budgets";
 
@@ -37,7 +37,9 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
     : null;
   const accountRef = { id: account.id, label: account.name };
   const categoryRef = { id: category.id, label: category.label, color: category.color };
-  const nextDateInput = new Date(input.nextDate);
+  // Местный день, а не UTC-полночь: западнее Гринвича «2026-01-31» иначе
+  // становился 30-м (см. localCalendarDate).
+  const nextDateInput = localCalendarDate(input.nextDate);
   // Дату в форме не трогали — число остаётся прежним. Иначе правка одной
   // суммы у платежа на 31-е, стоящего сейчас на 28 февраля, перевела бы его
   // на 28-е навсегда.
@@ -243,7 +245,11 @@ export function recurringPage(state: LocalState): RecurringTransactionsPageData 
       );
   // Debts with a due day are scheduled obligations — they belong here too,
   // otherwise the due day entered on the debts page has no visible effect.
-  const debtPayments = plannedDebtPayments(activeDebts(state.liabilities ?? []));
+  // В основной валюте, как и шаблоны: экран подписывает суммы её знаком и
+  // складывает их с шаблонами в итоги месяца и недели.
+  const debtPayments = plannedDebtPayments(
+    activeDebts(state.liabilities ?? []).map((item) => debtInBase(state, item))
+  );
   // Savings interest is the mirror image: money the plan will ADD, on dates
   // that follow from the rate and the capitalisation period.
   const interestAccruals = upcomingInterest(accountsPage(state).accounts);
@@ -266,7 +272,9 @@ export function recurringPage(state: LocalState): RecurringTransactionsPageData 
       nextSevenDaysAmount: roundMoney(
         active
           .filter((row) => row.isDue || row.daysUntilNext <= 7)
-          .reduce((sum, row) => sum + row.amount, 0) +
+          // countableAmount, как у итогов месяца ниже: 100 $ — это 9 000 ₽,
+          // а не 100, сложенные с рублями.
+          .reduce((sum, row) => sum + countableAmount(row), 0) +
           debtPayments
             .filter((payment) => payment.isDue || payment.daysUntilNext <= 7)
             .reduce((sum, payment) => sum + payment.amount, 0)

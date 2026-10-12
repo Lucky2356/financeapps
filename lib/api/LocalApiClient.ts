@@ -971,53 +971,81 @@ export class LocalApiClient implements ApiClient {
     // Счёт, возвращаемый вместе со своими операциями, уже несёт остаток с ними:
     // провести операции по нему ещё раз значило бы удвоить деньги.
     const accountsBack = new Set<string>();
-    for (const entry of entries) {
+    const restoreOne = (entry: TrashEntry) => {
       const { updatedAt: _stamp, ...row } = entry.row;
       void _stamp;
-      try {
-        if (entry.collection === "transactions") {
-          const accountId = (row.account as { id?: unknown } | undefined)?.id;
-          if (typeof accountId === "string" && accountsBack.has(accountId)) {
-            if (!state.transactions.some((item) => item.id === row.id))
-              state.transactions = [
-                transactionRowSchema.omit({ updatedAt: true }).parse(row) as TransactionRow,
-                ...state.transactions
-              ];
-          } else {
-            restoreTransaction(state, { transaction: row });
-          }
+      if (entry.collection === "transactions") {
+        const accountId = (row.account as { id?: unknown } | undefined)?.id;
+        if (typeof accountId === "string" && accountsBack.has(accountId)) {
+          if (!state.transactions.some((item) => item.id === row.id))
+            state.transactions = [
+              transactionRowSchema.omit({ updatedAt: true }).parse(row) as TransactionRow,
+              ...state.transactions
+            ];
         } else {
-          // Лист (и столбец) возвращается вместе со всем, что на нём было.
-          const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
-          delete row[SHEET_ARCHIVE];
-          if (content) {
-            for (const [collection, list] of Object.entries(content)) {
-              const present = Array.isArray(holder[collection])
-                ? (holder[collection] as Array<Record<string, unknown>>)
-                : [];
-              const ids = new Set(present.map((item) => item.id));
-              holder[collection] = [
-                ...present,
-                ...(list as Array<Record<string, unknown>>)
-                  .filter((item) => !ids.has(item.id))
-                  .map(({ updatedAt: _at, ...rest }) => (void _at, rest))
-              ];
-            }
-          }
-          const rows = Array.isArray(holder[entry.collection])
-            ? (holder[entry.collection] as Array<Record<string, unknown>>)
-            : [];
-          if (!rows.some((item) => item.id === row.id)) {
-            // Цель при удалении отдала деньги на счёт (см. remove, /goals): вернуть
-            // её с прежней суммой значило бы посчитать эти деньги дважды.
-            if (entry.collection === "goals") Object.assign(row, { currentAmount: 0, progress: 0 });
-            holder[entry.collection] = [...rows, row];
-            if (entry.collection === "accounts" && typeof row.id === "string")
-              accountsBack.add(row.id);
+          restoreTransaction(state, { transaction: row });
+        }
+      } else {
+        // Лист (и столбец) возвращается вместе со всем, что на нём было.
+        const content = row[SHEET_ARCHIVE] as Record<string, unknown[]> | undefined;
+        delete row[SHEET_ARCHIVE];
+        if (content) {
+          for (const [collection, list] of Object.entries(content)) {
+            const present = Array.isArray(holder[collection])
+              ? (holder[collection] as Array<Record<string, unknown>>)
+              : [];
+            const ids = new Set(present.map((item) => item.id));
+            holder[collection] = [
+              ...present,
+              ...(list as Array<Record<string, unknown>>)
+                .filter((item) => !ids.has(item.id))
+                .map(({ updatedAt: _at, ...rest }) => (void _at, rest))
+            ];
           }
         }
-        restored.push(entry.id);
+        const rows = Array.isArray(holder[entry.collection])
+          ? (holder[entry.collection] as Array<Record<string, unknown>>)
+          : [];
+        if (!rows.some((item) => item.id === row.id)) {
+          // Цель при удалении отдала деньги на счёт (см. remove, /goals): вернуть
+          // её с прежней суммой значило бы посчитать эти деньги дважды.
+          if (entry.collection === "goals") Object.assign(row, { currentAmount: 0, progress: 0 });
+          holder[entry.collection] = [...rows, row];
+          if (entry.collection === "accounts" && typeof row.id === "string")
+            accountsBack.add(row.id);
+        }
+      }
+    };
+    // Перевод возвращается целиком или никак. Половины проверялись по одной:
+    // счёт получателя за это время убрали — расход возвращался (со счёта
+    // снова уходили 300), доход падал с «счёт удалён» и оставался в корзине,
+    // а одинокая половина перевода не входит в итоги — 300 просто исчезали.
+    // Поэтому половины одного перевода — одна группа: упала одна — документ
+    // возвращается к состоянию до группы, и обе остаются в корзине.
+    const groups: TrashEntry[][] = [];
+    const byTransfer = new Map<string, TrashEntry[]>();
+    for (const entry of entries) {
+      const transfer = transferOf(entry);
+      const group = transfer === null ? undefined : byTransfer.get(transfer);
+      if (group) {
+        group.push(entry);
+        continue;
+      }
+      const fresh = [entry];
+      if (transfer !== null) byTransfer.set(transfer, fresh);
+      groups.push(fresh);
+    }
+    for (const group of groups) {
+      // Возврат меняет документ, заменяя массивы целиком (state.transactions =
+      // [...], applyBalance), а не правя их на месте, — поэтому для отката
+      // достаточно запомнить прежние ссылки.
+      const before = { ...holder };
+      try {
+        for (const entry of group) restoreOne(entry);
+        restored.push(...group.map((entry) => entry.id));
       } catch (error) {
+        for (const key of Object.keys(holder)) if (!(key in before)) delete holder[key];
+        Object.assign(holder, before);
         failed.push(error instanceof Error ? error.message : String(error));
       }
     }

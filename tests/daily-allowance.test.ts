@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { computeDailyAllowance } from "@/lib/analytics/daily-allowance";
 
@@ -95,5 +95,70 @@ describe("ручка /allowance", () => {
     const allowance = await api.get("/allowance");
     expect(allowance.income).toBe(50000);
     expect(allowance.spentToday).toBe(700);
+  });
+});
+
+describe("операции месяца, записанные вперёд", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Доход, записанный на 25-е, в бюджет месяца входил, а расход на 25-е — нет:
+  // ни в «потрачено» (только до сегодня), ни в «впереди» (только прогноз).
+  async function setup() {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 12, 12));
+    const { LocalApiClient } = await import("@/lib/api/LocalApiClient");
+    const { MemoryStorageAdapter } = await import("@/lib/storage/MemoryStorageAdapter");
+    const api = new LocalApiClient(new MemoryStorageAdapter());
+    const card = await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "0" });
+    await api.post("/transactions", {
+      type: "INCOME",
+      amount: "100000",
+      accountId: card.id,
+      categoryId: "cat-salary",
+      date: "2026-10-01"
+    });
+    return { api, card };
+  }
+
+  it("расход на 25-е — в «впереди», бюджет меньше", async () => {
+    const { api, card } = await setup();
+    expect((await api.get("/allowance")).budget).toBe(100000);
+    await api.post("/transactions", {
+      type: "EXPENSE",
+      amount: "30000",
+      accountId: card.id,
+      categoryId: "cat-food",
+      date: "2026-10-25"
+    });
+    const allowance = await api.get("/allowance");
+    expect(allowance.upcoming).toBe(30000);
+    expect(allowance.budget).toBe(70000);
+    expect(allowance.spentBeforeToday).toBe(0);
+  });
+
+  it("доход на 25-е по-прежнему доход месяца", async () => {
+    const { api, card } = await setup();
+    await api.post("/transactions", {
+      type: "INCOME",
+      amount: "50000",
+      accountId: card.id,
+      categoryId: "cat-salary",
+      date: "2026-10-25"
+    });
+    expect((await api.get("/allowance")).budget).toBe(150000);
+  });
+
+  it("расход следующего месяца в этот не входит", async () => {
+    const { api, card } = await setup();
+    await api.post("/transactions", {
+      type: "EXPENSE",
+      amount: "30000",
+      accountId: card.id,
+      categoryId: "cat-food",
+      date: "2026-11-02"
+    });
+    expect((await api.get("/allowance")).budget).toBe(100000);
   });
 });
