@@ -58,7 +58,7 @@ describe.each(ZONES)("stored dates in %s", (zone) => {
     process.env.TZ = zone;
     const csv = new ExportService().transactionsToCsv([transaction]);
     const mapper = new CsvImportMapper();
-    const { rows } = mapper.parse(csv.replace(/^﻿/, ""));
+    const { rows } = mapper.parse(csv.replace(/^\uFEFF/, ""));
     const date = parseImportedDate(rows[0].date);
     expect(date).not.toBeNull();
     expect(storedTransactionDate(date!)).toBe(transaction.date);

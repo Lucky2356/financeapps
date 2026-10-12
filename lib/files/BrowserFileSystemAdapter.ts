@@ -1,5 +1,6 @@
 "use client";
 
+import { decodeTextBytes } from "@/lib/files/decode-text";
 import type { FilePickResult, FileSystemAdapter } from "@/lib/files/FileSystemAdapter";
 
 export class BrowserFileSystemAdapter implements FileSystemAdapter {
@@ -19,7 +20,8 @@ export class BrowserFileSystemAdapter implements FileSystemAdapter {
 
     return {
       name: file.name,
-      content: await file.text(),
+      // Не file.text(): тот читает только UTF-8, а банковские CSV бывают в cp1251.
+      content: decodeTextBytes(await file.arrayBuffer()),
       mimeType: file.type
     };
   }
