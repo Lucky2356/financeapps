@@ -21,7 +21,7 @@ import {
 import { id, normalizePath, routeOf, toFormObject } from "@/lib/api/local/helpers";
 import { freezeLedgerOutsideProduction } from "@/lib/api/freeze-state";
 import { STAMPED, stampRows, trackDeletions } from "@/lib/sync/row-stamps";
-import { localStateSchema, transactionRowSchema } from "@/lib/api/local/schemas";
+import { localStateSchema } from "@/lib/api/local/schemas";
 import {
   BEFORE_CLEAR_SUFFIX,
   LOCAL_COPY_SUFFIX,
@@ -46,7 +46,6 @@ import { salvageLocalState } from "@/lib/api/local/schemas";
 import { transferKeyOf } from "@/lib/transactions/transfers";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import { recordPortfolioSnapshot } from "@/lib/investments/snapshots";
-import type { TransactionRow } from "@/types/finance";
 import { SAMPLE_PROFILE_ID, type ProfileList, type UserProfile } from "@/types/profiles";
 import {
   addToTrash,
@@ -66,7 +65,11 @@ import {
   createBlankState,
   migrateLocalState
 } from "@/lib/api/local/state";
-import { restoreTransaction } from "@/lib/api/local/ledger";
+import {
+  releaseTrashedPayments,
+  restoreTransaction,
+  restoreTransactionOnReturnedAccount
+} from "@/lib/api/local/ledger";
 import { investmentsPage, marketPricesFor, type MarketPrices } from "@/lib/api/local/investments";
 import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
@@ -985,11 +988,7 @@ export class LocalApiClient implements ApiClient {
       if (entry.collection === "transactions") {
         const accountId = (row.account as { id?: unknown } | undefined)?.id;
         if (typeof accountId === "string" && accountsBack.has(accountId)) {
-          if (!state.transactions.some((item) => item.id === row.id))
-            state.transactions = [
-              transactionRowSchema.omit({ updatedAt: true }).parse(row) as TransactionRow,
-              ...state.transactions
-            ];
+          restoreTransactionOnReturnedAccount(state, row);
         } else {
           restoreTransaction(state, { transaction: row });
         }
@@ -1021,6 +1020,9 @@ export class LocalApiClient implements ApiClient {
           holder[entry.collection] = [...rows, row];
           if (entry.collection === "accounts" && typeof row.id === "string")
             accountsBack.add(row.id);
+          // Платежи из корзины, сидящие в остатке долга, — вон из него: каждый
+          // снимется с долга сам, когда вернётся (см. releaseTrashedPayments).
+          if (entry.collection === "liabilities") releaseTrashedPayments(state, entry, all);
         }
       }
     };

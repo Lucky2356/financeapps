@@ -472,6 +472,56 @@ export function restoreTransaction(state: LocalState, body: unknown): Transactio
   return row;
 }
 
+/**
+ * Вернуть из корзины операцию, чей счёт возвращается тем же возвратом.
+ *
+ * Счёт приезжает из корзины с остатком, в котором эта операция уже сидит, —
+ * проводить её по счёту второй раз значило бы удвоить деньги. А вот долг она
+ * уменьшает как обычно: платёж из корзины снимается с долга при любом порядке
+ * возврата, и без этого «вернул счёт и платёж разом» оставлял долг таким,
+ * будто платежа нет, а «сначала счёт, потом платёж» — уменьшенным.
+ */
+export function restoreTransactionOnReturnedAccount(state: LocalState, raw: unknown): void {
+  const row = transactionRowSchema.omit({ updatedAt: true }).parse(raw) as TransactionRow;
+  if (state.transactions.some((item) => item.id === row.id)) return;
+  state.transactions = [row, ...state.transactions];
+  applyDebtPayment(state, row, -1);
+}
+
+/**
+ * Долг вернули из корзины — снять с него платежи, которые лежат в корзине, но
+ * сидят в его остатке.
+ *
+ * Остаток долга в корзине — такой, каким он был в миг удаления, вместе со
+ * всеми платежами, жившими в тот миг. Платёж, удалённый ПОСЛЕ долга (или
+ * вместе с ним, одной сверкой), из долга не вычитался: долга уже не было, и
+ * вернуть ему было нечего (см. applyDebtPayment). Возвращённый как есть, такой
+ * долг считал бы платёж, которого в книге нет, а возврат самого платежа снял
+ * бы его второй раз.
+ *
+ * Поэтому долг после возврата не держит ни одного платежа из корзины, а каждый
+ * возвращённый платёж снимается с него обычным порядком — сразу же этим
+ * возвратом или любым следующим. Платёж, удалённый, пока долг жил, уже вернул
+ * долгу свою долю при удалении — его не трогаем.
+ */
+export function releaseTrashedPayments(
+  state: LocalState,
+  liability: { key: string; deletedAt: string },
+  trashed: ReadonlyArray<{ collection: string; row: Record<string, unknown>; deletedAt: string }>
+): void {
+  for (const entry of trashed) {
+    if (entry.collection !== "transactions") continue;
+    if (entry.deletedAt < liability.deletedAt) continue;
+    const parsed = transactionRowSchema.omit({ updatedAt: true }).safeParse(entry.row);
+    if (!parsed.success) continue;
+    const row = parsed.data as TransactionRow;
+    if (row.liabilityId !== liability.key || row.type !== "EXPENSE") continue;
+    // Живой платёж в книге — это не платёж из корзины, он посчитан честно.
+    if (state.transactions.some((item) => item.id === row.id)) continue;
+    applyDebtPayment(state, row, 1);
+  }
+}
+
 export function deleteTransaction(state: LocalState, transactionId: string) {
   const existing = state.transactions.find((item) => item.id === transactionId);
   if (!existing) return;
