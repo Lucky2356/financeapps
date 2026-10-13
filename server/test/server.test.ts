@@ -386,6 +386,170 @@ describe("служба", () => {
     });
   });
 
+  describe("смена пароля", () => {
+    // Пароль меняют на устройстве, а служба помнила то, что ей прислали при
+    // регистрации: прежний пароль продолжал пускать и отдавать шкатулку,
+    // которая им же и открывалась.
+    const NEXT_VAULT = {
+      ...VAULT,
+      password: { salt: "новая-соль", iv: "новый-iv", wrapped: "завёрнутый-новым" }
+    };
+
+    async function login(secret: string) {
+      return call("/auth/login", { method: "POST", body: { login: "петя", secret } });
+    }
+
+    it("прежний пароль перестаёт пускать, новый — пускает и отдаёт новую шкатулку", async () => {
+      const { token } = await signUp("петя", "старый-секрет");
+      const changed = await call("/auth/vault", {
+        method: "PUT",
+        token,
+        body: { vault: NEXT_VAULT, secret: "новый-секрет", currentSecret: "старый-секрет" }
+      });
+      assert.equal(changed.status, 204);
+
+      assert.equal((await login("старый-секрет")).status, 401);
+      const entered = await login("новый-секрет");
+      assert.equal(entered.status, 200);
+      assert.deepEqual((entered.body as { vault: unknown }).vault, NEXT_VAULT);
+      // И соль для вывода секрета — уже от нового замка: иначе второе
+      // устройство вывело бы секрет по старой соли и не вошло бы новым паролем.
+      const params = await call(`/auth/params?login=${encodeURIComponent("петя")}`);
+      assert.equal((params.body as { salt: string }).salt, "новая-соль");
+    });
+
+    it("сброс по коду восстановления: прежнего пароля нет, но замок кода тот же", async () => {
+      const { token } = await signUp("петя", "старый-секрет");
+      const changed = await call("/auth/vault", {
+        method: "PUT",
+        token,
+        body: { vault: NEXT_VAULT, secret: "новый-секрет" }
+      });
+      assert.equal(changed.status, 204);
+      assert.equal((await login("старый-секрет")).status, 401);
+      assert.equal((await login("новый-секрет")).status, 200);
+    });
+
+    it("другие устройства не выпадают: их билеты продолжают работать", async () => {
+      const first = await signUp("петя", "старый-секрет");
+      const second = (await login("старый-секрет")).body as { token: string };
+      await call("/auth/vault", {
+        method: "PUT",
+        token: first.token,
+        body: { vault: NEXT_VAULT, secret: "новый-секрет", currentSecret: "старый-секрет" }
+      });
+      assert.equal((await call("/vault", { token: second.token })).status, 200);
+      assert.equal((await call("/vault", { token: first.token })).status, 200);
+    });
+
+    it("без входа — 401, и ничего не меняется", async () => {
+      await signUp("петя", "старый-секрет");
+      for (const token of [undefined, "vydumannyi-bilet"]) {
+        const answer = await call("/auth/vault", {
+          method: "PUT",
+          token,
+          body: { vault: NEXT_VAULT, secret: "новый-секрет", currentSecret: "старый-секрет" }
+        });
+        assert.equal(answer.status, 401);
+      }
+      assert.equal((await login("старый-секрет")).status, 200);
+    });
+
+    it("неверный прежний пароль или чужой замок кода — 403, и ничего не меняется", async () => {
+      const { token } = await signUp("петя", "старый-секрет");
+      const wrongSecret = await call("/auth/vault", {
+        method: "PUT",
+        token,
+        body: { vault: NEXT_VAULT, secret: "новый-секрет", currentSecret: "не тот" }
+      });
+      assert.equal(wrongSecret.status, 403);
+      assert.equal((wrongSecret.body as { reason: string }).reason, "secret");
+
+      // Одного билета мало: подменить шкатулку целиком (со своим ключом и
+      // своим кодом) можно, только зная прежний пароль.
+      const foreign = await call("/auth/vault", {
+        method: "PUT",
+        token,
+        body: {
+          vault: { ...NEXT_VAULT, recovery: { salt: "чужая", iv: "чужой", wrapped: "чужой" } },
+          secret: "новый-секрет"
+        }
+      });
+      assert.equal(foreign.status, 403);
+      assert.equal((foreign.body as { reason: string }).reason, "recovery");
+
+      assert.equal((await login("старый-секрет")).status, 200);
+      assert.equal((await login("новый-секрет")).status, 401);
+    });
+
+    it("неверное тело — 400, а не 500, и ничего не меняется", async () => {
+      const { token } = await signUp("петя", "старый-секрет");
+      const good = { vault: NEXT_VAULT, secret: "новый-секрет", currentSecret: "старый-секрет" };
+      const bodies: unknown[] = [
+        null,
+        [],
+        "строка",
+        {},
+        { ...good, vault: undefined },
+        { ...good, vault: null },
+        { ...good, vault: [] },
+        { ...good, vault: "шкатулка" },
+        { ...good, vault: { v: 1 } },
+        { ...good, vault: { ...NEXT_VAULT, iterations: "много" } },
+        { ...good, vault: { ...NEXT_VAULT, password: { salt: "с", iv: "", wrapped: "" } } },
+        { ...good, vault: { ...NEXT_VAULT, recovery: null } },
+        { ...good, vault: { ...NEXT_VAULT, pad: "x".repeat(70 * 1024) } },
+        { ...good, secret: undefined },
+        { ...good, secret: "" },
+        { ...good, secret: 42 },
+        { ...good, secret: "x".repeat(10_000) },
+        { ...good, currentSecret: 42 },
+        { ...good, currentSecret: "" },
+        { ...good, currentSecret: "x".repeat(10_000) }
+      ];
+      for (const body of bodies) {
+        const answer = await call("/auth/vault", { method: "PUT", token, body });
+        assert.equal(answer.status, 400, JSON.stringify(body)?.slice(0, 120));
+      }
+      const broken = await fetch(`${base}/auth/vault`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: "{не json"
+      });
+      await broken.text();
+      assert.equal(broken.status, 400);
+      assert.equal((await login("старый-секрет")).status, 200);
+    });
+
+    it("запись без пароля (без ключа на службе) не превращается в запись с паролем", async () => {
+      await restart({ openRegistration: true });
+      const stub = {
+        v: 1,
+        kdf: "PBKDF2-SHA256",
+        iterations: 1,
+        password: { salt: "соль", iv: "", wrapped: "" },
+        recovery: { salt: "", iv: "", wrapped: "" }
+      };
+      await call("/auth/register", {
+        method: "POST",
+        body: { code: "", login: "u-быстрая", vault: stub, secret: "случайный" }
+      });
+      const { token } = (
+        await call("/auth/login", {
+          method: "POST",
+          body: { login: "u-быстрая", secret: "случайный" }
+        })
+      ).body as { token: string };
+      const answer = await call("/auth/vault", {
+        method: "PUT",
+        token,
+        body: { vault: NEXT_VAULT, secret: "новый-секрет", currentSecret: "случайный" }
+      });
+      assert.equal(answer.status, 409);
+      assert.equal((answer.body as { reason: string }).reason, "keyless");
+    });
+  });
+
   describe("ячейки", () => {
     it("без входа не отдаются", async () => {
       assert.equal((await call("/vault/книга")).status, 401);
