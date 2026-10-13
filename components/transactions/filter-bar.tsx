@@ -41,14 +41,14 @@ import { SAVED_FILTERS_KEY, readMine, writeMine } from "@/lib/storage/mine";
 type SavedFilter = { name: string; params: string };
 
 /**
- * The filters of the operations list: one line beside the list's own title.
+ * The filters of the operations list: a title row and a grid of fields under it.
  *
  * They used to hide behind a window — the owner had to open it, change
  * something, and close it again to see the result. Nothing hides now: category,
- * the two ends of the period, account and type are on the line itself, and the
- * gear next to them holds only what is asked for rarely (named periods, amount
- * range, tag, page size, saved filters). Every control writes its parameter the
- * moment it is touched; there is no "apply" anywhere.
+ * the two ends of the period, account and type are in the grid itself, and the
+ * gear on the title row holds only what is asked for rarely (named periods,
+ * amount range, tag, page size, saved filters). Every control writes its
+ * parameter the moment it is touched; there is no "apply" anywhere.
  *
  * The screen opens on the current month rather than on the whole ledger: the
  * question people arrive with is what has happened this month. "За всё время"
@@ -67,7 +67,7 @@ export function TransactionFilterBar({
   categories: CategoryOption[];
   accounts: TransactionsPageData["accounts"];
   defaultLimit: number;
-  /** The list's heading — kept on the same line as the filters that trim it. */
+  /** The heading of the filters card — the gear and "clear" share its row. */
   title?: ReactNode;
 }) {
   const { t } = useI18n();
@@ -114,9 +114,12 @@ export function TransactionFilterBar({
   const accountId = searchParams.get("accountId") || ALL_OPTION;
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        {title ? <div className="mr-auto">{title}</div> : null}
+    <div className="space-y-2">
+      {/* Заголовок и всё, что относится к фильтрам целиком: «сбросить» и
+          шестерёнка с редкими настройками. Шестерёнка стояла одна в своём ряду
+          под полями — ряд высотой в кнопку ради одной кнопки. */}
+      <div className="flex min-h-9 items-center gap-2">
+        {title ? <div className="mr-auto min-w-0">{title}</div> : null}
 
         {/* Resetting was reachable from two places nobody looks: inside the
             gear, and at the tail of the chip list below, after however many
@@ -130,7 +133,7 @@ export function TransactionFilterBar({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-9 gap-1.5 px-2.5 text-muted-foreground"
+            className="h-9 shrink-0 gap-1.5 px-2.5 text-muted-foreground"
             onClick={() => go("")}
           >
             <X className="size-4" />
@@ -138,7 +141,25 @@ export function TransactionFilterBar({
           </Button>
         ) : null}
 
+        <MoreFilters
+          defaultLimit={defaultLimit}
+          paramsString={paramsString}
+          count={count}
+          onGo={go}
+          onSetParam={setParam}
+        />
+      </div>
+
+      {/* Поля — сеткой, а не строкой с переносом. В строке каждое поле было
+          шириной своего текста, ряды кончались где придётся, и правый край
+          выходил рваным. В сетке каждый ряд — во всю ширину карточки:
+          на телефоне категория одна, даты — две равные колонки с тире между
+          ними, счёт и тип — две равные колонки; на широком экране всё это
+          встаёт в один ряд. Колонки — minmax(0, …): иначе поле упёрлось бы в
+          ширину своего текста и вылезло за край (сторож — e2e/responsive). */}
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
         <CategoryFilter
+          className="col-span-2 lg:col-span-1"
           categories={categories}
           selected={selectedCategories}
           onChange={(ids) => setParam("categoryId", ids.join(","))}
@@ -146,35 +167,27 @@ export function TransactionFilterBar({
 
         {/* The period as the two dates it actually is. A named period fills
             both in (the gear holds the names); typing over one of them keeps
-            the other. */}
-        {/* Две даты по 9.5rem плюс тире — 326 px, больше, чем остаётся в ряду
-            и на телефоне, и в окне приложения. Переносится тут только внешний
-            ряд: сама пара не переносится НИКОГДА (flex без wrap). Перенос
-            внутри пары разрывал её пополам — «от» с тире на одной строке, «до»
-            на следующей, и ширины у полей выходили разные, потому что вторая
-            строка тянула единственное поле во всю ширину.
-            Вместо переноса пара ужимается целиком: basis задаёт желаемую
-            ширину, min-w-0 разрешает стать уже (без него поле упёрлось бы в
-            свой контент и вылезло за правый край — ровно это и поймал сторож
-            e2e/responsive.spec.ts). Сжимаются оба поля поровну: одинаковый
-            basis при одинаковом shrink. */}
-        <div className="flex min-w-0 items-center gap-1">
+            the other. Пара не разрывается никогда: она — одна клетка сетки со
+            своими тремя колонками, и поля в ней всегда равной ширины. */}
+        <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 lg:col-span-1">
           <Input
             type="date"
             aria-label={t("tx.from")}
             value={searchParams.get("from") ?? ""}
             max={searchParams.get("to") || undefined}
             onChange={(event) => setParam("from", event.target.value)}
-            className="h-9 w-auto min-w-0 flex-1 basis-[9.5rem] px-2"
+            className="h-9 min-w-0 px-2"
           />
-          <span className="shrink-0 text-muted-foreground">—</span>
+          <span className="text-muted-foreground" aria-hidden>
+            —
+          </span>
           <Input
             type="date"
             aria-label={t("tx.to")}
             value={searchParams.get("to") ?? ""}
             min={searchParams.get("from") || undefined}
             onChange={(event) => setParam("to", event.target.value)}
-            className="h-9 w-auto min-w-0 flex-1 basis-[9.5rem] px-2"
+            className="h-9 min-w-0 px-2"
           />
         </div>
 
@@ -182,7 +195,7 @@ export function TransactionFilterBar({
           value={accountId}
           onValueChange={(value) => setParam("accountId", value === ALL_OPTION ? "" : value)}
         >
-          <SelectTrigger className="h-9 w-auto min-w-[8rem]" aria-label={t("tx.account")}>
+          <SelectTrigger className="h-9 w-full min-w-0" aria-label={t("tx.account")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -199,7 +212,7 @@ export function TransactionFilterBar({
           value={type}
           onValueChange={(value) => setParam("type", value === "ALL" ? "" : value)}
         >
-          <SelectTrigger className="h-9 w-auto min-w-[7rem]" aria-label={t("tx.type")}>
+          <SelectTrigger className="h-9 w-full min-w-0" aria-label={t("tx.type")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -211,14 +224,6 @@ export function TransactionFilterBar({
             <SelectItem value="TRANSFER">{t("tx.type.transfer")}</SelectItem>
           </SelectContent>
         </Select>
-
-        <MoreFilters
-          defaultLimit={defaultLimit}
-          paramsString={paramsString}
-          count={count}
-          onGo={go}
-          onSetParam={setParam}
-        />
       </div>
 
       <div className="relative">
@@ -234,7 +239,10 @@ export function TransactionFilterBar({
       </div>
 
       {chips.length > 0 ? (
-        <div data-testid="filter-chips" className="flex flex-wrap items-center gap-1.5">
+        // Крестик чипа на телефоне — 44 px (tap-target), и чип раздувался в
+        // таблетку той же высоты. Отрицательные поля по вертикали оставляют
+        // зону нажатия прежней, а сам чип — в строку текста.
+        <div data-testid="filter-chips" className="flex flex-wrap items-center gap-1.5 py-0.5">
           {chips.map((chip) => (
             <span
               key={chip.id}
@@ -245,7 +253,7 @@ export function TransactionFilterBar({
                 type="button"
                 aria-label={`${t("tx.filters.clearOne")}: ${chip.label}`}
                 onClick={() => go(chip.next)}
-                className="tap-target inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-destructive"
+                className="tap-target -my-2.5 inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-destructive"
               >
                 <X className="size-3.5" />
               </button>
@@ -446,7 +454,7 @@ function MoreFilters({
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={t("tx.filters")}
-        className={cn(TRIGGER, "px-2.5")}
+        className={cn(TRIGGER, "min-w-9 justify-center px-2.5")}
       >
         <SlidersHorizontal className="size-4" />
         {count > 0 ? (
@@ -600,11 +608,13 @@ function MoreFilters({
 function CategoryFilter({
   categories,
   selected,
-  onChange
+  onChange,
+  className
 }: {
   categories: CategoryOption[];
   selected: string[];
   onChange: (ids: string[]) => void;
+  className?: string;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -639,13 +649,13 @@ function CategoryFilter({
       : (only?.label ?? t("tx.categoriesSelected", { count: selected.length }));
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={cn("relative min-w-0", className)} ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={t("common.category")}
-        className={cn(TRIGGER, "max-w-[12rem]")}
+        className={cn(TRIGGER, "w-full justify-between")}
       >
         <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
           {label}
