@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/lib/i18n/context";
 import { biometricAvailable } from "@/lib/vault/biometric";
-import { accountService } from "@/lib/vault/runtime";
+import { accountService, resetVaultPassword } from "@/lib/vault/runtime";
 
 export function UnlockScreen({ onDone }: { onDone: () => void }) {
   const { t } = useI18n();
@@ -80,7 +80,9 @@ export function UnlockScreen({ onDone }: { onDone: () => void }) {
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            void attempt(() => accountService.resetPassword(code, nextPassword));
+            // Новый пароль уедет и на службу синхронизации — когда
+            // синхронизация поднимется на отпертой книге (resumeSync).
+            void attempt(() => resetVaultPassword(code, nextPassword));
           }}
         >
           <Head icon={<LifeBuoy className="size-5" />} title={t("vault.recover.title")} />

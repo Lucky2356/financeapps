@@ -39,7 +39,55 @@ export type ServerLink = {
    * если билет когда-нибудь пропадёт. У записи с паролем его нет.
    */
   secret?: string;
+  /**
+   * Смена пароля, ещё не доехавшая до службы (см. sendPendingVault).
+   *
+   * Лежит здесь, в записи о службе, и это место выбрано не по удобству. Запись
+   * эта остаётся на устройстве (LOCAL_ONLY_KEYS) и не шифруется — значит
+   * читается и до того, как книгу отперли. А пропадает вместе со связью со
+   * службой: отправлять новый пароль туда, откуда устройство отключили, некуда
+   * и незачем.
+   */
+  pendingVault?: PendingVault;
 };
+
+/**
+ * Что отправить службе после смены пароля.
+ *
+ * Секреты здесь — секреты ВХОДА, а не пароль: из них не вывести ключ книги
+ * (см. lib/sync/vault-crypto). Лежат они рядом с билетом, который и так
+ * открывает службу этому устройству, и стираются, как только служба приняла.
+ * Новый секрет вывести заново нельзя — пароля после смены у устройства нет,
+ * — поэтому он и запоминается.
+ */
+export type PendingVault = {
+  vault: Vault;
+  /** Секрет входа от нового пароля. */
+  secret: string;
+  /**
+   * Секрет входа, который служба знает СЕЙЧАС, — доказательство, что меняет
+   * хозяин. Нет у сброса по коду восстановления: прежнего пароля там не знают,
+   * и служба сверяет вместо него замок кода (см. replaceVault на службе).
+   */
+  currentSecret?: string;
+};
+
+/** Чем кончилась попытка отправить смену пароля. */
+export type VaultPush =
+  /** Отправлять нечего. */
+  | { kind: "idle" }
+  /** Служба приняла: прежний пароль там больше не действует. */
+  | { kind: "sent" }
+  /** Записи без пароля на службе менять нечего: входа паролем у неё нет. */
+  | { kind: "skipped" }
+  /** Связи нет. Отправка ждёт и уйдёт при следующем запуске или сверке. */
+  | { kind: "offline" }
+  /** Служба старая и ручки не знает. Отправка ждёт её обновления. */
+  | { kind: "outdated" }
+  /** Отказ, который может пройти (служба занята, связь потеряна). Ждёт. */
+  | { kind: "failed"; message: string }
+  /** Отказ, повторять который бесполезно. Отправка забыта. */
+  | { kind: "refused"; message: string };
 
 /** Что отдаёт служба новому устройству по коду из картинки. */
 export type JoinAnswer = { base: string; sealed: string };
@@ -513,6 +561,122 @@ export class ServerAccount {
       token: link.token
     });
     if (status !== 204) refuseLinked(status, data, "Не удалось выкинуть устройство.");
+  }
+
+  /**
+   * Нужно ли рассказывать службе о смене пароля на этом устройстве.
+   *
+   * Нет, если связи со службой нет вовсе, — и нет у записи, заведённой одним
+   * нажатием (у неё здесь лежит случайный секрет): на службе у такой записи
+   * пустая обёртка без ключа, и прежнему паролю там нечего «продолжать
+   * открывать».
+   */
+  async wantsVaultChange(): Promise<boolean> {
+    const link = await this.link();
+    return !!link && !link.secret;
+  }
+
+  /**
+   * Запомнить смену пароля для отправки — ДО первой попытки, а не после
+   * неудачи. Оборвись приложение посреди запроса, на устройстве должно
+   * остаться «надо отправить», а не ничего.
+   *
+   * Две смены подряд без связи — уезжает последняя, но доказательство берётся
+   * от ПЕРВОЙ: служба всё ещё знает тот секрет, что был до неё, а
+   * промежуточного пароля не видела никогда.
+   */
+  async queueVaultChange(change: PendingVault): Promise<void> {
+    const link = await this.link();
+    if (!link || link.secret) return;
+    const proof = link.pendingVault ? link.pendingVault.currentSecret : change.currentSecret;
+    await this.storage.setItem<ServerLink>(SERVER_KEY, {
+      ...link,
+      pendingVault: {
+        vault: change.vault,
+        secret: change.secret,
+        ...(proof ? { currentSecret: proof } : {})
+      }
+    });
+  }
+
+  /** Есть ли смена пароля, ждущая отправки. */
+  async hasPendingVault(): Promise<boolean> {
+    return !!(await this.link())?.pendingVault;
+  }
+
+  /**
+   * Отправить ждущую смену пароля (PUT /auth/vault). Ничего не бросает: исход
+   * возвращается словом, а что сказать человеку — решает экран.
+   */
+  async sendPendingVault(): Promise<VaultPush> {
+    const link = await this.link();
+    const pending = link?.pendingVault;
+    if (!link || !pending) return { kind: "idle" };
+
+    let answer: { status: number; data: Record<string, unknown> };
+    try {
+      answer = await ask(link.base, "/auth/vault", {
+        method: "PUT",
+        token: link.token,
+        body: pending
+      });
+      // Прежний секрет не подошёл — второе доказательство, замок кода
+      // восстановления. Он у шкатулки один на всю жизнь, а вот секрет на
+      // службе мог разойтись с паролем этого устройства: пароль меняли с
+      // другого устройства или здесь, но до того, как смена стала доезжать до
+      // службы. Без повтора прежний пароль в таком случае остался бы на службе
+      // навсегда.
+      if (answer.status === 403 && answer.data.reason === "secret" && pending.currentSecret) {
+        answer = await ask(link.base, "/auth/vault", {
+          method: "PUT",
+          token: link.token,
+          body: { vault: pending.vault, secret: pending.secret }
+        });
+      }
+    } catch (cause) {
+      // Не дошли или ответил посредник: 0 и 5xx — то же «попробуйте позже».
+      const status = cause instanceof ServerRefused ? cause.status : 0;
+      if (status === 0 || status >= 500) return { kind: "offline" };
+      return { kind: "failed", message: (cause as Error).message };
+    }
+
+    const { status, data } = answer;
+    const said = typeof data.error === "string" ? data.error : "";
+    if (status === 204 || status === 200) {
+      await this.dropPending(pending);
+      return { kind: "sent" };
+    }
+    if (status >= 500) return { kind: "offline" };
+    // Служба до этой ручки отвечает «нет такой ручки». Отправка ждёт: обновят
+    // службу — уйдёт сама, а прежний пароль до тех пор там действует, и
+    // человеку это надо сказать.
+    if (status === 404 || status === 405) return { kind: "outdated" };
+    if (status === 409 && data.reason === "keyless") {
+      await this.dropPending(pending);
+      return { kind: "skipped" };
+    }
+    // Неверное тело или неверное доказательство — повтор дал бы то же самое.
+    // Чаще всего это пароль, уже сменённый с другого устройства: тогда на
+    // службе действует ТОТ, а прежний — уже нет, и цель достигнута и так.
+    if (status === 400 || status === 403) {
+      await this.dropPending(pending);
+      return { kind: "refused", message: said || "Служба не приняла новый пароль." };
+    }
+    if (status === 401) return { kind: "failed", message: LOST_LINK };
+    return { kind: "failed", message: said || "Служба не приняла новый пароль." };
+  }
+
+  /**
+   * Забыть отправленное — только если за время запроса не встала новая смена.
+   * Иначе удачная отправка первой стёрла бы вторую, ещё не отправленную.
+   */
+  private async dropPending(sent: PendingVault): Promise<void> {
+    const link = await this.link();
+    if (!link?.pendingVault) return;
+    if (JSON.stringify(link.pendingVault) !== JSON.stringify(sent)) return;
+    const rest: ServerLink = { ...link };
+    delete rest.pendingVault;
+    await this.storage.setItem<ServerLink>(SERVER_KEY, rest);
   }
 
   /** Запись о службе — или внятный отказ вместо «cannot read property of null». */
