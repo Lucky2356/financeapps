@@ -1,13 +1,14 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Android permissions: the camera for reading the pairing QR, the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation. The opener scope is pinned to this project's releases: granting the command alone opens nothing — the plugin also checks the URL against this list, and a bare `opener:allow-open-url` blocked the update download. The http scope ends with https://* and https://*:* — the two spellings the capability schema documents for \"any HTTPS origin\". Both are needed: https://* alone covers port 443 only, so a server behind a non-standard port would be refused because the sync server's address is typed by its owner at runtime and cannot be pinned at build time. This is deliberately granted to the PLUGIN, not to the page: the webview's own connect-src stays pinned, so an injected script cannot reach out through fetch. Sync requests go through lib/sync/shell-fetch.ts, which routes them via Rust for exactly this reason — the page CSP would otherwise block every request to a self-hosted server, and it would look like \"no connection\".",
+  "description": "Android permissions: the camera for reading the pairing QR, the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation. An imported file is read as raw bytes (fs:allow-read-file) so a bank statement in Windows-1251 can be decoded on our side; fs:allow-read-text-file stays for the sync folder, which is always UTF-8. Both rely on the same fs:scope below — the picked file itself is added to the scope by the dialog plugin. The opener scope is pinned to this project's releases: granting the command alone opens nothing — the plugin also checks the URL against this list, and a bare `opener:allow-open-url` blocked the update download. The http scope ends with https://* and https://*:* — the two spellings the capability schema documents for \"any HTTPS origin\". Both are needed: https://* alone covers port 443 only, so a server behind a non-standard port would be refused because the sync server's address is typed by its owner at runtime and cannot be pinned at build time. This is deliberately granted to the PLUGIN, not to the page: the webview's own connect-src stays pinned, so an injected script cannot reach out through fetch. Sync requests go through lib/sync/shell-fetch.ts, which routes them via Rust for exactly this reason — the page CSP would otherwise block every request to a self-hosted server, and it would look like \"no connection\".",
   "platforms": ["android", "iOS"],
   "windows": ["main"],
   "permissions": [
     "core:default",
     "dialog:allow-open",
     "dialog:allow-save",
+    "fs:allow-read-file",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-read-dir",
