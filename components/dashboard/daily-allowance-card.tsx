@@ -25,6 +25,8 @@ const EMPTY: Allowance = {
   daysLeft: 1,
   budget: 0,
   incomeSource: "actual",
+  carryOver: 0,
+  previousNet: 0,
   status: "ok",
   spentToday: 0,
   spentYesterday: 0,
@@ -45,7 +47,8 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
   const [open, setOpen] = useState(false);
 
   // Ни доходов, ни трат — считать нечего; пустая карточка с нулём только пугает.
-  if (!(data.income > 0) && !(data.spentToday > 0) && data.budget === 0) return null;
+  if (!(data.income > 0) && !(data.carryOver > 0) && !(data.spentToday > 0) && data.budget === 0)
+    return null;
 
   const money = (value: number) => formatCurrency(value, currency);
   const minus = (value: number) => (value > 0 ? `−${money(value)}` : money(0));
@@ -110,6 +113,12 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
               {data.incomeSource === "average" ? t("allow.incomeAverage") : t("allow.income")}
             </dt>
             <dd className="text-right">{money(data.income)}</dd>
+            {/* Остаток с прошлого — своей строкой: без неё «осталось на месяц»
+                не сходилось бы на глаз с доходами и тратами выше. */}
+            <dt className="text-muted-foreground">{t("allow.carry")}</dt>
+            <dd className="text-right" data-testid="allowance-carry">
+              {data.carryOver > 0 ? `+${money(data.carryOver)}` : money(0)}
+            </dd>
             <dt className="text-muted-foreground">{t("allow.spent")}</dt>
             <dd className="text-right">{minus(data.spentBeforeToday)}</dd>
             <dt className="text-muted-foreground">{t("allow.upcoming")}</dt>
@@ -121,6 +130,9 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
           </dl>
           {data.incomeSource === "average" ? (
             <p className="text-xs text-muted-foreground">{t("allow.byAverage")}</p>
+          ) : null}
+          {data.previousNet < 0 ? (
+            <p className="text-xs text-muted-foreground">{t("allow.carryNone")}</p>
           ) : null}
         </CardContent>
       </Expand>
