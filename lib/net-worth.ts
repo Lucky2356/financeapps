@@ -7,6 +7,8 @@
 // and still populated retroactively.
 
 import type { NetWorthBreakdown, NetWorthPoint } from "@/types/finance";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/catalog";
+import { intlLocale } from "@/lib/i18n/display-locale";
 import { isoDay, snapshotAsOf, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import { roundMoney } from "@/lib/utils";
 
@@ -61,6 +63,8 @@ export function buildNetWorthTrend(params: {
   snapshots?: NetWorthSnapshot[];
   now?: Date;
   monthsBack?: number;
+  /** Язык подписей месяцев на графике. */
+  locale?: Locale;
 }): NetWorthPoint[] {
   const now = params.now ?? new Date();
   const monthsBack = params.monthsBack ?? 6;
@@ -99,7 +103,9 @@ export function buildNetWorthTrend(params: {
       0
     );
     points.push({
-      month: monthEndDate.toLocaleDateString("ru", { month: "short" }),
+      month: monthEndDate.toLocaleDateString(intlLocale(params.locale ?? DEFAULT_LOCALE), {
+        month: "short"
+      }),
       value: snapshot
         ? snapshot.value
         : Math.round((params.currentNetWorth - flowAfter) * 100) / 100

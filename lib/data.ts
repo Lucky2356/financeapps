@@ -1,5 +1,5 @@
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
-import { ru } from "date-fns/locale";
+import { enGB, ru } from "date-fns/locale";
 
 import { ACCOUNT_TYPE_LABELS, RISK_PROFILE_LABELS } from "@/lib/constants";
 import { buildMonthlyCashflow, currentMonthRange } from "@/lib/data/derive";
@@ -370,7 +370,7 @@ function buildAnalyticsFromTransactions(
     const savings = income - expense;
     const savingsRate = income > 0 ? percent(savings, income) : 0;
     return {
-      month: format(month, "LLL", { locale: ru }),
+      month: format(month, "LLL", { locale: locale === "en" ? enGB : ru }),
       income,
       expense,
       savings,
