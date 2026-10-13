@@ -36,8 +36,15 @@ export async function LayoutShell({ children }: { children: ReactNode }) {
   // открывается шириной 1280, и с полосой прокрутки WebView2 это innerWidth
   // 1265 — на пятнадцать пикселей меньше. Двухколоночные экраны, заведённые от
   // xl:, в штатном окне не включались никогда. Две колонки — от lg:.
+  // overflow-x-clip — последняя страховка от сдвига вбок. Та, что стоит на
+  // body (globals.css), на телефоне не спасает: overflow у body уходит окну, а
+  // мобильный Chrome и WebView всё равно растягивают окно по самому широкому
+  // содержимому — страница становится шире экрана, и её можно таскать пальцем.
+  // Обрезка на обычном блоке до окна не доходит: лишнее просто не рисуется.
+  // Именно clip, а не hidden: hidden сделал бы блок прокручиваемым, и sticky
+  // (шапка, боковая панель, заголовки дней) прилипали бы к нему, а не к окну.
   return (
-    <div className="min-h-screen bg-muted/30 md:flex">
+    <div className="min-h-screen overflow-x-clip bg-muted/30 md:flex">
       {/* Skip navigation for keyboard users */}
       <SkipLink />
       <AppSidebar />
