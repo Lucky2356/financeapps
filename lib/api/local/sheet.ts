@@ -16,6 +16,7 @@ import {
   type SheetColumnKind,
   type SheetTarget
 } from "@/lib/sheet/model";
+import { SHEET_TEMPLATES, sheetTemplate, type SheetTemplate } from "@/lib/sheet/templates";
 import type { Stamped } from "@/lib/sync/row-stamps";
 
 export type SheetCellRow = SheetCell & { id: string };
@@ -114,6 +115,7 @@ type Body = Record<string, unknown>;
 
 /** Что человек выбрал в мастере создания таблицы. */
 type Wizard = {
+  template: SheetTemplate;
   months: number;
   opening: number | null;
   income: number | null;
@@ -128,48 +130,54 @@ function optionalAmount(value: unknown): number | null {
   return Number.isFinite(amount) ? amount : null;
 }
 
-/** Есть ли в запросе выбор мастера. Без него `start` работает как раньше. */
+/**
+ * Есть ли в запросе выбор мастера. Без него `start` работает как раньше.
+ * Шаблон без списка статей берёт статьи шаблона как есть — так его можно
+ * завести и одним запросом, без мастера.
+ */
 function readWizard(body: Body): Wizard | null {
-  if (!Array.isArray(body.articles)) return null;
-  const months = Math.round(Number(body.months) || 12);
+  const template = sheetTemplate(body.template);
+  if (!Array.isArray(body.articles) && !template) return null;
+  const raw: Body[] = Array.isArray(body.articles)
+    ? (body.articles as Body[])
+    : (template?.articles ?? []).map((name) => ({ name }));
+  const months = Math.round(Number(body.months) || template?.months || 12);
   return {
+    template: template ?? SHEET_TEMPLATES.categories,
     months: Math.max(1, Math.min(60, months)),
     opening: optionalAmount(body.opening),
     income: optionalAmount(body.income),
-    savings: body.savings !== false,
+    savings:
+      body.savings === undefined ? (template?.savingsByDefault ?? true) : body.savings !== false,
     savingsOpening: optionalAmount(body.savingsOpening),
-    articles: (body.articles as Body[])
+    articles: raw
       .slice(0, 40)
-      .map((raw) => ({
-        name: String(raw.name ?? "")
+      .map((article) => ({
+        name: String(article.name ?? "")
           .trim()
           .slice(0, 80),
-        categoryId: raw.categoryId ? String(raw.categoryId) : null,
-        monthly: optionalAmount(raw.monthly)
+        categoryId: article.categoryId ? String(article.categoryId) : null,
+        monthly: optionalAmount(article.monthly)
       }))
       .filter((article) => article.name)
   };
 }
 
-/** Столбцы мастера: Остаток, Доходы, выбранные статьи, а в сбережениях — подушка и перевод. */
+/**
+ * Столбцы мастера: начало шаблона (Остаток, Доходы), выбранные статьи, конец
+ * шаблона (заметка), а в сбережениях — подушка и перевод.
+ */
 function wizardColumns(wizard: Wizard, makeId: () => string): SheetColumn[] {
-  const columns: SheetColumn[] = [
-    { id: makeId(), name: "Остаток", kind: "opening", order: 0 },
-    { id: makeId(), name: "Доходы", kind: "income", order: 1 }
-  ];
+  const { template } = wizard;
+  const columns: SheetColumn[] = [];
+  const push = (column: Omit<SheetColumn, "id" | "order">, order: number) =>
+    columns.push({ id: makeId(), ...column, order });
+  template.lead.forEach((column, index) => push(column, index));
   wizard.articles.forEach((article, index) =>
-    columns.push({
-      id: makeId(),
-      name: article.name,
-      kind: "expense",
-      categoryId: article.categoryId,
-      order: 2 + index
-    })
+    push({ name: article.name, kind: "expense", categoryId: article.categoryId }, 100 + index)
   );
-  if (wizard.savings) {
-    columns.push({ id: makeId(), name: "Подушка на начало", kind: "savingsOpening", order: 1000 });
-    columns.push({ id: makeId(), name: "В сбережения", kind: "toSavings", order: 1001 });
-  }
+  template.tail.forEach((column, index) => push(column, 500 + index));
+  if (wizard.savings) template.savings.forEach((column, index) => push(column, 1000 + index));
   return columns;
 }
 
