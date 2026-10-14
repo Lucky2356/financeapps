@@ -4,7 +4,9 @@
 // каталоге: их много, и живут они только здесь.
 
 import { useI18n } from "@/lib/i18n/context";
+import { countLabel, type PluralForms } from "@/lib/i18n/plural";
 import type { SheetColumnKind } from "@/lib/sheet/model";
+import type { SheetTemplateId } from "@/lib/sheet/templates";
 
 const RU = {
   main: "Основные",
@@ -63,30 +65,33 @@ const RU = {
   sumOpening: "На начало",
   sumIncome: "Доходы",
   sumExpense: "Расходы",
-  sumTotal: "Останется",
+  sumTotal: "Итог",
+  totalHint:
+    "Итог месяца — сколько останется на конец месяца: Остаток + Доходы − Расходы − В сбережения. Переходит в Остаток следующего месяца.",
   sumSavings: "В сбережениях",
   shortfall: "В {month} денег не хватит: итог {amount}. Уменьшите расходы или добавьте доход.",
-  runningOut: "Таблица кончается через {count} мес. — добавьте ещё месяцев.",
+  runningOut: "Таблица кончается через {months} — добавьте ещё месяцев.",
+  runningOutNow: "Таблица кончается в этом месяце — добавьте ещё месяцев.",
   // Месяцы и заполнение
   addMonths: "Месяцы",
   addOne: "+1 месяц вперёд",
   addThree: "+3 месяца вперёд",
   addYear: "+12 месяцев вперёд",
-  monthsAdded: "Добавлено месяцев: {count}.",
+  monthsAdded: "Добавлено: {months}.",
   today: "К текущему месяцу",
   fillFromLedger: "Заполнить по учёту",
   fillFromLedgerHint:
     "В прошедшие месяцы подставится то, что записано в учёте. Только в пустые клетки статей, у которых есть категория.",
-  fillFromLedgerDone: "Подставлено из учёта: {count}.",
+  fillFromLedgerDone: "Подставлено из учёта: {cells}.",
   fillFromLedgerNothing:
     "Подставлять нечего: у статей нет категорий или в учёте за эти месяцы пусто.",
   monthActions: "Что сделать с месяцем",
   monthOperations: "Операции за месяц",
   copyFromPrev: "Скопировать числа из прошлого месяца",
-  copied: "Скопировано: {count}.",
+  copied: "Скопировано: {cells}.",
   copyNothing: "В прошлом месяце нечего копировать.",
   clearMonth: "Очистить числа месяца",
-  cleared: "Очищено: {count}.",
+  cleared: "Очищено: {cells}.",
   density: "Размер",
   densityComfort: "Крупно",
   densityCompact: "Компактно",
@@ -98,7 +103,8 @@ const RU = {
     "Итог = Остаток + Доходы − Расходы − В сбережения. Он переходит в Остаток следующего месяца.",
     "Вписывайте число или формулу: 20000+1500, =СУММ(1000;2000), =45000*13%.",
     "Нажмите на название статьи с категорией — откроются её операции в учёте.",
-    "Внизу — сумма и среднее по каждой статье."
+    "Внизу — сумма и среднее по каждой статье.",
+    "Расход с жёлтым уголком — выше обычного: в 1,3 раза больше медианы прошлых месяцев этой статьи (нужно хотя бы три месяца)."
   ],
   helpLegend: "Обозначения",
   legendAuto: "посчитано само",
@@ -115,7 +121,15 @@ const RU = {
   wizFromAgo6: "Полгода назад",
   wizFromAgo12: "Год назад",
   wizMonths: "Сколько месяцев",
-  wizMonthsCount: "{count} мес.",
+  wizTemplate: "Шаблон",
+  wizTemplates: {
+    categories: { name: "Мои категории", text: "Статьи — ваши категории из учёта" },
+    family: { name: "Семейный бюджет", text: "Продукты, жильё, дети, здоровье" },
+    renovation: { name: "Ремонт", text: "Материалы, мастера, мебель, техника" },
+    vacation: { name: "Отпуск", text: "Билеты, жильё, питание, экскурсии" },
+    blank: { name: "С нуля", text: "Только остаток и доходы — статьи добавите сами" }
+  } satisfies Record<SheetTemplateId, { name: string; text: string }>,
+  wizBlankHint: "Статьи добавите потом кнопкой «Статья» над таблицей.",
   wizOpening: "Сколько денег сейчас",
   wizOpeningHint: "Всё, что на картах и наличными, — с этого начинается таблица.",
   wizIncome: "Доход в месяц",
@@ -131,13 +145,13 @@ const RU = {
   wizHistory: "Подставить прошлые месяцы из учёта",
   wizHistoryHint: "Для месяцев до нынешнего возьмём то, что записано в приложении.",
   wizCreate: "Создать таблицу",
-  wizCreated: "Таблица готова: {months} мес., статей: {count}.",
+  wizCreated: "Таблица готова: {months}, {articles}.",
   // Режим «По месяцам» на телефоне
   viewTable: "Таблица",
   viewMonths: "По месяцам",
   monthPrev: "Прошлый месяц",
   monthNext: "Следующий месяц",
-  monthTotalRow: "Останется",
+  monthTotalRow: "Итог",
   monthEmptyCell: "не заполнено",
   monthEditHint: "Нажмите на статью, чтобы вписать сумму.",
   kindHints: {
@@ -184,7 +198,14 @@ const RU = {
   input: "Число или формула",
   inputHint: "Можно как в Excel: 20000+1500, =СУММ(1000;2000), =45000*13%",
   saved: "Сохранено.",
-  pasted: "Вставлено: {count}.",
+  pasted: "Вставлено: {cells}.",
+  // Подсветка «выше обычного» и график итогов
+  aboveUsual: "Выше обычного на {percent}% · обычно {usual}",
+  legendAbove: "выше обычного",
+  chartTitle: "Итог по месяцам",
+  chartAria: "Итог каждого месяца: столбик вниз — денег не хватает",
+  chartShow: "Показать график итогов",
+  chartHide: "Скрыть график итогов",
   kinds: {
     opening: "Остаток на начало",
     income: "Доход",
@@ -209,15 +230,15 @@ const RU = {
   importTotalCol: "Итог — только сверить",
   importSkip: "Не переносить",
   importCreate: "Создать «{name}»",
-  importFound: "Нашлось: {months} мес. — с {from} по {to}, столбцов: {columns}.",
-  importTotalsOk: "Итоги сошлись с Excel во всех {count} мес. — столбцы поняты правильно.",
+  importFound: "Нашлось {months} — с {from} по {to}, {columns}.",
+  importTotalsOk: "Итоги сошлись с Excel во всех {months} — столбцы поняты правильно.",
   importTotalsBad:
-    "Итоги не сошлись в {count} мес. (например, {month}: в Excel {file}, у нас {ours}). Проверьте, чем считаются столбцы.",
+    "Итоги не сошлись в {months} (например, {month}: в Excel {file}, у нас {ours}). Проверьте, чем считаются столбцы.",
   importMarkers: "Над таблицей: {items}",
   importReplace:
     "Нынешняя таблица заменится этой. Передумаете — «Отменить перенос» вернёт её как была.",
   importGo: "Перенести",
-  imported: "Таблица перенесена: {months} мес.",
+  imported: "Таблица перенесена: {months}.",
   importBadFile: "Не получилось прочитать файл: {error}"
 };
 
@@ -278,29 +299,32 @@ const EN: Text = {
   sumOpening: "At start",
   sumIncome: "Income",
   sumExpense: "Spending",
-  sumTotal: "Left over",
+  sumTotal: "Total",
+  totalHint:
+    "Month total — what is left at the end of the month: Opening + Income − Spending − To savings. It becomes next month's opening balance.",
   sumSavings: "In savings",
   shortfall: "In {month} the money runs out: total {amount}. Cut spending or add income.",
-  runningOut: "The sheet ends in {count} mo. — add more months.",
+  runningOut: "The sheet ends in {months} — add more months.",
+  runningOutNow: "The sheet ends this month — add more months.",
   addMonths: "Months",
   addOne: "+1 month ahead",
   addThree: "+3 months ahead",
   addYear: "+12 months ahead",
-  monthsAdded: "Months added: {count}.",
+  monthsAdded: "Added: {months}.",
   today: "Go to current month",
   fillFromLedger: "Fill from ledger",
   fillFromLedgerHint:
     "Past months get what the ledger has recorded. Only empty cells of items that have a category.",
-  fillFromLedgerDone: "Filled from ledger: {count}.",
+  fillFromLedgerDone: "Filled from ledger: {cells}.",
   fillFromLedgerNothing:
     "Nothing to fill: items have no category or the ledger is empty for those months.",
   monthActions: "What to do with the month",
   monthOperations: "Operations for the month",
   copyFromPrev: "Copy numbers from last month",
-  copied: "Copied: {count}.",
+  copied: "Copied: {cells}.",
   copyNothing: "Nothing to copy from last month.",
   clearMonth: "Clear the month's numbers",
-  cleared: "Cleared: {count}.",
+  cleared: "Cleared: {cells}.",
   density: "Size",
   densityComfort: "Large",
   densityCompact: "Compact",
@@ -311,7 +335,8 @@ const EN: Text = {
     "Total = Opening + Income − Spending − To savings. It becomes next month's opening balance.",
     "Type a number or a formula: 20000+1500, =SUM(1000;2000), =45000*13%.",
     "Click an item name that has a category to see its operations in the ledger.",
-    "The bottom rows show the sum and average of each item."
+    "The bottom rows show the sum and average of each item.",
+    "Spending with an amber corner is above usual: 1.3× the median of that item's previous months (needs at least three)."
   ],
   helpLegend: "Legend",
   legendAuto: "calculated",
@@ -327,7 +352,15 @@ const EN: Text = {
   wizFromAgo6: "Half a year ago",
   wizFromAgo12: "A year ago",
   wizMonths: "How many months",
-  wizMonthsCount: "{count} mo.",
+  wizTemplate: "Template",
+  wizTemplates: {
+    categories: { name: "My categories", text: "Items are your ledger categories" },
+    family: { name: "Family budget", text: "Groceries, housing, kids, health" },
+    renovation: { name: "Renovation", text: "Materials, labour, furniture, appliances" },
+    vacation: { name: "Vacation", text: "Tickets, stay, food, tours" },
+    blank: { name: "From scratch", text: "Just opening and income — add items yourself" }
+  },
+  wizBlankHint: "Add items later with the “Item” button above the sheet.",
   wizOpening: "Money you have now",
   wizOpeningHint: "Everything on cards and in cash — the sheet starts from it.",
   wizIncome: "Monthly income",
@@ -342,12 +375,12 @@ const EN: Text = {
   wizHistory: "Fill past months from the ledger",
   wizHistoryHint: "For months before the current one we use what is recorded in the app.",
   wizCreate: "Create sheet",
-  wizCreated: "Sheet ready: {months} months, items: {count}.",
+  wizCreated: "Sheet ready: {months}, {articles}.",
   viewTable: "Table",
   viewMonths: "By month",
   monthPrev: "Previous month",
   monthNext: "Next month",
-  monthTotalRow: "Left over",
+  monthTotalRow: "Total",
   monthEmptyCell: "not filled",
   monthEditHint: "Tap an item to enter an amount.",
   kindHints: {
@@ -390,7 +423,13 @@ const EN: Text = {
   input: "Number or formula",
   inputHint: "Excel style works: 20000+1500, =SUM(1000;2000), =45000*13%",
   saved: "Saved.",
-  pasted: "Pasted: {count}.",
+  pasted: "Pasted: {cells}.",
+  aboveUsual: "{percent}% above usual · usually {usual}",
+  legendAbove: "above usual",
+  chartTitle: "Total by month",
+  chartAria: "Each month's total: a bar below zero means a shortfall",
+  chartShow: "Show the totals chart",
+  chartHide: "Hide the totals chart",
   kinds: {
     opening: "Opening balance",
     income: "Income",
@@ -414,31 +453,132 @@ const EN: Text = {
   importTotalCol: "Total — check only",
   importSkip: "Skip",
   importCreate: "Create “{name}”",
+  importFound: "Found {months} — {from} to {to}, {columns}.",
+  importTotalsOk: "Totals match Excel in all {months} — the columns are read correctly.",
+  importTotalsBad:
+    "Totals differ in {months} (e.g. {month}: Excel {file}, ours {ours}). Check what each column is.",
   importReplace:
     "The current sheet will be replaced. Changed your mind — “Undo import” brings it back.",
   importGo: "Import",
-  imported: "Sheet imported: {months} months.",
+  imported: "Sheet imported: {months}.",
   importBadFile: "Could not read the file: {error}"
 };
 
 export type SheetText = Text;
+
+/** Слова при числе: «1 месяц», «3 месяца», «12 месяцев». */
+const COUNTS = {
+  ru: {
+    months: { one: "месяц", few: "месяца", many: "месяцев" },
+    /** «во всех 21 месяце», «в 3 месяцах». */
+    monthsIn: { one: "месяце", few: "месяцах", many: "месяцах" },
+    cells: { one: "клетка", few: "клетки", many: "клеток" },
+    articles: { one: "статья", few: "статьи", many: "статей" },
+    columns: { one: "столбец", few: "столбца", many: "столбцов" }
+  },
+  en: {
+    months: { one: "month", many: "months" },
+    monthsIn: { one: "month", many: "months" },
+    cells: { one: "cell", many: "cells" },
+    articles: { one: "item", many: "items" },
+    columns: { one: "column", many: "columns" }
+  }
+} satisfies Record<"ru" | "en", Record<string, PluralForms>>;
+
+export type SheetCountWord = keyof (typeof COUNTS)["ru"];
 
 export function useSheetText() {
   const { locale } = useI18n();
   const words = locale === "en" ? EN : RU;
   const format = (template: string, values: Record<string, string | number> = {}) =>
     template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ""));
-  return { words, format, locale };
+  const count = (value: number, word: SheetCountWord) =>
+    sheetCount(value, word, locale === "en" ? "en" : "ru");
+  return { words, format, locale, count };
 }
 
-/** «2026-08» → «авг 2026». */
+/** «5 месяцев» — число со словом в нужной форме. */
+export function sheetCount(value: number, word: SheetCountWord, locale: "ru" | "en" = "ru") {
+  return countLabel(value, COUNTS[locale][word], locale, (n) =>
+    n.toLocaleString(locale === "en" ? "en-GB" : "ru-RU")
+  );
+}
+
+// Свои сокращения месяцев, а не Intl: браузер по-русски сокращает вразнобой —
+// «янв.», но «февр.», «сент.», «нояб.», а май и июнь не сокращает вовсе, — и
+// в шапке таблицы месяцы выходили разной ширины и разного вида. Здесь у всех
+// трёх букв и без точки.
+const MONTHS_SHORT = {
+  ru: ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"],
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+};
+const MONTHS_LONG = {
+  ru: [
+    "Январь",
+    "Февраль",
+    "Март",
+    "Апрель",
+    "Май",
+    "Июнь",
+    "Июль",
+    "Август",
+    "Сентябрь",
+    "Октябрь",
+    "Ноябрь",
+    "Декабрь"
+  ],
+  en: [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+  ]
+};
+
+// «В апреле», а не «В Апрель»: предупреждение о нехватке подставляло месяц в
+// именительном падеже.
+const MONTHS_IN_RU = [
+  "январе",
+  "феврале",
+  "марте",
+  "апреле",
+  "мае",
+  "июне",
+  "июле",
+  "августе",
+  "сентябре",
+  "октябре",
+  "ноябре",
+  "декабре"
+];
+
+/** Месяц после «в»: «2027-04» → «апреле 2027»; по-английски — «April 2027». */
+export function monthIn(month: string, locale: string) {
+  if (locale === "en") return monthLabel(month, locale, "long");
+  const name = MONTHS_IN_RU[Number(month.slice(5, 7)) - 1];
+  return name ? `${name} ${month.slice(0, 4)}` : month;
+}
+
+/** Только месяц, без года: «2026-11» → «Ноя». */
+export function monthShort(month: string, locale: string) {
+  const index = Number(month.slice(5, 7)) - 1;
+  return MONTHS_SHORT[locale === "en" ? "en" : "ru"][index] ?? month;
+}
+
+/** «2026-08» → «Авг 2026», длинно — «Август 2026». */
 export function monthLabel(month: string, locale: string, style: "short" | "long" = "short") {
-  const [year, index] = month.split("-").map(Number);
-  const text = new Date(year, index - 1, 1)
-    .toLocaleDateString(locale === "en" ? "en-GB" : "ru-RU", { month: style, year: "numeric" })
-    .replace(/\s*г\.?$/, "")
-    .replace(".", "");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  const index = Number(month.slice(5, 7)) - 1;
+  const names = (style === "long" ? MONTHS_LONG : MONTHS_SHORT)[locale === "en" ? "en" : "ru"];
+  const name = names[index];
+  return name ? `${name} ${month.slice(0, 4)}` : month;
 }
 
 /**

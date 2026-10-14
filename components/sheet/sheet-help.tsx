@@ -6,6 +6,9 @@
 
 import { X } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
+import { NEGATIVE_TOTAL, TINT } from "@/components/sheet/budget-sheet/helpers";
 import { monthLabel } from "@/components/sheet/sheet-text";
 import type { SheetWords } from "@/components/sheet/sheet-types";
 
@@ -60,10 +63,28 @@ export function SheetHelp({
           {words.legendIncome}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="rounded border bg-card px-1.5 py-0.5 font-semibold text-destructive tabular-nums">
+          <span
+            className={cn(
+              "relative rounded border py-0.5 pl-2.5 pr-1.5 font-semibold tabular-nums",
+              NEGATIVE_TOTAL,
+              "before:inset-y-1 before:left-0.5"
+            )}
+          >
             −4 200
           </span>
           {words.legendMinus}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className={cn(
+              "relative rounded border px-1.5 py-0.5 tabular-nums",
+              TINT.warning10,
+              "after:absolute after:right-0 after:top-0 after:border-[4px] after:border-transparent after:border-r-warning after:border-t-warning after:content-['']"
+            )}
+          >
+            21 400
+          </span>
+          {words.legendAbove}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="rounded bg-foreground/10 px-1.5 py-0.5 font-bold text-foreground">

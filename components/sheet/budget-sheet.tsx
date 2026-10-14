@@ -15,7 +15,7 @@
 // На телефоне та же таблица (липкий месяц, прокрутка вбок), а ячейка
 // правится в окне: в клетку шириной в палец формулу не напечатать.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cellBarInfo } from "@/components/sheet/budget-sheet/cell-bar-info";
 import { SheetColumnDialog } from "@/components/sheet/budget-sheet/column-dialog-host";
@@ -33,6 +33,7 @@ import { SheetEmpty } from "@/components/sheet/budget-sheet/sheet-empty";
 import { SheetGrid } from "@/components/sheet/budget-sheet/sheet-grid";
 import { SheetTargets } from "@/components/sheet/budget-sheet/sheet-targets";
 import { SheetToolbar } from "@/components/sheet/budget-sheet/sheet-toolbar";
+import { SheetTotalChart } from "@/components/sheet/budget-sheet/sheet-total-chart";
 import { TargetDialog } from "@/components/sheet/budget-sheet/target-dialog";
 import { useSheetData } from "@/components/sheet/budget-sheet/use-sheet-data";
 import { useSheetEdits } from "@/components/sheet/budget-sheet/use-sheet-edits";
@@ -48,11 +49,12 @@ import type { DisplayColumn, Position } from "@/components/sheet/sheet-types";
 import { Segmented } from "@/components/ui/segmented";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { formatCurrency } from "@/lib/format";
-import { firstShortfall, focusRow, monthsAhead } from "@/lib/sheet/insights";
+import { unusualExpenses } from "@/lib/sheet/highlight";
+import { firstShortfall, focusRow, monthsAhead, totalSeries } from "@/lib/sheet/insights";
 import { isSavingsKind, orderedColumns } from "@/lib/sheet/model";
 
 export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
-  const { words, format, locale } = useSheetText();
+  const { words, format, locale, count } = useSheetText();
   const current = thisMonth();
   const {
     sheet,
@@ -69,7 +71,7 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
     copyFromPrevious,
     clearWholeMonth,
     fillFromLedger
-  } = useSheetData({ sheetId, current, words, format });
+  } = useSheetData({ sheetId, current, words, format, count });
   const phone = useMediaQuery("(max-width: 767px)");
 
   const [showHidden, setShowHidden] = useState(false);
@@ -100,6 +102,19 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
   }, [sheet.columns, showHidden]);
 
   const hiddenCount = sheet.columns.filter((column) => column.hidden).length;
+  const unusual = useMemo(
+    () => unusualExpenses(computed.rows, sheet.columns),
+    [computed.rows, sheet.columns]
+  );
+  const points = useMemo(() => totalSeries(computed.rows, current), [computed.rows, current]);
+
+  // Справка открывается сама только при первой встрече с таблицей: раз
+  // показали — запомнили, и в следующий раз она не займёт полэкрана, даже если
+  // её не закрывали крестиком. Вернуть — кнопкой «Как это работает».
+  const hasColumns = sheet.columns.length > 0;
+  useEffect(() => {
+    if (helpOpen && hasColumns) remember(HELP_KEY, "1");
+  }, [helpOpen, hasColumns]);
 
   const money = (value: number) => formatCurrency(Math.round(value), "RUB");
   const plain = (value: number) =>
@@ -132,6 +147,7 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
     current,
     words,
     format,
+    count,
     save,
     undoLast,
     setPhoneCell,
@@ -146,6 +162,7 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
         sheetId={sheetId}
         words={words}
         format={format}
+        count={count}
         categories={categories}
         current={current}
         wizardOpen={wizardOpen}
@@ -168,7 +185,10 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
   const showTable = !phone || view === "table";
 
   return (
-    <div className="space-y-3" data-testid="budget-sheet">
+    // Снизу на телефоне — запас над нижней панелью: круглая «+» в ней
+    // приподнята над краем и иначе впритык садилась на «Всего» и последнюю
+    // строку таблицы.
+    <div className="space-y-3 pb-4 md:pb-0" data-testid="budget-sheet">
       {/* Панель: то, что делают с таблицей целиком. */}
       <SheetToolbar
         words={words}
@@ -215,6 +235,7 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
           row={focus}
           words={words}
           format={format}
+          count={count}
           locale={locale}
           money={money}
           hasSavings={hasSavings}
@@ -224,6 +245,14 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
           onAddYear={() => void addMonthsAfter(12)}
         />
       ) : null}
+
+      <SheetTotalChart
+        points={points}
+        words={words}
+        locale={locale}
+        money={money}
+        onPick={goToMonth}
+      />
 
       <SheetTargets
         rows={computed.rows}
@@ -282,8 +311,11 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
           index={shownIndex}
           current={current}
           words={words}
+          format={format}
           locale={locale}
           plain={plain}
+          money={money}
+          unusual={unusual}
           onIndex={setMonthIndex}
           onEdit={setPhoneCell}
         />
@@ -317,6 +349,8 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
         onPaste={onPaste}
         onEditKeyDown={onEditKeyDown}
         plain={plain}
+        money={money}
+        unusual={unusual}
       />
 
       <SheetColumnDialog

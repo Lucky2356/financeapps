@@ -6,8 +6,8 @@
 
 import { CalendarPlus, TriangleAlert } from "lucide-react";
 
-import { monthLabel } from "@/components/sheet/sheet-text";
-import type { SheetFormat, SheetWords } from "@/components/sheet/sheet-types";
+import { monthIn, monthLabel } from "@/components/sheet/sheet-text";
+import type { SheetCount, SheetFormat, SheetWords } from "@/components/sheet/sheet-types";
 import { Button } from "@/components/ui/button";
 import type { Shortfall } from "@/lib/sheet/insights";
 import type { ComputedRow } from "@/lib/sheet/model";
@@ -17,6 +17,7 @@ export function SheetSummary({
   row,
   words,
   format,
+  count,
   locale,
   money,
   hasSavings,
@@ -28,6 +29,7 @@ export function SheetSummary({
   row: ComputedRow;
   words: SheetWords;
   format: SheetFormat;
+  count: SheetCount;
   locale: string;
   money: (value: number) => string;
   hasSavings: boolean;
@@ -65,6 +67,8 @@ export function SheetSummary({
             key={tile.key}
             className={cn("px-3 py-1.5 sm:flex-1", tile.key === "total" && "bg-foreground/[0.04]")}
             data-testid={`sum-${tile.key}`}
+            // «Итог» — тот же, что в таблице; что он значит — в подсказке.
+            title={tile.key === "total" ? words.totalHint : undefined}
           >
             <p className="text-[11px] text-muted-foreground">{tile.label}</p>
             <p
@@ -89,7 +93,7 @@ export function SheetSummary({
           <TriangleAlert className="size-4 shrink-0" />
           <span className="min-w-0 flex-1">
             {format(words.shortfall, {
-              month: monthLabel(shortfall.month, locale, "long"),
+              month: monthIn(shortfall.month, locale),
               amount: money(shortfall.total)
             })}
           </span>
@@ -108,7 +112,11 @@ export function SheetSummary({
       {monthsLeft !== null && monthsLeft <= 1 ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
           <CalendarPlus className="size-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1">{format(words.runningOut, { count: monthsLeft })}</span>
+          <span className="min-w-0 flex-1">
+            {monthsLeft > 0
+              ? format(words.runningOut, { months: count(monthsLeft, "months") })
+              : words.runningOutNow}
+          </span>
           <Button type="button" size="sm" variant="outline" onClick={onAddYear}>
             {words.addYear}
           </Button>

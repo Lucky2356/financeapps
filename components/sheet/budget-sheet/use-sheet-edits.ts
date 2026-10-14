@@ -15,6 +15,7 @@ import type { CellChange, Editing, PhoneView } from "@/components/sheet/budget-s
 import type {
   DisplayColumn,
   Position,
+  SheetCount,
   SheetFormat,
   SheetWords
 } from "@/components/sheet/sheet-types";
@@ -33,6 +34,7 @@ export function useSheetEdits({
   current,
   words,
   format,
+  count,
   save,
   undoLast,
   setPhoneCell,
@@ -45,6 +47,7 @@ export function useSheetEdits({
   current: string;
   words: SheetWords;
   format: SheetFormat;
+  count: SheetCount;
   save: (changes: CellChange[], options?: { undoable?: boolean }) => Promise<void>;
   undoLast: () => void;
   setPhoneCell: Dispatch<SetStateAction<Position | null>>;
@@ -128,7 +131,7 @@ export function useSheetEdits({
       });
     });
     await save(changes);
-    toast.success(format(words.pasted, { count: changes.length }));
+    toast.success(format(words.pasted, { cells: count(changes.length, "cells") }));
   }
 
   function fillDown(position: Position) {
