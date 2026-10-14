@@ -4,9 +4,16 @@
 // можно потратить сегодня, чтобы до конца месяца хватило. Считается просто и
 // честно, без угадываний:
 //
-//   (доходы месяца − плановые платежи до конца месяца − потрачено до сегодня)
-//   ────────────────────────────────────────────────────────────────────────
-//                    дней до конца месяца, считая сегодня
+//   (доходы месяца ± итог прошлого − платежи до конца месяца − потрачено до сегодня)
+//   ────────────────────────────────────────────────────────────────────────────────
+//                       дней до конца месяца, считая сегодня
+//
+// Итог прошлого месяца — его доходы минус его расходы, со знаком. Плюс — то,
+// что прошлый месяц не доел: без него человек, отложивший в сентябре, в
+// октябре видел «уже больше, чем позволяет месяц», хотя деньги у него были.
+// Минус — перерасход: в сентябре потратили больше, чем заработали, разницу
+// взяли с карт или с кредитки, и этих денег в октябре уже нет. Поэтому он
+// уменьшает бюджет месяца, а не обрезается до нуля.
 //
 // Доходов в месяце ещё нет (зарплата пятого, а сегодня третье) — берём средний
 // доход за прошлые месяцы и так и пишем: «по среднему доходу». Иначе первые
@@ -20,6 +27,11 @@ export type AllowanceInput = {
   income: number;
   /** Средний доход за прошлые месяцы — запасной, пока в этом месяце пусто. */
   averageIncome: number;
+  /**
+   * Доходы прошлого календарного месяца минус его расходы, со знаком: плюс —
+   * остаток, минус — перерасход. Нет прошлого месяца — ноль.
+   */
+  carryOver?: number;
   /** Плановые расходы после сегодня и до конца месяца (регулярные, долги, записанные вперёд). */
   upcoming: number;
   /** Расходы с начала месяца до вчера включительно. */
@@ -38,6 +50,8 @@ export type Allowance = {
   /** Сколько вообще осталось на месяц. */
   budget: number;
   incomeSource: "actual" | "average";
+  /** Остаток (плюс) или перерасход (минус) прошлого месяца — уже в budget. */
+  carryOver: number;
   /** ok — укладываемся; tight — на сегодня почти всё; over — уже перебор. */
   status: "ok" | "tight" | "over";
   spentToday: number;
@@ -57,7 +71,8 @@ export function computeDailyAllowance(input: AllowanceInput): Allowance {
 
   const useAverage = !(input.income > 0) && input.averageIncome > 0;
   const income = useAverage ? input.averageIncome : Math.max(input.income, 0);
-  const budget = round(income - input.upcoming - input.spentBeforeToday);
+  const carryOver = round(input.carryOver ?? 0);
+  const budget = round(income + carryOver - input.upcoming - input.spentBeforeToday);
   const perDay = round(Math.max(budget, 0) / daysLeft);
   const leftToday = round(perDay - input.spentToday);
 
@@ -70,6 +85,7 @@ export function computeDailyAllowance(input: AllowanceInput): Allowance {
     daysLeft,
     budget,
     incomeSource: useAverage ? "average" : "actual",
+    carryOver,
     status,
     spentToday: round(input.spentToday),
     spentYesterday: round(input.spentYesterday),

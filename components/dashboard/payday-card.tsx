@@ -7,35 +7,57 @@ import { useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Expand } from "@/components/ui/expand";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { PaydayPicker } from "@/components/dashboard/payday-picker";
+import { paydayDate, paydayHeadline, paydayMoneyLine } from "@/components/dashboard/payday-text";
 import { useApiPageData } from "@/hooks/use-api-page-data";
-import { formatCurrency, formatDate } from "@/lib/format";
+import type { PathWithQuery, ReadResponses } from "@/lib/api/routes";
+import {
+  parsePaydaySchedule,
+  serializePaydaySchedule,
+  type PaydaySchedule
+} from "@/lib/analytics/payday";
+import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { readMine, writeMine } from "@/lib/storage/mine";
 import { cn } from "@/lib/utils";
 
-/** День зарплаты, указанный человеком, — на этом устройстве. */
+/**
+ * Когда приходит зарплата, если человек указал сам, — на этом устройстве.
+ * Строка расписания (parsePaydaySchedule): «10,25», «week:5», «daily». До
+ * расписаний здесь лежало одно число — «10», — и оно читается как есть.
+ */
 export const PAYDAY_KEY = "payday-day";
 
+/** Путь чтения «до зарплаты» для указанного расписания (пусто — по истории). */
+export function paydayPath(stored: string): PathWithQuery<"/payday"> {
+  return stored ? `/payday?schedule=${encodeURIComponent(stored)}` : "/payday";
+}
+
+type PaydayData = ReadResponses["/payday"];
+
+const NOTHING: PaydayData = { forecast: null, detected: null };
+
 export function PaydayCard({ currency }: { currency: string }) {
-  const { t } = useI18n();
-  const [manual, setManual] = useState<string>(() => readMine(PAYDAY_KEY) ?? "");
+  const { t, locale } = useI18n();
+  // Перечитанное и пересохранённое: мусор или старое одно число становятся
+  // правильной строкой расписания при первом же выборе.
+  const [stored, setStored] = useState<string>(() =>
+    serializePaydaySchedule(parsePaydaySchedule(readMine(PAYDAY_KEY)))
+  );
   const [open, setOpen] = useState(false);
-  const { data } = useApiPageData({ forecast: null }, manual ? `/payday?day=${manual}` : "/payday");
+  // Пока считается новый выбор, показываем прежний ответ, а не пустоту: иначе
+  // каждый щелчок по числу на кадр убирал бы карточку целиком вместе с выбором.
+  const [shown, setShown] = useState<PaydayData>(NOTHING);
+  const { data } = useApiPageData(shown, paydayPath(stored));
+  if (data.forecast && data !== shown) setShown(data);
   const forecast = data.forecast;
   if (!forecast) return null;
   const money = (value: number) => formatCurrency(value, currency);
 
-  function choose(value: string) {
-    const next = value === "auto" ? "" : value;
-    writeMine(PAYDAY_KEY, next);
-    setManual(next);
+  function choose(next: PaydaySchedule | null) {
+    const value = serializePaydaySchedule(next);
+    writeMine(PAYDAY_KEY, value);
+    setStored(value);
   }
 
   return (
@@ -49,24 +71,28 @@ export function PaydayCard({ currency }: { currency: string }) {
       <CardContent className="space-y-2 p-4">
         <button
           type="button"
-          className="flex w-full items-start gap-3 text-left"
+          className="flex w-full items-start gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
           <CalendarClock className="mt-0.5 size-5 shrink-0 text-primary" />
           <span className="min-w-0 flex-1">
-            <span className="block text-sm text-muted-foreground">
-              {t("pay.until", { days: forecast.daysLeft, date: formatDate(forecast.nextDate) })}
+            <span className="block text-sm text-muted-foreground" data-testid="payday-when">
+              {paydayHeadline(
+                forecast,
+                locale,
+                paydayDate(forecast.nextDate, locale, forecast.schedule.kind === "weekly")
+              )}
             </span>
-            {forecast.status === "short" ? (
-              <span className="block font-semibold text-destructive" data-testid="payday-short">
-                {t("pay.short", { amount: money(Math.abs(forecast.free)) })}
-              </span>
-            ) : (
-              <span className="block font-semibold">
-                {t("pay.free", { amount: money(forecast.free), perDay: money(forecast.perDay) })}
-              </span>
-            )}
+            <span
+              className={cn(
+                "block font-semibold",
+                forecast.status === "short" && "text-destructive"
+              )}
+              data-testid={forecast.status === "short" ? "payday-short" : "payday-free"}
+            >
+              {paydayMoneyLine(forecast, locale, money)}
+            </span>
             {forecast.status === "tight" ? (
               <span className="block text-xs text-muted-foreground">
                 {t("pay.tight", { usual: money(forecast.usualPerDay) })}
@@ -85,37 +111,28 @@ export function PaydayCard({ currency }: { currency: string }) {
             </p>
             <p className="flex justify-between gap-2">
               <span className="text-muted-foreground">{t("pay.upcoming")}</span>
-              <span className="tabular-nums">−{money(forecast.upcoming)}</span>
+              <span className="tabular-nums">
+                {forecast.upcoming > 0 ? `−${money(forecast.upcoming)}` : money(0)}
+              </span>
             </p>
             {forecast.payments.length > 0 ? (
               <ul className="space-y-0.5 pl-3 text-xs text-muted-foreground">
                 {forecast.payments.map((item, index) => (
                   <li key={`${item.date}-${index}`} className="flex justify-between gap-2">
                     <span className="truncate">
-                      {formatDate(item.date)} · {item.title}
+                      {paydayDate(item.date.slice(0, 10), locale)} · {item.title}
                     </span>
                     <span className="tabular-nums">{money(item.amount)}</span>
                   </li>
                 ))}
               </ul>
             ) : null}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-muted-foreground">{t("pay.day")}</span>
-              <Select value={manual || "auto"} onValueChange={choose}>
-                <SelectTrigger className="h-8 w-44" aria-label={t("pay.day")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">
-                    {t("pay.auto", { day: forecast.source === "history" ? forecast.payday : "—" })}
-                  </SelectItem>
-                  {Array.from({ length: 31 }, (_, index) => String(index + 1)).map((day) => (
-                    <SelectItem key={day} value={day}>
-                      {t("pay.dayN", { day })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="pt-1">
+              <PaydayPicker
+                value={parsePaydaySchedule(stored)}
+                detected={data.detected}
+                onChange={choose}
+              />
             </div>
           </div>
         </Expand>

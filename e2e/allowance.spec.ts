@@ -15,7 +15,11 @@ test("главная показывает, сколько можно трати�
   const card = page.getByTestId("daily-allowance");
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(
-    card.getByText(/в день до конца месяца|Потрачено .* из |больше, чем позволяет месяц/).first()
+    card
+      .getByText(
+        /в день до конца месяца|Потрачено .* из |больше, чем позволяет месяц|больше, чем приходится на день/
+      )
+      .first()
   ).toBeVisible();
 
   // Под сводкой, а не над ней.
@@ -29,6 +33,15 @@ test("главная показывает, сколько можно трати�
   await expect(row).toHaveAttribute("aria-expanded", "false");
   await row.click();
   await expect(card.getByText("Платежи до конца месяца")).toBeVisible();
+  // Итог прошлого месяца — своей строкой между доходами и тратами: остаток
+  // или перерасход.
+  const terms = await card.locator("dt").allTextContents();
+  const carry = terms.findIndex((term) =>
+    /^(Остаток с прошлого месяца|Перерасход прошлого месяца)$/.test(term)
+  );
+  expect(carry).toBeGreaterThan(0);
+  expect(terms[carry - 1]).toMatch(/Доходы месяца|Средний доход/);
+  expect(terms[carry + 1]).toBe("Уже потрачено");
   const box = (await card.boundingBox())!;
   expect(box.x + box.width).toBeLessThanOrEqual(360);
 });
