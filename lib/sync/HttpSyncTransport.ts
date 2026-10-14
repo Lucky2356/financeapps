@@ -17,6 +17,7 @@
 import {
   OfflineError,
   ROUTES,
+  type KnownVersion,
   type PutRequest,
   type PutResult,
   type SlotChanged,
@@ -129,8 +130,8 @@ export class HttpSyncTransport implements SyncTransport {
     return (data.slots ?? []) as SlotSummary[];
   }
 
-  async pull(slot: SlotName): Promise<SlotSnapshot> {
-    const { status, data } = await ask(this.credentials, ROUTES.slot(slot));
+  async pull(slot: SlotName, known?: KnownVersion): Promise<SlotSnapshot> {
+    const { status, data } = await ask(this.credentials, ROUTES.slot(slot, known));
     if (status !== 200)
       throw new ServerRefused(status, String(data.error ?? "Служба не отдаёт данные."));
     return data as unknown as SlotSnapshot;

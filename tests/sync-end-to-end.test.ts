@@ -246,6 +246,77 @@ describe("две машины через сервер", () => {
       expect(await transactions(desktop)).toEqual(all);
       expect(await balance(desktop)).toBe(50000 - 700 - 300 - 100);
     });
+
+    describe("а другие устройства успели уйти дальше помнящегося номера", () => {
+      // Телефон записал после копии и запомнил свою версию. Службу вернули
+      // назад, компьютер (не видевший той записи) дописал дважды — и номер на
+      // службе снова БОЛЬШЕ помнящегося телефоном. По номеру возврат не виден:
+      // телефон принял бы чужую историю за продолжение своей, слил бы с
+      // основой, в которой есть его запись после копии, — и запись сочлась бы
+      // удалённой на службе. Узнать это можно только у службы: была ли у неё
+      // та версия, которую помнит телефон.
+      async function phoneAheadThenRewound() {
+        server.events = false;
+        const nightly = server.backup();
+        await addExpense(phone, "после копии", 300);
+        await phone.sync.flush();
+        const remembered = server.peek("localFinanceState_profile-default")!.version;
+
+        server.restore(nightly);
+        await addExpense(desktop, "компьютер 1", 200);
+        await desktop.sync.flush();
+        await addExpense(desktop, "компьютер 2", 100);
+        await desktop.sync.flush();
+        expect(server.peek("localFinanceState_profile-default")!.version).toBeGreaterThan(
+          remembered
+        );
+      }
+
+      const all = ["до копии", "компьютер 1", "компьютер 2", "после копии"];
+
+      it("сверка: запись после копии остаётся и уезжает ко всем", async () => {
+        await phoneAheadThenRewound();
+        await phone.sync.catchUp();
+        await desktop.sync.catchUp();
+
+        expect(await transactions(phone)).toEqual(all);
+        expect(await transactions(desktop)).toEqual(all);
+        // Остаток без общей основы сложить приращениями не из чего — слияние
+        // берёт версию посвежее (известное ограничение того же пути, что и при
+        // простом возврате, см. SUMMED в lib/sync/merge.ts). Главное здесь —
+        // операции: ни одна не пропала, и устройства сошлись.
+        expect(await balance(phone)).toBe(await balance(desktop));
+      });
+
+      it("отказ на запись: телефон пишет, не сверившись, — и тоже ничего не теряет", async () => {
+        await phoneAheadThenRewound();
+        await addExpense(phone, "после возврата", 50);
+        await phone.sync.flush();
+        await desktop.sync.catchUp();
+
+        const withNew = [...all, "после возврата"].sort();
+        expect(await transactions(phone)).toEqual(withNew);
+        expect(await transactions(desktop)).toEqual(withNew);
+        // И без ложного спора «удалили на службе — держу у себя» про операцию:
+        // строку после копии на службе никто не удалял, её там просто не было.
+        expect(phone.conflicts.filter((row) => row.collection === "transactions")).toEqual([]);
+      });
+
+      it("служба прежней версии (без истории) — всё как раньше, сверка сходится", async () => {
+        server.remembers = false;
+        await phoneAheadThenRewound();
+        await phone.sync.catchUp();
+        await desktop.sync.catchUp();
+        await phone.sync.catchUp();
+
+        // Чужие записи доезжают; запись телефона после копии старая служба
+        // уберечь не может — ради этого история и заведена.
+        expect(await transactions(phone)).toEqual(await transactions(desktop));
+        expect(await transactions(phone)).toEqual(
+          expect.arrayContaining(["до копии", "компьютер 1", "компьютер 2"])
+        );
+      });
+    });
   });
   it("восстановленное из файла копии не удаляется снова первой же синхронизацией", async () => {
     // Копия сделана, когда «обед» был; потом его удалили на телефоне, и след
