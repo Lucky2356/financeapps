@@ -469,6 +469,20 @@
     );
   }
 
+  /* Прилипнуть сразу под шапкой телефона (MobileTopBar), а не под краем
+     экрана — иначе шапка накрыла бы прилипшее. Высота шапки — её же формула:
+     отступ сверху (строка состояния) + ряд кнопок size-9 + pb-3. С md шапки
+     нет, и прилипает к самому верху. */
+  .sticky-under-topbar {
+    position: sticky;
+    top: calc(max(env(safe-area-inset-top), var(--fa-safe-top, 0px), 0.75rem) + 3rem);
+  }
+  @media (min-width: 768px) {
+    .sticky-under-topbar {
+      top: 0;
+    }
+  }
+
   /* Safe padding for mobile bottom nav */
   .pb-safe-nav {
     padding-bottom: max(5rem, calc(4rem + env(safe-area-inset-bottom)));
