@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { computeDailyAllowance } from "@/lib/analytics/daily-allowance";
+import { LocalApiClient } from "@/lib/api/LocalApiClient";
+import { MemoryStorageAdapter } from "@/lib/storage/MemoryStorageAdapter";
+import { convert, DEFAULT_CURRENCY_RATES } from "@/lib/currency";
+import { formatInputDate } from "@/lib/format";
 
 const base = {
   today: "2026-09-21",
@@ -52,9 +56,6 @@ describe("можно тратить сегодня", () => {
 
 describe("ручка /allowance", () => {
   it("считает доходы и расходы месяца, переводы — нет", async () => {
-    const { LocalApiClient } = await import("@/lib/api/LocalApiClient");
-    const { MemoryStorageAdapter } = await import("@/lib/storage/MemoryStorageAdapter");
-    const { formatInputDate } = await import("@/lib/format");
     const api = new LocalApiClient(new MemoryStorageAdapter());
     const card = await api.post("/accounts", {
       name: "Карта",
@@ -108,8 +109,6 @@ describe("операции месяца, записанные вперёд", () 
   async function setup() {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 9, 12, 12));
-    const { LocalApiClient } = await import("@/lib/api/LocalApiClient");
-    const { MemoryStorageAdapter } = await import("@/lib/storage/MemoryStorageAdapter");
     const api = new LocalApiClient(new MemoryStorageAdapter());
     const card = await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "0" });
     await api.post("/transactions", {
@@ -163,7 +162,7 @@ describe("операции месяца, записанные вперёд", () 
   });
 });
 
-describe("остаток с прошлого месяца", () => {
+describe("итог прошлого месяца: остаток или перерасход", () => {
   it("плюс прошлого месяца входит в бюджет отдельной строкой", () => {
     // Октябрь сам по себе в минусе (как на снимке владельца: 28 339 − 35 595),
     // но сентябрь оставил 20 000.
@@ -174,7 +173,7 @@ describe("остаток с прошлого месяца", () => {
       upcoming: 0,
       spentBeforeToday: 35_595,
       spentToday: 0,
-      previousNet: 20_000
+      carryOver: 20_000
     });
     expect(allowance.carryOver).toBe(20_000);
     // 28 339 + 20 000 − 35 595 = 12 744 на 22 дня (10…31 октября)
@@ -184,11 +183,19 @@ describe("остаток с прошлого месяца", () => {
     expect(allowance.status).toBe("ok");
   });
 
-  it("минус прошлого месяца остатком не считается — ноль, а не вычет", () => {
-    const allowance = computeDailyAllowance({ ...base, previousNet: -15_000 });
-    expect(allowance.carryOver).toBe(0);
-    expect(allowance.previousNet).toBe(-15_000);
-    expect(allowance.budget).toBe(30_000);
+  it("перерасход прошлого месяца уменьшает бюджет этого", () => {
+    const allowance = computeDailyAllowance({ ...base, carryOver: -15_000 });
+    expect(allowance.carryOver).toBe(-15_000);
+    // 100 000 − 15 000 − 10 000 − 60 000 = 15 000 на 10 дней
+    expect(allowance.budget).toBe(15_000);
+    expect(allowance.perDay).toBe(1_500);
+  });
+
+  it("перерасход больше остатка месяца — ноль в день и «перебор»", () => {
+    const allowance = computeDailyAllowance({ ...base, carryOver: -40_000 });
+    expect(allowance.budget).toBe(-10_000);
+    expect(allowance.perDay).toBe(0);
+    expect(allowance.status).toBe("over");
   });
 
   it("без прошлого месяца (первый месяц учёта) — ноль", () => {
@@ -202,7 +209,7 @@ describe("остаток с прошлого месяца", () => {
       ...base,
       income: 0,
       spentBeforeToday: 0,
-      previousNet: 10_000
+      carryOver: 10_000
     });
     expect(allowance.incomeSource).toBe("average");
     expect(allowance.budget).toBe(90_000);
@@ -217,8 +224,6 @@ describe("ручка /allowance: остаток с прошлого", () => {
   async function setup() {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 9, 10, 12));
-    const { LocalApiClient } = await import("@/lib/api/LocalApiClient");
-    const { MemoryStorageAdapter } = await import("@/lib/storage/MemoryStorageAdapter");
     const api = new LocalApiClient(new MemoryStorageAdapter());
     const card = await api.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "0" });
     const add = (type: "INCOME" | "EXPENSE", amount: number, date: string) =>
@@ -254,16 +259,15 @@ describe("ручка /allowance: остаток с прошлого", () => {
     expect(allowance.status).toBe("ok");
   });
 
-  it("сентябрь в минусе — остатка нет; август в счёт не идёт", async () => {
+  it("сентябрь в минусе — минус переходит в октябрь; август в счёт не идёт", async () => {
     const { api, add } = await setup();
     await add("INCOME", 50_000, "2026-10-05");
     await add("INCOME", 200_000, "2026-08-05");
     await add("INCOME", 40_000, "2026-09-05");
     await add("EXPENSE", 60_000, "2026-09-20");
     const allowance = await api.get("/allowance");
-    expect(allowance.carryOver).toBe(0);
-    expect(allowance.previousNet).toBe(-20_000);
-    expect(allowance.budget).toBe(50_000);
+    expect(allowance.carryOver).toBe(-20_000);
+    expect(allowance.budget).toBe(30_000);
   });
 
   it("перевод между своими счетами в прошлом месяце остатком не становится", async () => {
@@ -319,7 +323,6 @@ describe("ручка /allowance: остаток с прошлого", () => {
       categoryId: "cat-salary",
       date: "2026-09-05"
     });
-    const { convert, DEFAULT_CURRENCY_RATES } = await import("@/lib/currency");
     // Курсов в документе нет — пересчёт идёт по встроенным.
     const expected = convert(100, "USD", "RUB", DEFAULT_CURRENCY_RATES);
     expect(expected).toBeGreaterThan(100);

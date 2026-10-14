@@ -1426,7 +1426,7 @@ export const en: Messages = {
   "allow.spent": "Already spent",
   "allow.over": "Already more than the month allows",
   "allow.overHint":
-    "This month's income plus last month's leftover, minus the payments still due, has been spent. Hold off purchases or check the plan.",
+    "This month's income, adjusted for last month's balance, minus the payments still due, has been spent. Hold off purchases or check the plan.",
   "allow.yesterday": "Yesterday you spent {amount}",
   "allow.todaySpent": "Spent today: {amount}",
   "allow.byAverage": "No income this month yet — using your average",
@@ -1437,7 +1437,9 @@ export const en: Messages = {
   "allow.overToday": "Today's spending is over the daily amount",
   "allow.overTodayHint":
     "The month isn't used up: what's left is split over the remaining days, so tomorrow's amount will be smaller.",
-  "allow.carryNone": "Last month you spent more than you earned — nothing to carry over.",
+  "allow.carryDeficit": "Overspent last month",
+  "allow.carryDeficitHint":
+    "Last month you spent more than you earned, so the difference comes out of this month.",
   "allow.upcoming": "Payments until month end",
   "allow.left": "Left for the month",
   "allow.days": "Days, including today",

@@ -155,7 +155,7 @@ export function allowancePage(state: LocalState): Allowance {
   // (переводы уже убраны, суммы уже в основной валюте), платежи по долгам —
   // такой же расход, как здесь. Только прошлый календарный месяц, без цепочки
   // до начала истории: что было раньше, уже вошло в его собственный остаток
-  // или ушло. Минус в ноль обрезает computeDailyAllowance.
+  // или ушло. Со знаком: перерасход прошлого месяца уменьшает этот.
   const previousMonth = monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1));
   const previousRows = state.transactions.filter((row) => row.date.startsWith(previousMonth));
   return computeDailyAllowance({
@@ -164,7 +164,7 @@ export function allowancePage(state: LocalState): Allowance {
     averageIncome: previous.length
       ? previous.reduce((total, item) => total + item.income, 0) / previous.length
       : 0,
-    previousNet:
+    carryOver:
       sum(previousRows.filter((row) => row.type === "INCOME")) -
       sum(previousRows.filter((row) => row.type === "EXPENSE")),
     upcoming: upcoming + aheadThisMonth,

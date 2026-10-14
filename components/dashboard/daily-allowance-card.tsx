@@ -26,7 +26,6 @@ const EMPTY: Allowance = {
   budget: 0,
   incomeSource: "actual",
   carryOver: 0,
-  previousNet: 0,
   status: "ok",
   spentToday: 0,
   spentYesterday: 0,
@@ -47,12 +46,16 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
   const [open, setOpen] = useState(false);
 
   // Ни доходов, ни трат — считать нечего; пустая карточка с нулём только пугает.
-  if (!(data.income > 0) && !(data.carryOver > 0) && !(data.spentToday > 0) && data.budget === 0)
+  if (!(data.income > 0) && !data.carryOver && !(data.spentToday > 0) && data.budget === 0)
     return null;
 
   const money = (value: number) => formatCurrency(value, currency);
   const minus = (value: number) => (value > 0 ? `−${money(value)}` : money(0));
   const over = data.status === "over";
+  // «Перебор» бывает двух видов, и объяснять их надо по-разному: кончился
+  // весь месяц (доходы и остаток уже потрачены) или только сегодняшняя доля —
+  // тогда месяц в порядке, просто завтра на день выйдет меньше.
+  const overMonth = over && data.budget <= 0;
 
   // Узкая полоса, а не большая карточка: одно число на каждый день не должно
   // заслонять остальную главную. Всё прочее — по нажатию.
@@ -75,7 +78,7 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
           </span>
           <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]">
             {over
-              ? t("allow.over")
+              ? t(overMonth ? "allow.over" : "allow.overToday")
               : data.spentToday > 0
                 ? t("allow.spentOf", {
                     spent: money(data.spentToday),
@@ -96,7 +99,11 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
       </button>
       <Expand open={open}>
         <CardContent className="space-y-3 border-t pt-3">
-          {over ? <p className="text-xs text-muted-foreground">{t("allow.overHint")}</p> : null}
+          {over ? (
+            <p className="text-xs text-muted-foreground">
+              {t(overMonth ? "allow.overHint" : "allow.overTodayHint")}
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2 text-xs">
             {data.spentToday > 0 ? (
               <span className="rounded-full bg-muted px-2.5 py-1 tabular-nums">
@@ -115,9 +122,15 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
             <dd className="text-right">{money(data.income)}</dd>
             {/* Остаток с прошлого — своей строкой: без неё «осталось на месяц»
                 не сходилось бы на глаз с доходами и тратами выше. */}
-            <dt className="text-muted-foreground">{t("allow.carry")}</dt>
+            <dt className="text-muted-foreground">
+              {data.carryOver < 0 ? t("allow.carryDeficit") : t("allow.carry")}
+            </dt>
             <dd className="text-right" data-testid="allowance-carry">
-              {data.carryOver > 0 ? `+${money(data.carryOver)}` : money(0)}
+              {data.carryOver > 0
+                ? `+${money(data.carryOver)}`
+                : data.carryOver < 0
+                  ? `−${money(-data.carryOver)}`
+                  : money(0)}
             </dd>
             <dt className="text-muted-foreground">{t("allow.spent")}</dt>
             <dd className="text-right">{minus(data.spentBeforeToday)}</dd>
@@ -131,8 +144,8 @@ export function DailyAllowanceCard({ currency }: { currency: string }) {
           {data.incomeSource === "average" ? (
             <p className="text-xs text-muted-foreground">{t("allow.byAverage")}</p>
           ) : null}
-          {data.previousNet < 0 ? (
-            <p className="text-xs text-muted-foreground">{t("allow.carryNone")}</p>
+          {data.carryOver < 0 ? (
+            <p className="text-xs text-muted-foreground">{t("allow.carryDeficitHint")}</p>
           ) : null}
         </CardContent>
       </Expand>
