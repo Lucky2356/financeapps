@@ -48,3 +48,48 @@ export function countLabel(
 ): string {
   return `${format(count)} ${plural(count, forms, locale)}`;
 }
+
+/**
+ * Число из подстановки: 5, «5», «2.5», «1 234» (как его отдал toLocaleString).
+ * Не число — NaN, и тогда выбирается форма «много».
+ *
+ * Дробь, которую видно на экране, — дробь, даже если она целая: «1.0» из
+ * toFixed(1) читается «1,0 месяца» и "1.0 months", а не «1,0 месяц». По-
+ * английски запятая — разделитель тысяч («1,234»), по-русски — дробная.
+ */
+function countOf(value: string | number | undefined, locale: Locale): number {
+  if (typeof value === "number") return value;
+  if (value === undefined) return Number.NaN;
+  let text = value.replace(/[\s  ]/g, "");
+  text = locale === "en" ? text.replace(/,/g, "") : text.replace(",", ".");
+  const count = Number(text);
+  // Любое нецелое — plural() возьмёт форму дроби; само значение дальше не идёт.
+  if (/\.\d+$/.test(text) && Number.isInteger(count)) return count + 0.5;
+  return count;
+}
+
+/**
+ * Формы слова прямо в строке словаря: «{n} {n:строка|строки|строк}»,
+ * «{n} {n:row|rows}». Перевод держит слово вместе с фразой, а не в коде, — и
+ * падеж у каждой фразы свой: «Импортировать {n} {n:строку|строки|строк}»,
+ * «из {total} {total:строки|строк|строк}». Две формы — «одна» и «много»
+ * (английский); три — «одна», «несколько», «много» (русский).
+ */
+const PLURAL = /\{(\w+):([^{}|]*(?:\|[^{}|]*)+)\}/g;
+
+export function pluralizeTemplate(
+  template: string,
+  vars: Record<string, string | number>,
+  locale: Locale
+): string {
+  return template.replace(PLURAL, (whole, name: string, body: string) => {
+    if (!(name in vars)) return whole;
+    const words = body.split("|");
+    const forms: PluralForms =
+      words.length >= 3
+        ? { one: words[0], few: words[1], many: words[2] }
+        : { one: words[0], many: words[1] };
+    const count = countOf(vars[name], locale);
+    return Number.isNaN(count) ? forms.many : plural(count, forms, locale);
+  });
+}

@@ -40,6 +40,44 @@ export const MARKET_SECTORS = [
 
 export type MarketSector = (typeof MARKET_SECTORS)[number];
 
+/**
+ * Отрасль — так, как её прочтёт англоязычный глаз.
+ *
+ * Хранится отрасль русским словом: так её пишут и наш список, и smart-lab, и
+ * человек, поправивший бумагу руками. Значение не трогаем — переводим подпись.
+ * Чего здесь нет (отрасль, вписанная руками), показывается как записано.
+ */
+const SECTOR_EN: Record<string, string> = {
+  "Нефть/Газ": "Oil & Gas",
+  Энергетика: "Power & Utilities",
+  "Металлы и добыча": "Metals & Mining",
+  Уголь: "Coal",
+  Химия: "Chemicals",
+  Машиностроение: "Engineering",
+  Оборона: "Defence",
+  Строительство: "Construction",
+  Транспорт: "Transport",
+  Логистика: "Logistics",
+  Телекомы: "Telecoms",
+  "ПО и IT": "Software & IT",
+  Медиа: "Media",
+  Медицина: "Healthcare",
+  Продовольствие: "Food",
+  "Розничная торговля": "Retail",
+  "Отели и Рестораны": "Hotels & Restaurants",
+  "Пром. услуги": "Industrial Services",
+  "Финансы и Банки": "Finance & Banks",
+  Разное: "Other",
+  Облигации: "Bonds",
+  Фонды: "Funds",
+  "Драгоценные металлы": "Precious metals",
+  Прочее: "Other"
+};
+
+export function sectorLabel(sector: string, locale: "ru" | "en"): string {
+  return locale === "en" ? (SECTOR_EN[sector] ?? sector) : sector;
+}
+
 /** What a holding is filed under when the industry is unknown or does not apply. */
 export const SECTOR_BY_ASSET_KIND: Record<AssetKind, string> = {
   STOCK: "Разное",

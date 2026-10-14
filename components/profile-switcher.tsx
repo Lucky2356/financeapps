@@ -18,7 +18,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { APP_NAME } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import { useDataVersion } from "@/hooks/use-data-version";
@@ -339,7 +338,7 @@ function AppTitle({ profile }: { profile?: string }) {
   return (
     <span className="min-w-0">
       <span className="block text-[13px] font-semibold leading-tight text-foreground">
-        {APP_NAME}
+        {t("shell.appName")}
       </span>
       <span className="block truncate text-[11px] text-muted-foreground">
         {profile ?? t("shell.subtitle")}

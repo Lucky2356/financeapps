@@ -1,5 +1,6 @@
 "use client";
 
+import { decodeTextBytes } from "@/lib/files/decode-text";
 import type { FilePickResult, FileSystemAdapter } from "@/lib/files/FileSystemAdapter";
 
 /**
@@ -45,9 +46,16 @@ export class TauriFileSystemAdapter implements FileSystemAdapter {
     if (!selected || Array.isArray(selected)) return null;
     // The dialog plugin adds whatever the user picked to the fs scope, so the
     // read below is allowed even for a path outside the configured scope.
-    const content = await fs.readTextFile(selected);
+    //
+    // Байты, а не readTextFile: тот декодирует только UTF-8, и выписка в cp1251
+    // (Сбер, ВТБ, 1С) приходила «���� ��������» — ровно то, что браузерная
+    // сборка уже обходит через decodeTextBytes. На стороне Rust read_file и
+    // read_text_file — одна и та же функция чтения (read_file_inner), так что
+    // content:// от выбора файла на Android открывается точно так же. Путь
+    // передаётся строкой: объект URL со схемой content: плагин отвергает.
+    const bytes = await fs.readFile(selected);
 
-    return { name: fileNameFromPath(selected), content };
+    return { name: fileNameFromPath(selected), content: decodeTextBytes(bytes) };
   }
 
   // The MIME type of the interface is unused here: the native sheet derives the

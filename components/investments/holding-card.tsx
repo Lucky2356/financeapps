@@ -143,7 +143,7 @@ export function HoldingDetails({
   onEdit: () => void;
   onRemove: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const lots = [...(position.lots ?? [])].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <>
@@ -172,10 +172,13 @@ export function HoldingDetails({
             {lots.map((lot, index) => (
               <li key={`${lot.date}-${index}`} className="flex justify-between gap-3">
                 <span className="text-muted-foreground">
-                  {new Date(`${lot.date}T12:00:00`).toLocaleDateString("ru-RU")}
+                  {new Date(`${lot.date}T12:00:00`).toLocaleDateString(
+                    locale === "en" ? "en-GB" : "ru-RU"
+                  )}
                 </span>
                 <span>
-                  {lot.quantity.toLocaleString()} × {formatCurrency(lot.price, currency)}
+                  {lot.quantity.toLocaleString(locale === "en" ? "en-GB" : "ru-RU")} ×{" "}
+                  {formatCurrency(lot.price, currency)}
                 </span>
               </li>
             ))}

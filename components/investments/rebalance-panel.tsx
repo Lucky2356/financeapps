@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { sectorLabel } from "@/lib/market/sectors";
 import { computeRebalance } from "@/lib/investments/rebalance";
 import type { PortfolioRow } from "@/types/finance";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ export function RebalancePanel({
   positions: PortfolioRow[];
   currency: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -131,7 +132,11 @@ export function RebalancePanel({
             rows={actionable}
             rowKey={(row) => row.sector}
             columns={[
-              { header: t("inv.reb.sector"), primary: true, cell: (row) => row.sector },
+              {
+                header: t("inv.reb.sector"),
+                primary: true,
+                cell: (row) => sectorLabel(row.sector, locale)
+              },
               {
                 header: t("inv.reb.actual"),
                 align: "right",

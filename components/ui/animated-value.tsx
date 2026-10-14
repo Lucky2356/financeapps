@@ -11,6 +11,8 @@
 
 import { useChangeDirection, useCountUp } from "@/hooks/use-count-up";
 import { formatCurrency } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/catalog";
+import { displayLocale, intlLocale } from "@/lib/i18n/display-locale";
 import { cn } from "@/lib/utils";
 
 function tint(direction: "up" | "down" | null) {
@@ -39,44 +41,72 @@ export function AnimatedMoney({
   );
 }
 
-/** Первое число в строке: «−12 396,50 ₽» → −12396.5. */
-const NUMBER = /-?−?\d[\d\s  ]*(?:[.,]\d+)?/;
+/**
+ * Первое число в строке: «−12 396,50 ₽» → −12396.5, «-₽1,234.50» → −1234.5.
+ *
+ * Разделители — по языку экрана. По-русски тысячи отделяются пробелом, а
+ * дробь — запятой; по-английски тысячи — запятой, дробь — точкой. Русское
+ * правило на «₽1,234.50» читало «1,234» как одну целую и двести тридцать
+ * четыре тысячных. Минус по-английски стоит перед знаком валюты, а не перед
+ * цифрами — его ищем и там.
+ */
+const NUMBER: Record<Locale, RegExp> = {
+  ru: /-?−?\d[\d\s\u00a0\u202f]*(?:[.,]\d+)?/,
+  en: /-?−?\d[\d,]*(?:\.\d+)?/
+};
 
-export function parseShownNumber(text: string): {
+export function parseShownNumber(
+  text: string,
+  locale: Locale = displayLocale()
+): {
   value: number;
   before: string;
   after: string;
   fraction: number;
+  /** Минус стоял в самом начале строки, до знака валюты: «-₽1,234». */
+  signFirst: boolean;
 } | null {
-  const match = NUMBER.exec(text);
+  const match = NUMBER[locale].exec(text);
   if (!match) return null;
   const raw = match[0];
-  const negative = raw.startsWith("-") || raw.startsWith("−");
-  const digits = raw.replace(/[^\d.,]/g, "");
-  const [whole, part = ""] = digits.split(/[.,]/);
+  let before = text.slice(0, match.index);
+  // «-₽1,234» — минус отделён от цифр знаком валюты.
+  const signFirst = /^[-−]/.test(before) && !/\d/.test(before);
+  if (signFirst) before = before.slice(1);
+  const negative = signFirst || raw.startsWith("-") || raw.startsWith("−");
+  const decimal = locale === "en" ? "." : /[.,]/;
+  const digits = raw.replace(locale === "en" ? /[^\d.]/g : /[^\d.,]/g, "");
+  const [whole, part = ""] = digits.split(decimal);
   const value = Number(`${whole}.${part || "0"}`) * (negative ? -1 : 1);
   if (!Number.isFinite(value)) return null;
   return {
     value,
-    before: text.slice(0, match.index),
+    before,
     after: text.slice(match.index + raw.length),
-    fraction: part.length
+    fraction: part.length,
+    signFirst
   };
 }
 
 export function AnimatedValue({ text, className }: { text: string; className?: string }) {
-  const parsed = parseShownNumber(text);
+  const locale = displayLocale();
+  const parsed = parseShownNumber(text, locale);
   const target = parsed?.value ?? Number.NaN;
   const shown = useCountUp(target, 600, { fromZero: true });
   const direction = useChangeDirection(target);
   const done = !parsed || !Number.isFinite(shown) || Math.abs(shown - target) < 1e-9;
-  const body = done
-    ? text
-    : `${parsed.before}${new Intl.NumberFormat("ru-RU", {
+  const number = done
+    ? ""
+    : new Intl.NumberFormat(intlLocale(locale), {
         minimumFractionDigits: parsed.fraction,
         maximumFractionDigits: parsed.fraction
-      })
-        .format(Math.abs(shown))
-        .replace(/^/, shown < 0 ? "−" : "")}${parsed.after}`;
+      }).format(Math.abs(shown));
+  // Минус — там, где он был: «Итог −12 396 ₽», но «−₽1,234».
+  const sign = shown < 0 ? "−" : "";
+  const body = done
+    ? text
+    : parsed.signFirst
+      ? `${sign}${parsed.before}${number}${parsed.after}`
+      : `${parsed.before}${sign}${number}${parsed.after}`;
   return <span className={cn(tint(direction), className)}>{body}</span>;
 }

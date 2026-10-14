@@ -10,6 +10,7 @@ import { formatCurrency, formatInputDate } from "@/lib/format";
 import { percent, roundMoney } from "@/lib/utils";
 import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
+import { intlLocale } from "@/lib/i18n/display-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
 import { pickBestWorstMonth } from "@/lib/analytics/best-month";
@@ -195,7 +196,8 @@ export async function dashboardPage(state: LocalState): Promise<DashboardData> {
   const netWorthTrend = buildNetWorthTrend({
     currentNetWorth: netWorth,
     snapshots: [...(state.netWorthSnapshots ?? [])],
-    transactions: state.transactions
+    transactions: state.transactions,
+    locale: getClientLocale()
   });
   const savingsBalance = sumInBase(
     state,
@@ -294,7 +296,7 @@ export function analyticsPage(state: LocalState, includeTransfers = false): Anal
     const month = d.getMonth();
     const key = monthKeyOf(d);
     const endDate = new Date(year, month + 1, 0);
-    const shortLabel = d.toLocaleDateString("ru", { month: "short" });
+    const shortLabel = d.toLocaleDateString(intlLocale(getClientLocale()), { month: "short" });
     months.push({
       key,
       label: shortLabel,

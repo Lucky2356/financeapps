@@ -18,7 +18,7 @@ import {
 import type { DevicePreferences } from "@/components/settings/settings-form/use-device-preferences";
 import { Segmented } from "@/components/ui/segmented";
 import { SelectItem } from "@/components/ui/select";
-import { SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
+import { currencyLabel, SUPPORTED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
 import type { AccountsPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
 import {
@@ -80,7 +80,7 @@ function GeneralSection({ settings, persist, prefs, accounts }: GeneralSectionPr
         >
           {SUPPORTED_CURRENCIES.map((item) => (
             <SelectItem key={item.code} value={item.code}>
-              {item.code} — {item.label}
+              {item.code} — {currencyLabel(item.code, locale)}
             </SelectItem>
           ))}
         </SelectField>
