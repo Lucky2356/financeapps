@@ -193,7 +193,13 @@
      прокручиваемым контейнером — боковая колонка (sticky) прилипала к нему, то
      есть к верху документа, и на прокрученной странице улетала вверх ровно на
      прокрутку. С одним body его overflow уходит окну: запрет замораживает само
-     окно, и колонка стоит где стояла. Стережёт e2e/settings-select-scroll.spec.ts. */
+     окно, и колонка стоит где стояла. Стережёт e2e/settings-select-scroll.spec.ts.
+
+     НА ТЕЛЕФОНЕ ЭТОГО МАЛО. Ушедший окну overflow мобильный Chrome и WebView не
+     слушают: окно всё равно растягивается по самому широкому содержимому, и
+     страницу можно таскать пальцем вбок (вместе с шапкой и нижней панелью).
+     Настоящая обрезка — overflow-x-clip на корневом блоке оболочки
+     (components/layout-shell.tsx); сторож — e2e/no-sideways.spec.ts. */
   body {
     overflow-x: clip;
   }
@@ -461,6 +467,20 @@
     max-height: calc(
       100svh - max(1rem, env(safe-area-inset-top)) - max(1rem, env(safe-area-inset-bottom))
     );
+  }
+
+  /* Прилипнуть сразу под шапкой телефона (MobileTopBar), а не под краем
+     экрана — иначе шапка накрыла бы прилипшее. Высота шапки — её же формула:
+     отступ сверху (строка состояния) + ряд кнопок size-9 + pb-3. С md шапки
+     нет, и прилипает к самому верху. */
+  .sticky-under-topbar {
+    position: sticky;
+    top: calc(max(env(safe-area-inset-top), var(--fa-safe-top, 0px), 0.75rem) + 3rem);
+  }
+  @media (min-width: 768px) {
+    .sticky-under-topbar {
+      top: 0;
+    }
   }
 
   /* Safe padding for mobile bottom nav */
