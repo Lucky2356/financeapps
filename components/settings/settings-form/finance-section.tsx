@@ -150,8 +150,8 @@ function FinanceSection({ settings, persist, phone, riskProfiles }: FinanceSecti
           onValueChange={(value) => void persist({ emergencyFundMonthsTarget: Number(value) })}
         >
           <SelectItem value="3">{t("set.risk.fund.months", { n: 3 })}</SelectItem>
-          <SelectItem value="6">{t("set.risk.fund.months12", { n: 6 })}</SelectItem>
-          <SelectItem value="12">{t("set.risk.fund.months12", { n: 12 })}</SelectItem>
+          <SelectItem value="6">{t("set.risk.fund.months", { n: 6 })}</SelectItem>
+          <SelectItem value="12">{t("set.risk.fund.months", { n: 12 })}</SelectItem>
         </SelectField>
         <SelectField
           id="set-risk-profile"

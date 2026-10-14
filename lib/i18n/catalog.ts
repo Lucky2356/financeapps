@@ -12,6 +12,8 @@
 // logic); this file is excluded from duplication detection via
 // sonar-project.properties (sonar.cpd.exclusions).
 
+import { pluralizeTemplate } from "@/lib/i18n/plural";
+
 export const LOCALES = ["ru", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "ru";
@@ -533,7 +535,7 @@ const ru: Messages = {
   "cat.essential": "Обязательная",
   "cat.subscription": "Подписка",
   "cat.deleteAria": "Удалить категорию",
-  "cat.cantDelete": "Нельзя удалить: {count} операций",
+  "cat.cantDelete": "Нельзя удалить: {count} {count:операция|операции|операций}",
   "cat.standard": "Стандартная категория",
   "cat.standardLocked": "Стандартную категорию нельзя удалить — только изменить",
   "cat.hint":
@@ -1029,7 +1031,7 @@ const ru: Messages = {
   "notif.due.today": "сегодня",
   "notif.due.tomorrow": "завтра",
   "notif.due.inDays": "через {days} дн.",
-  "notif.ariaSome": "{count} важных уведомлений",
+  "notif.ariaSome": "{count} {count:важное уведомление|важных уведомления|важных уведомлений}",
   "notifSev.INFO": "Инфо",
   "notifSev.SUCCESS": "Ок",
   "notifSev.WARNING": "Важно",
@@ -1160,13 +1162,13 @@ const ru: Messages = {
   "imp.example": "Пример: {value}",
   "imp.optional": "(необязательно)",
   "imp.notSelected": "Не выбрано",
-  "imp.readyToImport": "Готово к импорту: {valid} из {total} строк",
+  "imp.readyToImport": "Готово к импорту: {valid} из {total} {total:строки|строк|строк}",
   "imp.noRows": "Нет строк для импорта",
-  "imp.skippedRows": "Пропущено: {n} строк (дубликаты или ошибки формата)",
+  "imp.skippedRows": "Пропущено: {n} {n:строка|строки|строк} (дубликаты или ошибки формата)",
   "imp.dupFound":
     "Найдено возможных дублей: {count}. Пропустить их при импорте (совпадение по дате, сумме и описанию).",
-  "imp.moreRows": "и ещё {n} строк...",
-  "imp.importBtn": "Импортировать {n} строк",
+  "imp.moreRows": "и ещё {n} {n:строка|строки|строк}...",
+  "imp.importBtn": "Импортировать {n} {n:строку|строки|строк}",
   "imp.exportTitle": "Экспорт операций",
   "imp.exportHint": "Все операции в текущем фильтре",
   "imp.backupTitle": "Резервная копия",
@@ -1211,7 +1213,8 @@ const ru: Messages = {
   "imp.toast.selectFirst": "Сначала выберите backup-файл",
   "imp.toast.restored": "Резервная копия восстановлена",
   "imp.toast.restoreError": "Не удалось восстановить резервную копию",
-  "imp.toast.imported": "CSV импортирован: {imported} строк, пропущено: {skipped}",
+  "imp.toast.imported":
+    "CSV импортирован: {imported} {imported:строка|строки|строк}, пропущено: {skipped}",
   "imp.toast.importError": "Не удалось импортировать CSV",
   "imp.toast.undone": "Последний импорт отменен: удалено операций {removed}",
   "imp.toast.nothingUndo": "Нет импорта, который можно отменить",
@@ -1932,7 +1935,8 @@ const ru: Messages = {
   "inv.toast.watchlistAddError": "Не удалось добавить бумагу",
   "inv.toast.watchlistRemoved": "Бумага удалена из watchlist",
   "inv.toast.watchlistRemoveError": "Не удалось удалить бумагу",
-  "inv.toast.marketRefreshed": "Рыночные данные обновлены: {n} бумаг, источник {source}",
+  "inv.toast.marketRefreshed":
+    "Рыночные данные обновлены: {n} {n:бумага|бумаги|бумаг}, источник {source}",
   "inv.toast.marketRefreshError": "Не удалось обновить рыночные данные",
   // Auth marketing panel
   // Auth forms
@@ -2126,8 +2130,7 @@ const ru: Messages = {
   "set.risk.profile.hint":
     "Используется для анализа концентрации и риска в инвестиционном портфеле.",
   "set.risk.fund": "Цель финансовой подушки",
-  "set.risk.fund.months": "{n} месяца расходов",
-  "set.risk.fund.months12": "{n} месяцев расходов",
+  "set.risk.fund.months": "{n} {n:месяц|месяца|месяцев} расходов",
   "set.risk.fund.hint": "Рекомендуется минимум 3 месяца. 6–12 — для большей уверенности.",
   // Settings: data
   "set.data.sampleHint":
@@ -2211,7 +2214,7 @@ const ru: Messages = {
   "set.localCopies.take": "Сделать копию сейчас",
   "set.localCopies.taken": "Копия сохранена на этом устройстве",
   "set.localCopies.none": "Копий пока нет.",
-  "set.localCopies.ops": "{count} операций",
+  "set.localCopies.ops": "{count} {count:операция|операции|операций}",
   "set.localCopies.daily": "ежедневная",
   "set.localCopies.manual": "по кнопке",
   "set.localCopies.beforeRestore": "перед возвратом",
@@ -2876,15 +2879,19 @@ export function loadLocale(locale: Locale): Promise<void> {
 }
 
 // Resolve a key for a locale: locale → Russian fallback → the key itself.
-// `vars` interpolates {placeholders}.
+// `vars` interpolates {placeholders}; {name:одна|несколько|много} picks the
+// word form for the number in `name` (see pluralizeTemplate).
 export function translate(
   locale: Locale,
   key: string,
   vars?: Record<string, string | number>
 ): string {
-  const template = CATALOGS[locale]?.[key] ?? CATALOGS.ru[key] ?? key;
+  const own = CATALOGS[locale]?.[key];
+  const template = own ?? CATALOGS.ru[key] ?? key;
   if (!vars) return template;
-  return template.replace(/\{(\w+)\}/g, (_, name: string) =>
+  // Строка взята из русского словаря (перевода нет) — и формы у неё русские.
+  const formsLocale: Locale = own === undefined ? "ru" : locale;
+  return pluralizeTemplate(template, vars, formsLocale).replace(/\{(\w+)\}/g, (_, name: string) =>
     name in vars ? String(vars[name]) : `{${name}}`
   );
 }

@@ -905,6 +905,30 @@ describe("LocalApiClient", () => {
     expect(page.categories.some((category) => category.id === "cat-food")).toBe(true);
   });
 
+  it("names the operations that keep a category, in the right form", async () => {
+    const client = createClient();
+    const account = await seedAccount(client);
+    const own = await client.post("/categories", { name: "Хобби", kind: "EXPENSE" });
+    const spend = () =>
+      client.post("/transactions", {
+        amount: "100",
+        type: "EXPENSE",
+        accountId: account.id,
+        categoryId: own.id,
+        date: todayInput(),
+        description: "Краски"
+      });
+
+    await spend();
+    await expect(client.delete(`/categories?id=${own.id}`)).rejects.toThrow(
+      "Нельзя удалить категорию: к ней привязана 1 операция."
+    );
+    await spend();
+    await expect(client.delete(`/categories?id=${own.id}`)).rejects.toThrow(
+      "к ней привязаны 2 операции."
+    );
+  });
+
   it("does not post an operation when a recurring template is created", async () => {
     const client = createClient();
     const account = await seedAccount(client);
