@@ -19,6 +19,7 @@ export const COMPARE_KEY = "sheet-compare";
 export const DENSITY_KEY = "sheet-density";
 export const VIEW_KEY = "sheet-view";
 export const HELP_KEY = "sheet-help-seen";
+export const CHART_KEY = "sheet-chart";
 
 /**
  * Оттенок ПОВЕРХ непрозрачной основы, а не прозрачный фон.
@@ -49,6 +50,15 @@ export const TINT = {
   warning25:
     "bg-card [background-image:linear-gradient(hsl(var(--warning)/0.25),hsl(var(--warning)/0.25))]"
 } as const;
+
+/**
+ * Минус в Итоге: красные цифры на чистой карточке и красная черта слева.
+ * Одни красные цифры на янтарном столбце Итога читались как «ещё одно число»,
+ * а красноватая подложка на тёмной теме съедала контраст (меньше 4,5:1) —
+ * поэтому подложку здесь убираем, а не добавляем.
+ */
+export const NEGATIVE_TOTAL =
+  "bg-card [background-image:none] text-destructive before:pointer-events-none before:absolute before:inset-y-1.5 before:left-1 before:w-[3px] before:rounded-full before:bg-destructive before:content-['']";
 
 /**
  * «Итог» прибит к правому краю таблицы. Он — ответ, ради которого таблицу

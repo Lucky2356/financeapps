@@ -22,3 +22,8 @@ export type SheetFormat = ReturnType<
  */
 export const QUIET_BUTTON =
   "text-foreground hover:bg-foreground/[0.07] active:bg-foreground/[0.14]";
+
+/** Число со словом в нужной форме: count(5, "months") → «5 месяцев». */
+export type SheetCount = ReturnType<
+  typeof import("@/components/sheet/sheet-text").useSheetText
+>["count"];

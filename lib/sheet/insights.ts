@@ -31,3 +31,21 @@ export function firstShortfall(rows: readonly ComputedRow[], current: string): S
 export function monthsAhead(rows: readonly ComputedRow[], current: string): number {
   return rows.filter((row) => row.month > current).length;
 }
+
+export type TotalPoint = {
+  month: string;
+  total: number;
+  /** Итог ниже нуля — столбик вниз и цветом нехватки. */
+  negative: boolean;
+  now: boolean;
+};
+
+/** Итог по месяцам — для маленького графика над таблицей. */
+export function totalSeries(rows: readonly ComputedRow[], current: string): TotalPoint[] {
+  return rows.map((row) => ({
+    month: row.month,
+    total: row.total,
+    negative: row.total < 0,
+    now: row.month === current
+  }));
+}

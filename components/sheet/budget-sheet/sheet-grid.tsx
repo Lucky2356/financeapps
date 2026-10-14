@@ -12,6 +12,7 @@ import type {
 
 import { HeaderCell } from "@/components/sheet/budget-sheet/header-cell";
 import {
+  NEGATIVE_TOTAL,
   PINNED_TOTAL,
   TINT,
   cellValue,
@@ -29,7 +30,8 @@ import type {
   SheetWords
 } from "@/components/sheet/sheet-types";
 import type { ImportPageData } from "@/lib/data";
-import { isBalanceKind, type ComputedSheet } from "@/lib/sheet/model";
+import type { AboveUsual } from "@/lib/sheet/highlight";
+import { cellKey, isBalanceKind, type ComputedSheet } from "@/lib/sheet/model";
 import { cn } from "@/lib/utils";
 
 /** Сама таблица: шапка и месяц липкие, прокрутка — внутри. */
@@ -59,7 +61,9 @@ export function SheetGrid({
   onKeyDown,
   onPaste,
   onEditKeyDown,
-  plain
+  plain,
+  money,
+  unusual
 }: {
   tableRef: RefObject<HTMLDivElement | null>;
   words: SheetWords;
@@ -87,6 +91,9 @@ export function SheetGrid({
   onPaste: (event: ClipboardEvent<HTMLDivElement>) => void;
   onEditKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
   plain: (value: number) => string;
+  money: (value: number) => string;
+  /** Клетки расходов выше обычного — `cellKey(месяц, столбец)`. */
+  unusual: Map<string, AboveUsual>;
 }) {
   const mainSpan = display.findIndex((item) => item.type === "total") + 1;
   const savingsSpan = display.length - mainSpan;
@@ -212,6 +219,23 @@ export function SheetGrid({
                       : null;
                   const crosshair =
                     !isSelected && (selected?.row === rowIndex || selected?.col === col);
+                  const above =
+                    item.type === "column" ? unusual.get(cellKey(row.month, item.column.id)) : null;
+                  const aboveText = above
+                    ? format(words.aboveUsual, {
+                        percent: above.percent,
+                        usual: money(above.usual)
+                      })
+                    : null;
+                  const baseTitle = cell?.error
+                    ? format(words.cellError, { error: cell.error })
+                    : cell?.auto
+                      ? words.auto
+                      : wordy && cell?.input
+                        ? cell.input
+                        : cell?.input && cell.input !== String(value)
+                          ? cell.input
+                          : undefined;
                   return (
                     <td
                       key={item.type === "column" ? item.column.id : item.type}
@@ -219,6 +243,7 @@ export function SheetGrid({
                       aria-selected={isSelected}
                       data-pos={`${rowIndex}:${col}`}
                       data-col={item.type === "column" ? item.column.name : item.type}
+                      data-above={above ? above.percent : undefined}
                       className={cn(
                         "relative min-w-[6.5rem] border-b border-r tabular-nums",
                         pad,
@@ -227,6 +252,13 @@ export function SheetGrid({
                         isTotal && cn(TINT.warning10, "font-semibold"),
                         item.type === "total" && cn(PINNED_TOTAL, "md:z-[6]"),
                         item.type === "column" && item.column.hidden && "opacity-50",
+                        // Выше обычного: лёгкая янтарная подложка и уголок, как у
+                        // примечания в Excel, — подсказка, а не тревога.
+                        above &&
+                          cn(
+                            TINT.warning10,
+                            "after:pointer-events-none after:absolute after:right-0 after:top-0 after:border-[5px] after:border-transparent after:border-r-warning after:border-t-warning after:content-['']"
+                          ),
                         now && !isTotal && "bg-foreground/[0.04]",
                         crosshair && !isTotal && "bg-foreground/[0.07]",
                         item.type === "column" &&
@@ -234,20 +266,16 @@ export function SheetGrid({
                           value !== null &&
                           "font-medium text-success",
                         value === 0 && !isTotal && "text-muted-foreground/50",
-                        isTotal && value !== null && value < 0 && "text-destructive",
+                        isTotal && value !== null && value < 0 && NEGATIVE_TOTAL,
                         isSelected && "outline outline-2 -outline-offset-2 outline-foreground",
                         cell?.error && "text-destructive"
                       )}
                       title={
-                        cell?.error
-                          ? format(words.cellError, { error: cell.error })
-                          : cell?.auto
-                            ? words.auto
-                            : wordy && cell?.input
-                              ? cell.input
-                              : cell?.input && cell.input !== String(value)
-                                ? cell.input
-                                : undefined
+                        aboveText
+                          ? baseTitle
+                            ? `${aboveText}\n${baseTitle}`
+                            : aboveText
+                          : baseTitle
                       }
                       onClick={() => {
                         if (phone) {

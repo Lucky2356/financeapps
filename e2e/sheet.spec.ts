@@ -11,7 +11,7 @@ async function importOwnerSheet(page: Page) {
   await page.getByRole("button", { name: "Перенести мою таблицу из Excel" }).click();
   const dialog = page.getByTestId("sheet-import");
   await dialog.getByLabel("Вставьте таблицу сюда").fill(OWNER_SHEET_TSV);
-  await expect(dialog.getByTestId("sheet-import-ok")).toContainText("во всех 11 мес.");
+  await expect(dialog.getByTestId("sheet-import-ok")).toContainText("во всех 11 месяцах");
   await dialog.getByRole("button", { name: "Перенести", exact: true }).click();
   // На телефоне таблица открывается «По месяцам», на ПК — сеткой.
   await expect(

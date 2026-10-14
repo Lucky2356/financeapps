@@ -9,7 +9,7 @@ import {
   type CellChange,
   type Facts
 } from "@/components/sheet/budget-sheet/helpers";
-import type { SheetFormat, SheetWords } from "@/components/sheet/sheet-types";
+import type { SheetCount, SheetFormat, SheetWords } from "@/components/sheet/sheet-types";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import { useDataVersion } from "@/hooks/use-data-version";
 import { apiClient } from "@/lib/api/client";
@@ -25,12 +25,14 @@ export function useSheetData({
   sheetId,
   current,
   words,
-  format
+  format,
+  count: countOf
 }: {
   sheetId: string;
   current: string;
   words: SheetWords;
   format: SheetFormat;
+  count: SheetCount;
 }) {
   const { data: loaded, reload } = useApiPageData(
     EMPTY,
@@ -141,7 +143,7 @@ export function useSheetData({
         await apiClient.post("/sheet", { sheetId, action: "addMonth", month: at });
       }
       await reload();
-      toast.success(format(words.monthsAdded, { count }));
+      toast.success(format(words.monthsAdded, { months: countOf(count, "months") }));
     } catch (cause) {
       toast.error((cause as Error).message);
     }
@@ -155,13 +157,17 @@ export function useSheetData({
       toast(words.copyNothing);
       return;
     }
-    void save(changes).then(() => toast.success(format(words.copied, { count: changes.length })));
+    void save(changes).then(() =>
+      toast.success(format(words.copied, { cells: countOf(changes.length, "cells") }))
+    );
   }
 
   function clearWholeMonth(month: string) {
     const changes = clearMonth(computed.rows, sheet.columns, month);
     if (changes.length === 0) return;
-    void save(changes).then(() => toast.success(format(words.cleared, { count: changes.length })));
+    void save(changes).then(() =>
+      toast.success(format(words.cleared, { cells: countOf(changes.length, "cells") }))
+    );
   }
 
   async function fillFromLedger() {
@@ -179,7 +185,7 @@ export function useSheetData({
         return;
       }
       await save(changes);
-      toast.success(format(words.fillFromLedgerDone, { count: changes.length }));
+      toast.success(format(words.fillFromLedgerDone, { cells: countOf(changes.length, "cells") }));
     } catch (cause) {
       toast.error((cause as Error).message);
     }

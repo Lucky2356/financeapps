@@ -65,7 +65,7 @@ export function SheetImportDialog({
   hasSheet: boolean;
   onImported: () => Promise<void>;
 }) {
-  const { words, format, locale } = useSheetText();
+  const { words, format, locale, count } = useSheetText();
   const { t } = useI18n();
   const [text, setText] = useState("");
   const [sheets, setSheets] = useState<Array<{ name: string; grid: Grid }>>([]);
@@ -188,7 +188,7 @@ export function SheetImportDialog({
     try {
       await apiClient.post("/sheet", { sheetId, action: "import", payload });
       await onImported();
-      toast.success(format(words.imported, { months: plan.rows.length }));
+      toast.success(format(words.imported, { months: count(plan.rows.length, "months") }));
       onOpenChange(false);
       setPlan(null);
       setText("");
@@ -325,10 +325,13 @@ export function SheetImportDialog({
             {plan.rows.length > 0 ? (
               <p className="text-sm" data-testid="sheet-import-found">
                 {format(words.importFound, {
-                  months: plan.rows.length,
+                  months: count(plan.rows.length, "months"),
                   from: monthLabel(plan.rows[0].month, locale),
                   to: monthLabel(plan.rows[plan.rows.length - 1].month, locale),
-                  columns: plan.columns.filter((column) => column.role !== "month").length
+                  columns: count(
+                    plan.columns.filter((column) => column.role !== "month").length,
+                    "columns"
+                  )
                 })}
               </p>
             ) : null}
@@ -351,13 +354,13 @@ export function SheetImportDialog({
                   data-testid="sheet-import-ok"
                 >
                   <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-                  {format(words.importTotalsOk, { count: totals.checked })}
+                  {format(words.importTotalsOk, { months: count(totals.checked, "monthsIn") })}
                 </p>
               ) : (
                 <p className="flex items-start gap-2 text-sm text-warning">
                   <TriangleAlert className="mt-0.5 size-4 shrink-0" />
                   {format(words.importTotalsBad, {
-                    count: totals.mismatched.length,
+                    months: count(totals.mismatched.length, "monthsIn"),
                     month: monthLabel(totals.mismatched[0].month, locale),
                     file: totals.mismatched[0].file.toLocaleString("ru-RU"),
                     ours: totals.mismatched[0].ours.toLocaleString("ru-RU")
