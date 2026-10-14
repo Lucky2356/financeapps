@@ -62,6 +62,18 @@ const SCHEMA = `
     primary key (person_id, slot)
   );
 
+  -- Недавние версии каждой ячейки: номер и время записи, без содержимого.
+  -- По ним служба отвечает устройству, видела ли она ту версию, которую оно
+  -- помнит (см. ancestryOf в vault.ts). Держится не больше HISTORY_DEPTH
+  -- строк на ячейку.
+  create table if not exists book_versions (
+    person_id  text not null references people(id) on delete cascade,
+    slot       text not null,
+    version    integer not null,
+    updated_at text not null,
+    primary key (person_id, slot, version)
+  );
+
   create table if not exists invitations (
     code      text primary key,
     issued_at text not null,
@@ -124,8 +136,11 @@ const SCHEMA = `
 
 export function openDatabase(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
+  const hadHistory = !!db
+    .prepare("select name from sqlite_master where type = 'table' and name = 'book_versions'")
+    .get();
   db.exec(SCHEMA);
-  upgrade(db);
+  upgrade(db, hadHistory);
   return db;
 }
 
@@ -136,7 +151,16 @@ export function openDatabase(path: string): DatabaseSync {
  * столбцы добавляются здесь, по одному и только если их нет: обновление
  * службы — это `git pull` и перезапуск, и база обязана пережить его сама.
  */
-function upgrade(db: DatabaseSync): void {
+function upgrade(db: DatabaseSync, hadHistory = true): void {
+  // История версий (book_versions) появилась позже книг. Заведённым раньше
+  // ячейкам в неё кладётся нынешняя версия — иначе первое же устройство,
+  // спросившее «видела ли ты мою пару», услышало бы «нет» про версию, которая
+  // лежит на службе прямо сейчас, и слило бы книгу без основы.
+  if (!hadHistory) {
+    db.exec(`insert or ignore into book_versions (person_id, slot, version, updated_at)
+      select person_id, slot, version, updated_at from books`);
+  }
+
   const columns = db
     .prepare("pragma table_info(pairings)")
     .all<{ name: string }>()

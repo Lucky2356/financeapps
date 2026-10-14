@@ -9,6 +9,10 @@
 // Запуск: npm run test:server
 
 import assert from "node:assert/strict";
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
@@ -634,6 +638,162 @@ describe("служба", () => {
         body: { baseVersion: -1, body: BOOK }
       });
       assert.equal(response.status, 400);
+    });
+  });
+
+  describe("история версий: служба вернулась из копии", () => {
+    // Устройство помнит версию ячейки — номер и время записи — и держит её
+    // основой для слияния. После возврата базы из копии другие устройства
+    // могут дописать ДАЛЬШЕ помнящегося номера, и по номеру возврат уже не
+    // виден. Служба помнит последние пары и отвечает, была ли у неё такая.
+    let folder: string;
+
+    beforeEach(() => {
+      folder = mkdtempSync(join(tmpdir(), "financeapps-history-"));
+    });
+
+    afterEach(() => {
+      rmSync(folder, { recursive: true, force: true });
+    });
+
+    /** Поднять службу на той же базе — после того, как её остановили. */
+    async function reopen(dbPath: string): Promise<void> {
+      app = createApp({ dbPath, adminToken: ADMIN });
+      await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+      base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+    }
+
+    async function put(token: string, baseVersion: number, extra: object = {}) {
+      return call("/vault/книга", {
+        method: "PUT",
+        token,
+        body: { baseVersion, body: BOOK, ...extra }
+      });
+    }
+
+    async function read(token: string, version: number, at: string) {
+      const query = `knownVersion=${version}&knownAt=${encodeURIComponent(at)}`;
+      return (await call(`/vault/книга?${query}`, { token })).body as {
+        version: number;
+        updatedAt: string;
+        ancestor?: string;
+      };
+    }
+
+    it("помнящуюся версию служба узнаёт — и нынешнюю, и прошлые", async () => {
+      const { token } = await signUp("петя");
+      const first = (await put(token, 0)).body as { version: number; updatedAt: string };
+      await put(token, 1);
+      await put(token, 2);
+      assert.equal((await read(token, first.version, first.updatedAt)).ancestor, "known");
+      const now = (await call("/vault/книга", { token })).body as {
+        version: number;
+        updatedAt: string;
+      };
+      assert.equal((await read(token, now.version, now.updatedAt)).ancestor, "known");
+      // Та же версия с другим временем — чужая.
+      assert.equal(
+        (await read(token, now.version, "2001-01-01T00:00:00.000Z")).ancestor,
+        "unknown"
+      );
+    });
+
+    it("после возврата из копии пара, записанная позже копии, неизвестна — даже когда номер обогнали", async () => {
+      const path = join(folder, "finance.db");
+      await restart({ dbPath: path });
+      const { token } = await signUp("петя");
+      const early = (await put(token, 0)).body as { version: number; updatedAt: string };
+
+      // Ночная копия.
+      await app.stop();
+      copyFileSync(path, join(folder, "nightly.db"));
+      await reopen(path);
+
+      // Это устройство дописало до третьей и запомнило её.
+      await put(token, 1);
+      const mine = (await put(token, 2)).body as { version: number; updatedAt: string };
+      assert.equal(mine.version, 3);
+
+      // Возврат из копии: служба снова на первой.
+      await app.stop();
+      copyFileSync(join(folder, "nightly.db"), path);
+      for (const tail of ["-wal", "-shm"]) rmSync(`${path}${tail}`, { force: true });
+      await reopen(path);
+
+      // Другое устройство успело дописать до четвёртой — дальше помнящейся.
+      for (let base = 1; base <= 3; base += 1) assert.equal((await put(token, base)).status, 200);
+
+      const seen = await read(token, mine.version, mine.updatedAt);
+      assert.equal(seen.version, 4);
+      assert.equal(seen.ancestor, "unknown");
+      // Версия из копии — общая, её служба помнит.
+      assert.equal((await read(token, early.version, early.updatedAt)).ancestor, "known");
+    });
+
+    it("история не растёт без предела", async () => {
+      const { token } = await signUp("петя");
+      const first = (await put(token, 0)).body as { version: number; updatedAt: string };
+      for (let base = 1; base < 70; base += 1) await put(token, base);
+      const rows = app.db
+        .prepare("select count(*) as n from book_versions where slot = ?")
+        .get<{ n: number }>("книга");
+      assert.equal(rows?.n, 64);
+      // Старше истории — служба не берётся судить и ничего не добавляет:
+      // устройство поступает как раньше.
+      assert.equal((await read(token, first.version, first.updatedAt)).ancestor, undefined);
+    });
+
+    it("запись поверх «той же» версии с другим временем — отказ, а не затирание", async () => {
+      const { token } = await signUp("петя");
+      const written = (await put(token, 0)).body as { version: number; updatedAt: string };
+
+      const foreign = await put(token, 1, { baseUpdatedAt: "2001-01-01T00:00:00.000Z" });
+      assert.equal(foreign.status, 409);
+      const current = (foreign.body as { current: { version: number; ancestor?: string } }).current;
+      assert.equal(current.version, 1);
+      assert.equal(current.ancestor, "unknown");
+
+      const own = await put(token, 1, { baseUpdatedAt: written.updatedAt });
+      assert.equal(own.status, 200);
+      // Отказ по номеру с верным временем говорит, что основа общая.
+      const behind = await put(token, 1, { baseUpdatedAt: written.updatedAt });
+      assert.equal(behind.status, 409);
+      assert.equal((behind.body as { current: { ancestor?: string } }).current.ancestor, "known");
+    });
+
+    it("неверно названная версия — 400, а не 500", async () => {
+      const { token } = await signUp("петя");
+      for (const query of [
+        "knownVersion=abc&knownAt=x",
+        "knownVersion=0&knownAt=x",
+        "knownVersion=-1&knownAt=x",
+        "knownVersion=1.5&knownAt=x",
+        "knownVersion=99999999999999999999&knownAt=x",
+        "knownVersion=1",
+        "knownAt=x",
+        `knownVersion=1&knownAt=${"x".repeat(100)}`
+      ]) {
+        assert.equal((await call(`/vault/книга?${query}`, { token })).status, 400, query);
+      }
+      for (const stamp of [42, "", "x".repeat(100), {}]) {
+        assert.equal((await put(token, 0, { baseUpdatedAt: stamp })).status, 400);
+      }
+    });
+
+    it("база прежней версии получает историю нынешних версий при запуске", async () => {
+      const path = join(folder, "finance.db");
+      await restart({ dbPath: path });
+      const { token } = await signUp("петя");
+      const written = (await put(token, 0)).body as { version: number; updatedAt: string };
+
+      // Так выглядит база до истории: таблицы нет вовсе.
+      await app.stop();
+      const old = new DatabaseSync(path);
+      old.exec("drop table book_versions");
+      old.close();
+      await reopen(path);
+
+      assert.equal((await read(token, written.version, written.updatedAt)).ancestor, "known");
     });
   });
 
