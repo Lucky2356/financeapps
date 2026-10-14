@@ -2373,6 +2373,15 @@ export const en: Messages = {
   "vault.settings.current": "Current password",
   "vault.settings.next": "New password",
   "vault.settings.changed": "Password changed. The recovery code is unchanged.",
+  "vault.server.sent":
+    "The new password now works on the sync server too: the old one no longer signs in there.",
+  "vault.server.offline":
+    "No connection to the sync server. The new password will be sent once you are online; until then the old one still works there.",
+  "vault.server.outdated":
+    "The sync server is out of date and does not accept password changes yet, so the old password still works there. The new one will be sent once the server is updated.",
+  "vault.server.later":
+    "The new password has not reached the sync server yet: {message} The app will try again.",
+  "vault.server.refused": "The sync server did not accept the new password: {message}",
   "vault.settings.lock": "Lock the data",
   "vault.error": "Did not work: {message}",
   "calc.title": "Calculator",

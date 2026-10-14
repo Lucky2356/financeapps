@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { VaultChangeWatch } from "@/components/sync/vault-change-watch";
 import { FirstRun } from "@/components/vault/first-run";
 import { ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { writeMine } from "@/lib/storage/mine";
@@ -149,7 +150,15 @@ export function VaultGate({ children }: { children: React.ReactNode }) {
     );
   }
   if (phase === "locked") return <UnlockScreen onDone={refresh} />;
-  return <>{children}</>;
+  // Слушатель исхода смены пароля — здесь, в воротах, а не в оболочке экранов:
+  // отправка, не доехавшая в прошлый раз, уходит вместе с подъёмом
+  // синхронизации (resumeSync выше), и слушать надо уже к этому моменту.
+  return (
+    <>
+      <VaultChangeWatch />
+      {children}
+    </>
+  );
 }
 
 /** Сказать воротам, что состояние замка изменилось. */

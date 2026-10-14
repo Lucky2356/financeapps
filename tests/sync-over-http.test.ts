@@ -394,6 +394,36 @@ describe("приложение через службу", () => {
     expect(snapshot).toMatchObject({ slot: "пусто", version: 0, body: null });
   });
 
+  it("провод спрашивает, видела ли служба помнящуюся версию, — и понимает ответ", async () => {
+    const { token } = await signUp("петя");
+    const transport = new HttpSyncTransport({ base, token });
+    const sealed = { v: 1 as const, alg: "AES-GCM" as const, iv: "iv", ct: "книга" };
+    const first = await transport.push("книга", { baseVersion: 0, body: sealed });
+    if (!first.ok) throw new Error("первая запись не принята");
+
+    const known = { version: first.version, updatedAt: first.updatedAt };
+    expect((await transport.pull("книга", known)).ancestor).toBe("known");
+    expect(
+      (await transport.pull("книга", { ...known, updatedAt: "2001-01-01T00:00:00.000Z" })).ancestor
+    ).toBe("unknown");
+    // Без помнящейся версии — ответ как у прежней службы.
+    expect((await transport.pull("книга")).ancestor).toBeUndefined();
+
+    // Запись поверх «другой первой» — отказ с тем же ответом.
+    const foreign = await transport.push("книга", {
+      baseVersion: 1,
+      baseUpdatedAt: "2001-01-01T00:00:00.000Z",
+      body: sealed
+    });
+    expect(foreign.ok === false && foreign.current.ancestor).toBe("unknown");
+    const own = await transport.push("книга", {
+      baseVersion: 1,
+      baseUpdatedAt: first.updatedAt,
+      body: sealed
+    });
+    expect(own.ok).toBe(true);
+  });
+
   it("чужой человек не видит нашу книгу", async () => {
     const petya = await signUp("петя");
     const vasya = await signUp("вася");

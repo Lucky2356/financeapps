@@ -79,6 +79,58 @@ export function listSlots(
     .all<{ slot: string; version: number; updatedAt: string }>(personId);
 }
 
+/**
+ * Сколько последних версий каждой ячейки служба помнит — номер и время записи.
+ *
+ * Зачем. Устройство помнит, какую версию ячейки видело последней, и держит её
+ * основой для слияния. Если хозяин службы вернул базу из ночной копии, а
+ * другие устройства успели дописать ДАЛЬШЕ того номера, что помнит это, —
+ * номер на службе снова больше, и по одному номеру возврат не виден: устройство
+ * приняло бы чужую историю за продолжение своей и слило бы с неверной основой
+ * (всё написанное им после копии сочлось бы удалённым на службе).
+ *
+ * Поэтому устройство называет пару «версия + время», которую помнит, а служба
+ * отвечает, была ли такая пара в её истории. Копия базы уносит с собой и
+ * историю на тот день — значит после возврата пары, записанной позже копии, в
+ * истории нет, и это видно сразу.
+ *
+ * Шестьдесят четыре — с запасом на неделю обычной работы одного человека;
+ * строка истории — номер и время, десятки байт. Предел держит таблицу
+ * маленькой при любой частоте записи.
+ */
+export const HISTORY_DEPTH = 64;
+
+/** Что служба знает о паре «версия + время», которую помнит устройство. */
+export type Ancestry = "known" | "unknown";
+
+/**
+ * Была ли у ячейки такая версия с таким временем записи.
+ *
+ * `null` — сказать нельзя: пара старше всего, что служба помнит (история
+ * короче, или запись сделана до того, как служба начала её вести). Тогда
+ * устройство поступает как раньше, по одному номеру.
+ */
+export function ancestryOf(
+  db: DatabaseSync,
+  personId: string,
+  slot: string,
+  known: { version: number; updatedAt: string }
+): Ancestry | null {
+  const hit = db
+    .prepare(
+      "select 1 as hit from book_versions where person_id = ? and slot = ? and version = ? and updated_at = ?"
+    )
+    .get<{ hit: number }>(personId, slot, known.version, known.updatedAt);
+  if (hit) return "known";
+  const oldest = db
+    .prepare("select min(version) as oldest from book_versions where person_id = ? and slot = ?")
+    .get<{ oldest: number | null }>(personId, slot)?.oldest;
+  // Истории нет вовсе — ячейки на службе нет (вернули копию, сделанную до
+  // неё): устройство помнит то, чего служба не видела.
+  if (oldest === null || oldest === undefined) return "unknown";
+  return known.version < oldest ? null : "unknown";
+}
+
 export type PutOutcome =
   | { ok: true; version: number; updatedAt: string }
   | { ok: false; reason: "stale"; current: Snapshot }
@@ -91,7 +143,17 @@ export function writeSlot(
   baseVersion: number,
   body: unknown,
   now: string,
-  limits: Limits = NO_LIMITS
+  limits: Limits = NO_LIMITS,
+  /**
+   * Время записи той версии, поверх которой пишет устройство. Необязательное:
+   * старые устройства его не шлют, и для них всё как раньше — по одному номеру.
+   *
+   * С ним «та же пятая» и «другая пятая» различаются и при записи. Другая
+   * пятая — это служба, вернувшаяся из копии, поверх которой соседнее
+   * устройство дописало до того же номера; принять запись по одному номеру
+   * значило бы затереть его работу, не слив.
+   */
+  baseUpdatedAt: string | null = null
 ): PutOutcome {
   const text = JSON.stringify(body);
   if (Buffer.byteLength(text) > MAX_BODY_BYTES) {
@@ -99,7 +161,10 @@ export function writeSlot(
   }
 
   const current = readSlot(db, personId, slot);
-  if (current.version !== baseVersion) return { ok: false, reason: "stale", current };
+  const sameBase =
+    current.version === baseVersion &&
+    (baseUpdatedAt === null || current.updatedAt === baseUpdatedAt);
+  if (!sameBase) return { ok: false, reason: "stale", current };
 
   const crowded = tooMuch(db, personId, slot, text, limits);
   if (crowded) return { ok: false, reason: "full", error: crowded };
@@ -125,7 +190,26 @@ export function writeSlot(
     return { ok: false, reason: "stale", current: readSlot(db, personId, slot) };
   }
 
+  remember(db, personId, slot, version, now);
   return { ok: true, version, updatedAt: now };
+}
+
+/** Записать версию в историю ячейки и забыть то, что старше предела. */
+function remember(
+  db: DatabaseSync,
+  personId: string,
+  slot: string,
+  version: number,
+  updatedAt: string
+): void {
+  db.prepare(
+    "insert or replace into book_versions (person_id, slot, version, updated_at) values (?, ?, ?, ?)"
+  ).run(personId, slot, version, updatedAt);
+  db.prepare("delete from book_versions where person_id = ? and slot = ? and version <= ?").run(
+    personId,
+    slot,
+    version - HISTORY_DEPTH
+  );
 }
 
 /**

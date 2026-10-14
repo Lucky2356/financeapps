@@ -42,7 +42,18 @@ export type SlotSnapshot = {
   body: SealedBook | null;
   /** Когда сервер принял эту версию. Время сервера, не устройства. */
   updatedAt: string | null;
+  /**
+   * Видел ли сервер ту версию, которую устройство назвало (см. KnownVersion):
+   * "known" — да, она — общий предок; "unknown" — нет: сервер вернули из
+   * копии, и общий предок неизвестен, даже если номер на сервере уже больше
+   * помнящегося. Нет поля — сервер не знает (старая служба, или версия старше
+   * его истории), и устройство судит по номеру, как раньше.
+   */
+  ancestor?: "known" | "unknown";
 };
+
+/** Версия, которую устройство видело последней: номер и время записи на сервере. */
+export type KnownVersion = { version: number; updatedAt: string };
 
 /** Ячейка в перечне: без содержимого, только имя и версия. */
 export type SlotSummary = {
@@ -58,6 +69,13 @@ export type PutRequest = {
    * ячейку — 0.
    */
   baseVersion: number;
+  /**
+   * Время записи этой версии на сервере, если устройство его помнит. Тогда
+   * сервер примет запись, только если у него та же версия с тем же временем:
+   * «другая пятая» после возврата из копии — отказ, а не затирание. Старая
+   * служба поле не читает.
+   */
+  baseUpdatedAt?: string;
   body: SealedBook;
 };
 
@@ -109,8 +127,11 @@ export interface SyncTransport {
    */
   list(): Promise<SlotSummary[]>;
 
-  /** Что лежит в ячейке сейчас. */
-  pull(slot: SlotName): Promise<SlotSnapshot>;
+  /**
+   * Что лежит в ячейке сейчас. `known` — версия, которую устройство помнит:
+   * сервер скажет в `ancestor`, видел ли он её.
+   */
+  pull(slot: SlotName, known?: KnownVersion): Promise<SlotSnapshot>;
 
   /** Положить поверх известной версии. Может вернуть отказ — это нормально. */
   push(slot: SlotName, request: PutRequest): Promise<PutResult>;
@@ -154,8 +175,13 @@ export function isOffline(error: unknown): boolean {
 export const ROUTES = {
   /** GET → { slots: SlotSummary[] } */
   slots: "/vault",
-  /** GET → SlotSnapshot */
-  slot: (slot: SlotName) => `/vault/${encodeURIComponent(slot)}`,
+  /**
+   * GET → SlotSnapshot. С помнящейся версией —
+   * `?knownVersion=<номер>&knownAt=<время>`, и в ответе поле `ancestor`.
+   */
+  slot: (slot: SlotName, known?: KnownVersion) =>
+    `/vault/${encodeURIComponent(slot)}` +
+    (known ? `?knownVersion=${known.version}&knownAt=${encodeURIComponent(known.updatedAt)}` : ""),
   /** PUT PutRequest → PutResult (отказ отдаётся кодом 409, а не 200). */
   put: (slot: SlotName) => `/vault/${encodeURIComponent(slot)}`,
   /** GET, поток событий SlotChanged. */

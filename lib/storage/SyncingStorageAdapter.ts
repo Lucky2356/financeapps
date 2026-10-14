@@ -30,7 +30,13 @@
 // снаружи (см. lib/vault/runtime.ts) — тем, у кого ключ есть.
 
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
-import { isOffline, type SlotName, type SyncTransport } from "@/lib/sync/protocol";
+import {
+  isOffline,
+  type KnownVersion,
+  type SlotName,
+  type SlotSnapshot,
+  type SyncTransport
+} from "@/lib/sync/protocol";
 import type { SealedBook } from "@/lib/sync/vault-crypto";
 
 /** Где лежат номера версий ячеек. Содержимого книги здесь нет — только числа. */
@@ -599,13 +605,26 @@ export class SyncingStorageAdapter implements StorageAdapter {
    * удалённым без следа удаления: свои строки остаются, серверные добавляются,
    * а `differs` отправляет слитое обратно на сервер.
    */
-  private async ancestor(
-    slot: SlotName,
-    version: number,
-    updatedAt: string | null
-  ): Promise<SealedBook | null> {
-    if (this.rewound(slot, version, updatedAt)) return null;
+  private async ancestor(slot: SlotName, snapshot: SlotSnapshot): Promise<SealedBook | null> {
+    // Сервер сам сказал, что помнящейся версии у него не было: его вернули из
+    // копии, и другие устройства успели уйти ДАЛЬШЕ нашего номера. По номеру
+    // этого не видно (он больше помнящегося), а основа наша — из истории,
+    // которой на сервере нет.
+    if (snapshot.ancestor === "unknown") return null;
+    if (this.rewound(slot, snapshot.version, snapshot.updatedAt)) return null;
     return this.base(slot);
+  }
+
+  /**
+   * Помнящаяся версия ячейки — чтобы спросить сервер, видел ли он её. Без
+   * времени записи (записи до его появления) спрашивать нечем.
+   */
+  private known(slot: SlotName): KnownVersion | undefined {
+    const version = this.versions[slot];
+    const updatedAt = this.stamps[slot];
+    return version !== undefined && version > 0 && updatedAt !== undefined
+      ? { version, updatedAt }
+      : undefined;
   }
 
   /** Запомнить версию сервера, которую мы теперь знаем. */
@@ -725,7 +744,8 @@ export class SyncingStorageAdapter implements StorageAdapter {
     const merge = this.merge;
     if (!transport || !merge) return;
 
-    const snapshot = await transport.pull(slot);
+    const known = this.known(slot);
+    const snapshot = known ? await transport.pull(slot, known) : await transport.pull(slot);
     if (snapshot.body === null) {
       // На сервере пусто, а у нас что-то есть — значит, мы первые.
       if (sealed(await this.inner.getItem(slot))) this.queue(slot);
@@ -740,7 +760,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
         slot,
         sealed(mine) ? mine : null,
         snapshot.body,
-        await this.ancestor(slot, snapshot.version, snapshot.updatedAt)
+        await this.ancestor(slot, snapshot)
       );
 
       // Пока мы сливали, человек что-то записал. Положи мы слитое как есть —
@@ -778,8 +798,12 @@ export class SyncingStorageAdapter implements StorageAdapter {
       if (!sealed(body)) return;
 
       this.set("sending");
+      const known = this.known(slot);
       const result = await transport.push(slot, {
         baseVersion: this.versions[slot] ?? 0,
+        // Время помнящейся версии — чтобы сервер не принял запись поверх
+        // «другой пятой» после возврата из копии (см. PutRequest).
+        ...(known ? { baseUpdatedAt: known.updatedAt } : {}),
         body
       });
 
@@ -808,7 +832,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
         slot,
         body,
         result.current.body,
-        await this.ancestor(slot, result.current.version, result.current.updatedAt)
+        await this.ancestor(slot, result.current)
       );
       if (this.writes !== mark) {
         // Та же гонка, что и при приёме: записанное человеком, пока мы сливали,

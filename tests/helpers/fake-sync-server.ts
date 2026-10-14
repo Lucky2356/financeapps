@@ -13,6 +13,7 @@
 
 import {
   OfflineError,
+  type KnownVersion,
   type PutRequest,
   type PutResult,
   type SlotChanged,
@@ -24,9 +25,25 @@ import {
 
 type Cell = Required<Pick<SlotSnapshot, "version" | "body" | "updatedAt">>;
 
+/** Сколько последних версий ячейки помнит служба (HISTORY_DEPTH в server/src/vault.ts). */
+const HISTORY_DEPTH = 64;
+
+type Pair = { version: number; updatedAt: string };
+
+/** Копия «базы»: ячейки вместе с историей версий — как файл копии на службе. */
+export type ServerCopy = { cells: Map<SlotName, Cell>; history: Map<SlotName, Pair[]> };
+
 export class FakeSyncServer implements SyncTransport {
   private readonly cells = new Map<SlotName, Cell>();
   private readonly watchers = new Set<(event: SlotChanged) => void>();
+  private readonly history = new Map<SlotName, Pair[]>();
+
+  /**
+   * Помнит ли служба историю версий. Снимается, чтобы изобразить службу
+   * прежней версии: она не отвечает про помнящуюся версию и не сверяет время
+   * основы при записи.
+   */
+  remembers = true;
 
   /** Связь. Снимается, чтобы проверить очередь и повторы. */
   online = true;
@@ -71,11 +88,35 @@ export class FakeSyncServer implements SyncTransport {
     }));
   }
 
-  async pull(slot: SlotName): Promise<SlotSnapshot> {
+  async pull(slot: SlotName, known?: KnownVersion): Promise<SlotSnapshot> {
     this.guard();
     this.calls.pull += 1;
+    const snapshot = this.snapshot(slot);
+    const ancestor = known ? this.ancestry(slot, known) : null;
+    return ancestor ? { ...snapshot, ancestor } : snapshot;
+  }
+
+  private snapshot(slot: SlotName): SlotSnapshot {
     const cell = this.cells.get(slot);
     return cell ? { slot, ...cell } : { slot, version: 0, body: null, updatedAt: null };
+  }
+
+  /** То же, что ancestryOf на службе: была ли такая пара, или сказать нельзя. */
+  private ancestry(slot: SlotName, known: KnownVersion): "known" | "unknown" | null {
+    if (!this.remembers) return null;
+    const pairs = this.history.get(slot) ?? [];
+    if (pairs.some((pair) => pair.version === known.version && pair.updatedAt === known.updatedAt))
+      return "known";
+    if (pairs.length === 0) return "unknown";
+    return known.version < Math.min(...pairs.map((pair) => pair.version)) ? null : "unknown";
+  }
+
+  private remember(slot: SlotName, version: number, updatedAt: string): void {
+    const pairs = [...(this.history.get(slot) ?? []), { version, updatedAt }];
+    this.history.set(
+      slot,
+      pairs.filter((pair) => pair.version > version - HISTORY_DEPTH)
+    );
   }
 
   async push(slot: SlotName, request: PutRequest): Promise<PutResult> {
@@ -87,18 +128,28 @@ export class FakeSyncServer implements SyncTransport {
 
     // Сердце договора: пишем только поверх той версии, которую устройство
     // видело. Иначе — отказ вместе с тем, что лежит сейчас.
-    if (request.baseVersion !== current) {
+    const stamp = this.remembers ? request.baseUpdatedAt : undefined;
+    if (
+      request.baseVersion !== current ||
+      (stamp !== undefined && (cell?.updatedAt ?? null) !== stamp)
+    ) {
       this.calls.rejected += 1;
+      const ancestor =
+        stamp !== undefined && request.baseVersion > 0
+          ? this.ancestry(slot, { version: request.baseVersion, updatedAt: stamp })
+          : null;
+      const snapshot = this.snapshot(slot);
       return {
         ok: false,
         reason: "stale",
-        current: cell ? { slot, ...cell } : { slot, version: 0, body: null, updatedAt: null }
+        current: ancestor ? { ...snapshot, ancestor } : snapshot
       };
     }
 
     const version = current + 1;
     const updatedAt = this.now();
     this.cells.set(slot, { version, body: request.body, updatedAt });
+    this.remember(slot, version, updatedAt);
     this.announce({ slot, version });
     return { ok: true, version, updatedAt };
   }
@@ -132,7 +183,9 @@ export class FakeSyncServer implements SyncTransport {
    */
   seed(slot: SlotName, body: SlotSnapshot["body"]): number {
     const version = (this.cells.get(slot)?.version ?? 0) + 1;
-    this.cells.set(slot, { version, body, updatedAt: this.now() });
+    const updatedAt = this.now();
+    this.cells.set(slot, { version, body, updatedAt });
+    this.remember(slot, version, updatedAt);
     this.announce({ slot, version });
     return version;
   }
@@ -143,13 +196,16 @@ export class FakeSyncServer implements SyncTransport {
    * пятую, а сервер снова на третьей. Событий нет — служба перезапускалась, и
    * устройства узнают о возврате только при следующей сверке.
    */
-  backup(): Map<SlotName, Cell> {
-    return new Map([...this.cells].map(([slot, cell]) => [slot, structuredClone(cell)]));
+  backup(): ServerCopy {
+    // История версий лежит в той же базе и уходит в ту же копию.
+    return structuredClone({ cells: this.cells, history: this.history });
   }
 
-  restore(copy: Map<SlotName, Cell>): void {
+  restore(copy: ServerCopy): void {
     this.cells.clear();
-    for (const [slot, cell] of copy) this.cells.set(slot, structuredClone(cell));
+    this.history.clear();
+    for (const [slot, cell] of copy.cells) this.cells.set(slot, structuredClone(cell));
+    for (const [slot, pairs] of copy.history) this.history.set(slot, structuredClone(pairs));
   }
 
   /** Что сейчас лежит в ячейке — для проверок, не для приложения. */

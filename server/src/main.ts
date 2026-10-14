@@ -27,7 +27,10 @@ import {
   normalizeLogin,
   register,
   renameDevice,
-  whoIs
+  replaceVault,
+  whoIs,
+  checkFullVault,
+  MAX_SECRET
 } from "./auth.ts";
 import { openDatabase } from "./db.ts";
 import { EventBus } from "./events.ts";
@@ -41,6 +44,7 @@ import {
 } from "./pairing.ts";
 import { RateLimiter } from "./rate-limit.ts";
 import {
+  ancestryOf,
   listSlots,
   readSlot,
   usageOf,
@@ -78,6 +82,7 @@ const KNOWN_ROUTES: readonly string[] = [
   "/auth/register",
   "/auth/login",
   "/auth/logout",
+  "/auth/vault",
   "/events",
   "/vault",
   "/devices",
@@ -113,6 +118,28 @@ export function decodePart(raw: string): string {
 
 /** Имя ячейки длиннее этого — не имя, а попытка забить базу мусором. */
 export const MAX_SLOT_NAME = 200;
+
+/** Время записи — строка ISO, два десятка знаков. Длиннее — не время. */
+const MAX_STAMP = 64;
+
+/**
+ * Пара «версия + время», которую помнит устройство, — из строки запроса.
+ *
+ * null — не названа (старое устройство или ничего не помнит), "bad" —
+ * названа неверно: это ошибка запроса, 400, а не повод молча ответить по-старому.
+ */
+export function knownPair(
+  version: string | null,
+  at: string | null
+): { version: number; updatedAt: string } | null | "bad" {
+  if (version === null && at === null) return null;
+  if (version === null || at === null) return "bad";
+  if (!/^[1-9]\d{0,15}$/.test(version)) return "bad";
+  const number = Number(version);
+  if (!Number.isSafeInteger(number)) return "bad";
+  if (at === "" || at.length > MAX_STAMP) return "bad";
+  return { version: number, updatedAt: at };
+}
 
 /**
  * Совпадает ли предъявленное с пропуском управления — за постоянное время.
@@ -236,6 +263,10 @@ export function createApp(options: AppOptions) {
   // Новое устройство при обратной связке спрашивает «ответили ли» каждые пару
   // секунд. Шестьдесят в минуту — с запасом на два устройства за одним роутером.
   const waiters = new RateLimiter(60);
+  // Замена шкатулки: два прогона scrypt на запрос. Человек меняет пароль раз в
+  // год; десять в минуту — с запасом на повторы после обрыва, а билету,
+  // унесённому чужим, не дают превратить службу в печку.
+  const rewraps = new RateLimiter(10);
 
   function now(): string {
     return new Date().toISOString();
@@ -452,6 +483,42 @@ export function createApp(options: AppOptions) {
       return send(res, 204);
     }
 
+    // Смена пароля на устройстве доезжает сюда: новая шкатулка и новый секрет
+    // входа. Кто и чем это доказывает — см. replaceVault в auth.ts.
+    if (path === "/auth/vault" && method === "PUT") {
+      const body = await readJson(req);
+      if (body.vault === null || typeof body.vault !== "object" || Array.isArray(body.vault)) {
+        return send(res, 400, { error: "Неверная шкатулка." });
+      }
+      const secret = body.secret;
+      if (typeof secret !== "string" || secret === "" || secret.length > MAX_SECRET) {
+        return send(res, 400, { error: "Неверный секрет входа." });
+      }
+      const current = body.currentSecret;
+      if (
+        current !== undefined &&
+        (typeof current !== "string" || current === "" || current.length > MAX_SECRET)
+      ) {
+        return send(res, 400, { error: "Неверный прежний секрет входа." });
+      }
+      const vault = JSON.stringify(body.vault);
+      checkFullVault(vault);
+      // Счётчик — после разбора тела и до scrypt: неверный запрос ничего не
+      // стоит и попытку не съедает, а дорогая часть ограничена.
+      if (!rewraps.allow(`шкатулка:${who.personId}`, Date.now())) {
+        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+      }
+      const outcome = await replaceVault(db, who.personId, {
+        vault,
+        secret,
+        currentSecret: typeof current === "string" ? current : null
+      });
+      if (!outcome.ok) {
+        return send(res, outcome.status, { error: outcome.error, reason: outcome.reason });
+      }
+      return send(res, 204);
+    }
+
     if (path === "/devices" && method === "GET") {
       const devices = db
         .prepare(
@@ -512,7 +579,21 @@ export function createApp(options: AppOptions) {
       if (slot.length > MAX_SLOT_NAME)
         return send(res, 400, { error: "Слишком длинное имя ячейки." });
 
-      if (method === "GET") return send(res, 200, readSlot(db, who.personId, slot));
+      if (method === "GET") {
+        // Устройство может назвать версию, которую помнит (номер и время
+        // записи), — и тогда узнаёт, видела ли служба такую. Не видела —
+        // значит, службу вернули из копии, и общего предка у них нет, даже
+        // если номер на службе уже обогнал помнящийся. Старые устройства
+        // ничего не называют и получают ровно то, что получали.
+        const snapshot = readSlot(db, who.personId, slot);
+        const known = knownPair(
+          url.searchParams.get("knownVersion"),
+          url.searchParams.get("knownAt")
+        );
+        if (known === "bad") return send(res, 400, { error: "Неверная помнящаяся версия." });
+        const ancestor = known ? ancestryOf(db, who.personId, slot, known) : null;
+        return send(res, 200, ancestor ? { ...snapshot, ancestor } : snapshot);
+      }
 
       if (method === "PUT") {
         const body = await readJson(req);
@@ -531,7 +612,28 @@ export function createApp(options: AppOptions) {
           return send(res, 400, { error: "Нет данных для записи." });
         }
 
-        const outcome = writeSlot(db, who.personId, slot, baseVersion, body.body, now(), LIMITS);
+        // Время записи той версии, поверх которой пишут. Необязательное: без
+        // него — по одному номеру, как всегда.
+        const stamp = body.baseUpdatedAt;
+        if (
+          stamp !== undefined &&
+          stamp !== null &&
+          (typeof stamp !== "string" || stamp === "" || stamp.length > MAX_STAMP)
+        ) {
+          return send(res, 400, { error: "Неверное время версии." });
+        }
+        const baseUpdatedAt = typeof stamp === "string" ? stamp : null;
+
+        const outcome = writeSlot(
+          db,
+          who.personId,
+          slot,
+          baseVersion,
+          body.body,
+          now(),
+          LIMITS,
+          baseUpdatedAt
+        );
         if (!outcome.ok && outcome.reason === "full") {
           // 507, а не 409 и не 403. 409 значит «сходите за свежим и повторите» —
           // устройство так и сделает, упрётся в то же самое и будет ходить по
@@ -544,7 +646,22 @@ export function createApp(options: AppOptions) {
         if (!outcome.ok) {
           // Отказ «вас обогнали» — 409, а не 200 с полем: по договору это другой
           // исход, и путать его с успехом на уровне кода ответа нельзя.
-          return send(res, 409, outcome);
+          //
+          // Назвало устройство время своей версии — к отказу прилагается и
+          // ответ, видела ли служба эту версию: отказ бывает и «из прошлого»,
+          // когда службу вернули из копии.
+          const ancestor =
+            baseUpdatedAt !== null && baseVersion > 0
+              ? ancestryOf(db, who.personId, slot, {
+                  version: baseVersion,
+                  updatedAt: baseUpdatedAt
+                })
+              : null;
+          return send(
+            res,
+            409,
+            ancestor ? { ...outcome, current: { ...outcome.current, ancestor } } : outcome
+          );
         }
         bus.announce(who.personId, slot, outcome.version);
         return send(res, 200, outcome);
