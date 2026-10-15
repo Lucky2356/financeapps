@@ -50,7 +50,7 @@ export function CompareMonthsCard({ currency }: { currency: string }) {
     });
   const picker = (value: string, onChange: (next: string) => void, label: string) => (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-44 capitalize" aria-label={label}>
+      <SelectTrigger className="min-w-0 flex-1 capitalize sm:w-44 sm:flex-none" aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -66,8 +66,11 @@ export function CompareMonthsCard({ currency }: { currency: string }) {
 
   return (
     <Card data-testid="compare-months">
+      {/* На телефоне заголовок — своим рядом, месяцы — следующим, поровну:
+          у заголовка с flex-1 min-w-0 ряд не переносился, и выбор месяца
+          ложился поверх «Сравнения месяцев». */}
       <CardHeader className="flex flex-row flex-wrap items-center gap-2 space-y-0">
-        <CardTitle className="flex min-w-0 flex-1 items-center gap-2 text-base">
+        <CardTitle className="flex w-full items-center gap-2 text-base sm:w-auto sm:min-w-0 sm:flex-1">
           <GitCompareArrows className="size-4 shrink-0" />
           {t("cmp.title")}
         </CardTitle>

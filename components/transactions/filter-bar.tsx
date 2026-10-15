@@ -388,9 +388,19 @@ function usePlacement(anchor: RefObject<HTMLElement | null>, align: "start" | "e
         node.style.left = `${left}px`;
         node.style.right = "auto";
         // Нижняя панель навигации на телефоне — около 5.5rem; на ПК её нет.
-        const below = screen < 768 ? 96 : gap * 2;
-        const room = window.innerHeight - box.bottom - below;
-        node.style.maxHeight = `${Math.max(220, room)}px`;
+        // Сверху — шапка приложения.
+        const phone = screen < 768;
+        const roomBelow = window.innerHeight - box.bottom - (phone ? 96 : gap * 2);
+        const roomAbove = box.top - (phone ? 72 : gap * 2);
+        // Кнопка у нижнего края экрана (долистали до фильтров и нажали):
+        // вниз панели места нет, и она уходила под нижнюю панель навигации.
+        // Тогда она раскрывается вверх, если там места больше.
+        const wanted = Math.min(node.scrollHeight, 360);
+        const upward = roomBelow < wanted && roomAbove > roomBelow;
+        node.style.top = upward ? "auto" : "";
+        node.style.bottom = upward ? `${box.height + 4}px` : "";
+        node.style.marginTop = upward ? "0" : "";
+        node.style.maxHeight = `${upward ? roomAbove : Math.max(220, roomBelow)}px`;
         node.style.overflowY = "auto";
       };
       place();

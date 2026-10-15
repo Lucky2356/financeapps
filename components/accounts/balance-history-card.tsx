@@ -64,13 +64,17 @@ export function BalanceHistoryCard() {
 
   return (
     <Card data-testid="balance-history">
+      {/* На телефоне заголовок — своим рядом, выборы — следующим, поровну.
+          Был один ряд с переносом, но у заголовка стояло flex-1 min-w-0: он
+          сжимался до нуля раньше, чем ряд переносился, и списки ложились
+          поверх «История остатка». */}
       <CardHeader className="flex flex-row flex-wrap items-center gap-2 space-y-0">
-        <CardTitle className="flex min-w-0 flex-1 items-center gap-2 text-base">
+        <CardTitle className="flex w-full items-center gap-2 text-base sm:w-auto sm:min-w-0 sm:flex-1">
           <LineChartIcon className="size-4 shrink-0" />
           {t("bh.title")}
         </CardTitle>
         <Select value={pick} onValueChange={setPick}>
-          <SelectTrigger className="w-44" aria-label={t("bh.what")}>
+          <SelectTrigger className="min-w-0 flex-1 sm:w-44 sm:flex-none" aria-label={t("bh.what")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -84,7 +88,7 @@ export function BalanceHistoryCard() {
           </SelectContent>
         </Select>
         <Select value={months} onValueChange={setMonths}>
-          <SelectTrigger className="w-32" aria-label={t("bh.period")}>
+          <SelectTrigger className="w-32 shrink-0" aria-label={t("bh.period")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -129,7 +133,9 @@ export function BalanceHistoryCard() {
                 tickLine={false}
                 axisLine={false}
                 tick={chartAxisTick}
-                width={52}
+                // «800 тыс. ₽» не влезало в 52 px, и первая цифра обрезалась
+                // краем карточки («) тыс. ₽»). Ширина — как у соседних графиков.
+                width={72}
                 domain={["auto", "auto"]}
               />
               <Tooltip

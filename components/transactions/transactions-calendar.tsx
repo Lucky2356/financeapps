@@ -8,7 +8,6 @@
 // операции этого дня.
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,6 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
-import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { isTransfer } from "@/lib/transactions/transfers";
 import { cn } from "@/lib/utils";
 import type { ForecastData } from "@/types/finance";
@@ -38,39 +36,12 @@ function compact(value: number, locale: string): string {
 const EMPTY_TX = { transactions: [] } as unknown as TransactionsPageData;
 const EMPTY_FORECAST = { events: [] } as unknown as ForecastData;
 
-/** Месяц начала периода из адреса («2026-10-01» → 2026, 9) или null. */
-function monthOf(from: string | null): { year: number; month: number } | null {
-  const match = from ? /^(\d{4})-(\d{2})/.exec(from) : null;
-  return match ? { year: Number(match[1]), month: Number(match[2]) - 1 } : null;
-}
-
 export function TransactionsCalendar() {
   const { t, locale } = useI18n();
   const now = new Date();
   const todayKey = dayKey(now.getFullYear(), now.getMonth(), now.getDate());
-  const params = useSearchParams();
-  const paramsString = params.toString();
-  const fromParam = params.get("from");
-  const [cursor, setCursor] = useState(
-    () => monthOf(fromParam) ?? { year: now.getFullYear(), month: now.getMonth() }
-  );
+  const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
   const [picked, setPicked] = useState<string>(todayKey);
-
-  // Фильтры наверху экрана служат и календарю. Сменили начало периода —
-  // календарь переходит на его месяц; дальше месяцы листаются стрелками.
-  const [seenFrom, setSeenFrom] = useState(fromParam);
-  if (fromParam !== seenFrom) {
-    setSeenFrom(fromParam);
-    const month = monthOf(fromParam);
-    if (month) {
-      setCursor(month);
-      setPicked(
-        month.year === now.getFullYear() && month.month === now.getMonth()
-          ? todayKey
-          : dayKey(month.year, month.month, 1)
-      );
-    }
-  }
 
   const lastDay = new Date(cursor.year, cursor.month + 1, 0).getDate();
   const from = dayKey(cursor.year, cursor.month, 1);
@@ -78,17 +49,9 @@ export function TransactionsCalendar() {
   const { data } = useApiPageData(EMPTY_TX, `/transactions?from=${from}&to=${to}&limit=all`);
   const { data: forecast } = useApiPageData(EMPTY_FORECAST, "/forecast");
 
-  // Остальные фильтры — категория, счёт, тип, поиск, суммы, тег — те же, что у
-  // списка. Период — нет: календарь показывает свой месяц целиком.
-  const rows = useMemo(() => {
-    const criteria = criteriaFromParams(new URLSearchParams(paramsString));
-    const withoutPeriod = { ...criteria, from: undefined, to: undefined };
-    return (data.transactions ?? []).filter((row) => matchesCriteria(row, withoutPeriod));
-  }, [data.transactions, paramsString]);
-
   const byDay = useMemo(() => {
     const map = new Map<string, { expense: number; income: number }>();
-    for (const row of rows) {
+    for (const row of data.transactions ?? []) {
       if (row.transferId || isTransfer(row)) continue;
       const key = row.date.slice(0, 10);
       const cell = map.get(key) ?? { expense: 0, income: 0 };
@@ -98,7 +61,7 @@ export function TransactionsCalendar() {
       map.set(key, cell);
     }
     return map;
-  }, [rows]);
+  }, [data.transactions]);
 
   const planned = useMemo(() => {
     const map = new Map<string, number>();
@@ -136,7 +99,7 @@ export function TransactionsCalendar() {
     );
   }
 
-  const dayRows = rows.filter((row) => row.date.slice(0, 10) === picked);
+  const dayRows = (data.transactions ?? []).filter((row) => row.date.slice(0, 10) === picked);
   const dayPlanned = (forecast.events ?? []).filter(
     (event) => event.date.slice(0, 10) === picked && picked > todayKey
   );

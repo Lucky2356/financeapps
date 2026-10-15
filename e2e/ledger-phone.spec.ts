@@ -86,35 +86,41 @@ async function rightEdges(page: Page) {
 
 // Окно приложения на компьютере: 1280 минус полоса прокрутки WebView2.
 for (const width of [360, 390, 430, 1265]) {
-  test(`${width}px: фильтры наверху, правый край у всех рядов один`, async ({ page }) => {
+  test(`${width}px: фильтры в шапке списка, правый край у всех рядов один`, async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 900 });
     await seedExampleData(page);
     await openSettled(page, "/transactions");
 
-    // Первая карточка экрана — фильтры, выше аналитики и переключателя видов.
+    // Фильтры — на своём месте, в шапке карточки списка, под переключателем
+    // «Список / Календарь»: отдельной карточкой наверх их не выносить.
     const filters = page.getByTestId("tx-filters");
-    const analytics = page.getByText("Аналитика по операциям");
-    expect((await filters.boundingBox())!.y).toBeLessThan((await analytics.boundingBox())!.y);
+    const views = page.getByRole("radiogroup", { name: "Вид" });
+    expect((await filters.boundingBox())!.y).toBeGreaterThan((await views.boundingBox())!.y);
 
-    const edges = await rightEdges(page);
-    const right = edges.search[0];
-    // Первый ряд: «Операции», кнопка фильтров, категории — категории до края.
-    expect(edges.category).toEqual([right]);
-    expect(edges.selects[1]).toBe(right);
-    // На телефоне даты — свой ряд во всю ширину. На широком экране даты,
-    // счёт и тип встают в один ряд, и до края доходит только последний — тип.
-    if (width < 1024) expect(edges.dates[1]).toBe(right);
+    // Раскладка на медленной машине может доехать позже открытия экрана
+    // (подгрузка карточек выше): замеры повторяются, пока она не устоится.
+    let edges = await rightEdges(page);
+    await expect(async () => {
+      edges = await rightEdges(page);
+      const right = edges.search[0];
+      // Первый ряд: «Операции», кнопка фильтров, категории — категории до края.
+      expect(edges.category).toEqual([right]);
+      expect(edges.selects[1]).toBe(right);
+      // На телефоне даты — свой ряд во всю ширину. На широком экране даты,
+      // счёт и тип встают в один ряд, и до края доходит только последний — тип.
+      if (width < 1024) expect(edges.dates[1]).toBe(right);
 
-    // Кнопка фильтров — между заголовком и категориями, в одном ряду с ними.
-    const title = (await filters.getByText("Операции", { exact: true }).first().boundingBox())!;
-    const gear = (await filters.getByRole("button", { name: "Фильтры" }).boundingBox())!;
-    const category = (await filters.getByRole("button", { name: "Категория" }).boundingBox())!;
-    expect(gear.x).toBeGreaterThanOrEqual(title.x + title.width);
-    expect(gear.x + gear.width).toBeLessThanOrEqual(category.x);
-    expect(
-      Math.abs(gear.y + gear.height / 2 - (category.y + category.height / 2))
-    ).toBeLessThanOrEqual(2);
+      // Кнопка фильтров — между заголовком и категориями, в одном ряду с ними.
+      const title = (await filters.getByText("Операции", { exact: true }).first().boundingBox())!;
+      const gear = (await filters.getByRole("button", { name: "Фильтры" }).boundingBox())!;
+      const category = (await filters.getByRole("button", { name: "Категория" }).boundingBox())!;
+      expect(gear.x).toBeGreaterThanOrEqual(title.x + title.width);
+      expect(gear.x + gear.width).toBeLessThanOrEqual(category.x);
+      expect(
+        Math.abs(gear.y + gear.height / 2 - (category.y + category.height / 2))
+      ).toBeLessThanOrEqual(2);
+    }).toPass({ timeout: 10_000 });
 
     // Даты и пара «счёт — тип» — равными колонками.
     const box = async (selector: string, index: number) =>
@@ -129,26 +135,59 @@ for (const width of [360, 390, 430, 1265]) {
     // Панель фильтров открывается поверх всего: кнопка теперь в начале ряда,
     // и панель, раскрытая влево, на ПК уходила под боковое меню — то
     // перехватывало нажатия. Каждый угол панели и её середина — её же.
-    await filters.getByRole("button", { name: "Фильтры" }).click();
+    // Панель меряется на экране: кнопка — посередине окна, а если раскладка
+    // сдвинулась уже после открытия, панель закрывается и открывается снова.
+    // Условие то же — никто её не перекрывает.
+    const gearButton = filters.getByRole("button", { name: "Фильтры" });
     const panel = page.getByTestId("more-filters-panel");
-    await expect(panel).toBeVisible();
-    const covered = await panel.evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      const points = [
-        [r.left + 4, r.top + 4],
-        [r.right - 4, r.top + 4],
-        [r.left + r.width / 2, r.top + Math.min(r.height / 2, 60)]
-      ];
-      return points.filter(([x, y]) => !el.contains(document.elementFromPoint(x, y))).length;
-    });
-    expect(covered).toBe(0);
+    await expect(async () => {
+      await gearButton.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      if (!(await panel.isVisible())) await gearButton.click();
+      await expect(panel).toBeVisible({ timeout: 2_000 });
+      const covered = await panel.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const points = [
+          [r.left + 4, r.top + 4],
+          [r.right - 4, r.top + 4],
+          [r.left + r.width / 2, r.top + Math.min(r.height / 2, 60)]
+        ];
+        return points
+          .map(([x, y]) => [x, y, document.elementFromPoint(x, y)] as const)
+          .filter(([, , hit]) => !el.contains(hit))
+          .map(
+            ([x, y, hit]) =>
+              `(${Math.round(x)}, ${Math.round(y)}) — ${hit?.tagName.toLowerCase() ?? "ничего"}.${(hit?.getAttribute("class") ?? "").slice(0, 60)}`
+          );
+      });
+      if (covered.length) await page.keyboard.press("Escape");
+      expect(covered).toEqual([]);
+    }).toPass({ timeout: 15_000 });
     await page.keyboard.press("Escape");
     await expect(panel).toBeHidden();
 
-    // Те же фильтры на месте и в календаре.
-    await page.getByRole("radiogroup", { name: "Вид" }).getByText("Календарь").click();
-    await expect(page.getByTestId("transactions-calendar")).toBeVisible();
-    await expect(filters).toBeVisible();
-    expect(await rightEdges(page)).toEqual(edges);
+    // Телефон: долистали так, что кнопка у самого низа, над нижней панелью
+    // навигации. Вниз места нет — панель раскрывается вверх, а не под панель.
+    if (width < 768) {
+      await expect(async () => {
+        await gearButton.evaluate((el) => {
+          const nav = document.querySelector("nav[aria-label]:last-of-type");
+          const navTop = nav ? nav.getBoundingClientRect().top : window.innerHeight;
+          const box = el.getBoundingClientRect();
+          window.scrollBy({ top: box.bottom - (navTop - 8), behavior: "instant" });
+        });
+        if (!(await panel.isVisible())) await gearButton.click();
+        await expect(panel).toBeVisible({ timeout: 2_000 });
+        const hidden = await panel.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return [
+            [r.left + 4, r.top + 4],
+            [r.left + 4, r.bottom - 4]
+          ].filter(([x, y]) => !el.contains(document.elementFromPoint(x, y))).length;
+        });
+        if (hidden) await page.keyboard.press("Escape");
+        expect(hidden).toBe(0);
+      }).toPass({ timeout: 15_000 });
+      await page.keyboard.press("Escape");
+    }
   });
 }

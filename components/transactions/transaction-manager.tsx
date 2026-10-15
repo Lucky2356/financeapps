@@ -34,9 +34,8 @@ import {
 
 // Части экрана лежат в ./transaction-manager/: здесь только сборка.
 //
-// Данные списка — общие с фильтрами наверху экрана (см. data-context.tsx). Если
-// экран их не завёл (список стоит сам по себе — например, в тестах), заводит
-// свою копию сам.
+// Данные списка — в общем хранилище (см. data-context.tsx). Если экран его не
+// завёл, список заводит свою копию сам.
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const shared = useSharedTransactionsData();
   if (shared) return <TransactionList />;
@@ -94,9 +93,6 @@ function TransactionList() {
 
   return (
     <div className="space-y-4">
-      {/* Фильтры — наверху экрана, в своей карточке (transactions-filters-card):
-          до них не надо листать мимо аналитики. Здесь — то, что относится к
-          самим строкам: итоги под фильтром и порядок. */}
       <Card>
         <TransactionListHeader
           pageData={pageData}
