@@ -63,13 +63,21 @@ export function formatCompactCurrency(
   locale: Locale = displayLocale()
 ) {
   if (areAmountsHidden()) return hiddenAmount(currency);
-  return new Intl.NumberFormat(intlLocale(locale), {
+  const parts = new Intl.NumberFormat(intlLocale(locale), {
     style: "currency",
     currency,
     ...currencyOptions(locale),
     notation: "compact",
     maximumFractionDigits: 1
-  }).format(withoutNegativeZero(value, 1));
+  }).formatToParts(withoutNegativeZero(value, 1));
+  // Британские данные локали с CLDR 46 пишут «₽1.2m», прежние — «₽1.2M», и
+  // одна и та же сумма выглядела бы по-разному в зависимости от версии
+  // WebView. По-английски знак порядка всегда заглавный: K, M, B, T.
+  return parts
+    .map((part) =>
+      locale === "en" && part.type === "compact" ? part.value.toUpperCase() : part.value
+    )
+    .join("");
 }
 
 export function formatPercent(
