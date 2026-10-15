@@ -115,31 +115,12 @@ export function TransactionFilterBar({
 
   return (
     <div className="space-y-2">
-      {/* Заголовок и всё, что относится к фильтрам целиком: «сбросить» и
-          шестерёнка с редкими настройками. Шестерёнка стояла одна в своём ряду
-          под полями — ряд высотой в кнопку ради одной кнопки. */}
+      {/* Первый ряд: «Операции», кнопка фильтров, «Все категории». Кнопка
+          стояла одна в своём ряду под полями — ряд высотой в кнопку ради одной
+          кнопки; её место — между заголовком и категориями, а категории
+          тянутся до правого края, где кончаются и поля ниже. */}
       <div className="flex min-h-9 items-center gap-2">
-        {title ? <div className="mr-auto min-w-0">{title}</div> : null}
-
-        {/* Resetting was reachable from two places nobody looks: inside the
-            gear, and at the tail of the chip list below, after however many
-            lines the chips happen to wrap onto. It opens the row now, ahead of
-            the controls it undoes — and only when there is something to reset,
-            an always-visible button that usually does nothing being its own
-            kind of noise. Clearing goes back to the current month, the state
-            the screen opens in. */}
-        {count > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-9 shrink-0 gap-1.5 px-2.5 text-muted-foreground"
-            onClick={() => go("")}
-          >
-            <X className="size-4" />
-            {t("tx.filters.clearAll")}
-          </Button>
-        ) : null}
+        {title ? <div className="shrink-0">{title}</div> : null}
 
         <MoreFilters
           defaultLimit={defaultLimit}
@@ -148,23 +129,23 @@ export function TransactionFilterBar({
           onGo={go}
           onSetParam={setParam}
         />
+
+        <CategoryFilter
+          className="min-w-0 flex-1"
+          categories={categories}
+          selected={selectedCategories}
+          onChange={(ids) => setParam("categoryId", ids.join(","))}
+        />
       </div>
 
       {/* Поля — сеткой, а не строкой с переносом. В строке каждое поле было
           шириной своего текста, ряды кончались где придётся, и правый край
           выходил рваным. В сетке каждый ряд — во всю ширину карточки:
-          на телефоне категория одна, даты — две равные колонки с тире между
-          ними, счёт и тип — две равные колонки; на широком экране всё это
-          встаёт в один ряд. Колонки — minmax(0, …): иначе поле упёрлось бы в
-          ширину своего текста и вылезло за край (сторож — e2e/responsive). */}
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
-        <CategoryFilter
-          className="col-span-2 lg:col-span-1"
-          categories={categories}
-          selected={selectedCategories}
-          onChange={(ids) => setParam("categoryId", ids.join(","))}
-        />
-
+          на телефоне даты — две равные колонки с тире между ними, счёт и тип —
+          две равные колонки; на широком экране всё это встаёт в один ряд.
+          Колонки — minmax(0, …): иначе поле упёрлось бы в ширину своего
+          текста и вылезло за край (сторож — e2e/responsive). */}
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
         {/* The period as the two dates it actually is. A named period fills
             both in (the gear holds the names); typing over one of them keeps
             the other. Пара не разрывается никогда: она — одна клетка сетки со
@@ -238,11 +219,27 @@ export function TransactionFilterBar({
         />
       </div>
 
-      {chips.length > 0 ? (
+      {chips.length > 0 || count > 0 ? (
         // Крестик чипа на телефоне — 44 px (tap-target), и чип раздувался в
         // таблетку той же высоты. Отрицательные поля по вертикали оставляют
         // зону нажатия прежней, а сам чип — в строку текста.
         <div data-testid="filter-chips" className="flex flex-wrap items-center gap-1.5 py-0.5">
+          {/* «Сбросить» — первым в ряду выбранного, рядом с тем, что он
+              снимает, и только когда снимать есть что. В первом ряду ему нет
+              места: там заголовок, кнопка фильтров и категории. Сброс
+              возвращает к текущему месяцу — к тому, с чем экран открывается. */}
+          {count > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+              onClick={() => go("")}
+            >
+              <X className="size-3.5" />
+              {t("tx.filters.clearAll")}
+            </Button>
+          ) : null}
           {chips.map((chip) => (
             <span
               key={chip.id}

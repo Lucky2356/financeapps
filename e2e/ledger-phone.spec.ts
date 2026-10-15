@@ -76,7 +76,6 @@ async function rightEdges(page: Page) {
         Math.round(el.getBoundingClientRect().right)
       );
     return {
-      gear: pick('button[aria-label="Фильтры"]'),
       category: pick('button[aria-label="Категория"]'),
       dates: pick('input[type="date"]'),
       selects: pick("button[role=combobox]"),
@@ -100,14 +99,22 @@ for (const width of [360, 390, 430, 1265]) {
 
     const edges = await rightEdges(page);
     const right = edges.search[0];
-    expect(edges.gear).toEqual([right]);
+    // Первый ряд: «Операции», кнопка фильтров, категории — категории до края.
+    expect(edges.category).toEqual([right]);
     expect(edges.selects[1]).toBe(right);
-    // На телефоне каждый ряд свой: категория, даты, счёт и тип. На широком
-    // экране они встают в один ряд, и до края доходит только последний — тип.
-    if (width < 1024) {
-      expect(edges.category).toEqual([right]);
-      expect(edges.dates[1]).toBe(right);
-    }
+    // На телефоне даты — свой ряд во всю ширину. На широком экране даты,
+    // счёт и тип встают в один ряд, и до края доходит только последний — тип.
+    if (width < 1024) expect(edges.dates[1]).toBe(right);
+
+    // Кнопка фильтров — между заголовком и категориями, в одном ряду с ними.
+    const title = (await filters.getByText("Операции", { exact: true }).first().boundingBox())!;
+    const gear = (await filters.getByRole("button", { name: "Фильтры" }).boundingBox())!;
+    const category = (await filters.getByRole("button", { name: "Категория" }).boundingBox())!;
+    expect(gear.x).toBeGreaterThanOrEqual(title.x + title.width);
+    expect(gear.x + gear.width).toBeLessThanOrEqual(category.x);
+    expect(
+      Math.abs(gear.y + gear.height / 2 - (category.y + category.height / 2))
+    ).toBeLessThanOrEqual(2);
 
     // Даты и пара «счёт — тип» — равными колонками.
     const box = async (selector: string, index: number) =>
