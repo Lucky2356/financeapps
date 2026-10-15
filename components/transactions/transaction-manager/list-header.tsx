@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 
-import { CardHeader } from "@/components/ui/card";
+import { TransactionFilterBar } from "@/components/transactions/filter-bar";
+import { CardHeader, CardTitle } from "@/components/ui/card";
 import { NOTICE_ACTION_CLASS, NoticeLine } from "@/components/ui/notice-line";
 import {
   Select,
@@ -16,10 +17,7 @@ import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { TX_SORTS, type TxSort } from "@/lib/transactions/sort";
 
-/**
- * Шапка карточки списка: итоги под фильтром, порядок, будущие даты. Сами
- * фильтры — наверху экрана (transactions-filters-card.tsx).
- */
+/** Шапка карточки списка: фильтры, итоги под фильтром, порядок, будущие даты. */
 export function TransactionListHeader({
   pageData,
   visibleCount,
@@ -42,6 +40,18 @@ export function TransactionListHeader({
 
   return (
     <CardHeader className="gap-3">
+      {/* Every way of adding something — an operation, a transfer, a split
+          receipt — is the round "+" button. What stands here instead are
+          the filters that decide which rows are below. */}
+      <div data-testid="tx-filters">
+        <TransactionFilterBar
+          title={<CardTitle>{t("tx.title")}</CardTitle>}
+          categories={pageData.categories}
+          accounts={pageData.accounts}
+          defaultLimit={pageData.pagination.limit}
+        />
+      </div>
+
       {/* The totals belong to the rows below them: they follow the filter,
           unlike the month tiles at the top of the screen.
           Порядок — во всю ширину на телефоне: справа от итогов ему оставалась

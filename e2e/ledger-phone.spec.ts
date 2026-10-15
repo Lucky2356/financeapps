@@ -86,16 +86,17 @@ async function rightEdges(page: Page) {
 
 // Окно приложения на компьютере: 1280 минус полоса прокрутки WebView2.
 for (const width of [360, 390, 430, 1265]) {
-  test(`${width}px: фильтры наверху, правый край у всех рядов один`, async ({ page }) => {
+  test(`${width}px: фильтры в шапке списка, правый край у всех рядов один`, async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width, height: 900 });
     await seedExampleData(page);
     await openSettled(page, "/transactions");
 
-    // Первая карточка экрана — фильтры, выше аналитики и переключателя видов.
+    // Фильтры — на своём месте, в шапке карточки списка, под переключателем
+    // «Список / Календарь»: отдельной карточкой наверх их не выносить.
     const filters = page.getByTestId("tx-filters");
-    const analytics = page.getByText("Аналитика по операциям");
-    expect((await filters.boundingBox())!.y).toBeLessThan((await analytics.boundingBox())!.y);
+    const views = page.getByRole("radiogroup", { name: "Вид" });
+    expect((await filters.boundingBox())!.y).toBeGreaterThan((await views.boundingBox())!.y);
 
     const edges = await rightEdges(page);
     const right = edges.search[0];
@@ -144,11 +145,5 @@ for (const width of [360, 390, 430, 1265]) {
     expect(covered).toBe(0);
     await page.keyboard.press("Escape");
     await expect(panel).toBeHidden();
-
-    // Те же фильтры на месте и в календаре.
-    await page.getByRole("radiogroup", { name: "Вид" }).getByText("Календарь").click();
-    await expect(page.getByTestId("transactions-calendar")).toBeVisible();
-    await expect(filters).toBeVisible();
-    expect(await rightEdges(page)).toEqual(edges);
   });
 }
