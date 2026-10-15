@@ -30,7 +30,14 @@ async function openWizard(page: Page) {
 async function createWithFood(page: Page, food: string, income = "") {
   const wizard = await openWizard(page);
   await wizard.getByRole("button", { name: "Снять все" }).click();
-  await wizard.getByRole("checkbox", { name: "Продукты" }).check();
+  const foodBox = wizard.getByRole("checkbox", { name: "Продукты" });
+  await expect(foodBox).not.toBeChecked();
+  // «Снять все» перерисовывает список; галочка, поставленная в ту же минуту,
+  // могла слететь вместе с перерисовкой. Ставим, пока не встанет.
+  await expect(async () => {
+    await foodBox.check();
+    await expect(foodBox).toBeChecked({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
   await wizard.getByLabel("Продукты: в месяц").fill(food);
   await wizard.getByLabel("Доход в месяц").fill(income);
   await wizard.getByRole("button", { name: "Создать таблицу" }).click();
@@ -186,19 +193,24 @@ test.describe("телефон", () => {
     await page.getByTestId("budget-sheet").getByText("Таблица", { exact: true }).click();
     const grid = page.getByTestId("sheet-grid");
     await expect(grid).toBeVisible();
-    // Таблица прокручена до конца — и своя прокрутка, и страница.
-    await grid.evaluate((el) => (el.scrollTop = el.scrollHeight));
-    await page.evaluate(() =>
-      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" })
-    );
-    await page.waitForTimeout(300);
-    const nav = await page.locator("nav[aria-label]").last().boundingBox();
-    const plus = await page
-      .getByRole("button", { name: "Быстрое добавление операции" })
-      .boundingBox();
-    const foot = await grid.locator("tfoot").boundingBox();
-    expect(nav && plus && foot).toBeTruthy();
-    const top = Math.min(nav!.y, plus!.y);
-    expect(foot!.y + foot!.height).toBeLessThanOrEqual(top);
+    // Таблица прокручена до конца — и своя прокрутка, и страница. На
+    // медленной машине раскладка может доехать позже прокрутки (подгрузка
+    // кусочков, шрифты), поэтому прокрутка и замер повторяются, пока
+    // страница не устоится; само условие — «Всего» над нижней панелью — то же.
+    await expect(async () => {
+      await grid.evaluate((el) => (el.scrollTop = el.scrollHeight));
+      await page.evaluate(() =>
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" })
+      );
+      await page.waitForTimeout(200);
+      const nav = await page.locator("nav[aria-label]").last().boundingBox();
+      const plus = await page
+        .getByRole("button", { name: "Быстрое добавление операции" })
+        .boundingBox();
+      const foot = await grid.locator("tfoot").boundingBox();
+      expect(nav && plus && foot).toBeTruthy();
+      const top = Math.min(nav!.y, plus!.y);
+      expect(foot!.y + foot!.height).toBeLessThanOrEqual(top);
+    }).toPass({ timeout: 10_000 });
   });
 });
