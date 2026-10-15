@@ -264,6 +264,166 @@ export async function login(
   return { ...session, vault: person.vault, personId: person.id };
 }
 
+/** Секрет входа длиннее этого — не секрет, а попытка заставить scrypt жевать мегабайты. */
+export const MAX_SECRET = 512;
+
+/**
+ * Шкатулка, в которой ключ книги и правда завёрнут, — не заглушка.
+ *
+ * Строже, чем при регистрации, и это нарочно. Регистрация принимает и пустую
+ * обёртку записи без пароля (см. emptyVault в lib/vault/server-account.ts), а
+ * замена шкатулки — это смена ПАРОЛЯ: без завёрнутого ключа второе устройство,
+ * вошедшее новым паролем, получило бы шкатулку, которой нечего открыть.
+ */
+export function checkFullVault(raw: string): void {
+  checkVault(raw);
+  const vault = JSON.parse(raw) as { password?: unknown; recovery?: unknown };
+  for (const lock of [vault.password, vault.recovery]) {
+    const fields = lock as { salt?: unknown; iv?: unknown; wrapped?: unknown } | null;
+    const good =
+      !!fields &&
+      typeof fields === "object" &&
+      [fields.salt, fields.iv, fields.wrapped].every(
+        (value) => typeof value === "string" && value.length > 0
+      );
+    if (!good) throw new AuthError(400, "Неверная шкатулка.");
+  }
+}
+
+type StoredLock = { salt?: unknown; iv?: unknown; wrapped?: unknown } | undefined;
+
+/** Тот же ли это замок — до последнего поля. */
+function sameLock(left: StoredLock, right: StoredLock): boolean {
+  return (
+    !!left &&
+    !!right &&
+    left.salt === right.salt &&
+    left.iv === right.iv &&
+    left.wrapped === right.wrapped
+  );
+}
+
+export type ReplaceVaultInput = {
+  /** Новая шкатулка целиком, как её собрало устройство после смены пароля. */
+  vault: string;
+  /** Новый секрет входа — от нового пароля. */
+  secret: string;
+  /** Прежний секрет входа, если устройство его знает (обычная смена пароля). */
+  currentSecret: string | null;
+};
+
+export type ReplaceVaultOutcome =
+  | { ok: true }
+  | { ok: false; status: 403 | 409; reason: string; error: string };
+
+/**
+ * Заменить шкатулку и секрет входа после смены пароля на устройстве.
+ *
+ * Без этого служба помнила то, что ей прислали при регистрации, и ПРЕЖНИЙ
+ * пароль продолжал работать: им входили с нового устройства и получали
+ * шкатулку, которая им же и открывалась. Сменивший пароль из-за того, что его
+ * подсмотрели, не менял ровным счётом ничего.
+ *
+ * КТО МОЖЕТ ЗАМЕНИТЬ. Билет обязателен (это решает вызывающий), но одного
+ * билета мало: украденный с устройства билет и так открывает зашифрованные
+ * книги, а замена шкатулки дала бы ещё и ВХОД ПАРОЛЕМ, переживающий
+ * выкидывание устройства. Поэтому сверх билета — одно из двух доказательств:
+ *
+ *   1. Прежний секрет входа. Его знает устройство, на котором меняли пароль:
+ *      старый пароль человек только что ввёл.
+ *   2. Тот же замок кода восстановления. Сброс пароля по коду не знает
+ *      прежнего пароля вовсе — но и замок кода при сбросе НЕ МЕНЯЕТСЯ (см.
+ *      resetPasswordWithRecoveryCode). Замок этот отдаётся только после входа
+ *      паролем, то есть лежит лишь на устройствах владельца; одного билета,
+ *      чтобы его узнать, недостаточно — ручки «отдай шкатулку по билету» нет.
+ *
+ * Проверить сам код восстановления служба не может: его проверочного значения
+ * у неё нет и никогда не было (при регистрации оно не уезжает), а заводить его
+ * задним числом для уже заведённых записей нечем.
+ *
+ * ДРУГИЕ БИЛЕТЫ НЕ ГАСЯТСЯ, и это решение, а не забывчивость. Устройства,
+ * связанные картинкой, не знают ни имени, ни пароля: погаси мы их билеты, все
+ * они разом выпали бы из синхронизации, и вернуть каждое можно было бы только
+ * новой картинкой с главного. Смена пароля — обычно гигиена, а не тревога; на
+ * случай тревоги есть «Мои устройства», где главное устройство выкидывает
+ * лишнее вместе с его билетами.
+ *
+ * Запись без ключа на службе (заведённая одним нажатием, без пароля) здесь не
+ * меняется: входа паролем у неё нет, и прежнему паролю нечего «продолжать
+ * работать». Превращать её в запись с паролем по одному билету — ровно то
+ * повышение, от которого защищают доказательства выше.
+ */
+export async function replaceVault(
+  db: DatabaseSync,
+  personId: string,
+  input: ReplaceVaultInput
+): Promise<ReplaceVaultOutcome> {
+  checkFullVault(input.vault);
+  if (!input.secret) throw new AuthError(400, "Нет секрета входа.");
+
+  const person = db
+    .prepare("select secret_hash, secret_salt, vault from people where id = ?")
+    .get<Pick<Person, "secret_hash" | "secret_salt" | "vault">>(personId);
+  if (!person) throw new AuthError(401, "Нужен вход.");
+
+  const stored = JSON.parse(person.vault) as {
+    password?: StoredLock;
+    recovery?: StoredLock;
+  };
+  if (typeof stored.password?.wrapped !== "string" || stored.password.wrapped === "") {
+    return {
+      ok: false,
+      status: 409,
+      reason: "keyless",
+      error: "У этой записи на службе нет входа по паролю — менять на службе нечего."
+    };
+  }
+
+  if (input.currentSecret !== null) {
+    const was = (await derive(input.currentSecret, person.secret_salt)).toString("hex");
+    if (!sameHash(was, person.secret_hash)) {
+      return {
+        ok: false,
+        status: 403,
+        reason: "secret",
+        error: "Прежний пароль не подходит к службе — похоже, его уже сменили с другого устройства."
+      };
+    }
+  } else {
+    const next = JSON.parse(input.vault) as { recovery?: StoredLock };
+    if (!sameLock(stored.recovery, next.recovery)) {
+      return {
+        ok: false,
+        status: 403,
+        reason: "recovery",
+        error: "Код восстановления на этом устройстве не тот, что на службе."
+      };
+    }
+  }
+
+  const salt = randomBytes(16).toString("hex");
+  const hash = (await derive(input.secret, salt)).toString("hex");
+
+  // Условие на ПРЕЖНИЙ хеш — в самом запросе. scrypt выше идёт десятки
+  // миллисекунд, и в этот промежуток помещается замена с другого устройства;
+  // без условия она бы тихо затёрлась той, что проверялась по устаревшему.
+  // Любая замена меняет хеш (соль каждый раз новая), так что гонку видно всегда.
+  const changed = db
+    .prepare(
+      "update people set secret_hash = ?, secret_salt = ?, vault = ? where id = ? and secret_hash = ?"
+    )
+    .run(hash, salt, input.vault, personId, person.secret_hash);
+  if (changed.changes !== 1) {
+    return {
+      ok: false,
+      status: 409,
+      reason: "race",
+      error: "Пароль на службе только что сменили с другого устройства — попробуйте ещё раз."
+    };
+  }
+  return { ok: true };
+}
+
 /**
  * Выдать билет — при входе или по коду связки.
  *

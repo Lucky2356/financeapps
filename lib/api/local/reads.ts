@@ -26,7 +26,12 @@ import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
 import { monthsBack } from "@/lib/accounts/balance-history";
 import { buildYearRecap } from "@/lib/analytics/year-recap";
 import { compareMonths } from "@/lib/analytics/compare-months";
-import { detectPayday, forecastToPayday } from "@/lib/analytics/payday";
+import {
+  detectPaydays,
+  forecastToPayday,
+  parsePaydaySchedule,
+  type PaydaySchedule
+} from "@/lib/analytics/payday";
 import type { LocalState } from "@/lib/api/local/state";
 import { countingState, inBase, ratesOf, sumInBase } from "@/lib/api/local/money";
 import {
@@ -142,17 +147,24 @@ function family({ state, searchParams }: ReadRequest) {
   };
 }
 
+/**
+ * «До зарплаты». Расписание, указанное человеком, приходит в ?schedule= (см.
+ * parsePaydaySchedule); старые клиенты шлют ?day=10 — это то же самое,
+ * расписание из одного числа. Нет ни того, ни другого — по истории.
+ */
 function payday({ state, searchParams }: ReadRequest) {
   const today = isoDay(new Date());
   const counted = countingState(inBase(state), false);
-  const manual = Number(searchParams.get("day"));
-  const detected = detectPayday(
+  const manual = parsePaydaySchedule(searchParams.get("schedule") ?? searchParams.get("day"));
+  const detected = detectPaydays(
     counted.transactions
       .filter((row) => row.type === "INCOME" && row.date.slice(0, 10) <= today)
-      .map((row) => ({ date: row.date, amount: row.amount, category: row.category.label }))
+      .map((row) => ({ date: row.date, amount: row.amount, category: row.category.label })),
+    today
   );
-  const day = manual >= 1 && manual <= 31 ? Math.trunc(manual) : detected;
-  if (!day) return { forecast: null };
+  const schedule: PaydaySchedule | null =
+    manual ?? (detected ? { kind: "monthly", days: detected } : null);
+  if (!schedule) return { forecast: null, detected };
   const open = state.accounts.filter((account) => !account.isArchived);
   // Обычная трата в день — за 90 дней, без плановых платежей и долгов: они
   // стоят в списке платежей до зарплаты отдельно.
@@ -170,8 +182,8 @@ function payday({ state, searchParams }: ReadRequest) {
   return {
     forecast: forecastToPayday({
       today,
-      payday: day,
-      source: manual >= 1 && manual <= 31 ? "manual" : "history",
+      schedule,
+      source: manual ? "manual" : "history",
       liquid: sumInBase(
         state,
         open.filter((account) => account.type === "CASH" || account.type === "DEBIT_CARD")
@@ -180,7 +192,10 @@ function payday({ state, searchParams }: ReadRequest) {
         .events.filter((event) => event.type === "EXPENSE")
         .map((event) => ({ date: event.date, amount: event.amount, title: event.title })),
       usualPerDay: everyday / 90
-    })
+    }),
+    // Дни по истории — даже когда человек указал свои: экран пишет их рядом
+    // с «по истории», чтобы было видно, к чему вернётся выбор.
+    detected
   };
 }
 

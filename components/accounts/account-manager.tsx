@@ -11,7 +11,7 @@ import { earnsInterest, interestSchedule, totalInterest } from "@/lib/accounts/i
 import { depositOutlook } from "@/lib/accounts/deposits";
 import { apiClient } from "@/lib/api/client";
 import type { AccountsPageData } from "@/lib/data";
-import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { currencyLabel, SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { useApiMutation } from "@/hooks/use-api-mutation";
@@ -463,7 +463,7 @@ function AccountDialog({
   account?: AccountsPageData["accounts"][number];
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   // The savings terms only make sense where money is parked, so they follow the
   // chosen type instead of cluttering every account form.
   const [type, setType] = useState(account?.type ?? "DEBIT_CARD");
@@ -489,7 +489,7 @@ function AccountDialog({
             <SelectContent>
               {SUPPORTED_CURRENCIES.map((item) => (
                 <SelectItem key={item.code} value={item.code}>
-                  {item.code} — {item.label}
+                  {item.code} — {currencyLabel(item.code, locale)}
                 </SelectItem>
               ))}
             </SelectContent>

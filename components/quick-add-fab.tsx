@@ -5,7 +5,7 @@ import { Plus, ScanLine, X } from "lucide-react";
 import { FavoriteChips } from "@/components/transactions/favorite-chips";
 import { FAB_RING } from "@/components/ui/fab";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -97,6 +97,10 @@ export function QuickAddFab({
   categories: CategoryOption[];
 }) {
   const router = useRouter();
+  // На «Таблице» плавающей кнопки нет: она садилась ровно на прибитый к правому
+  // краю столбец «Итог» и закрывала его нижние клетки. Запись операции там
+  // остаётся — клавишами Alt+N и через поиск (Ctrl+K).
+  const onSheet = usePathname()?.startsWith("/sheet") ?? false;
   const confirmFutureDate = useConfirmFutureDate();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -685,7 +689,11 @@ export function QuickAddFab({
         // dissolved into whatever was under it; a ring in the page colour cuts
         // a clean hole around the button, so it reads as floating above the
         // screen on any background and in either theme.
-        className={cn(FAB_RING, "fixed bottom-6 right-6 z-40 hidden size-[52px] !px-0 md:flex")}
+        className={cn(
+          FAB_RING,
+          "fixed bottom-6 right-6 z-40 hidden size-[52px] !px-0",
+          !onSheet && "md:flex"
+        )}
         onClick={() => void openDialog()}
         aria-label={t("qa.fabAria")}
       >

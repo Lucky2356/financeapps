@@ -198,3 +198,155 @@ describe("платёж по долгу и долг", () => {
     expect((await fresh.get("/debts")).liabilities[0].balance).toBe(0);
   });
 });
+
+// Возврат из корзины в любом порядке даёт тот же долг.
+//
+// Счёт, возвращаемый вместе со своими операциями, несёт остаток с ними, и
+// операции по нему не проводятся второй раз. Долг при этом пропускался тоже:
+// платёж возвращался, а долг оставался таким, будто платежа нет. Долг же,
+// удалённый раньше платежа, держит этот платёж в своём остатке — вернуть его, а
+// потом платёж, значило снять платёж с долга дважды.
+describe("возврат из корзины: долг сходится в любом порядке", () => {
+  const PAID = 25000;
+  type Entry = { id: string; collection: string; key: string; deletedAt: string };
+
+  async function world() {
+    const storage = new MemoryStorageAdapter();
+    const client = new LocalApiClient(storage);
+    await client.post("/accounts", { name: "Карта", type: "DEBIT_CARD", balance: "50000" });
+    const account = (await client.get("/accounts")).accounts[0];
+    await client.post("/debts", {
+      name: "Кредит",
+      kind: "LOAN",
+      balance: "30000",
+      originalAmount: "30000",
+      interestRate: "10",
+      minPayment: "3000",
+      dueDay: "1"
+    });
+    const debtId = (await client.get("/debts")).liabilities[0].id;
+    await client.post("/debts/pay", { id: debtId, amount: "5000", accountId: account.id });
+    const payment = (await client.get("/transactions?period=all")).transactions[0];
+    const bookKey = (await storage.keys()).find((key) => /^localFinanceState_[^:]+$/.test(key))!;
+    const trashKey = `${bookKey}:trash`;
+    const entries = async () =>
+      (await storage.getItem<{ entries: Entry[] }>(trashKey))?.entries ?? [];
+
+    return {
+      client,
+      debtId,
+      payment,
+      debt: async () =>
+        (await client.get("/debts")).liabilities.find((item) => item.id === debtId)?.balance,
+      /** Время удаления — явно: два удаления подряд могут прийтись на одну миллисекунду. */
+      async stamp(collection: string, at: string) {
+        await storage.setItem(trashKey, {
+          v: 1,
+          entries: (await entries()).map((entry) =>
+            entry.collection === collection ? { ...entry, deletedAt: at } : entry
+          )
+        });
+      },
+      /**
+       * Счёт исчезает из книги — так, как его убирает сверка с другим
+       * устройством (здесь же счёт только прячется в архив). В корзину его
+       * кладёт само приложение, заметив пропажу при следующем чтении.
+       */
+      async accountVanishes(at: string) {
+        const book = (await storage.getItem<{ accounts: Array<{ id: string }> }>(bookKey))!;
+        await storage.setItem(bookKey, {
+          ...book,
+          accounts: book.accounts.filter((item) => item.id !== account.id)
+        });
+        client.forgetCachedState();
+        await client.get("/trash");
+        await this.stamp("accounts", at);
+      },
+      async restore(collections: string[]) {
+        const ids = (await entries())
+          .filter((entry) => collections.includes(entry.collection))
+          .map((entry) => entry.id);
+        return client.post("/trash", { action: "restore", ids });
+      }
+    };
+  }
+
+  describe("платёж и его счёт", () => {
+    // Платёж удалили (долг вернулся), потом не стало и счёта.
+    async function bothInTrash() {
+      const w = await world();
+      await w.client.delete(`/transactions?id=${w.payment.id}`);
+      expect(await w.debt()).toBe(30000);
+      await w.stamp("transactions", "2026-10-01T10:00:00.000Z");
+      await w.accountVanishes("2026-10-01T11:00:00.000Z");
+      return w;
+    }
+
+    it("вместе, одним возвратом", async () => {
+      const w = await bothInTrash();
+      expect((await w.restore(["accounts", "transactions"])).restored).toBe(2);
+      expect(await w.debt()).toBe(PAID);
+    });
+
+    it("сначала счёт, потом платёж", async () => {
+      const w = await bothInTrash();
+      await w.restore(["accounts"]);
+      await w.restore(["transactions"]);
+      expect(await w.debt()).toBe(PAID);
+    });
+
+    it("сначала платёж (не выходит — счёта нет), потом оба", async () => {
+      const w = await bothInTrash();
+      expect((await w.restore(["transactions"])).restored).toBe(0);
+      await w.restore(["accounts", "transactions"]);
+      expect(await w.debt()).toBe(PAID);
+    });
+  });
+
+  describe("платёж и его долг", () => {
+    async function debtThenPayment(debtAt: string, paymentAt: string) {
+      const w = await world();
+      await w.client.delete(`/debts?id=${w.debtId}`);
+      await w.client.delete(`/transactions?id=${w.payment.id}`);
+      await w.stamp("liabilities", debtAt);
+      await w.stamp("transactions", paymentAt);
+      return w;
+    }
+
+    it("долг удалён раньше платежа — вместе", async () => {
+      const w = await debtThenPayment("2026-10-01T10:00:00.000Z", "2026-10-01T11:00:00.000Z");
+      await w.restore(["liabilities", "transactions"]);
+      expect(await w.debt()).toBe(PAID);
+    });
+
+    it("долг удалён раньше платежа — сначала долг, потом платёж", async () => {
+      const w = await debtThenPayment("2026-10-01T10:00:00.000Z", "2026-10-01T11:00:00.000Z");
+      await w.restore(["liabilities"]);
+      // Платежа в книге нет — и в долге его нет.
+      expect(await w.debt()).toBe(30000);
+      await w.restore(["transactions"]);
+      expect(await w.debt()).toBe(PAID);
+    });
+
+    it("долг и платёж исчезли разом (сверка) — вместе", async () => {
+      const w = await debtThenPayment("2026-10-01T10:00:00.000Z", "2026-10-01T10:00:00.000Z");
+      await w.restore(["liabilities", "transactions"]);
+      expect(await w.debt()).toBe(PAID);
+    });
+
+    it("платёж удалён раньше долга — вместе и по очереди", async () => {
+      for (const order of [
+        [["liabilities", "transactions"]],
+        [["liabilities"], ["transactions"]]
+      ]) {
+        const w = await world();
+        await w.client.delete(`/transactions?id=${w.payment.id}`);
+        await w.client.delete(`/debts?id=${w.debtId}`);
+        await w.stamp("transactions", "2026-10-01T10:00:00.000Z");
+        await w.stamp("liabilities", "2026-10-01T11:00:00.000Z");
+        for (const step of order) await w.restore(step);
+        expect(await w.debt(), JSON.stringify(order)).toBe(PAID);
+      }
+    });
+  });
+});

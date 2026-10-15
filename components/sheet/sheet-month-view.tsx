@@ -7,8 +7,14 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { kindCaption, monthLabel } from "@/components/sheet/sheet-text";
-import type { DisplayColumn, Position, SheetWords } from "@/components/sheet/sheet-types";
-import { isSavingsKind, type ComputedRow } from "@/lib/sheet/model";
+import type {
+  DisplayColumn,
+  Position,
+  SheetFormat,
+  SheetWords
+} from "@/components/sheet/sheet-types";
+import type { AboveUsual } from "@/lib/sheet/highlight";
+import { cellKey, isSavingsKind, type ComputedRow } from "@/lib/sheet/model";
 import { cn } from "@/lib/utils";
 
 function inSavings(item: DisplayColumn): boolean {
@@ -23,8 +29,11 @@ export function SheetMonthView({
   index,
   current,
   words,
+  format,
   locale,
   plain,
+  money,
+  unusual,
   onIndex,
   onEdit
 }: {
@@ -33,8 +42,12 @@ export function SheetMonthView({
   index: number;
   current: string;
   words: SheetWords;
+  format: SheetFormat;
   locale: string;
   plain: (value: number) => string;
+  money: (value: number) => string;
+  /** Клетки расходов выше обычного — `cellKey(месяц, столбец)`. */
+  unusual: Map<string, AboveUsual>;
   onIndex: (index: number) => void;
   onEdit: (position: Position) => void;
 }) {
@@ -99,6 +112,8 @@ export function SheetMonthView({
               <li
                 key={item.type}
                 className="flex items-center justify-between gap-3 bg-warning/10 px-3 py-3 font-semibold"
+                title={item.type === "total" ? words.totalHint : undefined}
+                data-testid={`month-${item.type}`}
               >
                 <span>{item.type === "total" ? words.monthTotalRow : words.savingsTotal}</span>
                 <span className={cn("tabular-nums", value < 0 && "text-destructive")}>
@@ -111,6 +126,8 @@ export function SheetMonthView({
           const { column } = item;
           const cell = row.cells[column.id];
           const empty = cell?.value === null || cell?.value === undefined;
+          const above = unusual.get(cellKey(row.month, column.id));
+          const caption = kindCaption(column, words.kinds);
           return [
             header,
             <li key={column.id} className="border-t first:border-t-0">
@@ -123,9 +140,21 @@ export function SheetMonthView({
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{column.name}</span>
-                  {kindCaption(column, words.kinds) ? (
-                    <span className="block text-xs text-muted-foreground">
-                      {kindCaption(column, words.kinds)}
+                  {caption ? (
+                    <span className="block text-xs text-muted-foreground">{caption}</span>
+                  ) : null}
+                  {/* Подсказки по наведению на телефоне нет — «выше обычного»
+                      написано словами под статьёй. */}
+                  {above ? (
+                    <span
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                      data-testid="month-above"
+                    >
+                      <span className="size-1.5 shrink-0 rounded-full bg-warning" />
+                      {format(words.aboveUsual, {
+                        percent: above.percent,
+                        usual: money(above.usual)
+                      })}
                     </span>
                   ) : null}
                 </span>

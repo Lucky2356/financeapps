@@ -10,11 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { tellVaultPush } from "@/components/sync/vault-change-watch";
 import { RecoveryWords } from "@/components/vault/recovery-words";
 import { announceVaultChanged } from "@/components/vault/vault-gate";
 import { useI18n } from "@/lib/i18n/context";
 import { biometricAvailable } from "@/lib/vault/biometric";
-import { accountService } from "@/lib/vault/runtime";
+import { accountService, changeVaultPassword } from "@/lib/vault/runtime";
 
 export function VaultPanel() {
   const { t } = useI18n();
@@ -93,10 +94,13 @@ export function VaultPanel() {
     event.preventDefault();
     setBusy(true);
     try {
-      await accountService.changePassword(current, next);
+      // У себя — сразу; на службе синхронизации прежний пароль иначе продолжал
+      // бы пускать. Что вышло там, говорится отдельной строкой.
+      const server = await changeVaultPassword(current, next);
       setCurrent("");
       setNext("");
       toast.success(t("vault.settings.changed"));
+      tellVaultPush(server, t);
     } catch (cause) {
       toast.error((cause as Error).message);
     } finally {

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { DEFAULT_LOCALE, loadLocale, LOCALES, translate, type Locale } from "@/lib/i18n/catalog";
+import { setDisplayLocale } from "@/lib/i18n/display-locale";
 
 const STORAGE_KEY = "app-locale";
 
@@ -32,10 +33,17 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   // locale on mount (avoids a hydration mismatch while still honoring the choice).
   const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
 
+  // Даты и суммы (lib/format) переходят на язык вместе с текстом — в том же
+  // кадре, а не по localStorage раньше него (см. lib/i18n/display-locale.ts).
+  const switchTo = useCallback((next: Locale) => {
+    setDisplayLocale(next);
+    setLocaleState(next);
+  }, []);
+
   useEffect(() => {
     const initial = resolveInitialLocale();
     // Словарь языка — до переключения, иначе экран мигнул бы русским.
-    void loadLocale(initial).then(() => setLocaleState(initial));
+    void loadLocale(initial).then(() => switchTo(initial));
     // Seed the cookie on first load so the web server renders generated content
     // (recommendations, metrics, insights) in the resolved locale even before
     // the user explicitly changes the language setting.
@@ -44,7 +52,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* document unavailable */
     }
-  }, []);
+  }, [switchTo]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -52,21 +60,24 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     }
   }, [locale]);
 
-  const setLocale = useCallback((next: Locale) => {
-    void loadLocale(next).then(() => setLocaleState(next));
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      /* storage unavailable — in-memory only */
-    }
-    // Mirror to a cookie so the web server (SSR / API routes) can render
-    // locale-aware generated content (recommendations, metrics, insights).
-    try {
-      document.cookie = `${STORAGE_KEY}=${next}; path=/; max-age=31536000; samesite=lax`;
-    } catch {
-      /* document unavailable */
-    }
-  }, []);
+  const setLocale = useCallback(
+    (next: Locale) => {
+      void loadLocale(next).then(() => switchTo(next));
+      try {
+        window.localStorage.setItem(STORAGE_KEY, next);
+      } catch {
+        /* storage unavailable — in-memory only */
+      }
+      // Mirror to a cookie so the web server (SSR / API routes) can render
+      // locale-aware generated content (recommendations, metrics, insights).
+      try {
+        document.cookie = `${STORAGE_KEY}=${next}; path=/; max-age=31536000; samesite=lax`;
+      } catch {
+        /* document unavailable */
+      }
+    },
+    [switchTo]
+  );
 
   const value = useMemo<I18nContextValue>(
     () => ({

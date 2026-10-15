@@ -4,7 +4,12 @@ import { FileUp, Sparkles } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { SheetImportDialog } from "@/components/sheet/sheet-import-dialog";
-import { QUIET_BUTTON, type SheetFormat, type SheetWords } from "@/components/sheet/sheet-types";
+import {
+  QUIET_BUTTON,
+  type SheetCount,
+  type SheetFormat,
+  type SheetWords
+} from "@/components/sheet/sheet-types";
 import { SheetWizard } from "@/components/sheet/sheet-wizard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +21,7 @@ export function SheetEmpty({
   sheetId,
   words,
   format,
+  count,
   categories,
   current,
   wizardOpen,
@@ -29,6 +35,7 @@ export function SheetEmpty({
   sheetId: string;
   words: SheetWords;
   format: SheetFormat;
+  count: SheetCount;
   categories: ImportPageData["categories"];
   current: string;
   wizardOpen: boolean;
@@ -106,6 +113,7 @@ export function SheetEmpty({
         current={current}
         words={words}
         format={format}
+        count={count}
         onCreated={async () => {
           await Promise.all([reload(), reloadRefs()]);
         }}

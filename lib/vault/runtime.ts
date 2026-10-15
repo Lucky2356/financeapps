@@ -49,7 +49,8 @@ import {
   whoAlreadyUses,
   type Roster
 } from "@/lib/vault/people";
-import { ServerAccount } from "@/lib/vault/server-account";
+import { ServerAccount, type VaultPush } from "@/lib/vault/server-account";
+import { PasswordSync } from "@/lib/vault/password-sync";
 import { deviceName } from "@/lib/vault/device-name";
 import {
   importTransferKey,
@@ -188,6 +189,54 @@ const merge: Merge = async (slot, mine, theirs, base) => {
 export const serverAccount = new ServerAccount(syncStorage);
 
 /**
+ * Исход отправки смены пароля на службу — для экрана (VaultChangeWatch в
+ * components/sync). Событием, а не возвратом: фоновую отправку (при запуске,
+ * после сверки) никто не ждёт, а сказать человеку о ней надо.
+ */
+export const VAULT_PUSHED = "vault-pushed";
+
+export type VaultPushedDetail = { outcome: VaultPush };
+
+/**
+ * Повторять ли отправку после каждой удачной сверки.
+ *
+ * Только пока она упирается в отсутствие связи: сверка удалась — связь
+ * вернулась, самое время. После отказа или «служба не обновлена» повтор на
+ * каждой сверке дал бы тот же ответ и то же сообщение человеку раз в пару
+ * минут; для них хватает попытки при следующем запуске.
+ */
+let retryOnSync = true;
+
+const passwordSync = new PasswordSync(accountService, serverAccount, (outcome, quiet) => {
+  retryOnSync = outcome.kind === "offline";
+  if (quiet || typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<VaultPushedDetail>(VAULT_PUSHED, { detail: { outcome } }));
+});
+
+/**
+ * Сменить пароль — у себя и на службе. Возвращает исход со службой; у себя
+ * пароль сменён, если вызов не бросил.
+ */
+export function changeVaultPassword(current: string, next: string): Promise<VaultPush> {
+  return passwordSync.changePassword(current, next);
+}
+
+/** Забыли пароль: новый по коду восстановления. Служба узнает при подъёме синхронизации. */
+export function resetVaultPassword(code: string, next: string): Promise<void> {
+  return passwordSync.resetPassword(code, next);
+}
+
+/** Отправить ждущую смену пароля, если она есть. */
+export function pushVaultChange(): Promise<VaultPush> {
+  return passwordSync.push();
+}
+
+// Связь вернулась — сверка прошла. Если смена пароля ждала связи, ей пора.
+syncStorage.onStatus((status) => {
+  if (status === "synced" && retryOnSync) void passwordSync.push();
+});
+
+/**
  * Включает синхронизацию.
  *
  * Отдельным вызовом, а не само собой: без входа синхронизировать не с кем, и
@@ -211,6 +260,9 @@ export async function resumeSync(): Promise<boolean> {
   const link = await serverAccount.link();
   if (!link) return false;
   await startSync(new HttpSyncTransport({ base: link.base, token: link.token }));
+  // Смена пароля, не доехавшая в прошлый раз (не было связи, служба была
+  // старой). Не ждём: запуск не имеет права ждать сеть.
+  if (link.pendingVault) void passwordSync.push();
   return true;
 }
 

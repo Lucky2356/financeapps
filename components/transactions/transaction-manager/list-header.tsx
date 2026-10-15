@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { TransactionFilterBar } from "@/components/transactions/filter-bar";
-import { CardHeader, CardTitle } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card";
 import { NOTICE_ACTION_CLASS, NoticeLine } from "@/components/ui/notice-line";
 import {
   Select,
@@ -17,7 +16,10 @@ import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { TX_SORTS, type TxSort } from "@/lib/transactions/sort";
 
-/** Шапка карточки списка: фильтры, итоги под фильтром, порядок, будущие даты. */
+/**
+ * Шапка карточки списка: итоги под фильтром, порядок, будущие даты. Сами
+ * фильтры — наверху экрана (transactions-filters-card.tsx).
+ */
 export function TransactionListHeader({
   pageData,
   visibleCount,
@@ -40,20 +42,12 @@ export function TransactionListHeader({
 
   return (
     <CardHeader className="gap-3">
-      {/* Every way of adding something — an operation, a transfer, a split
-          receipt — is the round "+" button. What stands here instead are
-          the filters that decide which rows are below. */}
-      <TransactionFilterBar
-        title={<CardTitle>{t("tx.title")}</CardTitle>}
-        categories={pageData.categories}
-        accounts={pageData.accounts}
-        defaultLimit={pageData.pagination.limit}
-      />
-
       {/* The totals belong to the rows below them: they follow the filter,
-          unlike the month tiles at the top of the screen. */}
+          unlike the month tiles at the top of the screen.
+          Порядок — во всю ширину на телефоне: справа от итогов ему оставалась
+          полоска, и итоги ломались в четыре строки; с sm он встаёт справа. */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <p className="num flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <p className="num flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span className="text-muted-foreground">{t("tx.shown", { count: visibleCount })}</span>
           <span className="text-success">+{formatCurrency(totals.income)}</span>
           <span className="text-destructive">-{formatCurrency(totals.expense)}</span>
@@ -65,7 +59,7 @@ export function TransactionListHeader({
         </p>
         <Select value={sort} onValueChange={(value) => onSortChange(value as TxSort)}>
           <SelectTrigger
-            className="h-8 w-44 text-xs"
+            className="h-9 w-full sm:w-48"
             aria-label={t("tx.sort.label")}
             data-testid="tx-sort"
           >

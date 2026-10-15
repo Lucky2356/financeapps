@@ -29,6 +29,44 @@ export const SUPPORTED_CURRENCIES: CurrencyMeta[] = [
 
 export const SUPPORTED_CURRENCY_CODES: readonly CurrencyCode[] = CURRENCY_CODES;
 
+/** Знак валюты из подписи: «₽ Рубль» → «₽». */
+function currencySymbolOf(code: string): string {
+  const meta = SUPPORTED_CURRENCIES.find((item) => item.code === code);
+  return meta ? meta.label.split(" ")[0] : "";
+}
+
+const displayNames = new Map<string, Intl.DisplayNames | null>();
+
+function currencyNames(locale: string): Intl.DisplayNames | null {
+  if (!displayNames.has(locale)) {
+    let names: Intl.DisplayNames | null = null;
+    try {
+      names = new Intl.DisplayNames([locale], { type: "currency", fallback: "none" });
+    } catch {
+      // Старый движок без Intl.DisplayNames — останется код валюты.
+    }
+    displayNames.set(locale, names);
+  }
+  return displayNames.get(locale) ?? null;
+}
+
+/**
+ * Подпись валюты в выборе — на языке экрана: «₽ Рубль» / «₽ Russian Ruble».
+ *
+ * Русские подписи — свои, короткие («Юань», а не «китайский юань», как у Intl).
+ * Английские — от Intl.DisplayNames: он знает названия всех валют, и новая
+ * валюта в списке не потребует перевода. Если движок названия не знает, —
+ * знак и код: «¥ CNY», но не русское слово среди английского.
+ */
+export function currencyLabel(code: string, locale: "ru" | "en"): string {
+  if (locale === "ru") {
+    return SUPPORTED_CURRENCIES.find((item) => item.code === code)?.label ?? code;
+  }
+  const name = currencyNames("en")?.of(code) ?? code;
+  const symbol = currencySymbolOf(code);
+  return symbol ? `${symbol} ${name}` : name;
+}
+
 export type CurrencyRates = Partial<Record<CurrencyCode, number>>;
 
 // Starting rates (RUB per 1 unit). Deliberately round, user-editable defaults.

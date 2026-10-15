@@ -13,6 +13,7 @@ import { Fragment, useMemo, useState } from "react";
 import { HoldingDetails } from "@/components/investments/holding-card";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { sectorLabel } from "@/lib/market/sectors";
 import { cn } from "@/lib/utils";
 import type { InvestmentData } from "@/types/finance";
 
@@ -36,7 +37,7 @@ export function HoldingsTable({
   onEdit: (position: Row) => void;
   onRemove: (ticker: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "value", desc: true });
 
   const returnPct = (row: Row) => {
@@ -135,7 +136,7 @@ export function HoldingsTable({
                       <div className="min-w-0">
                         <p className="font-semibold leading-tight">{row.ticker}</p>
                         <p className="max-w-[14rem] truncate text-xs text-muted-foreground">
-                          {row.name} · {row.sector}
+                          {row.name} · {sectorLabel(row.sector, locale)}
                         </p>
                       </div>
                     </div>

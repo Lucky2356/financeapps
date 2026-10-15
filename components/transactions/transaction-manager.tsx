@@ -26,11 +26,29 @@ import { useBulkActions } from "@/components/transactions/transaction-manager/us
 import { useTransactionListView } from "@/components/transactions/transaction-manager/use-list-view";
 import { useTransactionRowActions } from "@/components/transactions/transaction-manager/use-row-actions";
 import { useTransactionSelection } from "@/components/transactions/transaction-manager/use-selection";
-import { useTransactionsData } from "@/components/transactions/transaction-manager/use-transactions-data";
+import {
+  TransactionsDataProvider,
+  useSharedTransactionsData,
+  useTransactionsPage
+} from "@/components/transactions/transaction-manager/data-context";
 
 // Части экрана лежат в ./transaction-manager/: здесь только сборка.
-// Порядок хуков важен: эффекты загрузки списка идут раньше сброса выделения.
+//
+// Данные списка — общие с фильтрами наверху экрана (см. data-context.tsx). Если
+// экран их не завёл (список стоит сам по себе — например, в тестах), заводит
+// свою копию сам.
 export function TransactionManager({ data }: { data: TransactionsPageData }) {
+  const shared = useSharedTransactionsData();
+  if (shared) return <TransactionList />;
+  return (
+    <TransactionsDataProvider data={data}>
+      <TransactionList />
+    </TransactionsDataProvider>
+  );
+}
+
+// Порядок хуков важен: эффекты загрузки списка идут раньше сброса выделения.
+function TransactionList() {
   const router = useRouter();
   const { t, locale } = useI18n();
   const aiSettings = useAiSettings();
@@ -40,7 +58,7 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
   const confirm = useConfirm();
   const confirmFutureDate = useConfirmFutureDate();
   const [photoFor, setPhotoFor] = useState<string | null>(null);
-  const { pageData, loadTransactions } = useTransactionsData(data, paramsString);
+  const { pageData, loadTransactions } = useTransactionsPage();
   const { visibleTransactions, sort, sortLabel, changeSort, dayStarts, totals, net } =
     useTransactionListView({ pageData, searchParams, paramsString, router, t });
   const { selectedIds, allVisibleSelected, toggleSelect, toggleSelectAll, clearSelection } =
@@ -76,9 +94,9 @@ export function TransactionManager({ data }: { data: TransactionsPageData }) {
 
   return (
     <div className="space-y-4">
-      {/* The filters belong to the list they filter. They used to sit on the
-          page between two cards, a strip of controls attached to nothing;
-          inside the card they read as its own controls. */}
+      {/* Фильтры — наверху экрана, в своей карточке (transactions-filters-card):
+          до них не надо листать мимо аналитики. Здесь — то, что относится к
+          самим строкам: итоги под фильтром и порядок. */}
       <Card>
         <TransactionListHeader
           pageData={pageData}

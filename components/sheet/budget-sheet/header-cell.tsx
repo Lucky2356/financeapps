@@ -36,6 +36,7 @@ export function HeaderCell({
           item.type === "total" && cn(PINNED_TOTAL, "md:z-10"),
           !last && "border-r"
         )}
+        title={item.type === "total" ? words.totalHint : undefined}
       >
         {item.type === "total" ? words.total : words.savingsTotal}
       </th>

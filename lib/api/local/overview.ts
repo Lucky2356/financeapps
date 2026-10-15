@@ -10,6 +10,7 @@ import { formatCurrency, formatInputDate } from "@/lib/format";
 import { percent, roundMoney } from "@/lib/utils";
 import { translate } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
+import { intlLocale } from "@/lib/i18n/display-locale";
 import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
 import { pickBestWorstMonth } from "@/lib/analytics/best-month";
@@ -121,7 +122,8 @@ export function recordNetWorthSnapshot(state: LocalState, prices: MarketPrices) 
  * «Можно тратить сегодня» — см. lib/analytics/daily-allowance.ts. Переводы
  * между своими счетами не считаются ни доходом, ни расходом (countingState
  * уже без них), плановые платежи — из того же прогноза, что на экране
- * «Прогноз», чтобы два числа не спорили.
+ * «Прогноз», чтобы два числа не спорили. К доходам месяца добавляется
+ * остаток прошлого.
  */
 export function allowancePage(state: LocalState): Allowance {
   const now = new Date();
@@ -150,12 +152,22 @@ export function allowancePage(state: LocalState): Allowance {
   // записанная на 25-е, оставляла бюджет 100 000. Такой расход — тот же
   // плановый платёж до конца месяца, ему место в «впереди».
   const aheadThisMonth = sum(expenses.filter((row) => row.date.slice(0, 10) > today));
+  // Остаток с прошлого месяца — по тем же правилам, что этот: те же строки
+  // (переводы уже убраны, суммы уже в основной валюте), платежи по долгам —
+  // такой же расход, как здесь. Только прошлый календарный месяц, без цепочки
+  // до начала истории: что было раньше, уже вошло в его собственный остаток
+  // или ушло. Со знаком: перерасход прошлого месяца уменьшает этот.
+  const previousMonth = monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const previousRows = state.transactions.filter((row) => row.date.startsWith(previousMonth));
   return computeDailyAllowance({
     today,
     income: sum(monthRows.filter((row) => row.type === "INCOME")),
     averageIncome: previous.length
       ? previous.reduce((total, item) => total + item.income, 0) / previous.length
       : 0,
+    carryOver:
+      sum(previousRows.filter((row) => row.type === "INCOME")) -
+      sum(previousRows.filter((row) => row.type === "EXPENSE")),
     upcoming: upcoming + aheadThisMonth,
     spentBeforeToday: sum(expenses.filter((row) => row.date.slice(0, 10) < today)),
     spentToday: sum(expenses.filter((row) => row.date.slice(0, 10) === today)),
@@ -184,7 +196,8 @@ export async function dashboardPage(state: LocalState): Promise<DashboardData> {
   const netWorthTrend = buildNetWorthTrend({
     currentNetWorth: netWorth,
     snapshots: [...(state.netWorthSnapshots ?? [])],
-    transactions: state.transactions
+    transactions: state.transactions,
+    locale: getClientLocale()
   });
   const savingsBalance = sumInBase(
     state,
@@ -283,7 +296,7 @@ export function analyticsPage(state: LocalState, includeTransfers = false): Anal
     const month = d.getMonth();
     const key = monthKeyOf(d);
     const endDate = new Date(year, month + 1, 0);
-    const shortLabel = d.toLocaleDateString("ru", { month: "short" });
+    const shortLabel = d.toLocaleDateString(intlLocale(getClientLocale()), { month: "short" });
     months.push({
       key,
       label: shortLabel,

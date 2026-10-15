@@ -5,6 +5,8 @@ import { LoadingCard } from "@/components/loading-card";
 import { PageHeader } from "@/components/page-header";
 import { LedgerViews } from "@/components/transactions/ledger-views";
 import { TransactionManager } from "@/components/transactions/transaction-manager";
+import { TransactionsDataProvider } from "@/components/transactions/transaction-manager/data-context";
+import { TransactionsFiltersCard } from "@/components/transactions/transactions-filters-card";
 import { TransactionsSummary } from "@/components/transactions/transactions-summary";
 import { TransactionsAnalytics } from "@/components/transactions/transactions-analytics";
 import { TransferPairsCard } from "@/components/transactions/transfer-pairs-card";
@@ -20,14 +22,21 @@ export default async function TransactionsPage() {
       <div className="hidden md:block">
         <PageHeader titleKey="page.transactions.title" descriptionKey="page.transactions.desc" />
       </div>
-      <TransactionsSummary />
-      <TransferPairsCard />
-      <AiQuickAdd />
-      <TransactionsAnalytics />
+      {/* Фильтры — первыми: до них не надо листать мимо плиток и аналитики.
+          Данные у них со списком общие (TransactionsDataProvider), поэтому
+          граница Suspense — вокруг всего, что читает адрес. Провайдер своей
+          разметки не добавляет: карточки остаются ячейками page-grid. */}
       <Suspense fallback={<LoadingCard messageKey="loading.transactions" />}>
-        <LedgerViews>
-          <TransactionManager data={data} />
-        </LedgerViews>
+        <TransactionsDataProvider data={data}>
+          <TransactionsFiltersCard />
+          <TransactionsSummary />
+          <TransferPairsCard />
+          <AiQuickAdd />
+          <TransactionsAnalytics />
+          <LedgerViews>
+            <TransactionManager data={data} />
+          </LedgerViews>
+        </TransactionsDataProvider>
       </Suspense>
     </div>
   );

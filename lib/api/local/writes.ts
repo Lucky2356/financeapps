@@ -29,6 +29,7 @@ import {
   type WorkbookImportSheet
 } from "@/lib/api/local/sheets";
 import { convert } from "@/lib/currency";
+import { countLabel, plural } from "@/lib/i18n/plural";
 import { roundMoney } from "@/lib/utils";
 import { transferKeyOf } from "@/lib/transactions/transfers";
 import { unusualFor } from "@/lib/analytics/watchdog";
@@ -389,7 +390,14 @@ export const STATE_DELETES = {
     }
     const txCount = state.transactions.filter((t) => t.category.id === itemId).length;
     if (txCount > 0) {
-      throw new Error(`Нельзя удалить категорию: к ней привязано ${txCount} операций.`);
+      // «привязана 1 операция», «привязаны 2 операции», «привязано 5 операций».
+      const bound = plural(txCount, { one: "привязана", few: "привязаны", many: "привязано" });
+      const operations = countLabel(txCount, {
+        one: "операция",
+        few: "операции",
+        many: "операций"
+      });
+      throw new Error(`Нельзя удалить категорию: к ней ${bound} ${operations}.`);
     }
     state.categories = state.categories.filter((c) => c.id !== itemId);
   })

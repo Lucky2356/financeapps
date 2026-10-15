@@ -4,6 +4,7 @@
 // как у «Таблицы»: слов много, и живут они только здесь.
 
 import { useI18n } from "@/lib/i18n/context";
+import { pluralizeTemplate } from "@/lib/i18n/plural";
 import type { DeductionKind } from "@/lib/tax/deductions";
 
 const RU = {
@@ -142,11 +143,11 @@ const EN: Text = {
   trSoon: "ahead",
   trSpent: "Spent {spent} of {budget}",
   trSpentNoBudget: "Spent {spent}",
-  trLeft: "{left} left · {days} days",
+  trLeft: "{left} left · {days} {days:day|days}",
   trPerDay: "Per day: {amount}",
   trOver: "Over budget by {amount}",
   trOps: "Trip operations",
-  trDays: "{days} days",
+  trDays: "{days} {days:day|days}",
   dYear: "Year",
   dRefund: "Refund available",
   dRefundHint: "13% of the counted spending, no more than the income tax paid.",
@@ -192,7 +193,9 @@ export function useExtrasText() {
   const { locale } = useI18n();
   const words = locale === "en" ? EN : RU;
   const format = (template: string, values: Record<string, string | number> = {}) =>
-    template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? ""));
+    pluralizeTemplate(template, values, locale).replace(/\{(\w+)\}/g, (_, key: string) =>
+      String(values[key] ?? "")
+    );
   return { words, format, locale };
 }
 

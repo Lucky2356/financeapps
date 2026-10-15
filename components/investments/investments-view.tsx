@@ -59,7 +59,7 @@ import { useApiPageData } from "@/hooks/use-api-page-data";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatInputDate } from "@/lib/format";
 import { isUsableLot, summarizeLots } from "@/lib/investments/lots";
-import { MARKET_SECTORS } from "@/lib/market/sectors";
+import { MARKET_SECTORS, sectorLabel } from "@/lib/market/sectors";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import {
@@ -764,7 +764,7 @@ function PositionDialog({
   owned: Array<{ ticker: string; name: string }>;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   // For a new position the user can pick ANY security listed on MOEX via live
   // search; when editing, the ticker is fixed.
   const [chosen, setChosen] = useState<{ ticker: string; name: string } | null>(null);
@@ -983,7 +983,7 @@ function PositionDialog({
             <SelectContent>
               {sectorOptions.map((option) => (
                 <SelectItem key={option} value={option}>
-                  {option}
+                  {sectorLabel(option, locale)}
                 </SelectItem>
               ))}
             </SelectContent>
