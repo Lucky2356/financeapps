@@ -365,7 +365,7 @@ function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, close: ()
  * срабатывает, как только панель появилась, ДО отрисовки, — иначе панель на
  * кадр мелькнула бы за краем.
  */
-function usePlacement(anchor: RefObject<HTMLElement | null>) {
+function usePlacement(anchor: RefObject<HTMLElement | null>, align: "start" | "end" = "end") {
   return useCallback(
     (node: HTMLDivElement | null) => {
       if (!node) return;
@@ -374,11 +374,17 @@ function usePlacement(anchor: RefObject<HTMLElement | null>) {
         if (!box) return;
         const gap = 8;
         const screen = document.documentElement.clientWidth;
-        const width = Math.min(node.offsetWidth, screen - gap * 2);
-        // По умолчанию — правым краем к правому краю кнопки, как было на ПК.
-        let left = box.width - width;
+        // Левая граница — не край экрана, а край содержимого: на ПК слева
+        // боковое меню, и панель, прижатая к краю экрана, уходила под него —
+        // меню перехватывало нажатия, и галочки в панели было не нажать.
+        const content = anchor.current?.closest("main")?.getBoundingClientRect().left ?? 0;
+        const start = Math.max(gap, content + gap);
+        const width = Math.min(node.offsetWidth, screen - gap - start);
+        // «end» — правым краем к правому краю кнопки (кнопка у правого края
+        // ряда); «start» — левым краем к левому (кнопка в начале ряда).
+        let left = align === "start" ? 0 : box.width - width;
         left = Math.min(left, screen - gap - width - box.left);
-        left = Math.max(left, gap - box.left);
+        left = Math.max(left, start - box.left);
         node.style.left = `${left}px`;
         node.style.right = "auto";
         // Нижняя панель навигации на телефоне — около 5.5rem; на ПК её нет.
@@ -391,7 +397,7 @@ function usePlacement(anchor: RefObject<HTMLElement | null>) {
       window.addEventListener("resize", place);
       return () => window.removeEventListener("resize", place);
     },
-    [anchor]
+    [anchor, align]
   );
 }
 
@@ -419,7 +425,7 @@ function MoreFilters({
   const ref = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   useDismiss(ref, open, close);
-  const panel = usePlacement(ref);
+  const panel = usePlacement(ref, "start");
 
   const params = new URLSearchParams(paramsString);
   const [minAmount, setMinAmount] = useDebouncedParam(

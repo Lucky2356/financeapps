@@ -126,6 +126,25 @@ for (const width of [360, 390, 430, 1265]) {
     const type = await box("button[role=combobox]", 1);
     expect(Math.abs(account.width - type.width)).toBeLessThanOrEqual(1);
 
+    // Панель фильтров открывается поверх всего: кнопка теперь в начале ряда,
+    // и панель, раскрытая влево, на ПК уходила под боковое меню — то
+    // перехватывало нажатия. Каждый угол панели и её середина — её же.
+    await filters.getByRole("button", { name: "Фильтры" }).click();
+    const panel = page.getByTestId("more-filters-panel");
+    await expect(panel).toBeVisible();
+    const covered = await panel.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const points = [
+        [r.left + 4, r.top + 4],
+        [r.right - 4, r.top + 4],
+        [r.left + r.width / 2, r.top + Math.min(r.height / 2, 60)]
+      ];
+      return points.filter(([x, y]) => !el.contains(document.elementFromPoint(x, y))).length;
+    });
+    expect(covered).toBe(0);
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+
     // Те же фильтры на месте и в календаре.
     await page.getByRole("radiogroup", { name: "Вид" }).getByText("Календарь").click();
     await expect(page.getByTestId("transactions-calendar")).toBeVisible();
