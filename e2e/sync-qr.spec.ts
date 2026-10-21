@@ -155,6 +155,11 @@ test("«Объединить»: свои записи остаются и доб
     baseURL: new URL(page.url()).origin
   });
   await toLocalService(laptop);
+  // Биржа молчит — как в CI, где она недоступна, и как у человека без связи.
+  // «Объединить» начинается с выгрузки копии, а копия пересчитывала портфель
+  // по бирже: по десять секунд на запрос, полминуты до подключения. Проверка
+  // падала по таймауту через раз — смотря когда ответит биржа.
+  await laptop.route("https://iss.moex.com/**", () => {});
   const second = await laptop.newPage();
   await seedExampleData(second);
   await openSettled(second, "/");

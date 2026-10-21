@@ -6,7 +6,6 @@ import { isSupportedCurrency, type CurrencyRates } from "@/lib/currency";
 import { APP_VERSION, RISK_PROFILE_LABELS } from "@/lib/constants";
 import type { LocalState } from "@/lib/api/local/state";
 import { ratesOf } from "@/lib/api/local/money";
-import { investmentsPage } from "@/lib/api/local/investments";
 
 /**
  * The exported document, plus the version of the app that wrote it.
@@ -37,7 +36,14 @@ export async function backupDocument(
     budgets: state.budgets.map((budget) => ({ ...budget })),
     goals: state.goals.map((goal) => ({ ...goal })),
     recurringTransactions: state.recurringTransactions.map((transaction) => ({ ...transaction })),
-    investments: await investmentsPage(state),
+    // Портфель — каким он сохранён, с последними известными ценами. Раньше
+    // копия пересчитывала его по бирже: справочник, история по каждой бумаге —
+    // каждый запрос до десяти секунд, если биржа молчит. Копию ждут
+    // «Объединить» и «Сохранить копию и заменить» при подключении устройства,
+    // и без связи с биржей кнопка висела по полминуты, ничего не говоря.
+    // Котировки в копии не нужны: после восстановления их освежит первое же
+    // открытие «Инвестиций».
+    investments: structuredClone(state.investments),
     importBatches: [...(state.importBatches ?? [])]
   };
 }
