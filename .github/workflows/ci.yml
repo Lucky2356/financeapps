@@ -91,3 +91,14 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+      # Отчёт в CI печатается в журнал (reporter "github"), и папки
+      # playwright-report нет вовсе: от упавшей проверки не оставалось ничего,
+      # кроме строки с таймаутом. Здесь — трасса повтора и снимок страницы.
+      - name: Upload failed test traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
