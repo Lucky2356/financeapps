@@ -111,6 +111,23 @@ export class CashflowForecastService {
 
       const anchorDay = anchorDayOf(item);
       let cursor = startOfDay(new Date(item.nextDate));
+      // Срок прошёл, а платёж не подтверждён (автозапись выключена — так по
+      // умолчанию): деньги со счёта ещё не ушли, но и в прогноз он больше не
+      // попадал. Аренда, просроченная на день, пропадала из «Можно тратить» и
+      // «До зарплаты» — сумма на сегодня вырастала на всю аренду. Теперь она
+      // стоит сегодняшним днём, одна на шаблон: сколько раз её пропустили, тут
+      // не угадать — может, оплатили и записали руками.
+      if (isBefore(cursor, today)) {
+        events.push({
+          id: `${item.id}-overdue`,
+          date: storedTransactionDate(today),
+          title: item.description || item.category.label,
+          amount: item.amount,
+          type: item.type,
+          category: item.category.label,
+          account: item.account.label
+        });
+      }
       while (isBefore(cursor, today)) {
         cursor = this.recurring.getNextDate(cursor, item.frequency, anchorDay);
       }
@@ -187,6 +204,11 @@ export class CashflowForecastService {
         );
         if (isBefore(date, today)) continue;
         if (isAfter(date, horizon)) break;
+        // Платёж этого месяца уже внесён (вручную до срока или автоплатежом
+        // в сам день срока) — второй раз он деньги не забирает. Раньше
+        // «Можно тратить» и «До зарплаты» вычитали его снова: внёс кредит
+        // заранее — и на сегодня «перерасход».
+        if (liability.lastPaidMonth === format(date, "yyyy-MM")) continue;
 
         const amount = roundMoney(Math.min(liability.minPayment, outstanding));
         if (amount <= 0) break;

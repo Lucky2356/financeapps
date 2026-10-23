@@ -230,11 +230,23 @@ function ExtendedReport({
   const [from, setFrom] = useState(() => formatInputDate(startOfYear(new Date())));
   const [to, setTo] = useState(() => formatInputDate(new Date()));
 
+  // С какого дня нужны операции: два года назад — для сравнения с прошлым
+  // годом, — но и не позже начала выбранного периода и начала года перед
+  // годом его конца. Раньше бралось ровно 25 месяцев: период за 2023-й
+  // показывал нули, а сравнение с позапрошлым годом — неполный год, без
+  // всякого предупреждения.
+  const since = [
+    formatInputDate(addMonths(new Date(), -25)),
+    from,
+    /^\d{4}/.test(to) ? `${Number(to.slice(0, 4)) - 1}-01-01` : ""
+  ]
+    .filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day))
+    .sort()[0];
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const since = formatInputDate(addMonths(new Date(), -25));
         // One page holds a hundred operations at most, so a busy year used to
         // be reported from its hundred most recent rows and quietly understate
         // every total. Walk the pages instead, with a ceiling so a bad
@@ -257,7 +269,7 @@ function ExtendedReport({
     // Книга меняется и без нашего участия: её приносит синхронизация с другого
     // устройства. Без этой зависимости раздел остаётся с числами, прочитанными
     // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
-  }, [dataVersion]);
+  }, [dataVersion, since]);
 
   // The same choice the rest of the page follows: a transfer between own
   // accounts is not earning and not spending.

@@ -138,15 +138,18 @@ export function buildBudgetRow(
   const now = new Date();
   const month = monthKey ?? monthKeyOf(now);
   const spent = spentInMonth(state, category.id, month);
-  // Previous month (single-month carryover); desktop stores one limit per
-  // category, so the previous limit equals the current limit.
+  // Previous month (single-month carryover).
   const [y, m] = month.split("-").map(Number);
   const prevMonthKey = monthKeyOf(new Date(y, m - 2, 1));
   // What was left over is last month's limit against last month's spending —
-  // and last month may well have had a different limit.
+  // and last month may well have had a different limit, or none at all. With
+  // none there is nothing to carry: the fallback used to be THIS month's
+  // limit, so a limit of 30 000 set in October brought 25 000 "left over"
+  // from a September that never had a limit. The plan cell counts here the
+  // same way it does on Plan/Fact.
   const carried = rolloverCarry(
     rollover,
-    budgetInForce(state.budgets, category.id, prevMonthKey)?.limitAmount ?? limitAmount,
+    spendingPlan(state, category.id, prevMonthKey) ?? 0,
     spentInMonth(state, category.id, prevMonthKey)
   );
   const effective = effectiveLimit(limitAmount, carried);

@@ -14,6 +14,7 @@ import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount"
 import { TRANSFER_CATEGORY_LABEL, transferKeyOf } from "@/lib/transactions/transfers";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { matchRule } from "@/lib/categorization-rules";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import type { WatchRow } from "@/lib/analytics/watchdog";
 import type { AccountRow, TransactionRow } from "@/types/finance";
@@ -187,7 +188,42 @@ export function upsertTransaction(
   // старой строки (deleteTransaction), новая — уменьшает его. Новый платёж
   // (POST) долг уменьшает сам вызвавший — payDebt и автоплатёж.
   if (method === "PUT" && previous?.liabilityId) applyDebtPayment(state, transaction, -1);
+  if (method === "PUT" && previous) keepTransferInStep(state, previous, transaction);
   return transaction;
+}
+
+/**
+ * Правка одной половины перевода двигает и вторую.
+ *
+ * Форма правки открывается на любой строке, в том числе на половине перевода.
+ * Раньше переписывалась только она: списание 1 000 → 1 500, а поступление
+ * оставалось 1 000. Пятьсот рублей исчезали из капитала и не попадали ни в
+ * одну трату — перевод в итоги не входит. Теперь вторая половина получает ту
+ * же сумму (между валютами — по тому же курсу, что был у пары) и ту же дату.
+ */
+function keepTransferInStep(state: LocalState, previous: TransactionRow, edited: TransactionRow) {
+  const key = transferKeyOf(previous);
+  if (!key) return;
+  const partner = state.transactions.find(
+    (row) => row.id !== edited.id && transferKeyOf(row) === key
+  );
+  if (!partner) return;
+  const editedAccount = state.accounts.find((item) => item.id === edited.account.id);
+  const partnerAccount = state.accounts.find((item) => item.id === partner.account.id);
+  const sameCurrency = editedAccount?.currency === partnerAccount?.currency;
+  const amount =
+    edited.amount === previous.amount
+      ? partner.amount
+      : sameCurrency
+        ? edited.amount
+        : roundMoney((partner.amount * edited.amount) / previous.amount);
+  if (amount === partner.amount && edited.date === partner.date) return;
+  const delta = amount - partner.amount;
+  if (delta !== 0)
+    applyBalance(state, partner.account.id, partner.type === "INCOME" ? delta : -delta);
+  state.transactions = state.transactions.map((row) =>
+    row.id === partner.id ? { ...row, amount, date: edited.date } : row
+  );
 }
 
 /**
@@ -270,11 +306,14 @@ export function balanceHistoryPage(state: LocalState, months: string[]) {
     months
   });
   // Пополнение цели — минус на счёте без операции: учесть его в счёте.
+  // Движение цели записано в основной валюте, а счёт ведётся в своей: 100 $,
+  // отложенные с долларовой карты, прибавлялись к её прошлому как 9 000 $.
   for (const movement of state.goalMovements ?? []) {
     const account = history.accounts.find((item) => item.id === movement.accountId);
     if (!account) continue;
+    const amount = convert(movement.amount, state.currency, account.currency, rates);
     account.values = account.values.map((value, index) =>
-      movement.date.slice(0, 7) > months[index] ? roundMoney(value + movement.amount) : value
+      movement.date.slice(0, 7) > months[index] ? roundMoney(value + amount) : value
     );
   }
   const inBase = (amount: number, currency: string) =>
@@ -390,22 +429,33 @@ export function createTransfer(state: LocalState, body: unknown) {
   const toAccount = state.accounts.find(
     (item) => item.id === input.toAccountId && !item.isArchived
   );
-  const amount = Number(input.amount);
-
   if (!fromAccount || !toAccount)
     throw new Error("Выберите существующие активные счета для перевода.");
   if (fromAccount.id === toAccount.id)
     throw new Error("Счета списания и зачисления должны отличаться.");
-  if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
 
   // Money moving between currencies is still the same money: 100 $ leaving a
   // dollar card arrives as roubles, not as 100 ₽. Both halves used to carry
   // the typed amount, so a transfer either invented or destroyed the
   // difference — and the capital line moved on an operation that must leave
   // it exactly where it was.
-  const credited = roundMoney(
-    convert(amount, fromAccount.currency, toAccount.currency, ratesOf(state))
-  );
+  //
+  // `toAmount` — сколько должно ПРИЙТИ, в валюте счёта зачисления: так
+  // закрывается минус перед архивом. Карта −100 $ гасилась «переводом 100» с
+  // рублёвого счёта — списывалось 100 ₽, приходило 1,11 $, и карта уходила в
+  // архив с долгом почти в 99 $, выпав из капитала.
+  const rates = ratesOf(state);
+  const wanted =
+    input.toAmount !== undefined && input.toAmount !== "" ? Number(input.toAmount) : null;
+  const amount =
+    wanted === null
+      ? Number(input.amount)
+      : Math.ceil(convert(wanted, toAccount.currency, fromAccount.currency, rates) * 100 - 1e-6) /
+        100;
+  if (!isUsableMoney(amount) || (wanted !== null && !isUsableMoney(wanted)))
+    throw new Error(MONEY_RANGE_ERROR);
+  const credited =
+    wanted ?? roundMoney(convert(amount, fromAccount.currency, toAccount.currency, rates));
 
   const transferId = id("transfer");
   const expenseCategory = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
@@ -620,7 +670,6 @@ export function importCsvRows(state: LocalState, body: unknown) {
   for (const transaction of state.transactions) {
     const key = keyOf([
       transaction.account.id,
-      transaction.category.id,
       transaction.type,
       transaction.amount,
       transaction.date.slice(0, 10),
@@ -649,8 +698,18 @@ export function importCsvRows(state: LocalState, body: unknown) {
     // When the CSV row carries no category, try to auto-categorize it from
     // the description against existing transactions before falling back to a
     // generic import bucket.
+    //
+    // Правило человека важнее категории банка: колонку категории заполняют
+    // все выписки, и правило «Пятёрочка → Продукты» при импорте не работало
+    // ни разу — строка шла в «Супермаркеты» банка, заведённые заново.
+    const ruledId = rawCategoryName ? matchRule(description, state.rules) : null;
+    const ruled = ruledId
+      ? state.categories.find((item) => item.id === ruledId && item.kind === type)
+      : undefined;
     let category;
-    if (rawCategoryName) {
+    if (ruled) {
+      category = ruled;
+    } else if (rawCategoryName) {
       category = findOrCreateCategory(state, rawCategoryName, type);
     } else {
       const suggestedId = suggestCategoryId(description, state.transactions, {
@@ -667,7 +726,10 @@ export function importCsvRows(state: LocalState, body: unknown) {
     // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же
     // файла не узнавал ни одной строки и задваивал всё.
     const day = storedTransactionDate(date).slice(0, 10);
-    const key = keyOf([account.id, category.id, type, Math.abs(rawAmount), day, description]);
+    // Категория в ключ повтора не входит: она зависит от правил на момент
+    // импорта, и повторно загруженная выписка, разнесённая уже по новому
+    // правилу, задвоилась бы целиком.
+    const key = keyOf([account.id, type, Math.abs(rawAmount), day, description]);
     const already = before.get(key) ?? 0;
     const count = seen.get(key) ?? 0;
     seen.set(key, count + 1);
