@@ -294,6 +294,36 @@ export async function flushSync(): Promise<void> {
   await syncStorage.flush();
 }
 
+/**
+ * Сколько человек, только что подключивший устройство, ждёт первую сверку.
+ *
+ * Дольше — уже не «книга едет», а «приложение зависло». Сверка при этом не
+ * бросается: она идёт дальше фоном, и приехавшая книга доходит до экрана сама
+ * (refreshWhenBooksArrive, lib/api/client.ts).
+ */
+const PAIRING_WAIT_MS = 20_000;
+
+/**
+ * То же, что flushSync, но не дольше `limitMs` — для подключения устройства.
+ *
+ * Раньше подключение ждало очередь без срока, и один зависший запрос к службе
+ * (прогонка новую не заводит, а ждёт идущую) оставлял человека на крутилке
+ * навсегда: устройство уже подключено, а нажатие так и не кончалось.
+ */
+async function flushSyncWithin(limitMs = PAIRING_WAIT_MS): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      flushSync(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, limitMs);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function stopSync(): void {
   syncStorage.stop();
 }
@@ -413,7 +443,7 @@ export async function enableSync(base: string): Promise<void> {
   const link = await serverAccount.link();
   if (link) await rememberMyServer(link.base, link.login);
   await resumeSync();
-  await flushSync();
+  await flushSyncWithin();
 }
 
 /** Картинка и ссылка для нового устройства. */
@@ -493,7 +523,7 @@ export async function checkPairingRequest(request: PairingRequest): Promise<bool
   const link = await serverAccount.link();
   if (link) await rememberMyServer(link.base, link.login);
   await resumeSync();
-  await flushSync();
+  await flushSyncWithin();
   return true;
 }
 
@@ -559,5 +589,5 @@ export async function joinWithLink(raw: string, fallbackBase: string): Promise<v
   const link = await serverAccount.link();
   if (link) await rememberMyServer(link.base, link.login);
   await resumeSync();
-  await flushSync();
+  await flushSyncWithin();
 }

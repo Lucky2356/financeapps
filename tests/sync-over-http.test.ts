@@ -628,6 +628,89 @@ describe("поток, который молчит", () => {
   });
 });
 
+describe("служба, которая не отвечает", () => {
+  /** Поднять поддельную службу на случайном порту; вернуть адрес и как её погасить. */
+  async function fake(handler: Parameters<typeof createServer>[1]) {
+    const server = createServer(handler);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    return {
+      at: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+      close: async () => {
+        server.closeAllConnections();
+        await new Promise((resolve) => server.close(resolve));
+      }
+    };
+  }
+
+  it("зависший запрос обрывается по сроку и читается как «нет связи»", async () => {
+    // Соединение принято, а ответа нет и не будет: сервер завис, посредник
+    // держит запрос, телефон сменил сеть посреди ответа. Без срока такой
+    // запрос висел вечно — а с ним и вся очередь отправки (новая прогонка
+    // ждёт идущую), и подключение устройства, которое ждёт первую сверку.
+    const mute = await fake(() => {
+      // …ни звука.
+    });
+    try {
+      const transport = new HttpSyncTransport(
+        { base: mute.at, token: "bilet" },
+        { requestMs: 200 }
+      );
+      const started = Date.now();
+      await expect(transport.pull("книга")).rejects.toSatisfy(isOffline);
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      await mute.close();
+    }
+  });
+
+  it("ответ, оборвавшийся на середине тела, — тоже «нет связи» по сроку", async () => {
+    const half = await fake((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.write('{"slot":"книга",');
+      // …и дальше ни звука.
+    });
+    try {
+      const transport = new HttpSyncTransport(
+        { base: half.at, token: "bilet" },
+        { requestMs: 200 }
+      );
+      await expect(transport.pull("книга")).rejects.toSatisfy(isOffline);
+    } finally {
+      await half.close();
+    }
+  });
+
+  it("страница входа в Wi-Fi вместо ответа службы — «нет связи», а не сбой", async () => {
+    // Гостевой Wi-Fi отвечает на любой адрес своей страницей входа, кодом 200.
+    // Это не служба и не её отказ: до службы просто не дошли.
+    const portal = await fake((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html><body>Войдите в сеть</body></html>");
+    });
+    try {
+      const transport = new HttpSyncTransport({ base: portal.at, token: "bilet" });
+      await expect(transport.pull("книга")).rejects.toSatisfy(isOffline);
+    } finally {
+      await portal.close();
+    }
+  });
+
+  it("страница ошибки посредника с кодом 502 — «нет связи»", async () => {
+    // Раньше тело разбиралось как JSON ДО проверки кода, и HTML-страница
+    // посредника роняла разбор: вместо «попробуем позже» — красная ошибка.
+    const proxy = await fake((_req, res) => {
+      res.writeHead(502, { "content-type": "text/html" });
+      res.end("<html>502 Bad Gateway</html>");
+    });
+    try {
+      const transport = new HttpSyncTransport({ base: proxy.at, token: "bilet" });
+      await expect(transport.pull("книга")).rejects.toSatisfy(isOffline);
+    } finally {
+      await proxy.close();
+    }
+  });
+});
+
 describe("двое на одном устройстве — через настоящую службу", () => {
   beforeEach(async () => {
     app = createApp({ dbPath: ":memory:", adminToken: ADMIN });

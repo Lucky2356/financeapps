@@ -283,6 +283,22 @@ export class SyncingStorageAdapter implements StorageAdapter {
   private writes = 0;
 
   /**
+   * Записи приложения, которые идут прямо сейчас: начаты, но ещё не легли на
+   * диск.
+   *
+   * Одного счётчика `writes` для этого мало. Поздняя запись (см. `applied`)
+   * сама идёт через долгое слияние, и пока оно идёт, на диске лежит ещё
+   * старое. Приём или отправка, начавшие в этот промежуток, прочитали бы это
+   * старое, слили бы с сервером, положили бы слитое и сдвинули номер версии — а
+   * потом запись приложения легла бы поверх, без приехавшего, и следующая
+   * отправка стёрла бы чужую правку и на сервере. Поэтому запись отмечается
+   * дважды — в начале, ДО первого ожидания, и в конце, — а приём и отправка
+   * дожидаются, пока идущих записей не останется (см. quiet).
+   */
+  private writing = 0;
+  private readonly writingDone: Array<() => void> = [];
+
+  /**
    * Слияния, применённые к книге, которых приложение ещё не перечитывало.
    *
    * Приложение работает так: прочитать книгу целиком, изменить, записать
@@ -338,23 +354,33 @@ export class SyncingStorageAdapter implements StorageAdapter {
 
   async setItem<T>(key: string, value: T): Promise<void> {
     if (sealed(value) && syncableKey(key)) {
-      const pending = this.applied.get(key);
-      if (pending && this.merge) {
-        const merged = await this.merge(key, value, pending.body, pending.base);
-        this.applied.delete(key);
-        await this.inner.setItem(key, merged.body);
-        this.writes += 1;
-        this.queue(key);
-        // Записанное НЕ равно тому, что приложение просило записать: сюда
-        // подмешались строки с другого устройства. Промолчи мы здесь, экран
-        // показал бы свою правку без них, и узнать об этом ему было бы неоткуда.
-        this.announce(key);
-        void this.pump();
-        return;
-      }
-      await this.inner.setItem(key, value);
+      // Отметка — синхронно, до первого ожидания. Иначе приём, начатый, пока
+      // запись ещё сливается или пишется, не узнал бы о ней (см. `writing`).
       this.writes += 1;
+      this.writing += 1;
+      let mixed = false;
+      try {
+        const pending = this.applied.get(key);
+        if (pending && this.merge) {
+          const merged = await this.merge(key, value, pending.body, pending.base);
+          this.applied.delete(key);
+          await this.inner.setItem(key, merged.body);
+          mixed = true;
+        } else {
+          await this.inner.setItem(key, value);
+        }
+      } finally {
+        // И вторая отметка — по окончании: приём, взявший отметку посреди
+        // записи, иначе счёл бы, что ничего не изменилось.
+        this.writes += 1;
+        this.writing -= 1;
+        if (this.writing === 0) for (const resolve of this.writingDone.splice(0)) resolve();
+      }
       this.queue(key);
+      // Записанное НЕ равно тому, что приложение просило записать: сюда
+      // подмешались строки с другого устройства. Промолчи мы здесь, экран
+      // показал бы свою правку без них, и узнать об этом ему было бы неоткуда.
+      if (mixed) this.announce(key);
       void this.pump();
       return;
     }
@@ -727,6 +753,25 @@ export class SyncingStorageAdapter implements StorageAdapter {
     this.outbox.set(slot, this.writes);
   }
 
+  /**
+   * Дождаться, пока идущие записи приложения лягут на диск.
+   *
+   * Приём и отправка читают книгу с диска; посреди записи там ещё старое, и
+   * слитое из него было бы затёрто записью, как только та закончится. Ждать
+   * недолго: запись — это одно слияние и одна запись на диск. Сама запись
+   * очереди не ждёт никогда, так что друг друга они не запирают.
+   */
+  private async quiet(): Promise<void> {
+    while (this.writing > 0) {
+      await new Promise<void>((resolve) => this.writingDone.push(resolve));
+    }
+  }
+
+  /** Писал ли человек с отметки `mark` — или пишет прямо сейчас. */
+  private touched(mark: number): boolean {
+    return this.writes !== mark || this.writing > 0;
+  }
+
   /** Ставит повтор. Задержка растёт, но не бесконечно. */
   private arm(fixed?: number): void {
     if (this.retryArmed) return;
@@ -754,6 +799,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
     if (this.same(slot, snapshot.version, snapshot.updatedAt)) return;
 
     for (let attempt = 0; attempt < 3; attempt++) {
+      await this.quiet();
       const mark = this.writes;
       const mine = await this.inner.getItem<unknown>(slot);
       const result = await merge(
@@ -766,7 +812,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
       // Пока мы сливали, человек что-то записал. Положи мы слитое как есть —
       // его запись исчезла бы с экрана, хотя он её только что сделал. Сливаем
       // заново, теперь уже вместе с ней.
-      if (this.writes !== mark) continue;
+      if (this.touched(mark)) continue;
 
       this.remember(slot, result.body, sealed(mine) ? mine : null);
       await this.inner.setItem(slot, result.body);
@@ -794,6 +840,11 @@ export class SyncingStorageAdapter implements StorageAdapter {
     if (!transport || !merge) return;
 
     for (let race = 0; race <= MAX_RACES; race++) {
+      await this.quiet();
+      // Отметка — ДО чтения книги, а не после ответа сервера. Запись, легшая,
+      // пока запрос висел на сети, иначе прошла бы незамеченной, и слитое из
+      // отправленной (уже устаревшей) книги затёрло бы её на диске.
+      const mark = this.writes;
       const body = await this.inner.getItem<unknown>(slot);
       if (!sealed(body)) return;
 
@@ -824,7 +875,6 @@ export class SyncingStorageAdapter implements StorageAdapter {
         continue;
       }
 
-      const mark = this.writes;
       // Отказ тоже бывает «из прошлого»: сервер вернули из копии, а мы
       // предъявили номер, которого у него больше нет. Основа тогда та же, что и
       // при приёме, — никакая (см. ancestor).
@@ -834,12 +884,16 @@ export class SyncingStorageAdapter implements StorageAdapter {
         result.current.body,
         await this.ancestor(slot, result.current)
       );
-      if (this.writes !== mark) {
+      if (this.touched(mark)) {
         // Та же гонка, что и при приёме: записанное человеком, пока мы сливали,
-        // затирать нельзя. Заходим на круг заново.
-        this.seen(slot, result.current.version, result.current.updatedAt);
-        await this.inner.setItem(baseKey(slot), result.current.body);
-        await this.persist();
+        // затирать нельзя. Слитое выбрасываем и заходим на круг заново.
+        //
+        // И НЕ сдвигаем ни номер версии, ни основу. Прежде здесь они уходили
+        // на серверные — хотя серверное в книгу на диске так и не попало. Тогда
+        // следующая отправка шла поверх серверной версии, сервер её принимал, и
+        // чужая правка пропадала: и на сервере, и — через трёхстороннее
+        // слияние — на остальных устройствах. С прежним номером сервер снова
+        // ответит «вас обогнали», и слияние пойдёт уже со свежей записью.
         continue;
       }
       this.remember(slot, merged.body, body);

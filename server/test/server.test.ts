@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import {
   clientAddress,
   createApp,
+  MAX_SMALL_BODY_BYTES,
   sameSecret,
   whichMethod,
   whichRoute,
@@ -1681,7 +1682,9 @@ describe("служба: найденное при проверке безопа�
       undefined,
       "строка",
       { kdf: "x" },
-      { ...VAULT, junk: "я".repeat(70_000) }
+      // 80 КБ: больше предела шкатулки, но меньше предела тела — иначе отказ
+      // давал бы предел тела (413), а не проверка шкатулки.
+      { ...VAULT, junk: "я".repeat(40_000) }
     ]) {
       const response = await call("/auth/register", {
         method: "POST",
@@ -1704,6 +1707,71 @@ describe("служба: найденное при проверке безопа�
       })
     ]);
     assert.deepEqual([first.status, second.status].sort(), [201, 403]);
+  });
+
+  it("вход без билета не принимает тело больше малого предела", async () => {
+    // Прежде у всех ручек был один предел — 32 МБ, под книгу. Вход и
+    // регистрация отвечают без билета, и любой держал службе по 32 МБ памяти
+    // на запрос. Теперь большой предел — только у записи книги.
+    const huge = "x".repeat(MAX_SMALL_BODY_BYTES + 1024);
+    const login = await call("/auth/login", {
+      method: "POST",
+      body: { login: "petya", secret: huge }
+    });
+    assert.equal(login.status, 413);
+    const register = await call("/auth/register", {
+      method: "POST",
+      body: { code: await invite(), login: "petya", vault: VAULT, secret: huge }
+    });
+    assert.equal(register.status, 413);
+  });
+
+  it("предел на вход по адресу срабатывает до чтения тела", async () => {
+    // Прежде тело читалось ПЕРВЫМ, а счётчики — после: запрос с негодным телом
+    // отказывался разбором и в предел не упирался никогда.
+    const statuses: number[] = [];
+    for (let at = 0; at < 31; at += 1) {
+      const response = await fetch(`${base}/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{не json"
+      });
+      await response.text();
+      statuses.push(response.status);
+    }
+    assert.equal(statuses[0], 400);
+    assert.equal(statuses.at(-1), 429);
+  });
+
+  it("регистрация не принимает секрет длиннее предела", async () => {
+    // Смена пароля длину секрета проверяла, а регистрация — нет: мегабайтный
+    // «секрет» шёл в scrypt целиком.
+    const response = await call("/auth/register", {
+      method: "POST",
+      body: { code: await invite(), login: "petya", vault: VAULT, secret: "x".repeat(10_000) }
+    });
+    assert.equal(response.status, 400);
+    assert.equal(app.db.prepare("select id from people where login = ?").get("petya"), undefined);
+  });
+
+  it("вход с секретом длиннее предела отвечает как неверный", async () => {
+    await signUp("petya", "s");
+    const response = await call("/auth/login", {
+      method: "POST",
+      body: { login: "petya", secret: "x".repeat(10_000) }
+    });
+    assert.equal(response.status, 401);
+  });
+
+  it("запись книги по-прежнему принимает тело больше малого предела", async () => {
+    const { token } = await signUp("petya");
+    const big = { ...BOOK, ct: "x".repeat(MAX_SMALL_BODY_BYTES * 2) };
+    const put = await call("/vault/книга", {
+      method: "PUT",
+      token,
+      body: { baseVersion: 0, body: big }
+    });
+    assert.equal(put.status, 200);
   });
 
   it("живых кодов связки у человека — не больше пяти", async () => {

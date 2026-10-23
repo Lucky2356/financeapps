@@ -47,6 +47,9 @@ export async function pullFromFolder(folder: string, passphrase: string): Promis
   const decoded = await decryptString(encrypted, passphrase);
   const parsed = JSON.parse(decoded) as { exportedAt?: string; backup?: unknown };
   if (!parsed.backup) throw new Error("Файл синхронизации не содержит данных.");
-  await apiClient.post("/backup", parsed.backup);
+  // /backup reads the document from the `backup` field of the request body —
+  // the same shape the restore button sends. Posting the bare document made
+  // every pull fail with «Файл не похож на резервную копию…».
+  await apiClient.post("/backup", { backup: parsed.backup });
   return { exportedAt: parsed.exportedAt ?? null };
 }
