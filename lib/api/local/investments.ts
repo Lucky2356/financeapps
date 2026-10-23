@@ -2,7 +2,7 @@
 // сигналы, выплаты и стоимость портфеля.
 
 import { subMonths } from "date-fns";
-import { id, toFormObject } from "@/lib/api/local/helpers";
+import { id, routeOf, toFormObject } from "@/lib/api/local/helpers";
 import { isUsableLot, parsePurchaseLots, sortLots, summarizeLots } from "@/lib/investments/lots";
 import type { MarketAlert } from "@/lib/market/alerts";
 import { buildAssetKindStructure, buildSectorStructure } from "@/lib/data/derive";
@@ -15,6 +15,8 @@ import {
   createMarketDataProvider,
   marketDataSource
 } from "@/services/market/createMarketDataProvider";
+import type { MarketSecurity } from "@/services/market/MarketDataService";
+import { sectorForTicker } from "@/lib/market/sectors";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import { sellGain } from "@/services/InvestmentTaxReportService";
 import type {
@@ -28,88 +30,180 @@ import type { LocalState } from "@/lib/api/local/state";
 import { findOrCreateCategory, ratesOf } from "@/lib/api/local/money";
 import { upsertTransaction, deleteTransaction } from "@/lib/api/local/ledger";
 
-/** Что нужно любому делу с портфелем: форма, тикер и справочник биржи. */
-type MarketContext = {
-  input: ReturnType<typeof toFormObject>;
-  ticker: string | undefined;
-  provider: ReturnType<typeof createMarketDataProvider>;
-  securities: Awaited<ReturnType<ReturnType<typeof createMarketDataProvider>["getSecurities"]>>;
-  marketSource: ReturnType<typeof marketDataSource>;
+/**
+ * Что портфель берёт с биржи. Запрашивается ДО очереди записей, как и
+ * marketPricesFor: биржа отвечает секундами, а то и не отвечает, пока не
+ * истечёт срок, и дело с портфелем, ждавшее её внутри очереди, держало за
+ * собой все остальные записи — операция не добавлялась, пока молчит биржа.
+ * Само дело потом только меняет документ, уже прочитанный в очереди.
+ *
+ * Чего биржа не дала, того здесь просто нет: бумага без цены остаётся при
+ * своей последней, а не получает выдуманную.
+ */
+export type InvestmentMarket = {
+  /** Справочник биржи (ликвидные бумаги); пуст, если биржа не ответила. */
+  securities: MarketSecurity[];
+  /** Бумаги по тикеру: справочник и найденные по всей доске. */
+  byTicker: ReadonlyMap<string, MarketSecurity>;
+  /** Цены за месяц по бумагам — для разбора рисков. */
+  history: Readonly<Record<string, number[]>>;
 };
 
-async function marketContext(body: unknown, refresh: boolean): Promise<MarketContext> {
-  const input = toFormObject(body);
+/** Биржа ничего не дала: всё — по сохранённому. */
+export const NO_MARKET: InvestmentMarket = { securities: [], byTicker: new Map(), history: {} };
+
+/**
+ * Справочник, цены и история для портфеля — по сети.
+ *
+ * `tickers` — бумаги, которые нужны делу сверх портфеля (добавляемая
+ * позиция, бумага в «Слежу»): их ищут по всей доске, если в справочнике нет.
+ * `historyFor` — бумаги сверх портфеля, по которым нужна история.
+ */
+export async function investmentMarketFor(
+  state: LocalState,
+  options: { refresh?: boolean; tickers?: readonly string[]; historyFor?: readonly string[] } = {}
+): Promise<InvestmentMarket> {
   const provider = createMarketDataProvider();
   // An explicit refresh should bypass the cache for genuinely fresh quotes.
-  if (refresh) await provider.updateMarketPrices();
-  const securities = await provider.getSecurities();
-  const ticker = input.ticker?.toUpperCase();
-  // Раньше «MOCK» писалось всегда, когда переменная не равна "moex", — хотя
-  // по умолчанию цены живые. Правило теперь одно с выбором поставщика.
-  const marketSource = marketDataSource();
-  return { input, ticker, provider, securities, marketSource };
+  if (options.refresh) await provider.updateMarketPrices();
+  const securities = await provider.getSecurities().catch(() => []);
+  const byTicker = new Map(securities.map((security) => [security.ticker, security]));
+  const held = state.investments.portfolio.map((position) => position.ticker);
+
+  // A position may hold a security outside the curated board — the "add
+  // position" dialog searches the WHOLE MOEX board. Resolve those tickers
+  // live (the board snapshot is shared and cached, so this is cheap) so their
+  // price stays fresh; if the market is unreachable we keep the stored
+  // snapshot. Dropping unknown tickers here used to make a just-saved
+  // position disappear the moment it was written.
+  const unresolved = [...new Set([...held, ...(options.tickers ?? [])])].filter(
+    (ticker) => !byTicker.has(ticker)
+  );
+  await Promise.all(
+    unresolved.map(async (ticker) => {
+      const resolved = await provider.getSecurityByTicker(ticker).catch(() => null);
+      if (resolved) byTicker.set(resolved.ticker, resolved);
+    })
+  );
+
+  // История за месяц по каждой бумаге — по четыре разом, а не по одной: этот
+  // расчёт идёт на каждое открытие и раз в 45 секунд, и портфель из десяти
+  // бумаг ждал десять запросов подряд. Бумага без истории не роняет всё.
+  const history: Record<string, number[]> = {};
+  const from = subMonths(new Date(), 1);
+  const withHistory = [...new Set([...held, ...(options.historyFor ?? [])])];
+  for (let start = 0; start < withHistory.length; start += 4) {
+    await Promise.all(
+      withHistory.slice(start, start + 4).map(async (ticker) => {
+        const points = await provider.getHistoricalPrices(ticker, from, new Date()).catch(() => []);
+        history[ticker] = points.map((item) => item.price);
+      })
+    );
+  }
+  return { securities, byTicker, history };
 }
 
 /**
- * Дело с портфелем на справочнике биржи. Справочник берётся до дела — для
- * «Обновить цены» после сброса кэша, чтобы котировки были свежими.
+ * Что взять с биржи для записи в `/investments` — по телу запроса, до
+ * очереди. «Обновить цены» сначала сбрасывает кэш; позиции (новой, правке,
+ * «Докупить») нужна её бумага и её история, «Следить» — только бумага.
  */
-function withMarket<Result>(
-  run: (state: LocalState, market: MarketContext) => Promise<Result>,
-  refresh = false
-) {
-  return async (state: LocalState, body: unknown) => run(state, await marketContext(body, refresh));
+export function investmentWriteMarket(state: LocalState, body: unknown): Promise<InvestmentMarket> {
+  const input = toFormObject(body);
+  const action = input.action ?? "";
+  const ticker = input.ticker?.toUpperCase();
+  // Дело не из таблицы — запись позиции (см. byAction в writes.ts).
+  const saving = !routeOf(INVESTMENT_ACTIONS, action);
+  return investmentMarketFor(state, {
+    refresh: action === "refreshMarket",
+    tickers: ticker && (saving || action === "addWatchlist") ? [ticker] : [],
+    historyFor: ticker && saving ? [ticker] : []
+  });
 }
 
-/** Дела с портфелем по полю `action`; без него (и «Докупить») — позиция записывается. */
+/**
+ * Дела с портфелем по полю `action`; без него (и «Докупить») — позиция
+ * записывается. Биржу каждое дело получает готовой (investmentWriteMarket) и
+ * само по сети не ходит: оно идёт в очереди записей.
+ */
 export const INVESTMENT_ACTIONS = {
-  refreshMarket: withMarket(async (state, { securities, marketSource }) => {
-    state.investments = await investmentsPage(state);
-    return { updated: securities.length, source: marketSource };
-  }, true),
+  refreshMarket: (state: LocalState, _body: unknown, market: InvestmentMarket) => {
+    state.investments = buildInvestmentsPage(state, market);
+    // Раньше «MOCK» писалось всегда, когда переменная не равна "moex", — хотя
+    // по умолчанию цены живые. Правило теперь одно с выбором поставщика.
+    return { updated: market.securities.length, source: marketDataSource() };
+  },
 
-  addWatchlist: withMarket(async (state, { ticker, provider, securities }) => {
+  addWatchlist: (state: LocalState, body: unknown, market: InvestmentMarket) => {
+    const ticker = toFormObject(body).ticker?.toUpperCase();
     if (!ticker) throw new Error("Ticker is required.");
     // The search spans the whole MOEX board, so a picked ticker may be outside
-    // the curated list — resolve it live before giving up.
-    const security =
-      securities.find((item) => item.ticker === ticker) ??
-      (await provider.getSecurityByTicker(ticker));
+    // the curated list — it was resolved live before the queue (see
+    // investmentWriteMarket).
+    const security = market.byTicker.get(ticker);
     if (!security) throw new Error("Security not found in the market directory.");
     const exists = state.investments.watchlist.some((item) => item.ticker === ticker);
     state.investments.watchlist = exists
       ? state.investments.watchlist
       : [...state.investments.watchlist, security];
-    state.investments = await investmentsPage(state);
+    state.investments = buildInvestmentsPage(state, market);
     return state.investments.watchlist.find((item) => item.ticker === ticker);
-  }),
+  },
 
-  removeWatchlist: withMarket(async (state, { ticker }) => {
+  removeWatchlist: (state: LocalState, body: unknown, market: InvestmentMarket) => {
+    const ticker = toFormObject(body).ticker?.toUpperCase();
     if (!ticker) throw new Error("Ticker is required.");
     state.investments.watchlist = state.investments.watchlist.filter(
       (item) => item.ticker !== ticker
     );
-    state.investments = await investmentsPage(state);
+    state.investments = buildInvestmentsPage(state, market);
     return undefined;
-  }),
+  },
 
-  delete: withMarket(async (state, { ticker }) => {
+  delete: (state: LocalState, body: unknown, market: InvestmentMarket) => {
+    const ticker = toFormObject(body).ticker?.toUpperCase();
     if (!ticker) throw new Error("Ticker is required.");
     state.investments.portfolio = state.investments.portfolio.filter(
       (item) => item.ticker !== ticker
     );
-    state.investments = await investmentsPage(state);
+    state.investments = buildInvestmentsPage(state, market);
     return undefined;
-  })
+  }
 };
 
+/**
+ * Бумага, которой нет в ответе биржи, но которая уже в портфеле, — по тому,
+ * что о ней сохранено. Без этого «Докупить» и правка позиции не работали бы,
+ * пока биржа недоступна. Отрасль — как её назвал бы справочник, чтобы
+ * отрасль, заданная вручную, так и осталась ручной.
+ */
+function storedSecurity(position: InvestmentData["portfolio"][number]): MarketSecurity {
+  const assetKind = position.assetKind ?? "STOCK";
+  return {
+    ticker: position.ticker,
+    name: position.name,
+    assetKind,
+    sector: sectorForTicker(position.ticker, assetKind),
+    risk: position.risk,
+    comment: "",
+    price: position.currentPrice,
+    changeDay: 0,
+    change30d: 0,
+    ...(position.accruedInterest ? { accruedInterest: position.accruedInterest } : {})
+  };
+}
+
 /** Позиция портфеля: новая, правка или «Докупить» (action addLot). */
-export const savePosition = withMarket(async (state, { input, ticker, provider, securities }) => {
+export function savePosition(state: LocalState, body: unknown, market: InvestmentMarket) {
+  const input = toFormObject(body);
   const action = input.action ?? "";
+  const ticker = input.ticker?.toUpperCase();
   if (!ticker) throw new Error("Ticker is required.");
-  const security =
-    securities.find((item) => item.ticker === ticker) ??
-    (await provider.getSecurityByTicker(ticker));
+  // Бумага вне справочника найдена по всей доске ещё до очереди
+  // (investmentWriteMarket); биржа молчит — бумага из портфеля идёт по своей
+  // последней цене.
+  const held = state.investments.portfolio.find((item) => item.ticker === ticker);
+  const security = market.byTicker.get(ticker) ?? (held ? storedSecurity(held) : undefined);
   if (!security) throw new Error("Security not found in the market directory.");
 
   // «Докупить» — одна покупка к тому, что уже есть. Раньше подборка слала
@@ -118,7 +212,6 @@ export const savePosition = withMarket(async (state, { input, ticker, provider, 
   // средней, введённой вручную, становится первым лотом — количество и
   // средняя сохраняются, дата у него сегодняшняя, другой нет.
   if (action === "addLot") {
-    const held = state.investments.portfolio.find((item) => item.ticker === ticker);
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(input.date ?? ""))
       ? String(input.date)
       : isoDay(new Date());
@@ -149,13 +242,12 @@ export const savePosition = withMarket(async (state, { input, ticker, provider, 
   // liquid names, and a bond or a fresh listing is nobody's to classify but
   // the owner's. Choosing what the directory already says stores nothing.
   const typedSector = String(input.sector ?? "").trim();
-  const existing = state.investments.portfolio.find((item) => item.ticker === ticker);
   const sectorOverride =
     typedSector && typedSector !== security.sector
       ? typedSector
       : typedSector
         ? undefined
-        : existing?.sectorOverride;
+        : held?.sectorOverride;
 
   const position = {
     ticker: security.ticker,
@@ -176,9 +268,9 @@ export const savePosition = withMarket(async (state, { input, ticker, provider, 
     position,
     ...state.investments.portfolio.filter((item) => item.ticker !== ticker)
   ];
-  state.investments = await investmentsPage(state);
+  state.investments = buildInvestmentsPage(state, market);
   return state.investments.portfolio.find((item) => item.ticker === ticker);
-});
+}
 
 // Realized investment events (desktop tax ledger): sells and dividends.
 export function investmentEventsPage(state: LocalState): {
@@ -267,7 +359,10 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
                   quantity: left,
                   averageBuyPrice: average,
                   currentValue: roundMoney(item.currentPrice * left),
-                  pnl: roundMoney((item.currentPrice - average) * left),
+                  // Прибыль — по чистой цене, без НКД, как в buildInvestmentsPage.
+                  pnl: roundMoney(
+                    (item.currentPrice - (item.accruedInterest ?? 0) - average) * left
+                  ),
                   ...(kept.length ? { lots: kept } : {})
                 }
               : item
@@ -357,7 +452,8 @@ export function undoSale(state: LocalState, event: RealizedInvestmentEvent) {
             quantity,
             averageBuyPrice: average,
             currentValue: roundMoney(item.currentPrice * quantity),
-            pnl: roundMoney((item.currentPrice - average) * quantity),
+            // Прибыль — по чистой цене, без НКД, как в buildInvestmentsPage.
+            pnl: roundMoney((item.currentPrice - (item.accruedInterest ?? 0) - average) * quantity),
             ...(lots?.length ? { lots } : {})
           }
         : item
@@ -530,34 +626,17 @@ export function investmentTotals(state: LocalState, portfolio: InvestmentData["p
   };
 }
 
-export async function investmentsPage(state: LocalState): Promise<InvestmentData> {
-  const provider = createMarketDataProvider();
-  const securities = await provider.getSecurities();
-  const securityByTicker = new Map(securities.map((security) => [security.ticker, security]));
+/**
+ * Страница портфеля: документ плюс то, что дала биржа (investmentMarketFor).
+ * Сети здесь нет и ждать нечего, поэтому страницу можно считать и внутри
+ * очереди записей — по документу, прочитанному там же.
+ */
+export function buildInvestmentsPage(state: LocalState, market: InvestmentMarket): InvestmentData {
+  const { securities, byTicker: securityByTicker } = market;
   const watchlist = state.investments.watchlist
     .map((item) => securityByTicker.get(item.ticker) ?? item)
     .filter((item, index, rows) => rows.findIndex((row) => row.ticker === item.ticker) === index)
     .sort((left, right) => left.ticker.localeCompare(right.ticker));
-
-  // A position may hold a security outside the curated board — the "add
-  // position" dialog searches the WHOLE MOEX board. Resolve those tickers
-  // live (the board snapshot is shared and cached, so this is cheap) so their
-  // price stays fresh; if the market is unreachable we keep the stored
-  // snapshot. Dropping unknown tickers here used to make a just-saved
-  // position disappear the moment it was written.
-  const unresolved = [
-    ...new Set(
-      state.investments.portfolio
-        .map((position) => position.ticker)
-        .filter((ticker) => !securityByTicker.has(ticker))
-    )
-  ];
-  await Promise.all(
-    unresolved.map(async (ticker) => {
-      const resolved = await provider.getSecurityByTicker(ticker).catch(() => null);
-      if (resolved) securityByTicker.set(resolved.ticker, resolved);
-    })
-  );
 
   const rowsWithoutShare = state.investments.portfolio.map((position) => {
     const security = securityByTicker.get(position.ticker);
@@ -595,20 +674,13 @@ export async function investmentsPage(state: LocalState): Promise<InvestmentData
     ...row,
     share: total > 0 ? percent(row.currentValue, total) : 0
   }));
-  // История за месяц по каждой бумаге — по четыре разом, а не по одной: этот
-  // расчёт идёт на каждое открытие и раз в 45 секунд, и портфель из десяти
-  // бумаг ждал десять запросов подряд. Бумага без истории не роняет всё.
+  // История — только по тому, что в портфеле сейчас: биржу спрашивали по
+  // документу до очереди, и проданная с тех пор бумага не должна влиять на
+  // разбор рисков.
   const historical: Record<string, number[]> = {};
-  const from = subMonths(new Date(), 1);
-  for (let start = 0; start < portfolio.length; start += 4) {
-    await Promise.all(
-      portfolio.slice(start, start + 4).map(async (row) => {
-        const points = await provider
-          .getHistoricalPrices(row.ticker, from, new Date())
-          .catch(() => []);
-        historical[row.ticker] = points.map((item) => item.price);
-      })
-    );
+  for (const row of portfolio) {
+    const points = market.history[row.ticker];
+    if (points) historical[row.ticker] = points;
   }
   const analysis = new InvestmentAnalysisService().analyze(
     portfolio,
@@ -651,7 +723,13 @@ export type MarketPrices = ReadonlyMap<string, number>;
 export async function marketPricesFor(state: LocalState): Promise<MarketPrices> {
   if (!state.investments.portfolio.length) return new Map();
   const securities = await createMarketDataProvider().getSecurities();
-  return new Map(securities.map((security) => [security.ticker, security.price]));
+  // Биржа не ответила — список пуст, и каждая бумага идёт по своей последней
+  // цене (portfolioValueAt). Нулевая цена — не цена.
+  return new Map(
+    securities
+      .filter((security) => security.price > 0)
+      .map((security) => [security.ticker, security.price])
+  );
 }
 
 /** Стоимость портфеля по данным ценам; бумага без цены — по последней своей. */
