@@ -19,8 +19,12 @@ export function createMarketDataProvider(): MarketDataService {
   // Default to REAL MOEX ISS data (live prices, day/30-day change, historical
   // candles). The deterministic mock is used only in tests or when explicitly
   // opted out via NEXT_PUBLIC_MARKET_DATA=mock. On the web the provider runs
-  // server-side (no CORS); the desktop webview falls back to the mock if a
-  // direct MOEX request is blocked (handled inside MoexMarketDataProvider).
+  // server-side (no CORS); the desktop webview asks MOEX directly.
+  //
+  // Если биржа недоступна (нет сети, запрос заблокирован), живой поставщик
+  // отвечает пустым списком, а не учебными ценами: настоящий портфель нельзя
+  // оценивать выдуманными котировками. Портфель тогда остаётся при последних
+  // сохранённых ценах (см. MoexMarketDataProvider).
   if (mockMode()) {
     return new MockMarketDataProvider();
   }

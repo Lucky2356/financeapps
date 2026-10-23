@@ -8,7 +8,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { LiabilitiesPageData } from "@/lib/data";
 import { activeDebts } from "@/lib/debts/settled";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
 // Head of the debts screen. Settled debts keep their record but count nowhere,
@@ -54,7 +54,7 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
         <StatTile
           label={t("debt.tile.rate")}
           hint="tip.debt.tile.rate"
-          value={`${rate.toFixed(1)}%`}
+          value={`${formatDecimal(rate, 1)}%`}
           caption={t("debt.tile.rateCaption")}
           icon={Percent}
           tone={rate >= 20 ? "danger" : "default"}

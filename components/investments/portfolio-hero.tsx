@@ -5,13 +5,13 @@ import { Coins, HandCoins, TrendingUp, Wallet } from "lucide-react";
 import { HeroCard } from "@/components/ui/hero-card";
 import { StatGrid } from "@/components/ui/stat-grid";
 import { StatTile } from "@/components/ui/stat-tile";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { InvestmentData } from "@/types/finance";
 
 // The head of the investments screen, in the same shape as every other screen:
 // market value with today's move beside it, then the four supporting figures.
-// The maths is unchanged from the flat summary this replaced.
+// The maths is unchanged from the flat summary this replaced, except P&L (below).
 export function PortfolioHero({
   portfolio,
   currency,
@@ -29,7 +29,10 @@ export function PortfolioHero({
 
   const cost = portfolio.reduce((sum, p) => sum + p.quantity * p.averageBuyPrice, 0);
   const value = portfolio.reduce((sum, p) => sum + p.currentValue, 0);
-  const pnl = value - cost;
+  // Прибыль — сумма прибылей строк, а не «стоимость − вложено»: стоимость
+  // облигации включает НКД, а прибыль считается по чистой цене. Разность
+  // завышала её на весь накопленный купон и спорила с таблицей и итогами.
+  const pnl = portfolio.reduce((sum, p) => sum + p.pnl, 0);
   const returnPct = cost > 0 ? (pnl / cost) * 100 : 0;
   // Весь доход: бумажный + с продаж + выплаты. Без данных — только бумажный.
   const totalIncome = totals ? totals.total : pnl;
@@ -62,7 +65,9 @@ export function PortfolioHero({
           label={t("inv.pnlLabel")}
           hint="tip.inv.pnlLabel"
           value={`${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, currency)}`}
-          caption={t("inv.tile.pnlPct", { pct: `${pnl >= 0 ? "+" : ""}${returnPct.toFixed(1)}` })}
+          caption={t("inv.tile.pnlPct", {
+            pct: `${pnl >= 0 ? "+" : ""}${formatDecimal(returnPct, 1)}`
+          })}
           icon={TrendingUp}
           tone={pnl >= 0 ? "success" : "danger"}
         />
@@ -88,7 +93,9 @@ export function PortfolioHero({
           hint="tip.inv.tile.today"
           value={dayBase > 0 ? `${dayAbs >= 0 ? "+" : ""}${formatCurrency(dayAbs, currency)}` : "—"}
           caption={
-            dayBase > 0 ? `${dayPct >= 0 ? "+" : ""}${dayPct.toFixed(2)}%` : t("inv.tile.todayNone")
+            dayBase > 0
+              ? `${dayPct >= 0 ? "+" : ""}${formatDecimal(dayPct, 2)}%`
+              : t("inv.tile.todayNone")
           }
           icon={Wallet}
           tone={dayBase > 0 ? (dayAbs >= 0 ? "success" : "danger") : "default"}

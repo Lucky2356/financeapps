@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import type { MonthlyCashflowDatum } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
-import { axisMoney } from "@/lib/charts/format";
+import { axisMoney, axisMonth, tooltipMonth } from "@/lib/charts/format";
 import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
@@ -16,7 +16,13 @@ export function CashflowChart({ data }: { data: MonthlyCashflowDatum[] }) {
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid {...chartGridProps} />
-          <XAxis dataKey="month" tickLine={false} axisLine={false} tick={chartAxisTick} />
+          <XAxis
+            dataKey="month"
+            tickFormatter={(value) => axisMonth(value, locale)}
+            tickLine={false}
+            axisLine={false}
+            tick={chartAxisTick}
+          />
           <YAxis
             tickFormatter={(value) => axisMoney(Number(value), locale)}
             tickLine={false}
@@ -24,7 +30,11 @@ export function CashflowChart({ data }: { data: MonthlyCashflowDatum[] }) {
             tick={chartAxisTick}
             width={72}
           />
-          <Tooltip {...chartTooltipProps} formatter={(value) => formatCurrency(Number(value))} />
+          <Tooltip
+            {...chartTooltipProps}
+            labelFormatter={(value) => tooltipMonth(value, locale)}
+            formatter={(value) => formatCurrency(Number(value))}
+          />
           <Bar
             dataKey="income"
             name={t("chart.series.income")}

@@ -73,7 +73,9 @@ describe("MoexMarketDataProvider", () => {
     expect(sber?.changeDay).toBe(10); // close-over-close (330 vs 300), not 0
   });
 
-  it("falls back to mock data when MOEX is unreachable", async () => {
+  // Раньше здесь были учебные цены MockMarketDataProvider — и настоящий
+  // портфель оценивался по ним. Без биржи цен нет: пустой список.
+  it("returns no securities (not mock prices) when MOEX is unreachable", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -82,8 +84,7 @@ describe("MoexMarketDataProvider", () => {
     );
     const { MoexMarketDataProvider } = await import("@/services/market/MoexMarketDataProvider");
     const securities = await new MoexMarketDataProvider().getSecurities();
-    expect(securities.length).toBeGreaterThan(0); // mock universe
-    expect(securities.some((s) => s.ticker === "SBER")).toBe(true);
+    expect(securities).toEqual([]);
   });
 });
 

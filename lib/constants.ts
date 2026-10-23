@@ -15,7 +15,7 @@ export const INVESTMENT_DISCLAIMER =
 export const ACCOUNT_TYPE_LABELS = {
   CASH: "Наличные",
   DEBIT_CARD: "Дебетовая карта",
-  SAVINGS: "Накопительный счет",
+  SAVINGS: "Накопительный счёт",
   BROKERAGE: "Брокерский счет"
 } as const;
 

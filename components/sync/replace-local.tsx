@@ -16,11 +16,81 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
+import type { ProfilesBackup } from "@/lib/api/LocalApiClient";
 import { todayDay } from "@/lib/transactions/date";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
+import type { FileSystemAdapter } from "@/lib/files/FileSystemAdapter";
 import { useI18n } from "@/lib/i18n/context";
 import { forgetMyData } from "@/lib/storage/mine";
 import { carryOver } from "@/lib/sync/carry-over";
+
+/**
+ * Есть ли в книге профиля что-то, ради чего стоит отдельный файл. Текущий
+ * профиль сохраняется всегда; остальные — только с записями: пустой профиль,
+ * заведённый когда-то и забытый, не стоит лишнего окна «Сохранить как».
+ */
+function worthAFile(backup: ProfilesBackup["profiles"][number]["backup"]): boolean {
+  const own = [
+    backup.transactions,
+    backup.accounts,
+    backup.goals,
+    backup.liabilities,
+    backup.recurringTransactions,
+    backup.budgets,
+    backup.plans,
+    backup.planNotes,
+    backup.sheetCells,
+    backup.freeCells,
+    backup.realizedInvestmentEvents,
+    backup.investments.portfolio
+  ];
+  return own.some((rows) => Array.isArray(rows) && rows.length > 0);
+}
+
+/** Имя профиля в имени файла: без знаков, которые запрещены в именах файлов. */
+function fileSafe(name: string): string {
+  return (
+    name
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "")
+      .replace(/\s+/g, "-")
+      .slice(0, 40) || "profile"
+  );
+}
+
+/**
+ * Сохранить копию всех профилей в файлы — по файлу на профиль.
+ *
+ * По файлу, а не одним: «Восстановить из копии» принимает книгу ОДНОГО
+ * профиля, и файл со всеми профилями сразу восстановить было бы нечем. Раньше
+ * сохранялся только текущий профиль, и «Сохранить копию и заменить» стирало
+ * остальные без всякой копии. Каждый файл восстанавливается в выбранный
+ * профиль обычной кнопкой.
+ *
+ * false — человек закрыл одно из окон сохранения: копии нет, и стирать нельзя.
+ */
+export async function saveProfilesToFiles(
+  fileSystem: FileSystemAdapter,
+  all: ProfilesBackup
+): Promise<boolean> {
+  const day = todayDay();
+  const files = all.profiles.filter(
+    (entry) => entry.profile.id === all.activeProfileId || worthAFile(entry.backup)
+  );
+  for (const entry of files) {
+    const name =
+      entry.profile.id === all.activeProfileId
+        ? `financial-assistant-backup-${day}.json`
+        : `financial-assistant-backup-${day}-${fileSafe(entry.profile.name)}.json`;
+    const saved = await fileSystem.saveTextFile(
+      name,
+      JSON.stringify(entry.backup, null, 2),
+      "application/json;charset=utf-8"
+    );
+    if (!saved) return false;
+  }
+  return true;
+}
 
 export function ReplaceLocal({
   onReplaced,
@@ -34,11 +104,15 @@ export function ReplaceLocal({
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
   const [busy, setBusy] = useState(false);
 
-  /** Свои записи — в память, чтобы после подключения добавить их к общим. */
+  /**
+   * Свои записи — в память, чтобы после подключения добавить их к общим. Все
+   * профили, а не только текущий: очистка ниже стирает каждый, а копия перед
+   * очисткой подключения не переживёт (см. lib/sync/carry-over.ts).
+   */
   async function merge() {
     setBusy(true);
     try {
-      carryOver(await apiClient.get("/backup"));
+      carryOver(await apiClient.get("/backup/profiles"));
       await apiClient.delete("/storage/clear");
       forgetMyData();
       onReplaced();
@@ -53,11 +127,9 @@ export function ReplaceLocal({
     setBusy(true);
     try {
       if (withBackup) {
-        const backup = await apiClient.get("/backup");
-        const saved = await fileSystem.saveTextFile(
-          `financial-assistant-backup-${todayDay()}.json`,
-          JSON.stringify(backup, null, 2),
-          "application/json;charset=utf-8"
+        const saved = await saveProfilesToFiles(
+          fileSystem,
+          await apiClient.get("/backup/profiles")
         );
         // Закрыл окно сохранения — значит, копии нет, и стирать нельзя.
         if (!saved) return;

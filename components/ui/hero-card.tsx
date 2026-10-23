@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDecimal } from "@/lib/format";
 import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { AnimatedValue } from "@/components/ui/animated-value";
@@ -85,7 +86,7 @@ export function HeroCard({
           >
             <ChangeIcon className="size-3.5" aria-hidden />
             {positive ? "+" : "−"}
-            {Math.abs(changePercent).toFixed(1)}%
+            {formatDecimal(Math.abs(changePercent), 1)}%
           </span>
         ) : null}
       </div>

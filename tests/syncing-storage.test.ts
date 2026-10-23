@@ -470,6 +470,77 @@ describe("синхронизирующее хранилище", () => {
     });
   });
 
+  describe("запись, сделанная ПОКА идёт слияние", () => {
+    it("отказ «вас обогнали» не пропускает чужое, если человек писал во время слияния", async () => {
+      // Отправка получила отказ вместе с чужой правкой «д» и пошла сливать. Пока
+      // сливала, человек записал ещё раз. Прежде слой отбрасывал слитое (это
+      // верно — оно затёрло бы новую запись), но при этом сдвигал номер версии
+      // и основу на серверные. Следующая отправка шла уже поверх серверной
+      // версии — и сервер честно принимал книгу БЕЗ «д»: чужая правка
+      // пропадала, а на других устройствах трёхстороннее слияние потом
+      // сочло бы её удалённой и убрало и у них.
+      server.events = false;
+      let interrupt = true;
+      const merge: Merge = async (slot, mine, theirs, base) => {
+        if (interrupt && mine?.ct === "а+б") {
+          interrupt = false;
+          await storage.setItem(SLOT, box("а+б+в"));
+        }
+        return glue(slot, mine, theirs, base);
+      };
+      await storage.start(server, merge);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+
+      server.seed(SLOT, box("а+д"));
+      await storage.setItem(SLOT, box("а+б"));
+      await storage.flush();
+      await storage.flush();
+
+      expect(interrupt).toBe(false);
+      expect(server.peek(SLOT)?.body).toEqual(box("а+б+в+д"));
+      expect(await device.getItem(SLOT)).toEqual(box("а+б+в+д"));
+    });
+
+    it("приём с сервера не затирается поздней записью, которая ещё сливается", async () => {
+      // Поздняя запись приложения (поверх уже применённого слияния) сама идёт
+      // через долгое слияние. Прежде счётчик записей рос только ПОСЛЕ него, и
+      // приём, пришедший в этот промежуток, не видел ничего: клал на диск
+      // свежую серверную версию и сдвигал номер. Потом запись приложения
+      // дописывалась поверх — без «г», — и следующая отправка стирала «г» и на
+      // сервере.
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const merge: Merge = async (slot, mine, theirs, base) => {
+        if (mine?.ct === "а+в") await gate;
+        return glue(slot, mine, theirs, base);
+      };
+      await storage.start(server, merge);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+
+      // Приехало чужое «б»; приложение книгу после этого не перечитывало.
+      server.seed(SLOT, box("а+б"));
+      await storage.flush();
+      expect(await device.getItem(SLOT)).toEqual(box("а+б"));
+
+      // Приложение пишет по прочитанному раньше — запись сливается и висит.
+      const writing = storage.setItem(SLOT, box("а+в"));
+      // Пока она висит, с другого устройства приезжает «г».
+      server.seed(SLOT, box("а+б+г"));
+      const pumping = storage.flush();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      release();
+      await writing;
+      await pumping;
+      await storage.flush();
+
+      expect(server.peek(SLOT)?.body).toEqual(box("а+б+в+г"));
+      expect(await device.getItem(SLOT)).toEqual(box("а+б+в+г"));
+    });
+  });
+
   describe("версии переживают перезапуск", () => {
     it("второй запуск не перемалывает книгу заново", async () => {
       await storage.start(server, glue);

@@ -16,6 +16,7 @@ import {
   STATE_DELETES,
   STATE_WRITES,
   type DeleteRequest,
+  type WriteMarket,
   type WriteRequest
 } from "@/lib/api/local/writes";
 import { id, normalizePath, routeOf, toFormObject } from "@/lib/api/local/helpers";
@@ -70,9 +71,10 @@ import {
   restoreTransaction,
   restoreTransactionOnReturnedAccount
 } from "@/lib/api/local/ledger";
-import { investmentsPage, marketPricesFor, type MarketPrices } from "@/lib/api/local/investments";
+import { buildInvestmentsPage, investmentMarketFor } from "@/lib/api/local/investments";
 import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
+import { createSheet, listSheets, MAIN_SHEET, putScope, sheetScope } from "@/lib/api/local/sheets";
 
 // Прежде жили здесь — потребители импортируют их отсюда.
 export {
@@ -96,6 +98,29 @@ export type PreUpgradeBackup = {
 
 /** Что отдаёт `/backup/before-clear`: когда очистили и до какого числа можно вернуть. */
 export type BeforeClearCopy = { savedAt: string; until: string };
+
+/** Книга одного профиля в том виде, в каком её отдаёт `/backup`. */
+export type BackupDocument = Awaited<ReturnType<typeof backupDocument>>;
+
+/**
+ * Все профили устройства разом — что отдаёт `/backup/profiles` и что
+ * принимает `/backup/merge` наравне с книгой одного профиля.
+ *
+ * Нужно «Объединить» при подключении. Раньше оно брало обычный `/backup`, а тот
+ * выгружает только ТЕКУЩИЙ профиль. Остальные стирались очисткой и пропадали
+ * насовсем: копия перед очисткой не переживает подключения — новый ключ
+ * сносит всё, что запечатано прежним (EncryptingStorageAdapter.clear). Профиль
+ * «Бизнес» со своим «Бизнес-счётом» после «Объединить» исчезал без следа.
+ *
+ * Текущий профиль — первым. Пример тоже едет: в нём, бывает, ведут и свои
+ * записи, и выбрасывать их молча нельзя.
+ */
+export type ProfilesBackup = {
+  format: "profiles";
+  savedAt: string;
+  activeProfileId: string;
+  profiles: Array<{ profile: UserProfile; backup: BackupDocument }>;
+};
 
 function localCopyKey(id: string): string {
   return `${LOCAL_COPY_PREFIX}${id}${LOCAL_COPY_SUFFIX}`;
@@ -248,6 +273,7 @@ export class LocalApiClient implements ApiClient {
     "/backup/before-upgrade": () => this.preUpgradeBackup(),
     "/backup/before-clear": () => this.beforeClearCopy(),
     "/backup/local-copies": () => this.localCopies(),
+    "/backup/profiles": () => this.exportAllProfiles(),
     "/trash": () => this.trashList(),
     "/profiles": () => this.profileList(),
     "/photos": ({ state, searchParams }: ReadRequest) =>
@@ -292,13 +318,17 @@ export class LocalApiClient implements ApiClient {
   }
 
   private async refreshInvestments(state: LocalState) {
-    const invData = await investmentsPage(state);
-    // Persist last-known prices so they survive app restart. Read the state
-    // again inside the queue first: fetching quotes takes seconds, and
-    // whatever the owner saved meanwhile must not be rolled back by the
-    // snapshot this request started from.
-    await this.serialize(async () => {
+    // Биржа — по сети, до очереди: котировки идут секундами.
+    const market = await investmentMarketFor(state);
+    // Persist last-known prices so they survive app restart.
+    //
+    // Страница считается уже в очереди — по документу, прочитанному там же, и
+    // на него ложатся только цены с биржи. Прежде в документ писались строки,
+    // посчитанные по документу ДО ожидания биржи, и продажа, записанная за
+    // эти секунды, отменялась: проданные бумаги возвращались в портфель.
+    return this.serialize(async () => {
       const fresh = await this.state();
+      const invData = buildInvestmentsPage(fresh, market);
       fresh.investments = {
         ...fresh.investments,
         securities: invData.securities,
@@ -309,8 +339,13 @@ export class LocalApiClient implements ApiClient {
         assetStructure: invData.assetStructure
       };
       // Снимок дня: портфель пуст — снимать нечего (иначе история
-      // начиналась бы с нулей до первой покупки).
-      if (invData.portfolio.length > 0) {
+      // начиналась бы с нулей до первой покупки). Биржа не дала ни одной
+      // цены бумагам портфеля — тоже: снимок из одних сохранённых цен ничего
+      // не говорит о сегодняшнем дне.
+      const pricedLive = invData.portfolio.some(
+        (row) => (market.byTicker.get(row.ticker)?.price ?? 0) > 0
+      );
+      if (pricedLive) {
         fresh.portfolioSnapshots = recordPortfolioSnapshot(
           fresh.portfolioSnapshots ?? [],
           isoDay(new Date()),
@@ -320,8 +355,8 @@ export class LocalApiClient implements ApiClient {
         invData.history = fresh.portfolioSnapshots;
       }
       await this.save(fresh);
+      return invData;
     });
-    return invData;
   }
 
   async post<P extends WriteRoute, const Body = undefined>(
@@ -341,24 +376,24 @@ export class LocalApiClient implements ApiClient {
   /**
    * Поставить запись в очередь. Обычная встаёт сразу, в порядке вызова.
    *
-   * Запись, которой нужны цены с биржи (PRICED_WRITES), сначала получает их —
-   * ДО очереди, а не в ней: биржу ждут секундами, и всё это время очередь
-   * стояла бы. Документ для этого читается без очереди, как при любом чтении:
-   * он нужен только затем, чтобы не ходить на биржу с пустым портфелем.
-   * Портфель могут успеть поменять, пока ждём биржу, — обработчик считает по
-   * документу, прочитанному уже в очереди, а бумага без полученной цены идёт
-   * по своей последней.
+   * Запись, которой нужна биржа (PRICED_WRITES: цены, справочник, история),
+   * сначала получает её ответ — ДО очереди, а не в ней: биржу ждут секундами,
+   * и всё это время очередь стояла бы. Документ для этого читается без
+   * очереди, как при любом чтении: он нужен только затем, чтобы знать, что
+   * спрашивать. Портфель могут успеть поменять, пока ждём биржу, — обработчик
+   * считает по документу, прочитанному уже в очереди, а бумага без
+   * полученной цены идёт по своей последней.
    */
   private enqueueWrite<TResponse>(
     path: string,
     body: unknown,
     method: "POST" | "PUT"
   ): Promise<TResponse> {
-    if (!PRICED_WRITES.has(normalizePath(path).pathname))
-      return this.serialize(() => this.write<TResponse>(path, body, method));
+    const askMarket = routeOf(PRICED_WRITES, normalizePath(path).pathname);
+    if (!askMarket) return this.serialize(() => this.write<TResponse>(path, body, method));
     return this.state(false)
-      .then(marketPricesFor)
-      .then((prices) => this.serialize(() => this.write<TResponse>(path, body, method, prices)));
+      .then((state) => askMarket(state, body))
+      .then((market) => this.serialize(() => this.write<TResponse>(path, body, method, market)));
   }
 
   async delete(path: DeletePath): Promise<void> {
@@ -474,11 +509,11 @@ export class LocalApiClient implements ApiClient {
     path: string,
     body: unknown,
     method: "POST" | "PUT",
-    prices?: MarketPrices
+    market: WriteMarket = {}
   ): Promise<TResponse> {
     const state = await this.state();
     const { pathname } = normalizePath(path);
-    const request: WriteRequest = { state, body, method, prices };
+    const request: WriteRequest = { state, body, method, ...market };
 
     // Обработчик правит документ и отвечает; сохраняется документ здесь, после
     // него, — и только если он не бросил ошибку.
@@ -537,13 +572,12 @@ export class LocalApiClient implements ApiClient {
    *
    * Устройство со своими записями подключается к другому: ключ и данные
    * приезжают оттуда, а свои записи, снятые копией до подключения, ложатся
-   * сюда ДОБАВКОЙ. Ничего из уже лежащего здесь не заменяется.
+   * сюда ДОБАВКОЙ. Ничего из уже лежащего здесь не заменяется (как именно —
+   * см. mergeRecords ниже, после класса).
    *
-   * Одноимённые категории склеиваются: «Продукты» с двух устройств — это одни
-   * «Продукты», и операции переводятся на ту, что уже есть. Счета — нет:
-   * «Карта» на телефоне и «Карта» на ноутбуке могут быть разными картами, и
-   * сложить их остатки значило бы соврать. Одинаковое имя получает «(2)», чтобы
-   * было видно, что их два, — объединить или убрать лишний человек решит сам.
+   * Копия бывает двух видов: книга одного профиля (обычный `/backup`) и все
+   * профили разом (`/backup/profiles`, ProfilesBackup). Вторую шлёт «Объединить»
+   * — иначе профили, кроме текущего, терялись.
    */
   private async mergeBackup(body: unknown) {
     const payload = (body as { backup?: unknown })?.backup;
@@ -551,86 +585,149 @@ export class LocalApiClient implements ApiClient {
       payload && typeof payload === "object" && "backup" in payload
         ? (payload as { backup?: unknown }).backup
         : payload;
-    const parsed = localStateSchema.safeParse(document);
-    if (!parsed.success) throw new Error("Не удалось прочитать записи для объединения.");
-    const incoming = migrateLocalState(parsed.data);
+    if (isProfilesBackup(document)) return this.mergeProfiles(document);
 
-    let added = 0;
+    const incoming = readMergeDocument(document);
     const state = await this.state();
-
-    const categoryOf = new Map<string, LocalState["categories"][number]>();
-    for (const category of incoming.categories) {
-      const same =
-        state.categories.find((existing) => existing.id === category.id) ??
-        state.categories.find(
-          (existing) =>
-            existing.kind === category.kind &&
-            existing.label.trim().toLowerCase() === category.label.trim().toLowerCase()
-        );
-      if (same) {
-        categoryOf.set(category.id, same);
-        continue;
-      }
-      state.categories.push(category);
-      categoryOf.set(category.id, category);
-    }
-    const recategorize = <T extends { category: { id: string; label: string } }>(row: T): T => {
-      const target = categoryOf.get(row.category.id);
-      return target
-        ? { ...row, category: { ...row.category, id: target.id, label: target.label } }
-        : row;
-    };
-
-    const names = new Set(state.accounts.map((account) => account.name.trim().toLowerCase()));
-    const accountIds = new Set(state.accounts.map((account) => account.id));
-    for (const account of incoming.accounts) {
-      if (accountIds.has(account.id)) continue;
-      let name = account.name;
-      for (let n = 2; names.has(name.trim().toLowerCase()); n += 1) name = `${account.name} (${n})`;
-      names.add(name.trim().toLowerCase());
-      state.accounts.push({ ...account, name });
-      added += 1;
-    }
-
-    const addById = <T extends { id: string }>(target: T[], rows: T[], shape = (row: T) => row) => {
-      const have = new Set(target.map((row) => row.id));
-      for (const row of rows) {
-        if (have.has(row.id)) continue;
-        target.push(shape(row));
-        added += 1;
-      }
-    };
-    addById(state.transactions, incoming.transactions, (row) => {
-      const moved = recategorize(row);
-      const account = state.accounts.find((item) => item.id === moved.account.id);
-      return account ? { ...moved, account: { ...moved.account, name: account.name } } : moved;
-    });
-    addById(state.recurringTransactions, incoming.recurringTransactions, recategorize);
-    addById(state.goals, incoming.goals);
-    state.goalMovements ??= [];
-    addById(state.goalMovements, incoming.goalMovements ?? []);
-    addById(state.liabilities, incoming.liabilities);
-    addById(state.rules, incoming.rules);
-    addById(
-      state.budgets,
-      incoming.budgets
-        .map((budget) => ({
-          ...budget,
-          categoryId: categoryOf.get(budget.categoryId)?.id ?? budget.categoryId
-        }))
-        // Лимит на ту же категорию в тот же месяц уже есть — здешний главнее.
-        .filter(
-          (budget) =>
-            !state.budgets.some(
-              (existing) =>
-                existing.categoryId === budget.categoryId &&
-                (existing as { month?: string }).month === (budget as { month?: string }).month
-            )
-        )
-    );
-
+    const added = mergeRecords(state, incoming);
     await this.save(state);
     return { merged: added };
+  }
+
+  /**
+   * Все профили копии — по своим местам.
+   *
+   * Текущий профиль копии ложится в текущий профиль здесь, как и раньше: это
+   * то, с чем человек работал, и туда он и посмотрит после подключения.
+   * Остальные ищут себе пару среди здешних профилей — по id (так совпадают
+   * «Основной» двух устройств и профили, уже приехавшие прошлым объединением),
+   * затем по имени. Нашёлся — записи добавляются к нему; нет — профиль
+   * заводится заново, с тем же id, именем и цветом.
+   *
+   * Сначала читается ВСЁ, и только потом пишется: копия, у которой третий
+   * профиль не прочитался, не должна успеть влить первые два, а потом упасть —
+   * повтор тогда начинался бы с половины.
+   */
+  private async mergeProfiles(bundle: ProfilesBackup) {
+    const entries = bundle.profiles.map((entry) => ({
+      profile: entry.profile,
+      incoming: readMergeDocument(entry.backup, entry.profile.name)
+    }));
+    const activeId = await this.getActiveProfileId();
+    let added = 0;
+    try {
+      for (const { profile, incoming } of entries) {
+        const target =
+          profile.id === bundle.activeProfileId ? activeId : await this.profileForMerge(profile);
+        added += await this.mergeIntoProfile(target, incoming);
+      }
+    } finally {
+      // Книги пишутся через «текущий профиль» — по пути он переключался. Вернуть
+      // прежний обязательно, даже если что-то упало: иначе человек после
+      // подключения оказался бы в чужом профиле и решил, что его записи пропали.
+      const list = await this.profileList();
+      await this.storage.setItem(PROFILE_LIST_KEY, {
+        ...list,
+        activeProfileId: activeId
+      } satisfies ProfileList);
+      this.invalidateStateCache();
+    }
+    return { merged: added };
+  }
+
+  /** Здешний профиль для профиля из копии — найденный или заведённый. */
+  private async profileForMerge(profile: UserProfile): Promise<string> {
+    const list = await this.profileList();
+    const same =
+      list.profiles.find((existing) => existing.id === profile.id) ??
+      list.profiles.find((existing) => sameName(existing.name, profile.name));
+    if (same) return same.id;
+    const created: UserProfile = {
+      id: profile.id || id("profile"),
+      name: profile.name.trim().slice(0, 40) || "Профиль",
+      color: profile.color || DEFAULT_PROFILE.color,
+      createdAt: profile.createdAt || new Date().toISOString()
+    };
+    list.profiles.push(created);
+    await this.storage.setItem(PROFILE_LIST_KEY, list);
+    return created.id;
+  }
+
+  /**
+   * Влить книгу в профиль `profileId`. Пишется тем же save, что и любая правка
+   * (с отметками времени — чтобы добавленное уехало на другие устройства),
+   * поэтому профиль на время делается текущим.
+   */
+  private async mergeIntoProfile(profileId: string, incoming: LocalState): Promise<number> {
+    const list = await this.profileList();
+    if (list.activeProfileId !== profileId) {
+      await this.storage.setItem(PROFILE_LIST_KEY, {
+        ...list,
+        activeProfileId: profileId
+      } satisfies ProfileList);
+      this.invalidateStateCache();
+    }
+    // Книги у профиля здесь нет вовсе — она едет целиком, вместе с
+    // настройками (валюта, тема): добавлять не к чему. Есть ли она, смотрим по
+    // перечню ключей: чтение пустого места завело бы начальную книгу, и записи
+    // пришлось бы склеивать с категориями по умолчанию без всякой нужды.
+    if (!(await this.storage.keys()).includes(profileStateKey(profileId))) {
+      await this.save({ ...incoming, aiApiKey: "" });
+      return countRows(incoming);
+    }
+    const state = await this.state();
+    const added = mergeRecords(state, incoming);
+    await this.save(state);
+    return added;
+  }
+
+  /**
+   * Все профили устройства — для «Объединить» при подключении (ProfilesBackup).
+   *
+   * Отметку «копия снята» (lastBackupAt), в отличие от `/backup`, не ставит:
+   * эту выгрузку человек в файл не сохранял, и сказать ему «копия есть» было
+   * бы неправдой.
+   */
+  private async exportAllProfiles(): Promise<ProfilesBackup> {
+    const list = await this.profileList();
+    const ordered = [
+      ...list.profiles.filter((profile) => profile.id === list.activeProfileId),
+      ...list.profiles.filter((profile) => profile.id !== list.activeProfileId)
+    ];
+    const profiles: ProfilesBackup["profiles"] = [];
+    for (const profile of ordered) {
+      const state =
+        profile.id === list.activeProfileId
+          ? await this.state(false)
+          : await this.readProfileState(profile);
+      if (!state) continue;
+      profiles.push({ profile: { ...profile }, backup: await backupDocument(state) });
+    }
+    return {
+      format: "profiles",
+      savedAt: new Date().toISOString(),
+      activeProfileId: list.activeProfileId,
+      profiles
+    };
+  }
+
+  /**
+   * Книга НЕ текущего профиля — только прочитать: ни переключения, ни записи.
+   *
+   * Не прочиталась даже по частям — ошибка, а не пропуск: следом за выгрузкой
+   * идёт очистка, и молча оставить профиль за бортом значило бы стереть его.
+   */
+  private async readProfileState(profile: UserProfile): Promise<LocalState | null> {
+    const raw = await this.storage.getItem<unknown>(profileStateKey(profile.id));
+    if (raw == null) return null;
+    const parsed = localStateSchema.safeParse(raw);
+    if (parsed.success) return migrateLocalState(parsed.data);
+    const salvaged = salvageLocalState(raw);
+    if (salvaged) return migrateLocalState(salvaged.state);
+    throw new Error(
+      `Не удалось прочитать профиль «${profile.name}». Ничего не стёрто — сохраните ` +
+        "резервную копию и попробуйте снова."
+    );
   }
 
   /**
@@ -1476,4 +1573,448 @@ export class LocalApiClient implements ApiClient {
     }
     this.invalidateStateCache();
   }
+}
+
+// ——— «Объединить»: свои записи к пришедшим ————————————————————————————
+
+/** Одно и то же имя — без оглядки на регистр и пробелы по краям. */
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function isProfilesBackup(value: unknown): value is ProfilesBackup {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.format === "profiles" &&
+    typeof record.activeProfileId === "string" &&
+    Array.isArray(record.profiles) &&
+    record.profiles.every((entry: unknown) => {
+      const item = entry as { profile?: Partial<UserProfile>; backup?: unknown } | null;
+      return (
+        typeof item?.profile?.id === "string" &&
+        typeof item.profile.name === "string" &&
+        typeof item.backup === "object" &&
+        item.backup !== null
+      );
+    })
+  );
+}
+
+/**
+ * Книга из копии для объединения. Сломанные строки отбрасываются, как и при
+ * чтении своей книги (salvageLocalState): одна кривая строка не повод
+ * потерять остальные записи.
+ */
+function readMergeDocument(document: unknown, profileName?: string): LocalState {
+  const parsed = localStateSchema.safeParse(document);
+  if (parsed.success) return migrateLocalState(parsed.data);
+  const salvaged = salvageLocalState(document);
+  if (salvaged) return migrateLocalState(salvaged.state);
+  throw new Error(
+    profileName
+      ? `Не удалось прочитать записи профиля «${profileName}» для объединения.`
+      : "Не удалось прочитать записи для объединения."
+  );
+}
+
+/** Сколько строк в книге — ответ объединения, когда книга легла целиком. */
+function countRows(state: LocalState): number {
+  const record = state as unknown as Record<string, unknown>;
+  return STAMPED.reduce((sum, [collection]) => {
+    const rows = record[collection];
+    return sum + (Array.isArray(rows) ? rows.length : 0);
+  }, 0);
+}
+
+type Tally = { added: number };
+
+/**
+ * Добавить к `target` строки из `rows`, которых в нём ещё нет, — новым
+ * массивом: разделы книги из кэша заморожены (freeze-state.ts), и правка на
+ * месте упала бы.
+ *
+ * `key` — как узнать ту же строку: у большинства id, у плана — месяц и статья.
+ * Считается ПОСЛЕ `shape`, перевода ссылок на здешние категории: план на
+ * «Продукты» телефона и план на «Продукты» ноутбука — один план.
+ *
+ * При совпадении остаётся здешняя строка: это данные, к которым подключились,
+ * и правили их, может быть, позже. Кроме одного случая — здешняя пуста
+ * (`empty`: план на ноль, заметка без текста), а пришедшая нет: тогда пустоту
+ * заменяет то, что человек вписал.
+ */
+function addRows<T>(
+  tally: Tally,
+  target: readonly T[],
+  rows: readonly T[],
+  key: (row: T) => string,
+  options: { shape?: (row: T) => T; empty?: (row: T) => boolean } = {}
+): T[] {
+  const result = [...target];
+  const at = new Map<string, number>();
+  result.forEach((row, index) => at.set(key(row), index));
+  for (const raw of rows) {
+    const row = options.shape ? options.shape(raw) : raw;
+    const index = at.get(key(row));
+    if (index === undefined) {
+      at.set(key(row), result.length);
+      result.push(row);
+      tally.added += 1;
+    } else if (options.empty && options.empty(result[index]) && !options.empty(row)) {
+      result[index] = row;
+      tally.added += 1;
+    }
+  }
+  return result;
+}
+
+/**
+ * Влить записи `incoming` в `state` — добавкой, ничего здешнего не заменяя.
+ * Возвращает, сколько строк добавилось.
+ *
+ * Одноимённые категории склеиваются: «Продукты» с двух устройств — это одни
+ * «Продукты», и всё, что на них ссылается, переводится на ту, что уже есть, —
+ * операции, шаблоны, лимиты, планы, ПРАВИЛА, столбцы таблицы, кэшбэк, платёж
+ * по долгу. Правила раньше добавлялись как есть: правило на «Кофе», склеенное
+ * со здешним «Кофе», показывало на категорию, которой здесь нет.
+ *
+ * Счета — нет: «Карта» на телефоне и «Карта» на ноутбуке могут быть разными
+ * картами, и сложить их остатки значило бы соврать. Одинаковое имя получает
+ * «(2)», чтобы было видно, что их два, — объединить или убрать лишний человек
+ * решит сам. Id счёта при этом сохраняется, и ссылки на него остаются верными.
+ *
+ * Участники семьи склеиваются по имени, как категории: «Маша» на двух
+ * устройствах — один человек.
+ *
+ * Раньше сливались только категории, счета, операции, шаблоны, цели, долги,
+ * правила и лимиты. Остальное — планы и заметки к ним, таблицы, портфель,
+ * сделки, семья, кэшбэк, поездки, снимки капитала — молча пропадало.
+ *
+ * Настройки (валюта, тема, ключ помощника) остаются здешними: это настройки
+ * тех данных, к которым подключились.
+ */
+function mergeRecords(state: LocalState, incoming: LocalState): number {
+  const tally: Tally = { added: 0 };
+
+  const categoryOf = new Map<string, LocalState["categories"][number]>();
+  const categories = [...state.categories];
+  for (const category of incoming.categories) {
+    const same =
+      categories.find((existing) => existing.id === category.id) ??
+      categories.find(
+        (existing) => existing.kind === category.kind && sameName(existing.label, category.label)
+      );
+    if (same) {
+      categoryOf.set(category.id, same);
+      continue;
+    }
+    categories.push(category);
+    categoryOf.set(category.id, category);
+  }
+  state.categories = categories;
+  // OPENING_BALANCE_ID у плана и «*» у кэшбэка — не категории: их нет в
+  // копии, и они проходят как есть.
+  const categoryId = (from: string) => categoryOf.get(from)?.id ?? from;
+  const recategorize = <T extends { category: { id: string; label: string } }>(row: T): T => {
+    const target = categoryOf.get(row.category.id);
+    return target
+      ? { ...row, category: { ...row.category, id: target.id, label: target.label } }
+      : row;
+  };
+
+  const memberOf = new Map<string, string>();
+  const members = [...(state.members ?? [])];
+  for (const member of incoming.members ?? []) {
+    const same =
+      members.find((existing) => existing.id === member.id) ??
+      members.find((existing) => sameName(existing.name, member.name));
+    if (same) {
+      memberOf.set(member.id, same.id);
+      continue;
+    }
+    members.push(member);
+    tally.added += 1;
+  }
+  state.members = members;
+  const memberId = (from: string) => memberOf.get(from) ?? from;
+
+  const accounts = [...state.accounts];
+  const names = new Set(accounts.map((account) => account.name.trim().toLowerCase()));
+  const accountIds = new Set(accounts.map((account) => account.id));
+  for (const account of incoming.accounts) {
+    if (accountIds.has(account.id)) continue;
+    let name = account.name;
+    for (let n = 2; names.has(name.trim().toLowerCase()); n += 1) name = `${account.name} (${n})`;
+    names.add(name.trim().toLowerCase());
+    accounts.push({ ...account, name });
+    tally.added += 1;
+  }
+  state.accounts = accounts;
+  // Подпись счёта в операции и шаблоне — под новое имя. Раньше сюда писалось
+  // поле `name`, которого у подписи нет (у неё `label`): разбор схемой его
+  // срезал, и операции «Карты (2)» оставались подписаны просто «Карта».
+  const renamed = <T extends { account: { id: string; label: string } }>(row: T): T => {
+    const account = accounts.find((item) => item.id === row.account.id);
+    return account && account.name !== row.account.label
+      ? { ...row, account: { ...row.account, label: account.name } }
+      : row;
+  };
+
+  const byId = (row: { id: string }) => row.id;
+  const notHere = <T extends { id: string }>(target: readonly T[], rows: readonly T[]) => {
+    const have = new Set(target.map((row) => row.id));
+    return rows.filter((row) => !have.has(row.id));
+  };
+
+  state.transactions = addRows(tally, state.transactions, incoming.transactions, byId, {
+    shape: (row) => {
+      const moved = renamed(recategorize(row));
+      return moved.memberId ? { ...moved, memberId: memberId(moved.memberId) } : moved;
+    }
+  });
+  state.recurringTransactions = addRows(
+    tally,
+    state.recurringTransactions,
+    incoming.recurringTransactions,
+    byId,
+    { shape: (row) => renamed(recategorize(row)) }
+  );
+  state.goals = addRows(tally, state.goals, incoming.goals, byId, {
+    shape: (goal) =>
+      goal.shares
+        ? {
+            ...goal,
+            shares: Object.fromEntries(
+              Object.entries(goal.shares).map(([member, share]) => [memberId(member), share])
+            )
+          }
+        : goal
+  });
+  state.goalMovements = addRows(
+    tally,
+    state.goalMovements ?? [],
+    incoming.goalMovements ?? [],
+    byId,
+    {
+      shape: (row) => {
+        const by = (row as { memberId?: string }).memberId;
+        return by ? { ...row, memberId: memberId(by) } : row;
+      }
+    }
+  );
+  state.liabilities = addRows(tally, state.liabilities, incoming.liabilities, byId, {
+    shape: (row) =>
+      row.paymentCategoryId ? { ...row, paymentCategoryId: categoryId(row.paymentCategoryId) } : row
+  });
+  // Правило на то же слово уже есть — здешнее главнее: два правила на одно
+  // слово спорили бы, куда относить операцию.
+  state.rules = addRows(
+    tally,
+    state.rules,
+    notHere(state.rules, incoming.rules),
+    (rule) => rule.match.trim().toLowerCase(),
+    { shape: (rule) => ({ ...rule, categoryId: categoryId(rule.categoryId) }) }
+  );
+  // Лимит на ту же категорию в тот же месяц уже есть — здешний главнее.
+  state.budgets = addRows(
+    tally,
+    state.budgets,
+    notHere(state.budgets, incoming.budgets),
+    (budget) => JSON.stringify([budget.categoryId, (budget as { month?: string }).month ?? ""]),
+    {
+      shape: (budget) => {
+        const target = categoryOf.get(budget.categoryId);
+        return target ? { ...budget, categoryId: target.id, category: target.label } : budget;
+      }
+    }
+  );
+
+  // План/факт: план узнаётся месяцем и статьёй, заметка — месяцем.
+  state.plans = addRows(
+    tally,
+    state.plans,
+    incoming.plans,
+    (plan) => JSON.stringify([plan.month, plan.categoryId]),
+    {
+      shape: (plan) => ({ ...plan, categoryId: categoryId(plan.categoryId) }),
+      empty: (plan) => plan.amount === 0
+    }
+  );
+  state.planNotes = addRows(tally, state.planNotes, incoming.planNotes, (note) => note.month, {
+    empty: (note) => !note.note.trim() && !note.factNote.trim()
+  });
+  state.planMonths = [
+    ...new Set([...(state.planMonths ?? []), ...(incoming.planMonths ?? [])])
+  ].sort();
+
+  // Инвестиции. Бумага узнаётся тикером. Одна и та же бумага на обоих
+  // устройствах остаётся здешней, а не складывается: чаще всего это одна и та
+  // же позиция, записанная дважды, и сумма удвоила бы портфель. Цены и доли
+  // (structure и прочее) пересчитает первое же открытие «Инвестиций».
+  state.investments = {
+    ...state.investments,
+    portfolio: addRows(tally, state.investments.portfolio, incoming.investments.portfolio, (row) =>
+      row.ticker.toUpperCase()
+    ),
+    watchlist: addRows(tally, state.investments.watchlist, incoming.investments.watchlist, (row) =>
+      row.ticker.toUpperCase()
+    )
+  };
+  state.realizedInvestmentEvents = addRows(
+    tally,
+    state.realizedInvestmentEvents,
+    incoming.realizedInvestmentEvents,
+    byId
+  );
+  state.expectedDividends = addRows(
+    tally,
+    state.expectedDividends,
+    incoming.expectedDividends,
+    byId
+  );
+  // Целевая доля отрасли одна: две «Финансы» с разными процентами спорили бы.
+  state.targetAllocations = addRows(
+    tally,
+    state.targetAllocations,
+    notHere(state.targetAllocations, incoming.targetAllocations),
+    (row) => row.sector.trim().toLowerCase()
+  );
+  state.marketAlerts = addRows(
+    tally,
+    state.marketAlerts,
+    notHere(state.marketAlerts, incoming.marketAlerts),
+    (row) => JSON.stringify([row.ticker.toUpperCase(), row.metric, row.op, row.value])
+  );
+
+  state.familySettlements = addRows(
+    tally,
+    state.familySettlements ?? [],
+    incoming.familySettlements ?? [],
+    byId,
+    { shape: (row) => ({ ...row, from: memberId(row.from), to: memberId(row.to) }) }
+  );
+  state.cashbackRules = addRows(tally, state.cashbackRules, incoming.cashbackRules, byId, {
+    shape: (rule) => ({ ...rule, categoryId: categoryId(rule.categoryId) })
+  });
+  state.trips = addRows(tally, state.trips, incoming.trips, byId);
+  // Год вычета — id сам год: здешний главнее, если в нём хоть что-то вписано.
+  state.deductionYears = addRows(tally, state.deductionYears, incoming.deductionYears, byId, {
+    empty: (row) => row.taxPaid === undefined && row.children === undefined
+  });
+  state.importBatches = addRows(
+    tally,
+    state.importBatches ?? [],
+    incoming.importBatches ?? [],
+    byId
+  );
+
+  // Снимки капитала и портфеля — по дням. За день, который здесь уже снят,
+  // остаётся здешний: складывать нельзя — повторное объединение удвоило бы.
+  // Дни, которых здесь нет (до подключения), приезжают — история не
+  // начинается заново с сегодняшнего дня.
+  const byDate = (row: { date: string }) => row.date;
+  const dated = <T extends { date: string }>(rows: T[]) =>
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+  state.netWorthSnapshots = dated(
+    addRows(tally, state.netWorthSnapshots, incoming.netWorthSnapshots, byDate)
+  );
+  state.portfolioSnapshots = dated(
+    addRows(tally, state.portfolioSnapshots ?? [], incoming.portfolioSnapshots ?? [], byDate)
+  );
+
+  mergeSheets(tally, state, incoming, categoryId);
+
+  return tally.added;
+}
+
+/**
+ * Таблицы — по листам.
+ *
+ * Id столбцов и листов случайные (кроме главной таблицы «main»), поэтому
+ * совпавший id значит «тот же лист», уже приезжавший сюда, — к нему просто
+ * добавляется недостающее. С главной таблицей так нельзя: «main» есть на
+ * каждом устройстве, и две разные таблицы, слитые в одну, дали бы два
+ * «Остатка» и два «Итога» с бессмысленным счётом. Поэтому своя главная
+ * таблица, если здешняя уже заполнена, ложится отдельным листом «Бюджет (2)».
+ */
+function mergeSheets(
+  tally: Tally,
+  state: LocalState,
+  incoming: LocalState,
+  categoryId: (from: string) => string
+): void {
+  const sheetOf = new Map<string, string>();
+  for (const column of state.sheetColumns ?? []) {
+    sheetOf.set(column.id, (column as { sheetId?: string }).sheetId ?? MAIN_SHEET);
+  }
+  const hasRow = (sheetId: string) => (state.sheets ?? []).some((row) => row.id === sheetId);
+
+  for (const tab of listSheets(incoming)) {
+    const row = (incoming.sheets ?? []).find((item) => item.id === tab.id);
+
+    if (tab.kind === "free") {
+      if (row && !hasRow(tab.id)) {
+        state.sheets = [...(state.sheets ?? []), row];
+        tally.added += 1;
+      }
+      state.freeCells = addRows(
+        tally,
+        state.freeCells ?? [],
+        (incoming.freeCells ?? []).filter((cell) => cell.sheetId === tab.id),
+        (cell) => cell.id
+      );
+      continue;
+    }
+
+    const scope = sheetScope(incoming, tab.id);
+    const columns = scope.sheetColumns ?? [];
+    // Пустая главная таблица — это просто «таблицу не заводили».
+    if (tab.id === MAIN_SHEET && columns.length === 0 && !scope.sheetTargets?.length) continue;
+
+    let target = columns.map((column) => sheetOf.get(column.id)).find(Boolean);
+    if (!target) {
+      if (tab.id !== MAIN_SHEET) target = tab.id;
+      else if ((sheetScope(state, MAIN_SHEET).sheetColumns ?? []).length === 0) target = MAIN_SHEET;
+      else {
+        target = createSheet(state, { name: freeSheetName(state, tab.name), kind: "budget" }, () =>
+          id("sheet")
+        ).id;
+        tally.added += 1;
+      }
+    }
+    if (target === tab.id && row && !hasRow(tab.id)) {
+      state.sheets = [...(state.sheets ?? []), row];
+      tally.added += 1;
+    }
+
+    const here = sheetScope(state, target);
+    const merged = {
+      sheetColumns: addRows(tally, here.sheetColumns ?? [], columns, (column) => column.id, {
+        shape: (column) =>
+          column.categoryId ? { ...column, categoryId: categoryId(column.categoryId) } : column
+      }),
+      sheetCells: addRows(tally, here.sheetCells ?? [], scope.sheetCells ?? [], (cell) => cell.id),
+      sheetMonths: addRows(tally, here.sheetMonths ?? [], scope.sheetMonths ?? [], (m) => m.id),
+      sheetTargets: addRows(
+        tally,
+        here.sheetTargets ?? [],
+        scope.sheetTargets ?? [],
+        (item) => item.id
+      ),
+      // «Отменить перенос из Excel» — здешний: это память этого устройства.
+      sheetBackup: here.sheetBackup ?? null
+    };
+    putScope(state, target, merged);
+    for (const column of merged.sheetColumns) sheetOf.set(column.id, target);
+  }
+}
+
+/** «Бюджет» → «Бюджет (2)», если такое имя у листа уже есть. */
+function freeSheetName(state: LocalState, name: string): string {
+  const taken = new Set(listSheets(state).map((tab) => tab.name.trim().toLowerCase()));
+  let candidate = name;
+  for (let n = 2; taken.has(candidate.trim().toLowerCase()); n += 1) {
+    candidate = `${name.slice(0, 54)} (${n})`;
+  }
+  return candidate;
 }

@@ -192,12 +192,18 @@ function checkFree(db: DatabaseSync, login: string, code: string): void {
   }
 }
 
+/** Секрет входа длиннее этого — не секрет, а попытка заставить scrypt жевать мегабайты. */
+export const MAX_SECRET = 512;
+
 export async function register(db: DatabaseSync, input: RegisterInput, now: string, open = false) {
   const login = normalizeLogin(input.login);
   if (login.length < 3) throw new AuthError(400, "Имя входа короче трёх знаков.");
   if (login.length > MAX_LOGIN) throw new AuthError(400, "Имя входа длиннее 64 знаков.");
   if (CONTROL.test(login)) throw new AuthError(400, "В имени входа есть недопустимые знаки.");
   if (!input.secret) throw new AuthError(400, "Нет секрета входа.");
+  // Длина — до scrypt: проверка смены пароля (/auth/vault) это уже делала, а
+  // регистрация и вход — нет, и мегабайтный «секрет» шёл в вывод ключа целиком.
+  if (input.secret.length > MAX_SECRET) throw new AuthError(400, "Неверный секрет входа.");
   checkVault(input.vault);
 
   const code = input.code.trim();
@@ -247,6 +253,10 @@ export async function login(
   input: { login: string; secret: string; device?: string },
   now: string
 ) {
+  // Такого секрета не может быть ни у кого (см. register), и гнать его через
+  // scrypt незачем. Отказ тот же, что и на неверный, — по нему не узнать,
+  // заведено ли имя.
+  if (input.secret.length > MAX_SECRET) throw new AuthError(401, "Не подходит имя или пароль.");
   const person = db
     .prepare("select * from people where login = ?")
     .get<Person>(normalizeLogin(input.login));
@@ -263,9 +273,6 @@ export async function login(
   const session = openSession(db, person.id, input.device, now);
   return { ...session, vault: person.vault, personId: person.id };
 }
-
-/** Секрет входа длиннее этого — не секрет, а попытка заставить scrypt жевать мегабайты. */
-export const MAX_SECRET = 512;
 
 /**
  * Шкатулка, в которой ключ книги и правда завёрнут, — не заглушка.

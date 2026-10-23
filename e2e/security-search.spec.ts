@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { fakeExchange } from "./fake-exchange";
 import { openSettled, seedExampleData } from "./helpers";
 
 // GUARD: поиск бумаг работает так же, как в банковском приложении, — с
@@ -12,6 +13,12 @@ import { openSettled, seedExampleData } from "./helpers";
 // Встроенный пример не заводит инвестиций, поэтому «свои бумаги» на нём пусты —
 // проверяется вторая половина того же списка, недавно выбранные. Она и
 // показывает, что пустое поле перестало быть пустым.
+// Поиск ходит на биржу; без сети выдача пуста — учебных бумаг приложение
+// больше не подставляет. Биржа здесь проверочная (fake-exchange.ts).
+test.beforeEach(async ({ page }) => {
+  await fakeExchange(page);
+});
+
 async function openAddPosition(page: Page) {
   await page
     .getByRole("button", { name: /Добавить (первую )?бумагу/ })
@@ -27,8 +34,7 @@ test("выбор делается с клавиатуры, и выбранное
   const results = await openAddPosition(page);
   const field = page.getByRole("dialog").getByRole("textbox").first();
   // Одна буква, а не тикер целиком: строк должно быть несколько, иначе
-  // стрелкам некуда двигаться. Точное совпадение тикера даёт ровно одну строку —
-  // и в запасном наборе бумаг, которым приложение пользуется без сети, тоже.
+  // стрелкам некуда двигаться. Точное совпадение тикера даёт ровно одну строку.
   await field.fill("S");
 
   // Ждём саму выдачу, а не время: поиск ходит на биржу.

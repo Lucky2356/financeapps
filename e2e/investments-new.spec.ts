@@ -1,9 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+import { fakeExchange } from "./fake-exchange";
 import { openSettled, seedExampleData } from "./helpers";
 
 // Инвестиции 2.2: таблица на ПК, карточки на телефоне, выплаты с «Получено»,
 // сравнение с индексом.
+
+// Котировки, история и индекс — с проверочной биржи (fake-exchange.ts): без
+// сети приложение цен больше не выдумывает, а проверке нужны числа.
+test.beforeEach(async ({ page }) => {
+  await fakeExchange(page);
+});
 
 test("ПК: таблица позиций сортируется и раскрывает бумагу", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });

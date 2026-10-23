@@ -25,3 +25,31 @@ function trimZero(text: string, locale: Locale): string {
   const trimmed = text.replace(/[.,]0$/, "");
   return locale === "en" ? trimmed : trimmed.replace(".", ",");
 }
+
+/**
+ * Месяц «2026-10» — подписью оси: «окт.» / «Oct».
+ *
+ * График доходов и расходов на главной печатал ключи месяцев как есть —
+ * «2026-08 2026-09 2026-10», — а соседний график капитала над ним подписывал
+ * те же месяцы словами. Всё, что не похоже на ключ месяца, остаётся как было.
+ */
+export function axisMonth(value: unknown, locale: Locale): string {
+  const text = String(value ?? "");
+  const match = /^(\d{4})-(\d{2})$/.exec(text);
+  if (!match) return text;
+  return new Date(Number(match[1]), Number(match[2]) - 1, 1).toLocaleDateString(
+    locale === "en" ? "en-GB" : "ru-RU",
+    { month: "short" }
+  );
+}
+
+/** Тот же месяц — целиком, для подсказки: «октябрь 2026» / «October 2026». */
+export function tooltipMonth(value: unknown, locale: Locale): string {
+  const text = String(value ?? "");
+  const match = /^(\d{4})-(\d{2})$/.exec(text);
+  if (!match) return text;
+  return new Date(Number(match[1]), Number(match[2]) - 1, 1).toLocaleDateString(
+    locale === "en" ? "en-GB" : "ru-RU",
+    { month: "long", year: "numeric" }
+  );
+}

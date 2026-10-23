@@ -114,9 +114,14 @@ export function AccountManager({ data }: { data: AccountsPageData }) {
   async function archiveWithTransfer(account: AccountsPageData["accounts"][number], toId: string) {
     if (toId !== "writeOff") {
       try {
+        // Минус гасится тем, что ПРИДЁТ на этот счёт, в его валюте: сумма
+        // остатка, списанная со счёта в другой валюте, закрывала бы долг по
+        // курсу — 100 ₽ вместо 100 $.
         await apiClient.post("/transactions", {
           action: "transfer",
-          amount: String(Math.abs(account.balance)),
+          ...(account.balance > 0
+            ? { amount: String(account.balance) }
+            : { toAmount: String(Math.abs(account.balance)) }),
           fromAccountId: account.balance > 0 ? account.id : toId,
           toAccountId: account.balance > 0 ? toId : account.id,
           date: todayDay(),

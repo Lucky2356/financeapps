@@ -2,10 +2,11 @@
 
 import type { SettingsPageData } from "@/lib/data";
 import { toFormObject } from "@/lib/api/local/helpers";
-import { isSupportedCurrency, type CurrencyRates } from "@/lib/currency";
+import { convert, isSupportedCurrency, type CurrencyRates } from "@/lib/currency";
 import { APP_VERSION, RISK_PROFILE_LABELS } from "@/lib/constants";
 import type { LocalState } from "@/lib/api/local/state";
 import { ratesOf } from "@/lib/api/local/money";
+import { roundMoney } from "@/lib/utils";
 
 /**
  * The exported document, plus the version of the app that wrote it.
@@ -65,6 +66,7 @@ export function updateSettings(state: LocalState, body: unknown) {
     // the money it actually holds. Stamping the new currency onto every
     // account left 500 000 ₽ reading as 500 000 $, and a rate table nobody
     // was using — the totals now convert through it instead.
+    if (input.currency !== state.currency) rebaseAmounts(state, state.currency, input.currency);
     state.currency = input.currency;
   }
   if (input.emergencyFundMonthsTarget !== undefined && input.emergencyFundMonthsTarget !== "") {
@@ -114,6 +116,41 @@ export function updateSettings(state: LocalState, body: unknown) {
     state.aiModel = String(raw.aiModel ?? "").trim();
   }
   return settingsPage(state);
+}
+
+/**
+ * Суммы, записанные в основной валюте, — в новую основную.
+ *
+ * Счета держат свою валюту, а цели, их движения, лимиты, план и снимки
+ * капитала — основную. Смена основной меняла одно поле, и 90 000 ₽ в цели
+ * читались как 90 000 $: капитал вырастал в сто раз, а удаление цели
+ * возвращало на рублёвый счёт девять миллионов. Теперь всё это пересчитывается
+ * по текущему курсу вместе со сменой.
+ */
+function rebaseAmounts(state: LocalState, from: string, to: string) {
+  const rates = ratesOf(state);
+  const move = (amount: number) => roundMoney(convert(amount, from, to, rates));
+  state.goals = state.goals.map((goal) => ({
+    ...goal,
+    targetAmount: move(goal.targetAmount),
+    currentAmount: move(goal.currentAmount),
+    monthlyContribution: move(goal.monthlyContribution ?? 0),
+    plannedContribution: move(goal.plannedContribution ?? 0)
+  }));
+  state.goalMovements = (state.goalMovements ?? []).map((movement) => ({
+    ...movement,
+    amount: move(movement.amount)
+  }));
+  state.budgets = state.budgets.map((budget) => ({
+    ...budget,
+    limitAmount: move(budget.limitAmount),
+    rolloverAmount: move(budget.rolloverAmount)
+  }));
+  state.plans = state.plans.map((entry) => ({ ...entry, amount: move(entry.amount) }));
+  state.netWorthSnapshots = (state.netWorthSnapshots ?? []).map((snapshot) => ({
+    ...snapshot,
+    value: move(snapshot.value)
+  }));
 }
 
 // Merges a fresh FX table (RUB per unit, fetched client-side from the CBR feed)

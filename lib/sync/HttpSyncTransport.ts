@@ -79,69 +79,142 @@ function usable(token: string): boolean {
   return token.length > 0 && /^[\x20-\x7e]+$/.test(token);
 }
 
+/**
+ * Сколько ждать ответа на один запрос, прежде чем счесть связь пропавшей.
+ *
+ * Без срока зависший запрос — сервер принял соединение и молчит, посредник
+ * держит его, телефон сменил сеть посреди ответа — не кончался НИКОГДА. А с
+ * ним вставала вся синхронизация: новая прогонка очереди не заводится, пока
+ * идёт прежняя, и ждёт её. Подключение устройства, ждущее первую сверку,
+ * висело вместе с ней. Полминуты — с запасом на большую книгу по медленной
+ * связи; дальше ждать уже нечего.
+ */
+const REQUEST_LIMIT_MS = 30_000;
+
+/**
+ * Пришедшее — ответ службы, или чужая страница по дороге.
+ *
+ * Гостевой Wi-Fi отвечает на любой адрес своей страницей входа, посредник —
+ * своей страницей ошибки. Это HTML, а не JSON, и разбор падал бы ошибкой,
+ * неотличимой от поломки, — хотя до службы просто не дошли. Удачный код с
+ * таким телом — значит, перехватили по дороге: это «нет связи». Отказ с
+ * таким телом остаётся отказом, только без слов службы.
+ */
+function parse(status: number, text: string): Json {
+  if (!text) return {};
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed))
+      return parsed as Json;
+  } catch {
+    // Ниже — тот же исход, что и для JSON, который не объект.
+  }
+  if (status < 400) {
+    throw new OfflineError(new Error("ответ не похож на ответ службы: сеть перехватывает запросы"));
+  }
+  return {};
+}
+
 async function ask(
   credentials: Credentials,
   path: string,
-  init: { method?: string; body?: unknown } = {}
+  init: { method?: string; body?: unknown } = {},
+  limitMs = REQUEST_LIMIT_MS
 ): Promise<{ status: number; data: Json }> {
   if (!usable(credentials.token)) {
     throw new ServerRefused(401, LOST_LINK);
   }
 
-  let response: Response;
+  // Срок — на весь обмен целиком, вместе с чтением тела: ответ может и
+  // начаться, и оборваться посередине. Отмена запроса через Rust (телефон,
+  // Windows) до уже идущего чтения может и не дойти — поэтому, кроме отмены,
+  // ожидание просто обрывается само (см. то же в watch).
+  const control = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      control.abort();
+      reject(new OfflineError(new Error(`служба не ответила за ${limitMs} мс`)));
+    }, limitMs);
+  });
+
+  const exchange = async (): Promise<{ status: number; text: string }> => {
+    let response: Response;
+    try {
+      response = await shellFetch(`${credentials.base.replace(/\/+$/, "")}${path}`, {
+        method: init.method ?? "GET",
+        headers: {
+          authorization: `Bearer ${credentials.token}`,
+          ...(init.body === undefined ? {} : { "content-type": "application/json" })
+        },
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: control.signal
+      });
+    } catch (cause) {
+      // fetch бросает только когда до сервера не дошли вовсе.
+      throw new OfflineError(cause);
+    }
+    try {
+      return { status: response.status, text: await response.text() };
+    } catch (cause) {
+      // Связь оборвалась посреди ответа — то же «не доехало».
+      throw new OfflineError(cause);
+    }
+  };
+
+  let reply: { status: number; text: string };
   try {
-    response = await shellFetch(`${credentials.base.replace(/\/+$/, "")}${path}`, {
-      method: init.method ?? "GET",
-      headers: {
-        authorization: `Bearer ${credentials.token}`,
-        ...(init.body === undefined ? {} : { "content-type": "application/json" })
-      },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body)
-    });
-  } catch (cause) {
-    // fetch бросает только когда до сервера не дошли вовсе.
-    throw new OfflineError(cause);
+    reply = await Promise.race([exchange(), expired]);
+  } finally {
+    clearTimeout(timer);
   }
 
-  const text = await response.text();
-  const data = text ? (JSON.parse(text) as Json) : {};
-
   // 5xx — сервер есть, но ему сейчас плохо: это то же «попробуйте позже», что и
-  // обрыв связи, и обходиться с ним надо так же.
-  if (response.status >= 500)
-    throw new OfflineError(new Error(`сервер ответил ${response.status}`));
+  // обрыв связи, и обходиться с ним надо так же. Проверяется ДО разбора тела:
+  // страница ошибки посредника — HTML, и разбор её как JSON ронял бы всё в
+  // «ошибку» вместо «попробуем позже».
+  if (reply.status >= 500) throw new OfflineError(new Error(`сервер ответил ${reply.status}`));
 
-  return { status: response.status, data };
+  return { status: reply.status, data: parse(reply.status, reply.text) };
 }
 
 export class HttpSyncTransport implements SyncTransport {
   private credentials: Credentials;
   private readonly silenceMs: number;
+  private readonly requestMs: number;
 
-  constructor(credentials: Credentials, options: { silenceMs?: number } = {}) {
+  constructor(credentials: Credentials, options: { silenceMs?: number; requestMs?: number } = {}) {
     this.credentials = credentials;
     this.silenceMs = options.silenceMs ?? SILENCE_LIMIT_MS;
+    this.requestMs = options.requestMs ?? REQUEST_LIMIT_MS;
   }
 
   async list(): Promise<SlotSummary[]> {
-    const { status, data } = await ask(this.credentials, ROUTES.slots);
+    const { status, data } = await ask(this.credentials, ROUTES.slots, {}, this.requestMs);
     if (status !== 200)
       throw new ServerRefused(status, String(data.error ?? "Не отдаёт перечень."));
     return (data.slots ?? []) as SlotSummary[];
   }
 
   async pull(slot: SlotName, known?: KnownVersion): Promise<SlotSnapshot> {
-    const { status, data } = await ask(this.credentials, ROUTES.slot(slot, known));
+    const { status, data } = await ask(
+      this.credentials,
+      ROUTES.slot(slot, known),
+      {},
+      this.requestMs
+    );
     if (status !== 200)
       throw new ServerRefused(status, String(data.error ?? "Служба не отдаёт данные."));
     return data as unknown as SlotSnapshot;
   }
 
   async push(slot: SlotName, request: PutRequest): Promise<PutResult> {
-    const { status, data } = await ask(this.credentials, ROUTES.put(slot), {
-      method: "PUT",
-      body: request
-    });
+    const { status, data } = await ask(
+      this.credentials,
+      ROUTES.put(slot),
+      { method: "PUT", body: request },
+      this.requestMs
+    );
 
     // 409 — не ошибка, а второй законный исход договора: нас обогнали. Вместе с
     // отказом приезжает то, что лежит на сервере, чтобы не ходить второй раз.

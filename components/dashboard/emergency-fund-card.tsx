@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
 import { Progress } from "@/components/ui/progress";
 import type { EmergencyFundStatus } from "@/types/finance";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
 export function EmergencyFundCard({
@@ -39,9 +39,9 @@ export function EmergencyFundCard({
         <Progress value={fund.progress} />
         <p className="text-sm text-muted-foreground">
           {reached
-            ? t("ef.reached", { months: fund.months.toFixed(1) })
+            ? t("ef.reached", { months: formatDecimal(fund.months, 1) })
             : t("ef.covers", {
-                months: fund.months.toFixed(1),
+                months: formatDecimal(fund.months, 1),
                 target: fund.targetMonths,
                 pct: fund.progress
               })}

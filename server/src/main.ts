@@ -119,6 +119,18 @@ export function decodePart(raw: string): string {
 /** Имя ячейки длиннее этого — не имя, а попытка забить базу мусором. */
 export const MAX_SLOT_NAME = 200;
 
+/**
+ * Предел тела для всех ручек, кроме записи книги.
+ *
+ * Прежде у всех был один предел — 32 МБ, под книгу с фото чеков. Но вход и
+ * регистрация отвечают БЕЗ билета, и любой мог держать службе по 32 МБ памяти
+ * на каждый запрос, не зная ни имени, ни пароля. Всё, что ходит мимо книги, —
+ * имя, секрет, шкатулка (до 64 КБ, см. checkVault), пакет связки (до 16 КБ),
+ * — помещается в 128 КБ с запасом; большой предел остался только у записи
+ * книги, а туда без билета не пускают.
+ */
+export const MAX_SMALL_BODY_BYTES = 128 * 1024;
+
 /** Время записи — строка ISO, два десятка знаков. Длиннее — не время. */
 const MAX_STAMP = 64;
 
@@ -284,14 +296,22 @@ export function createApp(options: AppOptions) {
     res.end(text);
   }
 
-  async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+  async function readJson(
+    req: IncomingMessage,
+    limit = MAX_SMALL_BODY_BYTES
+  ): Promise<Record<string, unknown>> {
+    // Названный заранее размер больше предела — отказ, не читая ни байта.
+    const declared = Number(req.headers["content-length"]);
+    if (Number.isFinite(declared) && declared > limit) {
+      throw new AuthError(413, "Слишком большой запрос.");
+    }
     const chunks: Buffer[] = [];
     let size = 0;
     for await (const chunk of req) {
       size += (chunk as Buffer).length;
       // Предел проверяется ПО ХОДУ, а не после: иначе достаточно одного запроса
       // на гигабайт, чтобы служба легла, не дочитав его.
-      if (size > MAX_BODY_BYTES) throw new AuthError(413, "Слишком большой запрос.");
+      if (size > limit) throw new AuthError(413, "Слишком большой запрос.");
       chunks.push(chunk as Buffer);
     }
     if (chunks.length === 0) return {};
@@ -428,17 +448,20 @@ export function createApp(options: AppOptions) {
     }
 
     if (path === "/auth/login" && method === "POST") {
+      // Счётчик по адресу — ДО чтения тела: для него тело не нужно. Прежде
+      // тело читалось первым, и вход без всякого предела принимал запросы,
+      // которые служба держала в памяти целиком, прежде чем отказать.
+      const stamp = Date.now();
+      if (!byAddress.allow(`адрес:${addressOf(req)}`, stamp)) {
+        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+      }
       const body = await readJson(req);
       // Счётчик — по имени В ОБЩЕМ ВИДЕ, тем же, каким его сравнивает вход.
       // Прежде он брал имя как прислано, а вход сравнивал без учёта регистра:
       // «петя», «Петя» и «ПЕТЯ» были тремя счётчиками на одного человека, и
       // предел на подбор пароля обходился сменой регистра.
       const name = normalizeLogin(text(body.login));
-      const stamp = Date.now();
-      if (
-        !byLogin.allow(`имя:${name}`, stamp) ||
-        !byAddress.allow(`адрес:${addressOf(req)}`, stamp)
-      ) {
+      if (!byLogin.allow(`имя:${name}`, stamp)) {
         return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
       }
 
@@ -596,7 +619,9 @@ export function createApp(options: AppOptions) {
       }
 
       if (method === "PUT") {
-        const body = await readJson(req);
+        // Единственная ручка с большим пределом: книга с фото чеков бывает
+        // тяжёлой. Сюда без билета не пускают — см. проверку входа выше.
+        const body = await readJson(req, MAX_BODY_BYTES);
         const baseVersion = Number(body.baseVersion);
         if (!Number.isInteger(baseVersion) || baseVersion < 0) {
           return send(res, 400, { error: "Неверная версия." });

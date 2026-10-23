@@ -13,13 +13,15 @@ export function parseImportedAmount(raw: unknown) {
   const parenthesised = /\(\s*[\d\s.,]*\d[\d\s.,]*\)/.test(text);
   const cleaned = text
     .replace(/\s/g, "")
-    // Типографский минус (‒ – — ―, −) — тоже минус.
-    .replace(/[‒-―−]/g, "-")
+    // Типографский минус и дефисы (‐ ‑ ‒ – — ―, −) — тоже минус.
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
     .replace(/[^\d.,-]/g, "");
   if (!/\d/.test(cleaned)) return null;
 
   const negative = parenthesised || cleaned.startsWith("-") || cleaned.endsWith("-");
-  const digits = cleaned.replace(/-/g, "");
+  // Разделитель по краю — не разделитель: точка из «руб.» и «р.» оставалась
+  // последней, за ней ноль цифр, и «1 234,56 руб.» читалось как 123 456.
+  const digits = cleaned.replace(/-/g, "").replace(/^[.,]+|[.,]+$/g, "");
   const lastSeparator = Math.max(digits.lastIndexOf("."), digits.lastIndexOf(","));
   const decimals = lastSeparator >= 0 ? digits.length - lastSeparator - 1 : 0;
   const normalized =

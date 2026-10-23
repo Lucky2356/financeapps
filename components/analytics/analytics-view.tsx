@@ -35,7 +35,7 @@ import { buildCategoryTrends, type CategoryTrend } from "@/lib/analytics/categor
 import { todayDay } from "@/lib/transactions/date";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
-import { formatCurrency, formatInputDate } from "@/lib/format";
+import { formatCurrency, formatDecimal, formatInputDate } from "@/lib/format";
 import { axisMoney } from "@/lib/charts/format";
 import { useI18n } from "@/lib/i18n/context";
 import { PrintHeader } from "@/components/reports/print-header";
@@ -102,7 +102,7 @@ export function AnalyticsView({
         <StatTile
           label={t("an.avgSavings")}
           hint="tip.an.avgSavings"
-          value={`${data.avgSavingsRate.toFixed(1)}%`}
+          value={`${formatDecimal(data.avgSavingsRate, 1)}%`}
           icon={PiggyBank}
           tone={data.avgSavingsRate >= 0 ? "success" : "danger"}
         />
@@ -140,7 +140,7 @@ export function AnalyticsView({
                 }
               >
                 {data.expenseChangePct > 0 ? "+" : ""}
-                {data.expenseChangePct.toFixed(1)}%
+                {formatDecimal(data.expenseChangePct, 1)}%
               </p>
             </div>
           </CardContent>
@@ -258,7 +258,7 @@ export function AnalyticsView({
             {data.monthlyCashflow.map((m) => (
               <div key={m.month} className="text-center">
                 <div className="text-xs text-muted-foreground">{m.month}</div>
-                <div className="text-sm font-medium">{m.savingsRate.toFixed(1)}%</div>
+                <div className="text-sm font-medium">{formatDecimal(m.savingsRate, 1)}%</div>
               </div>
             ))}
           </div>
@@ -374,7 +374,7 @@ function StructureCard({
                   </Pie>
                   <Tooltip
                     {...chartTooltipProps}
-                    formatter={(value) => [`${Number(value).toFixed(1)}%`, shareLabel]}
+                    formatter={(value) => [`${formatDecimal(Number(value), 1)}%`, shareLabel]}
                   />
                 </PieChart>
               </ResponsiveContainer>
