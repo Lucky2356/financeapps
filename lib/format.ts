@@ -80,6 +80,19 @@ export function formatCompactCurrency(
     .join("");
 }
 
+/**
+ * Дробное число с заданным числом знаков — с разделителем языка экрана.
+ *
+ * Проценты и месяцы писались через `toFixed`, то есть всегда с точкой: рядом с
+ * «873 227 ₽» стояло «+35.4%» и «Покрывает 3.8 из 6 мес.». По-русски — запятая.
+ */
+export function formatDecimal(value: number, digits = 1, locale: Locale = displayLocale()) {
+  return new Intl.NumberFormat(intlLocale(locale), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  }).format(withoutNegativeZero(value, digits));
+}
+
 export function formatPercent(
   value: number,
   maximumFractionDigits = 1,

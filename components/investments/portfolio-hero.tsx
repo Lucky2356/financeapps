@@ -5,7 +5,7 @@ import { Coins, HandCoins, TrendingUp, Wallet } from "lucide-react";
 import { HeroCard } from "@/components/ui/hero-card";
 import { StatGrid } from "@/components/ui/stat-grid";
 import { StatTile } from "@/components/ui/stat-tile";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import type { InvestmentData } from "@/types/finance";
 
@@ -62,7 +62,9 @@ export function PortfolioHero({
           label={t("inv.pnlLabel")}
           hint="tip.inv.pnlLabel"
           value={`${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, currency)}`}
-          caption={t("inv.tile.pnlPct", { pct: `${pnl >= 0 ? "+" : ""}${returnPct.toFixed(1)}` })}
+          caption={t("inv.tile.pnlPct", {
+            pct: `${pnl >= 0 ? "+" : ""}${formatDecimal(returnPct, 1)}`
+          })}
           icon={TrendingUp}
           tone={pnl >= 0 ? "success" : "danger"}
         />
@@ -88,7 +90,9 @@ export function PortfolioHero({
           hint="tip.inv.tile.today"
           value={dayBase > 0 ? `${dayAbs >= 0 ? "+" : ""}${formatCurrency(dayAbs, currency)}` : "—"}
           caption={
-            dayBase > 0 ? `${dayPct >= 0 ? "+" : ""}${dayPct.toFixed(2)}%` : t("inv.tile.todayNone")
+            dayBase > 0
+              ? `${dayPct >= 0 ? "+" : ""}${formatDecimal(dayPct, 2)}%`
+              : t("inv.tile.todayNone")
           }
           icon={Wallet}
           tone={dayBase > 0 ? (dayAbs >= 0 ? "success" : "danger") : "default"}

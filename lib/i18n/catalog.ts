@@ -543,7 +543,7 @@ const ru: Messages = {
   "acc.hero.caption": "Активных счетов: {count}",
   "accountType.CASH": "Наличные",
   "accountType.DEBIT_CARD": "Дебетовая карта",
-  "accountType.SAVINGS": "Накопительный счет",
+  "accountType.SAVINGS": "Накопительный счёт",
   "accountType.BROKERAGE": "Брокерский счет",
   // Accounts manager
   "acc.title": "Счета",

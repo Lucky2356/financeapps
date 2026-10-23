@@ -1485,7 +1485,7 @@ export const en: Messages = {
   "rep.avgIncome": "Average income / mo",
   "rep.avgExpense": "Average expense / mo",
   "rep.savingsRate": "Savings rate",
-  "rep.lastMonth": "Last month: {month}",
+  "rep.lastMonth": "Latest month: {month}",
   "rep.income": "Income",
   "rep.expense": "Expenses",
   "rep.savings": "Savings",

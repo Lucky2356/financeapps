@@ -55,8 +55,11 @@ export function StatTile({
             шириной в пол-экрана обрывался на «Прогноз через 90…» — обрезанным
             оказывался сам заголовок, а не пояснение под ним. Две строки
             по-прежнему зарезервированы (ряд стоит на одной базовой линии),
-            третья разрешена тем, кому не хватило. */}
-        <p className="line-clamp-3 min-h-[2.6em] min-w-0 text-[13px] leading-[1.3] text-muted-foreground">
+            третья разрешена тем, кому не хватило.
+            Одно длинное слово («Накопительный») переносу не поддаётся и
+            обрезалось посреди слова без многоточия: такие слова переносятся
+            по слогам, а в крайнем случае — где угодно. */}
+        <p className="line-clamp-3 min-h-[2.6em] min-w-0 text-[13px] leading-[1.3] text-muted-foreground hyphens-auto [overflow-wrap:anywhere]">
           {label}
           {hint && !href ? <InfoHint text={hint} className="ml-1" /> : null}
         </p>

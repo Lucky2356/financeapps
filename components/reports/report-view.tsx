@@ -14,7 +14,7 @@ import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AnalyticsData, TransactionsPageData } from "@/lib/data";
-import { formatCurrency, formatDate, formatInputDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDecimal, formatInputDate } from "@/lib/format";
 import { buildPeriodReport, buildYoY } from "@/lib/reports/period-report";
 import { countableRows } from "@/lib/transactions/transfers";
 import { ExportService } from "@/services/export/ExportService";
@@ -348,7 +348,7 @@ function ExtendedReport({
           />
           <ReportStat
             label={t("rep.savingsRate")}
-            value={`${report.totals.savingsRate.toFixed(1)}%`}
+            value={`${formatDecimal(report.totals.savingsRate, 1)}%`}
           />
         </div>
 
@@ -362,7 +362,7 @@ function ExtendedReport({
               <p className="font-medium">{formatCurrency(yoy.current.income, currency)}</p>
               <p className={`text-xs ${pctClass(-yoy.incomeChangePct)}`}>
                 {yoy.incomeChangePct >= 0 ? "+" : ""}
-                {yoy.incomeChangePct.toFixed(1)}% {t("rep.ext.vsPrevYear")}
+                {formatDecimal(yoy.incomeChangePct, 1)}% {t("rep.ext.vsPrevYear")}
               </p>
             </div>
             <div>
@@ -370,7 +370,7 @@ function ExtendedReport({
               <p className="font-medium">{formatCurrency(yoy.current.expense, currency)}</p>
               <p className={`text-xs ${pctClass(yoy.expenseChangePct)}`}>
                 {yoy.expenseChangePct >= 0 ? "+" : ""}
-                {yoy.expenseChangePct.toFixed(1)}% {t("rep.ext.vsPrevYear")}
+                {formatDecimal(yoy.expenseChangePct, 1)}% {t("rep.ext.vsPrevYear")}
               </p>
             </div>
             <div>
@@ -378,7 +378,7 @@ function ExtendedReport({
               <p className="font-medium">{formatCurrency(yoy.current.savings, currency)}</p>
               <p className={`text-xs ${savingsPctClass(yoy.savingsChangePct)}`}>
                 {yoy.savingsChangePct >= 0 ? "+" : ""}
-                {yoy.savingsChangePct.toFixed(1)}% {t("rep.ext.vsPrevYear")}
+                {formatDecimal(yoy.savingsChangePct, 1)}% {t("rep.ext.vsPrevYear")}
               </p>
             </div>
           </div>

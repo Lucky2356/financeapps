@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, Minus, TrendingDown, TrendingUp } from "lucide-react";
 
+import { formatDecimal } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkline } from "@/components/charts/sparkline";
 import { AnimatedValue } from "@/components/ui/animated-value";
@@ -83,7 +84,7 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
             {(trendPositive || trendNegative) && <TrendIcon className="size-3" />}
             <span>
               {trendPositive ? "+" : ""}
-              {trend.value.toFixed(1)}% {trend.label}
+              {formatDecimal(trend.value, 1)}% {trend.label}
             </span>
           </div>
         )}
