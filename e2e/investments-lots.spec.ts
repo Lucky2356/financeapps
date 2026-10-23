@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+import { fakeExchange } from "./fake-exchange";
 import { openSettled, seedExampleData } from "./helpers";
+
+// Котировки, история и индекс — с проверочной биржи (fake-exchange.ts): без
+// сети приложение цен больше не выдумывает, а проверке нужны числа.
+test.beforeEach(async ({ page }) => {
+  await fakeExchange(page);
+});
 
 // The average purchase price is the app's job, not the user's arithmetic.
 // This walks the real dialog: pick a security, list two purchases at different

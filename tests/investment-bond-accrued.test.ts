@@ -50,4 +50,33 @@ describe("облигация с НКД", () => {
     expect(bond?.pnl).toBe(100);
     expect(bond?.accruedInterest).toBe(20);
   });
+
+  it("продажа и её отмена считают прибыль остатка тоже по чистой цене", async () => {
+    const { LocalApiClient } = await import("@/lib/api/LocalApiClient");
+    const { MemoryStorageAdapter } = await import("@/lib/storage/MemoryStorageAdapter");
+    const api = new LocalApiClient(new MemoryStorageAdapter());
+    await api.post("/investments", {
+      ticker: BOND.ticker,
+      quantity: "10",
+      averageBuyPrice: "590"
+    });
+
+    const sale = await api.post("/investments/events", {
+      type: "SELL",
+      ticker: BOND.ticker,
+      quantity: "4",
+      sellPrice: "615",
+      fee: "0",
+      date: "2026-10-01"
+    });
+    // Копия — то, что сохранено, без пересчёта по бирже.
+    const afterSale = (await api.get("/backup")).investments.portfolio[0];
+    // (600 − 590) × 6, а не (620 − 590) × 6 = 180.
+    expect(afterSale.pnl).toBe(60);
+
+    await api.delete(`/investments/events?id=${sale.id}`);
+    const afterUndo = (await api.get("/backup")).investments.portfolio[0];
+    expect(afterUndo.quantity).toBe(10);
+    expect(afterUndo.pnl).toBe(100);
+  });
 });

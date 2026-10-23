@@ -16,6 +16,7 @@ import {
   STATE_DELETES,
   STATE_WRITES,
   type DeleteRequest,
+  type WriteMarket,
   type WriteRequest
 } from "@/lib/api/local/writes";
 import { id, normalizePath, routeOf, toFormObject } from "@/lib/api/local/helpers";
@@ -70,7 +71,7 @@ import {
   restoreTransaction,
   restoreTransactionOnReturnedAccount
 } from "@/lib/api/local/ledger";
-import { investmentsPage, marketPricesFor, type MarketPrices } from "@/lib/api/local/investments";
+import { buildInvestmentsPage, investmentMarketFor } from "@/lib/api/local/investments";
 import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
 import { createSheet, listSheets, MAIN_SHEET, putScope, sheetScope } from "@/lib/api/local/sheets";
@@ -317,13 +318,17 @@ export class LocalApiClient implements ApiClient {
   }
 
   private async refreshInvestments(state: LocalState) {
-    const invData = await investmentsPage(state);
-    // Persist last-known prices so they survive app restart. Read the state
-    // again inside the queue first: fetching quotes takes seconds, and
-    // whatever the owner saved meanwhile must not be rolled back by the
-    // snapshot this request started from.
-    await this.serialize(async () => {
+    // Биржа — по сети, до очереди: котировки идут секундами.
+    const market = await investmentMarketFor(state);
+    // Persist last-known prices so they survive app restart.
+    //
+    // Страница считается уже в очереди — по документу, прочитанному там же, и
+    // на него ложатся только цены с биржи. Прежде в документ писались строки,
+    // посчитанные по документу ДО ожидания биржи, и продажа, записанная за
+    // эти секунды, отменялась: проданные бумаги возвращались в портфель.
+    return this.serialize(async () => {
       const fresh = await this.state();
+      const invData = buildInvestmentsPage(fresh, market);
       fresh.investments = {
         ...fresh.investments,
         securities: invData.securities,
@@ -334,8 +339,13 @@ export class LocalApiClient implements ApiClient {
         assetStructure: invData.assetStructure
       };
       // Снимок дня: портфель пуст — снимать нечего (иначе история
-      // начиналась бы с нулей до первой покупки).
-      if (invData.portfolio.length > 0) {
+      // начиналась бы с нулей до первой покупки). Биржа не дала ни одной
+      // цены бумагам портфеля — тоже: снимок из одних сохранённых цен ничего
+      // не говорит о сегодняшнем дне.
+      const pricedLive = invData.portfolio.some(
+        (row) => (market.byTicker.get(row.ticker)?.price ?? 0) > 0
+      );
+      if (pricedLive) {
         fresh.portfolioSnapshots = recordPortfolioSnapshot(
           fresh.portfolioSnapshots ?? [],
           isoDay(new Date()),
@@ -345,8 +355,8 @@ export class LocalApiClient implements ApiClient {
         invData.history = fresh.portfolioSnapshots;
       }
       await this.save(fresh);
+      return invData;
     });
-    return invData;
   }
 
   async post<P extends WriteRoute, const Body = undefined>(
@@ -366,24 +376,24 @@ export class LocalApiClient implements ApiClient {
   /**
    * Поставить запись в очередь. Обычная встаёт сразу, в порядке вызова.
    *
-   * Запись, которой нужны цены с биржи (PRICED_WRITES), сначала получает их —
-   * ДО очереди, а не в ней: биржу ждут секундами, и всё это время очередь
-   * стояла бы. Документ для этого читается без очереди, как при любом чтении:
-   * он нужен только затем, чтобы не ходить на биржу с пустым портфелем.
-   * Портфель могут успеть поменять, пока ждём биржу, — обработчик считает по
-   * документу, прочитанному уже в очереди, а бумага без полученной цены идёт
-   * по своей последней.
+   * Запись, которой нужна биржа (PRICED_WRITES: цены, справочник, история),
+   * сначала получает её ответ — ДО очереди, а не в ней: биржу ждут секундами,
+   * и всё это время очередь стояла бы. Документ для этого читается без
+   * очереди, как при любом чтении: он нужен только затем, чтобы знать, что
+   * спрашивать. Портфель могут успеть поменять, пока ждём биржу, — обработчик
+   * считает по документу, прочитанному уже в очереди, а бумага без
+   * полученной цены идёт по своей последней.
    */
   private enqueueWrite<TResponse>(
     path: string,
     body: unknown,
     method: "POST" | "PUT"
   ): Promise<TResponse> {
-    if (!PRICED_WRITES.has(normalizePath(path).pathname))
-      return this.serialize(() => this.write<TResponse>(path, body, method));
+    const askMarket = routeOf(PRICED_WRITES, normalizePath(path).pathname);
+    if (!askMarket) return this.serialize(() => this.write<TResponse>(path, body, method));
     return this.state(false)
-      .then(marketPricesFor)
-      .then((prices) => this.serialize(() => this.write<TResponse>(path, body, method, prices)));
+      .then((state) => askMarket(state, body))
+      .then((market) => this.serialize(() => this.write<TResponse>(path, body, method, market)));
   }
 
   async delete(path: DeletePath): Promise<void> {
@@ -499,11 +509,11 @@ export class LocalApiClient implements ApiClient {
     path: string,
     body: unknown,
     method: "POST" | "PUT",
-    prices?: MarketPrices
+    market: WriteMarket = {}
   ): Promise<TResponse> {
     const state = await this.state();
     const { pathname } = normalizePath(path);
-    const request: WriteRequest = { state, body, method, prices };
+    const request: WriteRequest = { state, body, method, ...market };
 
     // Обработчик правит документ и отвечает; сохраняется документ здесь, после
     // него, — и только если он не бросил ошибку.

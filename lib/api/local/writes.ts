@@ -62,8 +62,12 @@ import {
   addRealizedEvent,
   setTargetAllocations,
   INVESTMENT_ACTIONS,
+  investmentWriteMarket,
+  marketPricesFor,
+  NO_MARKET,
   savePosition,
   undoSale,
+  type InvestmentMarket,
   type MarketPrices
 } from "@/lib/api/local/investments";
 import { addRule, upsertCategory, withSheetCategories } from "@/lib/api/local/categories";
@@ -79,14 +83,27 @@ export type WriteRequest = {
   method: "POST" | "PUT";
   /** Цены с биржи, если путь их просит (PRICED_WRITES) — получены до очереди. */
   prices?: MarketPrices;
+  /** Справочник и история для портфеля (PRICED_WRITES) — получены до очереди. */
+  market?: InvestmentMarket;
 };
 
+/** Что запись взяла с биржи до очереди. */
+export type WriteMarket = Pick<WriteRequest, "prices" | "market">;
+
 /**
- * Записи, которым нужны цены с биржи. Клиент запрашивает их ДО очереди
- * записей и передаёт обработчику: ждать сеть внутри очереди — значит держать
- * за собой все остальные записи (см. marketPricesFor).
+ * Записи, которым нужна биржа, — и как её спросить. Клиент спрашивает ДО
+ * очереди записей и передаёт ответ обработчику: ждать сеть внутри очереди —
+ * значит держать за собой все остальные записи (см. marketPricesFor). Так
+ * было с каждым делом в `/investments`: пока биржа молчала (по десять секунд
+ * на запрос), не добавлялась даже операция.
  */
-export const PRICED_WRITES: ReadonlySet<string> = new Set(["/networth/snapshot"]);
+export const PRICED_WRITES: Record<
+  string,
+  (state: LocalState, body: unknown) => Promise<WriteMarket>
+> = {
+  "/networth/snapshot": async (state) => ({ prices: await marketPricesFor(state) }),
+  "/investments": async (state, body) => ({ market: await investmentWriteMarket(state, body) })
+};
 
 /** Что получает обработчик удаления. */
 export type DeleteRequest = {
@@ -228,8 +245,12 @@ export const STATE_WRITES = {
   "/investments/targets": ({ state, body }: WriteRequest) => setTargetAllocations(state, body),
   "/market/alerts": ({ state, body }: WriteRequest) => addMarketAlert(state, body),
   "/investments": byAction(
-    fromTable(INVESTMENT_ACTIONS, ({ state, body }: WriteRequest) => [state, body]),
-    ({ state, body }: WriteRequest) => savePosition(state, body)
+    fromTable(INVESTMENT_ACTIONS, ({ state, body, market }: WriteRequest) => [
+      state,
+      body,
+      market ?? NO_MARKET
+    ]),
+    ({ state, body, market }: WriteRequest) => savePosition(state, body, market ?? NO_MARKET)
   ),
   "/categories": ({ state, body, method }: WriteRequest) => upsertCategory(state, body, method),
   "/plan": ({ state, body }: WriteRequest) => savePlan(state, body),

@@ -11,7 +11,7 @@ import type { InvestmentData } from "@/types/finance";
 
 // The head of the investments screen, in the same shape as every other screen:
 // market value with today's move beside it, then the four supporting figures.
-// The maths is unchanged from the flat summary this replaced.
+// The maths is unchanged from the flat summary this replaced, except P&L (below).
 export function PortfolioHero({
   portfolio,
   currency,
@@ -29,7 +29,10 @@ export function PortfolioHero({
 
   const cost = portfolio.reduce((sum, p) => sum + p.quantity * p.averageBuyPrice, 0);
   const value = portfolio.reduce((sum, p) => sum + p.currentValue, 0);
-  const pnl = value - cost;
+  // Прибыль — сумма прибылей строк, а не «стоимость − вложено»: стоимость
+  // облигации включает НКД, а прибыль считается по чистой цене. Разность
+  // завышала её на весь накопленный купон и спорила с таблицей и итогами.
+  const pnl = portfolio.reduce((sum, p) => sum + p.pnl, 0);
   const returnPct = cost > 0 ? (pnl / cost) * 100 : 0;
   // Весь доход: бумажный + с продаж + выплаты. Без данных — только бумажный.
   const totalIncome = totals ? totals.total : pnl;

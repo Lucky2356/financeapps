@@ -51,7 +51,7 @@ describe("MOEX ISS response parsing", () => {
   });
 });
 
-describe("MockMarketDataProvider (fallback behavior)", () => {
+describe("MockMarketDataProvider (mock mode)", () => {
   it("getSecurities returns an expanded securities universe", async () => {
     const { MockMarketDataProvider } = await import("@/services/market/MockMarketDataProvider");
     const provider = new MockMarketDataProvider();

@@ -5,7 +5,6 @@ import type { AssetKind } from "@/types/enums";
 import { rankSecurities } from "@/lib/investments/security-match";
 import { sectorForTicker } from "@/lib/market/sectors";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
-import { MockMarketDataProvider } from "./MockMarketDataProvider";
 
 // Curated universe of liquid Russian blue chips. MOEX ISS provides live prices
 // and day change; sector/risk/comment are app-curated. (Yandex now trades as
@@ -241,8 +240,18 @@ type HistoryStats = { lastClose: number; change30d: number; changeDay: number };
 // created per request) to keep MOEX load low while staying near-real-time.
 const SNAPSHOT_TTL_MS = 30_000;
 const HISTORY_STATS_TTL_MS = 60 * 60 * 1000;
+// Биржа не ответила — столько её не спрашивают снова. Каждый запрос ждёт до
+// десяти секунд, и экран, который спрашивает справочник, историю и выплаты
+// подряд, без этой паузы ждал бы их все по очереди — при каждом открытии.
+const FAILURE_TTL_MS = 15_000;
 let snapshotCache: { ts: number; rows: Map<string, SnapshotRow> } | null = null;
-let historyStatsCache: { ts: number; map: Map<string, HistoryStats> } | null = null;
+let snapshotFailedAt: number | null = null;
+let historyStatsCache: { ts: number; ttl: number; map: Map<string, HistoryStats> } | null = null;
+
+/** Снимок с биржи только что не получился — не ждать её снова до паузы. */
+function exchangeRecentlyUnreachable(): boolean {
+  return snapshotFailedAt !== null && Date.now() - snapshotFailedAt < FAILURE_TTL_MS;
+}
 
 function parseMoexRows(table: { columns: string[]; data: (string | number | null)[][] }) {
   const map = new Map<string, Record<string, string | number | null>>();
@@ -288,9 +297,13 @@ async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Respons
   }
 }
 
+// Без биржи — пусто, а не выдуманное. Раньше при недоступной бирже отдавались
+// цены из MockMarketDataProvider: настоящий портфель оценивался по учебным
+// котировкам (ВТБ по 90 ₽ становился ВТБ по 0,02 ₽), и они записывались в
+// портфель, в его историю и в снимок капитала. Пустой ответ значит «цены
+// нет»: портфель остаётся при последних сохранённых ценах. Учебные данные —
+// только когда так настроено (createMarketDataProvider).
 export class MoexMarketDataProvider implements MarketDataService {
-  private readonly fallback = new MockMarketDataProvider();
-
   async getSecurities(): Promise<MarketSecurity[]> {
     try {
       const [snapshot, stats] = await Promise.all([this.getSnapshot(), this.getHistoryStatsMap()]);
@@ -320,10 +333,9 @@ export class MoexMarketDataProvider implements MarketDataService {
         });
       }
 
-      if (results.length > 0) return results;
-      return this.fallback.getSecurities();
+      return results;
     } catch {
-      return this.fallback.getSecurities();
+      return [];
     }
   }
 
@@ -336,12 +348,14 @@ export class MoexMarketDataProvider implements MarketDataService {
       const matches = await this.searchSecurities(t, 1);
       return matches.find((security) => security.ticker === t) ?? null;
     } catch {
-      return this.fallback.getSecurityByTicker(ticker);
+      return null;
     }
   }
 
   async getPayouts(ticker: string, kind: AssetKind): Promise<Payout[]> {
     const secid = encodeURIComponent(ticker.toUpperCase());
+    // Биржа только что не ответила на снимок — выплаты по каждой бумаге не ждём.
+    if (exchangeRecentlyUnreachable()) return [];
     try {
       if (kind === "BOND") {
         const response = await fetchWithTimeout(
@@ -371,33 +385,37 @@ export class MoexMarketDataProvider implements MarketDataService {
         INDEX_BOARD
       );
     } catch {
-      return this.fallback.getIndexHistory(index, from, to);
+      return [];
     }
   }
 
   async getHistoricalPrices(ticker: string, from: Date, to: Date): Promise<HistoricalPrice[]> {
     try {
       const upper = ticker.toUpperCase();
-      const prices = await this.fetchHistory(
+      const board = await this.boardOf(upper);
+      // Справочник с биржи только что не пришёл — и история не придёт: не ждать
+      // её по десять секунд на каждую бумагу портфеля.
+      if (exchangeRecentlyUnreachable()) return [];
+      return await this.fetchHistory(
         upper,
         format(from, "yyyy-MM-dd"),
         format(to, "yyyy-MM-dd"),
-        await this.boardOf(upper)
+        board
       );
-      if (prices.length > 0) return prices;
-      return this.fallback.getHistoricalPrices(ticker, from, to);
     } catch {
-      return this.fallback.getHistoricalPrices(ticker, from, to);
+      return [];
     }
   }
 
   async updateMarketPrices(): Promise<void> {
-    // Force a fresh snapshot on the next read.
+    // Force a fresh snapshot on the next read — and ask the exchange again even
+    // if it failed a moment ago: the owner pressed «Обновить» on purpose.
     snapshotCache = null;
+    snapshotFailedAt = null;
     try {
       await this.getSnapshot();
     } catch {
-      /* offline — readers fall back to mock/cache */
+      /* offline — readers get no prices and keep the stored ones */
     }
   }
 
@@ -406,6 +424,7 @@ export class MoexMarketDataProvider implements MarketDataService {
   // search or a price lookup never has to know where a security is listed.
   private async getSnapshot(): Promise<Map<string, SnapshotRow>> {
     if (snapshotCache && Date.now() - snapshotCache.ts < SNAPSHOT_TTL_MS) return snapshotCache.rows;
+    if (exchangeRecentlyUnreachable()) throw new Error("MOEX ISS was unreachable a moment ago");
 
     const boards = await Promise.all(
       BOARDS.map(async (spec) => {
@@ -421,8 +440,12 @@ export class MoexMarketDataProvider implements MarketDataService {
 
     const rows = new Map<string, SnapshotRow>();
     for (const board of boards) for (const [secid, row] of board) rows.set(secid, row);
-    if (rows.size === 0) throw new Error("MOEX ISS returned nothing on every board");
+    if (rows.size === 0) {
+      snapshotFailedAt = Date.now();
+      throw new Error("MOEX ISS returned nothing on every board");
+    }
 
+    snapshotFailedAt = null;
     snapshotCache = { ts: Date.now(), rows };
     return rows;
   }
@@ -536,9 +559,9 @@ export class MoexMarketDataProvider implements MarketDataService {
         } satisfies MarketSecurity;
       });
 
-      return matches.length > 0 ? matches : this.fallback.searchSecurities(query, limit, kind);
+      return matches;
     } catch {
-      return this.fallback.searchSecurities(query, limit, kind);
+      return [];
     }
   }
 
@@ -546,8 +569,10 @@ export class MoexMarketDataProvider implements MarketDataService {
   // because they barely move out of hours: the official last close (shown when
   // the market is closed), the close-over-close day change, and the 30-day change.
   private async getHistoryStatsMap(): Promise<Map<string, HistoryStats>> {
-    if (historyStatsCache && Date.now() - historyStatsCache.ts < HISTORY_STATS_TTL_MS)
+    if (historyStatsCache && Date.now() - historyStatsCache.ts < historyStatsCache.ttl)
       return historyStatsCache.map;
+    // Биржа только что не ответила — пятнадцать историй подряд не спрашиваем.
+    if (exchangeRecentlyUnreachable()) return new Map();
 
     const from = format(subDays(new Date(), 35), "yyyy-MM-dd");
     const till = format(new Date(), "yyyy-MM-dd");
@@ -573,7 +598,14 @@ export class MoexMarketDataProvider implements MarketDataService {
       })
     );
 
-    historyStatsCache = { ts: Date.now(), map };
+    // Ни одной истории — биржа, скорее всего, недоступна. Такой пустой ответ
+    // держится недолго, а не час: иначе вернувшаяся биржа час показывала бы
+    // бумаги без изменения за месяц.
+    historyStatsCache = {
+      ts: Date.now(),
+      ttl: map.size > 0 ? HISTORY_STATS_TTL_MS : FAILURE_TTL_MS,
+      map
+    };
     return map;
   }
 
