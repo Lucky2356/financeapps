@@ -8,11 +8,11 @@
 // PairWait). Поле для ссылки остаётся запасным путём на обоих.
 
 import { Camera } from "lucide-react";
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PairWait } from "@/components/sync/pair-wait";
-import { ReplaceLocal } from "@/components/sync/replace-local";
+import { ReplaceLocal, saveProfilesToFiles } from "@/components/sync/replace-local";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,9 @@ import { useI18n } from "@/lib/i18n/context";
 import { DEFAULT_SERVER } from "@/lib/sync/default-server";
 import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
 import { apiClient } from "@/lib/api/client";
-import { takeCarryOver } from "@/lib/sync/carry-over";
+import type { ProfilesBackup } from "@/lib/api/LocalApiClient";
+import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
+import { carryOver, peekCarryOver, takeCarryOver } from "@/lib/sync/carry-over";
 import { OwnRecordsError } from "@/lib/vault/account";
 import { joinWithLink } from "@/lib/vault/runtime";
 
@@ -46,14 +48,14 @@ export function PairJoin({
   // замены подключаемся по ней же, не заставляя снимать код второй раз.
   const [replacing, setReplacing] = useState<string | null>(null);
 
-  const joined = useCallback(async () => {
-    // «Объединить»: свои записи, снятые до подключения, — к общим данным.
-    const carried = takeCarryOver();
-    if (carried) {
-      await apiClient
-        .post("/backup/merge", { backup: carried })
-        .catch((cause: Error) => toast.error(cause.message));
-    }
+  const fileSystem = useMemo(() => createFileSystemAdapter(), []);
+  // Подключились, но свои записи («Объединить») добавить не вышло. Пока это
+  // так, экран не уходит и не перечитывается: записи живут только в памяти
+  // вкладки, и перезагрузка стёрла бы их навсегда.
+  const [mergeFailed, setMergeFailed] = useState<string | null>(null);
+  const [savedToFile, setSavedToFile] = useState(false);
+
+  const finish = useCallback(async () => {
     toast.success(t("sync2.join.done"));
     if (onJoined) onJoined();
     else {
@@ -63,6 +65,67 @@ export function PairJoin({
       window.location.reload();
     }
   }, [onJoined, t]);
+
+  const joined = useCallback(async () => {
+    // «Объединить»: свои записи, снятые до подключения, — к общим данным.
+    //
+    // Раньше неудача здесь показывалась всплывашкой, а следом шло «готово» и
+    // перезагрузка — и записи, которых больше нигде нет, пропадали молча.
+    // Теперь они возвращаются в память, а экран показывает ошибку и выход:
+    // повторить или сохранить их в файл.
+    const carried = takeCarryOver();
+    if (carried) {
+      try {
+        await apiClient.post("/backup/merge", { backup: carried });
+      } catch (cause) {
+        carryOver(carried);
+        setMergeFailed(cause instanceof Error ? cause.message : String(cause));
+        return;
+      }
+    }
+    setMergeFailed(null);
+    await finish();
+  }, [finish]);
+
+  async function retryMerge() {
+    setBusy(true);
+    try {
+      await joined();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCarried() {
+    const carried = peekCarryOver();
+    if (!carried) return;
+    setBusy(true);
+    try {
+      const saved =
+        typeof carried === "object" && (carried as Partial<ProfilesBackup>).format === "profiles"
+          ? await saveProfilesToFiles(fileSystem, carried as ProfilesBackup)
+          : await fileSystem.saveTextFile(
+              "financial-assistant-backup.json",
+              JSON.stringify(carried, null, 2),
+              "application/json;charset=utf-8"
+            );
+      if (saved) {
+        setSavedToFile(true);
+        toast.success(t("imp.toast.backupSaved"));
+      }
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Записи в файле — держать их в памяти дальше незачем. */
+  async function continueWithoutMerge() {
+    takeCarryOver();
+    setMergeFailed(null);
+    await finish();
+  }
 
   async function join(raw: string) {
     setError(null);
@@ -109,6 +172,41 @@ export function PairJoin({
         : shot.why === "absent"
           ? t("server.cameraAbsent")
           : t("server.cameraBroken")
+    );
+  }
+
+  if (mergeFailed !== null) {
+    return (
+      <div
+        className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4"
+        data-testid="merge-failed"
+      >
+        <p className="text-sm font-medium">{t("sync2.merge.failed")}</p>
+        <p className="text-sm text-destructive">{mergeFailed}</p>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button type="button" disabled={busy} onClick={() => void retryMerge()}>
+            {t("error.retry")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void saveCarried()}
+          >
+            {t("sync2.merge.save")}
+          </Button>
+          {savedToFile ? (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => void continueWithoutMerge()}
+            >
+              {t("sync2.merge.continue")}
+            </Button>
+          ) : null}
+        </div>
+      </div>
     );
   }
 
