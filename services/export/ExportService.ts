@@ -1,6 +1,8 @@
 import Papa from "papaparse";
 
 import type { AccountRow, TransactionRow } from "@/types/finance";
+import type { Locale } from "@/lib/i18n/catalog";
+import { displayLocale } from "@/lib/i18n/display-locale";
 import type { PeriodReport } from "@/lib/reports/period-report";
 
 // CSV formula-injection guard: a spreadsheet treats a cell starting with = + - @
@@ -10,24 +12,48 @@ export function escapeCsvField(value: string): string {
   return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 
+/**
+ * Как писать файл для таблиц на этом языке.
+ *
+ * Excel с русскими настройками ждёт точку с запятой между столбцами и запятую
+ * в дробях: файл через запятые открывался одним столбцом, а «1234.5» — текстом.
+ * Остальные выгрузки приложения (Таблица, вычеты) так и пишут. По-английски —
+ * как принято там: запятые и точка.
+ */
+function csvStyle(locale: Locale) {
+  const russian = locale !== "en";
+  return {
+    delimiter: russian ? ";" : ",",
+    number: (value: number) => (russian ? String(value).replace(".", ",") : String(value))
+  };
+}
+
 export class ExportService {
   /**
    * `accounts` names the currency each row is in. An operation is recorded in
    * the currency of its account, so a file of bare numbers put dollars and
    * roubles in one column with nothing to tell them apart.
    */
-  transactionsToCsv(transactions: TransactionRow[], accounts: AccountRow[] = []) {
+  transactionsToCsv(
+    transactions: TransactionRow[],
+    accounts: AccountRow[] = [],
+    locale: Locale = displayLocale()
+  ) {
+    const style = csvStyle(locale);
     const currencyOf = new Map(accounts.map((account) => [account.id, account.currency]));
     const csv = Papa.unparse(
       transactions.map((transaction) => ({
         date: transaction.date,
-        amount: transaction.type === "INCOME" ? transaction.amount : -transaction.amount,
+        amount: style.number(
+          transaction.type === "INCOME" ? transaction.amount : -transaction.amount
+        ),
         currency: currencyOf.get(transaction.account.id) ?? "",
         type: transaction.type,
         category: escapeCsvField(transaction.category.label),
         account: escapeCsvField(transaction.account.label),
         description: escapeCsvField(transaction.description ?? "")
-      }))
+      })),
+      { delimiter: style.delimiter }
     );
     return "﻿" + csv;
   }
@@ -37,19 +63,20 @@ export class ExportService {
   }
 
   // Monthly report rows (income/expense/savings) plus a totals line, as CSV.
-  reportToCsv(report: PeriodReport) {
+  reportToCsv(report: PeriodReport, locale: Locale = displayLocale()) {
+    const style = csvStyle(locale);
     const rows = report.monthly.map((month) => ({
       month: month.month,
-      income: month.income,
-      expense: month.expense,
-      savings: month.savings
+      income: style.number(month.income),
+      expense: style.number(month.expense),
+      savings: style.number(month.savings)
     }));
     rows.push({
       month: `${report.from}…${report.to}`,
-      income: report.totals.income,
-      expense: report.totals.expense,
-      savings: report.totals.savings
+      income: style.number(report.totals.income),
+      expense: style.number(report.totals.expense),
+      savings: style.number(report.totals.savings)
     });
-    return "﻿" + Papa.unparse(rows);
+    return "﻿" + Papa.unparse(rows, { delimiter: style.delimiter });
   }
 }

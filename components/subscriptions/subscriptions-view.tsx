@@ -94,7 +94,9 @@ export function SubscriptionsView({ data }: { data: RecurringTransactionsPageDat
       (item.categoryId &&
         pageData.categories.find((category) => category.id === item.categoryId)?.id) ||
       pageData.categories.find((category) => category.kind === "EXPENSE")?.id;
-    const accountId = pageData.accounts[0]?.id;
+    const accountId =
+      (item.accountId && pageData.accounts.find((account) => account.id === item.accountId)?.id) ||
+      pageData.accounts[0]?.id;
     if (!categoryId || !accountId) {
       return;
     }

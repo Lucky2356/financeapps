@@ -23,7 +23,7 @@ describe("ExportService CSV formula-injection guard", () => {
     const csv = service.transactionsToCsv([row({ description: "=cmd|'/c calc'!A1" })]);
     expect(csv).toContain("'=cmd|");
     // The raw, unescaped formula must not appear as a cell value.
-    expect(csv).not.toMatch(/,=cmd\|/);
+    expect(csv).not.toMatch(/[,;]=cmd\|/);
   });
 
   it("escapes leading + - @ in category/account labels", () => {
@@ -41,5 +41,23 @@ describe("ExportService CSV formula-injection guard", () => {
     const csv = service.transactionsToCsv([row({ description: "Groceries" })]);
     expect(csv).toContain("Groceries");
     expect(csv).not.toContain("'Groceries");
+  });
+});
+
+describe("CSV для таблиц на языке экрана", () => {
+  const service = new ExportService();
+
+  it("по-русски — точка с запятой и запятая в дробях: Excel открывает по столбцам", () => {
+    const csv = service.transactionsToCsv([row({ amount: 1234.5 })], [], "ru");
+    const [header, line] = csv.replace(/^﻿/, "").split(/\r?\n/);
+    expect(header.split(";")).toContain("amount");
+    expect(line).toContain("-1234,5");
+  });
+
+  it("по-английски — запятые и точка", () => {
+    const csv = service.transactionsToCsv([row({ amount: 1234.5 })], [], "en");
+    const [header, line] = csv.replace(/^﻿/, "").split(/\r?\n/);
+    expect(header.split(",")).toContain("amount");
+    expect(line).toContain("-1234.5");
   });
 });

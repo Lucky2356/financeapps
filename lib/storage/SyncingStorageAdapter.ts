@@ -715,11 +715,29 @@ export class SyncingStorageAdapter implements StorageAdapter {
       // Возьми мы всю очередь списком и очисти заранее — первый же обрыв связи
       // посреди списка унёс бы с собой всё, что стояло за ним, и отправлять
       // это было бы уже некому: в хранилище оно записано, а в очереди нет.
+      //
+      // Ячейка, которую не удалось принять (не открылась, слияние отказало),
+      // откладывается до следующего захода, а очередь идёт дальше. Раньше
+      // она стояла первой в очереди и падала снова и снова, и ни одна правка
+      // этого устройства больше не уезжала — до переустановки.
+      // Отложенная потому, что человек писал быстрее, чем мы сливали, тоже
+      // уходит в конец, а не теряется: прежде «вернуть в очередь» внутри
+      // receive было пустым звуком — ячейка тут же из очереди удалялась.
+      const stuck = new Set<SlotName>();
+      const later = new Set<SlotName>();
       for (;;) {
         const incoming = first(this.inbox);
         if (incoming !== null) {
-          await this.receive(incoming);
           this.inbox.delete(incoming);
+          try {
+            if (!(await this.receive(incoming))) later.add(incoming);
+          } catch (error) {
+            if (isOffline(error)) {
+              this.inbox.add(incoming);
+              throw error;
+            }
+            stuck.add(incoming);
+          }
           continue;
         }
         const outgoing = firstKey(this.outbox);
@@ -731,8 +749,15 @@ export class SyncingStorageAdapter implements StorageAdapter {
         await this.send(outgoing);
         if (this.outbox.get(outgoing) === queued) this.outbox.delete(outgoing);
       }
+      for (const slot of [...stuck, ...later]) this.inbox.add(slot);
+      if (stuck.size > 0) {
+        this.set("error");
+        this.arm(ERROR_RETRY_MS);
+        return;
+      }
       this.attempt = 0;
       this.set("synced");
+      if (later.size > 0) this.arm();
     } catch (error) {
       if (isOffline(error)) {
         this.set("offline");
@@ -784,19 +809,20 @@ export class SyncingStorageAdapter implements StorageAdapter {
     }, delay);
   }
 
-  private async receive(slot: SlotName): Promise<void> {
+  /** Принять ячейку. `false` — не успели (человек пишет), повторить позже. */
+  private async receive(slot: SlotName): Promise<boolean> {
     const transport = this.transport;
     const merge = this.merge;
-    if (!transport || !merge) return;
+    if (!transport || !merge) return true;
 
     const known = this.known(slot);
     const snapshot = known ? await transport.pull(slot, known) : await transport.pull(slot);
     if (snapshot.body === null) {
       // На сервере пусто, а у нас что-то есть — значит, мы первые.
       if (sealed(await this.inner.getItem(slot))) this.queue(slot);
-      return;
+      return true;
     }
-    if (this.same(slot, snapshot.version, snapshot.updatedAt)) return;
+    if (this.same(slot, snapshot.version, snapshot.updatedAt)) return true;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       await this.quiet();
@@ -826,12 +852,13 @@ export class SyncingStorageAdapter implements StorageAdapter {
       // Отправляем обратно, только если в слитом есть что-то наше. Иначе два
       // устройства перекидывали бы одну и ту же книгу друг другу без конца.
       if (result.differs) this.queue(slot);
-      return;
+      return true;
     }
 
     // Человек пишет быстрее, чем мы сливаем. Не страшно: ячейка остаётся в
-    // очереди, и следующий заход разберёт её вместе со всем написанным.
-    this.inbox.add(slot);
+    // очереди (см. drain), и следующий заход разберёт её вместе со всем
+    // написанным.
+    return false;
   }
 
   private async send(slot: SlotName): Promise<void> {

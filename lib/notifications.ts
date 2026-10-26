@@ -9,6 +9,7 @@ import type {
   RecommendationView
 } from "@/types/finance";
 import { formatCurrency } from "@/lib/format";
+import { dayAsLocalDate } from "@/lib/transactions/date";
 import { DEFAULT_LOCALE, translate, type Locale } from "@/lib/i18n/catalog";
 
 export type NotificationSeverity = "INFO" | "SUCCESS" | "WARNING" | "CRITICAL";
@@ -67,7 +68,12 @@ export function buildNotifications(input: {
     .filter((event) => event.type === "EXPENSE")
     .map((event) => ({
       event,
-      days: Math.round((new Date(event.date.slice(0, 10)).getTime() - today.getTime()) / DAY_MS)
+      // День события — как день, в местном времени. «2026-10-26» как момент —
+      // это полночь по Гринвичу, а на Камчатке уже полдень: сегодняшний
+      // платёж округлялся в «завтра».
+      days: Math.round(
+        (dayAsLocalDate(event.date.slice(0, 10)).getTime() - today.getTime()) / DAY_MS
+      )
     }))
     .filter(({ days }) => days >= 0 && days <= 7)
     .sort((left, right) => left.days - right.days)
