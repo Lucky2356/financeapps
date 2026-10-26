@@ -12,6 +12,9 @@
 // logic); this file is excluded from duplication detection via
 // sonar-project.properties (sonar.cpd.exclusions).
 
+import { ru as ruApi } from "@/lib/i18n/catalog-api";
+import { ru as ruData } from "@/lib/i18n/catalog-data";
+import { ru as ruUi } from "@/lib/i18n/catalog-ui";
 import { pluralizeTemplate } from "@/lib/i18n/plural";
 
 export const LOCALES = ["ru", "en"] as const;
@@ -2927,15 +2930,23 @@ const ru: Messages = {
  * Словари по языкам. Английский пуст, пока его не подгрузили (loadLocale): до
  * этого всё показывается по-русски — так же, как непереведённая строка.
  */
-export const CATALOGS: Record<Locale, Messages> = { ru, en: {} };
+export const CATALOGS: Record<Locale, Messages> = {
+  ru: { ...ru, ...ruApi, ...ruData, ...ruUi },
+  en: {}
+};
 
 let english: Promise<void> | null = null;
 
 /** Подгрузить словарь языка. Русский — всегда на месте. */
 export function loadLocale(locale: Locale): Promise<void> {
   if (locale !== "en") return Promise.resolve();
-  english ??= import("@/lib/i18n/catalog-en").then(({ en }) => {
-    Object.assign(CATALOGS.en, en);
+  english ??= Promise.all([
+    import("@/lib/i18n/catalog-en"),
+    import("@/lib/i18n/catalog-api-en"),
+    import("@/lib/i18n/catalog-data-en"),
+    import("@/lib/i18n/catalog-ui-en")
+  ]).then((parts) => {
+    for (const { en } of parts) Object.assign(CATALOGS.en, en);
   });
   return english;
 }
