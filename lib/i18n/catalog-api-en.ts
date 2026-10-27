@@ -278,5 +278,5 @@ export const en: Messages = {
   "api.profile.notFound": "Profile not found.",
   "api.recurring.notFound": "Recurring transaction not found.",
   "api.inv.tickerRequired": "Enter the security's ticker.",
-  "api.inv.securityNotFound": "This security is not in the exchange directory.",
+  "api.inv.securityNotFound": "This security is not in the exchange directory."
 };

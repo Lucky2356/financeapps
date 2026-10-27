@@ -86,7 +86,9 @@ export function InlineStockChart({ seed, currency }: { seed: StockDetailSeed; cu
         ) : null}
         {seed.change30d ? <ChangeBadge value={seed.change30d} suffix={t("inv.30days")} /> : null}
         {seed.sector ? (
-          <span className="text-xs text-muted-foreground">· {sectorLabel(seed.sector, locale)}</span>
+          <span className="text-xs text-muted-foreground">
+            · {sectorLabel(seed.sector, locale)}
+          </span>
         ) : null}
       </div>
 

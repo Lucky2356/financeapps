@@ -282,5 +282,5 @@ export const ru: Messages = {
   "api.profile.notFound": "Профиль не найден.",
   "api.recurring.notFound": "Плановая операция не найдена.",
   "api.inv.tickerRequired": "Укажите тикер бумаги.",
-  "api.inv.securityNotFound": "Такой бумаги нет в справочнике биржи.",
+  "api.inv.securityNotFound": "Такой бумаги нет в справочнике биржи."
 };

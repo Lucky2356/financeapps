@@ -1295,7 +1295,8 @@ export class LocalApiClient implements ApiClient {
 
   private async switchProfile(profileId: string): Promise<void> {
     const list = await this.profileList();
-    if (!list.profiles.find((p) => p.id === profileId)) throw new Error(apiText("api.profile.notFound"));
+    if (!list.profiles.find((p) => p.id === profileId))
+      throw new Error(apiText("api.profile.notFound"));
     list.activeProfileId = profileId;
     await this.storage.setItem(PROFILE_LIST_KEY, list);
     this.invalidateStateCache();
