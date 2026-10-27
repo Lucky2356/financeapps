@@ -35,6 +35,7 @@ import {
   type BiometricOutcome,
   type Sealed
 } from "@/lib/vault/biometric";
+import { apiText } from "@/lib/i18n/api-text";
 
 /** Где лежит шкатулка. Читается запертым — см. UNSEALED_KEYS. */
 export const VAULT_KEY = "financeVault";
@@ -124,10 +125,7 @@ const LEDGER_FIELDS = ["transactions", "accounts", "goals", "liabilities"] as co
  */
 export class OwnRecordsError extends Error {
   constructor() {
-    super(
-      "На этом устройстве уже есть свои записи. Подключение заменит их данными с другого " +
-        "устройства."
-    );
+    super(apiText("api.vault.ownRecords"));
     this.name = "OwnRecordsError";
   }
 }
@@ -180,7 +178,7 @@ export class AccountService {
     password: string,
     options: { iterations?: number } = {}
   ): Promise<{ recoveryCode: string }> {
-    if (await this.vault()) throw new Error("Учётная запись на этом устройстве уже заведена.");
+    if (await this.vault()) throw new Error(apiText("api.vault.exists"));
 
     const { vault, recoveryCode, bookKey } = await createVault(password, options);
     await sealExistingBook(this.plain, bookKey);
@@ -215,7 +213,7 @@ export class AccountService {
    * значит завести второй путь через весь замок, и однажды разойтись с первым.
    */
   async createWithoutPassword(): Promise<void> {
-    if (await this.vault()) throw new Error("Учётная запись на этом устройстве уже заведена.");
+    if (await this.vault()) throw new Error(apiText("api.vault.exists"));
 
     const throwaway = toBase64(crypto.getRandomValues(new Uint8Array(32)));
     const { vault, recoveryCode } = await createVault(throwaway);
@@ -250,7 +248,7 @@ export class AccountService {
   async setPassword(next: string): Promise<{ recoveryCode: string }> {
     const remembered = await this.plain.getItem<DeviceMemory>(DEVICE_KEY);
     if (!remembered?.recoveryCode) {
-      throw new Error("Пароль уже задан — его можно только сменить.");
+      throw new Error(apiText("api.vault.passwordSet"));
     }
     await this.resetPassword(remembered.recoveryCode, next);
     await this.forgetDevice();
@@ -295,12 +293,7 @@ export class AccountService {
 
     const own = await this.ownLedgerKeys();
     if (own.length > 0) {
-      throw new Error(
-        "На этом устройстве уже есть свои записи. Подключение к учётной записи " +
-          "сервера заменит ключ, и прочитать их будет нечем. Выгрузите резервную " +
-          "копию (Импорт → Резервная копия), очистите данные в настройках и " +
-          "подключитесь заново — данные приедут с сервера."
-      );
+      throw new Error(apiText("api.vault.ownRecordsServer"));
     }
 
     await this.sealed.clear();
@@ -331,7 +324,7 @@ export class AccountService {
     const remembered = await this.plain.getItem<DeviceMemory>(DEVICE_KEY);
     let bookKey = remembered?.bookKey;
     if (!bookKey) {
-      if (!password) throw new Error("Введите пароль приложения, чтобы подключить устройство.");
+      if (!password) throw new Error(apiText("api.vault.passwordToConnect"));
       const key = await unlockWithPassword(vault, password, { extractable: true });
       bookKey = toBase64(new Uint8Array(await crypto.subtle.exportKey("raw", key)));
     }
@@ -502,7 +495,7 @@ export class AccountService {
    */
   async lock(): Promise<void> {
     if (!(await this.hasPassword())) {
-      throw new Error("Пароль не задан — запирать нечем. Сначала задайте пароль.");
+      throw new Error(apiText("api.vault.noPasswordToLock"));
     }
     this.sealed.lock();
     await this.forgetDevice();
@@ -628,10 +621,7 @@ async function sealExistingBook(plain: StorageAdapter, bookKey: CryptoKey): Prom
     const readBack = await sealing.getItem<unknown>(staging);
     if (JSON.stringify(readBack) !== JSON.stringify(original)) {
       await plain.removeItem(staging);
-      throw new Error(
-        "Не удалось зашифровать данные: прочитанное обратно не совпало с исходным. " +
-          "Ничего не тронуто — сообщите об этом, не удаляя ничего сами."
-      );
+      throw new Error(apiText("api.vault.sealMismatch"));
     }
 
     await plain.setItem(key, await plain.getItem(staging));

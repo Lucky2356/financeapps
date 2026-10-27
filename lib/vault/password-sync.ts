@@ -21,6 +21,7 @@
 import type { AccountService } from "@/lib/vault/account";
 import type { ServerAccount, VaultPush } from "@/lib/vault/server-account";
 import { authSecret } from "@/lib/sync/vault-crypto";
+import { apiText } from "@/lib/i18n/api-text";
 
 export class PasswordSync {
   private pushing: Promise<VaultPush> | null = null;
@@ -97,7 +98,7 @@ export class PasswordSync {
       .catch(
         (cause: unknown): VaultPush => ({
           kind: "failed",
-          message: (cause as Error)?.message || "Не удалось отправить новый пароль на службу."
+          message: (cause as Error)?.message || apiText("api.vault.passwordSendFailed")
         })
       )
       .then((outcome) => {

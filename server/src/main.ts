@@ -30,7 +30,8 @@ import {
   replaceVault,
   whoIs,
   checkFullVault,
-  MAX_SECRET
+  MAX_SECRET,
+  refusal
 } from "./auth.ts";
 import { openDatabase } from "./db.ts";
 import { EventBus } from "./events.ts";
@@ -112,7 +113,7 @@ export function decodePart(raw: string): string {
   try {
     return decodeURIComponent(raw);
   } catch {
-    throw new AuthError(400, "Неверный адрес.");
+    throw new AuthError(400, "bad_address", "Неверный адрес.");
   }
 }
 
@@ -303,7 +304,7 @@ export function createApp(options: AppOptions) {
     // Названный заранее размер больше предела — отказ, не читая ни байта.
     const declared = Number(req.headers["content-length"]);
     if (Number.isFinite(declared) && declared > limit) {
-      throw new AuthError(413, "Слишком большой запрос.");
+      throw new AuthError(413, "request_too_large", "Слишком большой запрос.");
     }
     const chunks: Buffer[] = [];
     let size = 0;
@@ -311,7 +312,7 @@ export function createApp(options: AppOptions) {
       size += (chunk as Buffer).length;
       // Предел проверяется ПО ХОДУ, а не после: иначе достаточно одного запроса
       // на гигабайт, чтобы служба легла, не дочитав его.
-      if (size > limit) throw new AuthError(413, "Слишком большой запрос.");
+      if (size > limit) throw new AuthError(413, "request_too_large", "Слишком большой запрос.");
       chunks.push(chunk as Buffer);
     }
     if (chunks.length === 0) return {};
@@ -319,7 +320,7 @@ export function createApp(options: AppOptions) {
     try {
       parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     } catch {
-      throw new AuthError(400, "Тело запроса — не JSON.");
+      throw new AuthError(400, "body_not_json", "Тело запроса — не JSON.");
     }
     // `null`, `[]`, `5` — тоже JSON, и разбор их пропускает. Дальше каждый
     // обработчик читает поля (`body.login`), и `null.login` падал бы с 500 —
@@ -327,7 +328,7 @@ export function createApp(options: AppOptions) {
     // хотя виноват в нём тот, кто прислал. Тело у всех ручек — объект; всё
     // прочее — ошибка запроса, 400.
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new AuthError(400, "Тело запроса — не объект JSON.");
+      throw new AuthError(400, "body_not_object", "Тело запроса — не объект JSON.");
     }
     return parsed as Record<string, unknown>;
   }
@@ -368,7 +369,11 @@ export function createApp(options: AppOptions) {
     // Код связки предъявляется ДО входа: у второго устройства ещё ничего нет.
     if (path.startsWith("/pairing/") && method === "GET") {
       if (!guessers.allow(`связка:${addressOf(req)}`, Date.now())) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
       const code = decodePart(path.slice("/pairing/".length));
       const found = redeemPairing(db, code, now());
@@ -383,7 +388,11 @@ export function createApp(options: AppOptions) {
     // без входа: у нового устройства ещё ничего нет.
     if (path === "/pairing/request" && method === "POST") {
       if (!guessers.allow(`запрос:${addressOf(req)}`, Date.now())) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
       return send(res, 201, openRequest(db, now()));
     }
@@ -392,7 +401,11 @@ export function createApp(options: AppOptions) {
       // Спрашивают раз в пару секунд пять минут подряд — отдельный счётчик,
       // шире, чем на коды: билет в 256 бит перебором не взять.
       if (!waiters.allow(`ждёт:${addressOf(req)}`, Date.now())) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
       const body = await readJson(req);
       const ticket = decodePart(path.slice("/pairing/request/".length));
@@ -406,7 +419,11 @@ export function createApp(options: AppOptions) {
     // картинке QR.
     if (path.startsWith("/pairing/") && method === "POST") {
       if (!guessers.allow(`связка:${addressOf(req)}`, Date.now())) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
       const body = await readJson(req);
       const code = decodePart(path.slice("/pairing/".length));
@@ -419,7 +436,11 @@ export function createApp(options: AppOptions) {
       // ней перебирают имена подряд — с открытой записью это уже не десять
       // своих, а кто угодно.
       if (!byAddress.allow(`имена:${addressOf(req)}`, Date.now())) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
       const params = authParams(db, text(url.searchParams.get("login")));
       return send(res, 200, JSON.parse(params.vaultMeta));
@@ -427,9 +448,14 @@ export function createApp(options: AppOptions) {
 
     if (path === "/auth/register" && method === "POST") {
       if (!newcomers.allow(`запись:${addressOf(req)}`, Date.now())) {
-        return send(res, 429, {
-          error: "Слишком много новых записей с этого адреса. Попробуйте позже."
-        });
+        return send(
+          res,
+          429,
+          refusal(
+            "too_many_signups",
+            "Слишком много новых записей с этого адреса. Попробуйте позже."
+          )
+        );
       }
 
       const body = await readJson(req);
@@ -453,7 +479,11 @@ export function createApp(options: AppOptions) {
       // которые служба держала в памяти целиком, прежде чем отказать.
       const stamp = Date.now();
       if (!byAddress.allow(`адрес:${addressOf(req)}`, stamp)) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
       const body = await readJson(req);
       // Счётчик — по имени В ОБЩЕМ ВИДЕ, тем же, каким его сравнивает вход.
@@ -462,7 +492,11 @@ export function createApp(options: AppOptions) {
       // предел на подбор пароля обходился сменой регистра.
       const name = normalizeLogin(text(body.login));
       if (!byLogin.allow(`имя:${name}`, stamp)) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
 
       const session = await login(
@@ -481,7 +515,7 @@ export function createApp(options: AppOptions) {
     const admin = sameSecret(raw, ADMIN_TOKEN);
 
     if (path.startsWith("/admin/")) {
-      if (!admin) return send(res, 403, { error: "Нужен пропуск управления." });
+      if (!admin) return send(res, 403, refusal("admin_required", "Нужен пропуск управления."));
 
       if (path === "/admin/people" && method === "GET") {
         const people = db
@@ -496,10 +530,10 @@ export function createApp(options: AppOptions) {
       if (path === "/admin/invite" && method === "POST") {
         return send(res, 201, { code: issueInvitation(db, now()) });
       }
-      return send(res, 404, { error: "Нет такой ручки." });
+      return send(res, 404, refusal("no_route", "Нет такой ручки."));
     }
 
-    if (!who) return send(res, 401, { error: "Нужен вход." });
+    if (!who) return send(res, 401, refusal("auth_required", "Нужен вход."));
 
     if (path === "/auth/logout" && method === "POST") {
       if (raw) logout(db, raw);
@@ -511,25 +545,29 @@ export function createApp(options: AppOptions) {
     if (path === "/auth/vault" && method === "PUT") {
       const body = await readJson(req);
       if (body.vault === null || typeof body.vault !== "object" || Array.isArray(body.vault)) {
-        return send(res, 400, { error: "Неверная шкатулка." });
+        return send(res, 400, refusal("bad_vault", "Неверная шкатулка."));
       }
       const secret = body.secret;
       if (typeof secret !== "string" || secret === "" || secret.length > MAX_SECRET) {
-        return send(res, 400, { error: "Неверный секрет входа." });
+        return send(res, 400, refusal("bad_secret", "Неверный секрет входа."));
       }
       const current = body.currentSecret;
       if (
         current !== undefined &&
         (typeof current !== "string" || current === "" || current.length > MAX_SECRET)
       ) {
-        return send(res, 400, { error: "Неверный прежний секрет входа." });
+        return send(res, 400, refusal("bad_current_secret", "Неверный прежний секрет входа."));
       }
       const vault = JSON.stringify(body.vault);
       checkFullVault(vault);
       // Счётчик — после разбора тела и до scrypt: неверный запрос ничего не
       // стоит и попытку не съедает, а дорогая часть ограничена.
       if (!rewraps.allow(`шкатулка:${who.personId}`, Date.now())) {
-        return send(res, 429, { error: "Слишком много попыток. Подождите минуту." });
+        return send(
+          res,
+          429,
+          refusal("too_many_attempts", "Слишком много попыток. Подождите минуту.")
+        );
       }
       const outcome = await replaceVault(db, who.personId, {
         vault,
@@ -537,7 +575,10 @@ export function createApp(options: AppOptions) {
         currentSecret: typeof current === "string" ? current : null
       });
       if (!outcome.ok) {
-        return send(res, outcome.status, { error: outcome.error, reason: outcome.reason });
+        return send(res, outcome.status, {
+          ...refusal(outcome.code, outcome.error),
+          reason: outcome.reason
+        });
       }
       return send(res, 204);
     }
@@ -598,9 +639,9 @@ export function createApp(options: AppOptions) {
 
     if (path.startsWith("/vault/")) {
       const slot = decodePart(path.slice("/vault/".length));
-      if (!slot) return send(res, 400, { error: "Не указана ячейка." });
+      if (!slot) return send(res, 400, refusal("slot_missing", "Не указана ячейка."));
       if (slot.length > MAX_SLOT_NAME)
-        return send(res, 400, { error: "Слишком длинное имя ячейки." });
+        return send(res, 400, refusal("slot_name_too_long", "Слишком длинное имя ячейки."));
 
       if (method === "GET") {
         // Устройство может назвать версию, которую помнит (номер и время
@@ -613,7 +654,8 @@ export function createApp(options: AppOptions) {
           url.searchParams.get("knownVersion"),
           url.searchParams.get("knownAt")
         );
-        if (known === "bad") return send(res, 400, { error: "Неверная помнящаяся версия." });
+        if (known === "bad")
+          return send(res, 400, refusal("bad_known_version", "Неверная помнящаяся версия."));
         const ancestor = known ? ancestryOf(db, who.personId, slot, known) : null;
         return send(res, 200, ancestor ? { ...snapshot, ancestor } : snapshot);
       }
@@ -624,7 +666,7 @@ export function createApp(options: AppOptions) {
         const body = await readJson(req, MAX_BODY_BYTES);
         const baseVersion = Number(body.baseVersion);
         if (!Number.isInteger(baseVersion) || baseVersion < 0) {
-          return send(res, 400, { error: "Неверная версия." });
+          return send(res, 400, refusal("bad_version", "Неверная версия."));
         }
 
         // Без книги писать нечего. `{"baseVersion":0}` без поля body раньше
@@ -634,7 +676,7 @@ export function createApp(options: AppOptions) {
         // «на сервере ничего нет» — то есть книга, стёртая таким запросом,
         // пропала бы с сервера молча, без единого отказа.
         if (body.body === undefined || body.body === null) {
-          return send(res, 400, { error: "Нет данных для записи." });
+          return send(res, 400, refusal("no_body", "Нет данных для записи."));
         }
 
         // Время записи той версии, поверх которой пишут. Необязательное: без
@@ -645,7 +687,7 @@ export function createApp(options: AppOptions) {
           stamp !== null &&
           (typeof stamp !== "string" || stamp === "" || stamp.length > MAX_STAMP)
         ) {
-          return send(res, 400, { error: "Неверное время версии." });
+          return send(res, 400, refusal("bad_version_time", "Неверное время версии."));
         }
         const baseUpdatedAt = typeof stamp === "string" ? stamp : null;
 
@@ -666,7 +708,7 @@ export function createApp(options: AppOptions) {
           // 507 устройство трактует как отказ, повторять который бесполезно, —
           // и показывает текст. Данные при этом остаются на устройстве целыми:
           // не уехало — не значит потеряно.
-          return send(res, 507, { error: outcome.error });
+          return send(res, 507, refusal(outcome.code, outcome.error, outcome.params));
         }
         if (!outcome.ok) {
           // Отказ «вас обогнали» — 409, а не 200 с полем: по договору это другой
@@ -693,7 +735,7 @@ export function createApp(options: AppOptions) {
       }
     }
 
-    return send(res, 404, { error: "Нет такой ручки." });
+    return send(res, 404, refusal("no_route", "Нет такой ручки."));
   }
 
   /**
@@ -740,12 +782,13 @@ export function createApp(options: AppOptions) {
   const server = createServer((req, res) => {
     note(req, res);
     route(req, res).catch((error: unknown) => {
-      if (error instanceof AuthError) return send(res, error.status, { error: error.message });
+      if (error instanceof AuthError)
+        return send(res, error.status, refusal(error.code, error.message, error.params));
       // Наружу — без подробностей: текст ошибки службы человеку не поможет, а
       // нападающему расскажет об её устройстве. В журнал — полностью, но путь
       // запроса приходит СНАРУЖИ, и класть его в журнал как есть нельзя.
       console.error("сбой запроса", whichMethod(req.method), whichRoute(req.url), error);
-      send(res, 500, { error: "Внутренняя ошибка." });
+      send(res, 500, refusal("internal", "Внутренняя ошибка."));
     });
   });
 

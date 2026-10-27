@@ -38,6 +38,7 @@ import {
   type SyncTransport
 } from "@/lib/sync/protocol";
 import type { SealedBook } from "@/lib/sync/vault-crypto";
+import { apiText } from "@/lib/i18n/api-text";
 
 /** Где лежат номера версий ячеек. Содержимого книги здесь нет — только числа. */
 export const SYNC_STATE_KEY = "financeSync";
@@ -935,6 +936,6 @@ export class SyncingStorageAdapter implements StorageAdapter {
     // выпускать ячейку из очереди. Раньше здесь только менялся значок, а
     // прогонка шла дальше и снимала ячейку с отправки как отправленную: на
     // устройстве запись есть, на сервере нет, и никто больше за ней не придёт.
-    throw new Error("Не удалось отправить: другие устройства пишут одновременно.");
+    throw new Error(apiText("api.sync.contention"));
   }
 }

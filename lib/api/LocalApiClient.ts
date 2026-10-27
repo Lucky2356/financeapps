@@ -76,6 +76,7 @@ import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
 import { dataKeyOf, dataText } from "@/lib/i18n/data-text";
 import { createSheet, listSheets, MAIN_SHEET, putScope, sheetScope } from "@/lib/api/local/sheets";
+import { apiText } from "@/lib/i18n/api-text";
 
 // Прежде жили здесь — потребители импортируют их отсюда.
 export {
@@ -548,10 +549,7 @@ export class LocalApiClient implements ApiClient {
         ? (payload as { backup?: unknown }).backup
         : payload;
     const parsed = localStateSchema.safeParse(document);
-    if (!parsed.success)
-      throw new Error(
-        "Файл не похож на резервную копию приложения — выберите файл, сохранённый кнопкой «Скачать backup»."
-      );
+    if (!parsed.success) throw new Error(apiText("api.backup.notBackup"));
     const restored = migrateLocalState(parsed.data);
 
     // The key does not travel in the file (see `backup`), so a copy carries an
@@ -730,10 +728,7 @@ export class LocalApiClient implements ApiClient {
     if (parsed.success) return migrateLocalState(parsed.data);
     const salvaged = salvageLocalState(raw);
     if (salvaged) return migrateLocalState(salvaged.state);
-    throw new Error(
-      `Не удалось прочитать профиль «${profile.name}». Ничего не стёрто — сохраните ` +
-        "резервную копию и попробуйте снова."
-    );
+    throw new Error(apiText("api.profile.unreadable", { name: profile.name }));
   }
 
   /**
@@ -795,19 +790,12 @@ export class LocalApiClient implements ApiClient {
 
     const storedVersion = (existing as { schemaVersion?: unknown })?.schemaVersion;
     if (typeof storedVersion === "number" && storedVersion > LATEST_LOCAL_STATE_VERSION)
-      throw new Error(
-        `Данные сохранены более новой версией приложения (формат ${storedVersion}). ` +
-          "Обновите приложение — старая версия их не откроет."
-      );
+      throw new Error(apiText("api.data.newerVersion", { version: storedVersion }));
 
     await this.keepRescueCopy(key, existing);
 
     const salvaged = salvageLocalState(existing);
-    if (!salvaged)
-      throw new Error(
-        "Не удалось прочитать сохранённые данные. Они не тронуты, копия отложена — " +
-          "восстановите из резервной копии в настройках."
-      );
+    if (!salvaged) throw new Error(apiText("api.data.unreadable"));
 
     const migrated = migrateLocalState(salvaged.state);
     await this.storage.setItem(key, migrated);
@@ -927,7 +915,7 @@ export class LocalApiClient implements ApiClient {
     const key = typeof input.key === "string" ? input.key : "";
 
     const identify = STAMPED.find(([name]) => name === collection)?.[1];
-    if (!identify) throw new Error(`Такого раздела в данных нет: ${collection}`);
+    if (!identify) throw new Error(apiText("api.data.noCollection", { name: collection }));
 
     const holder = state as unknown as Record<string, unknown>;
     const rows = Array.isArray(holder[collection]) ? (holder[collection] as unknown[]) : [];
@@ -1078,7 +1066,7 @@ export class LocalApiClient implements ApiClient {
         return ids.includes(entry.id) || (transfer !== null && transfers.has(transfer));
       })
       .sort((a, b) => order.indexOf(a.collection) - order.indexOf(b.collection));
-    if (entries.length === 0) throw new Error("В корзине этого уже нет.");
+    if (entries.length === 0) throw new Error(apiText("api.trash.gone"));
     const holder = state as unknown as Record<string, unknown>;
     const restored: string[] = [];
     const failed: string[] = [];
@@ -1196,10 +1184,10 @@ export class LocalApiClient implements ApiClient {
     const input = (body ?? {}) as Record<string, unknown>;
     const transactionId = String(input.transactionId ?? "");
     const row = state.transactions.find((item) => item.id === transactionId);
-    if (!row) throw new Error("Операция не найдена — возможно, её уже удалили.");
+    if (!row) throw new Error(apiText("api.tx.notFound"));
     const data = String(input.data ?? "");
     if (!data.startsWith("data:image/") || data.length > PHOTO_MAX_CHARS)
-      throw new Error("Не получилось прочитать фото. Попробуйте снять ещё раз.");
+      throw new Error(apiText("api.photo.unreadableRetake"));
     const place: PhotoPlace = input.place === "device" ? "device" : "synced";
     // Было фото в другом месте — убрать, чтобы не лежало два.
     if (row.photo && row.photo !== place) await this.dropPhoto(transactionId, row.photo);
@@ -1413,7 +1401,7 @@ export class LocalApiClient implements ApiClient {
    */
   private async undoClear(): Promise<void> {
     if (!(await this.beforeClearCopy())) {
-      throw new Error("Копии до очистки нет: её хранят неделю.");
+      throw new Error(apiText("api.clear.noCopy"));
     }
     const stored = (await this.storage.getItem<BeforeClearStored>(BEFORE_CLEAR_KEY))!;
     for (const [profileId, raw] of Object.entries(stored.states)) {
@@ -1498,7 +1486,7 @@ export class LocalApiClient implements ApiClient {
    */
   private async restoreLocalCopy(id: string): Promise<void> {
     const stored = await this.storage.getItem<LocalCopyStored>(localCopyKey(id));
-    if (!stored?.states) throw new Error("Такой копии на этом устройстве нет.");
+    if (!stored?.states) throw new Error(apiText("api.backup.noSuchCopy"));
     await this.takeLocalCopy("before-restore");
     for (const [profileId, raw] of Object.entries(stored.states)) {
       const parsed = localStateSchema.safeParse(raw);
@@ -1555,7 +1543,7 @@ export class LocalApiClient implements ApiClient {
 
   private async deleteProfile(profileId: string): Promise<void> {
     const list = await this.profileList();
-    if (list.profiles.length <= 1) throw new Error("Нельзя удалить последний профиль");
+    if (list.profiles.length <= 1) throw new Error(apiText("api.profile.lastOne"));
     list.profiles = list.profiles.filter((p) => p.id !== profileId);
     if (list.activeProfileId === profileId) list.activeProfileId = list.profiles[0].id;
     await this.storage.setItem(PROFILE_LIST_KEY, list);
@@ -1625,8 +1613,8 @@ function readMergeDocument(document: unknown, profileName?: string): LocalState 
   if (salvaged) return migrateLocalState(salvaged.state);
   throw new Error(
     profileName
-      ? `Не удалось прочитать записи профиля «${profileName}» для объединения.`
-      : "Не удалось прочитать записи для объединения."
+      ? apiText("api.merge.unreadableProfile", { name: profileName })
+      : apiText("api.merge.unreadable")
   );
 }
 

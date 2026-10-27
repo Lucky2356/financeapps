@@ -134,7 +134,17 @@ export function ancestryOf(
 export type PutOutcome =
   | { ok: true; version: number; updatedAt: string }
   | { ok: false; reason: "stale"; current: Snapshot }
-  | { ok: false; reason: "full"; error: string };
+  | {
+      ok: false;
+      reason: "full";
+      /** Постоянный код и подстановки — для перевода в приложении (см. refusal в auth.ts). */
+      code: "quota_slots" | "quota_bytes";
+      params: Record<string, number | string>;
+      error: string;
+    };
+
+/** Отказ «не влезло»: фраза для человека и то, из чего её собрать на другом языке. */
+type Crowded = Omit<Extract<PutOutcome, { reason: "full" }>, "ok" | "reason">;
 
 export function writeSlot(
   db: DatabaseSync,
@@ -167,7 +177,7 @@ export function writeSlot(
   if (!sameBase) return { ok: false, reason: "stale", current };
 
   const crowded = tooMuch(db, personId, slot, text, limits);
-  if (crowded) return { ok: false, reason: "full", error: crowded };
+  if (crowded) return { ok: false, reason: "full", ...crowded };
 
   const version = current.version + 1;
   // Одним запросом, а не «проверить и записать»: между двумя запросами
@@ -225,8 +235,9 @@ function remember(
  * поверх большей всё равно считалась бы добавкой, и единственный выход из
  * переполнения оказался бы закрыт тем же переполнением.
  *
- * Отказ возвращается строкой, а не `true`: человеку на экране нужно не «не
- * влезло», а сколько у него есть и сколько он просит.
+ * Отказ возвращается фразой, а не `true`: человеку на экране нужно не «не
+ * влезло», а сколько у него есть и сколько он просит. Числа идут и отдельно
+ * (params) — приложение на другом языке соберёт из них свою фразу.
  */
 function tooMuch(
   db: DatabaseSync,
@@ -234,32 +245,44 @@ function tooMuch(
   slot: string,
   text: string,
   limits: Limits
-): string | null {
+): Crowded | null {
   if (limits.slots === null && limits.bytes === null) return null;
 
   const mine = usageOf(db, personId);
   const existing = db.prepare(SIZE_OF_ONE).get<{ bytes: number }>(personId, slot);
 
   if (limits.slots !== null && !existing && !isAttachment(slot) && mine.slots >= limits.slots) {
-    return `На этой службе разрешено ${limits.slots} книг(и) на человека, а у вас уже ${mine.slots}.`;
+    return {
+      code: "quota_slots",
+      params: { limit: limits.slots, used: mine.slots },
+      error: `На этой службе разрешено ${limits.slots} книг(и) на человека, а у вас уже ${mine.slots}.`
+    };
   }
 
   if (limits.bytes !== null) {
     const before = existing ? costOf(slot, existing.bytes) : 0;
     const after = mine.bytes - before + costOf(slot, Buffer.byteLength(text));
     if (after > limits.bytes) {
-      return (
-        `Не хватает места на службе: разрешено ${megabytes(limits.bytes)}, ` +
-        `а эта запись довела бы до ${megabytes(after)}.`
-      );
+      return {
+        code: "quota_bytes",
+        params: { limit: mebibytes(limits.bytes), after: mebibytes(after) },
+        error:
+          `Не хватает места на службе: разрешено ${megabytes(limits.bytes)}, ` +
+          `а эта запись довела бы до ${megabytes(after)}.`
+      };
     }
   }
 
   return null;
 }
 
+/** Число мебибайт с одним знаком — без единицы: её подставит язык. */
+function mebibytes(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+
 function megabytes(bytes: number): string {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} МиБ`;
+  return `${mebibytes(bytes)} МиБ`;
 }
 
 /**

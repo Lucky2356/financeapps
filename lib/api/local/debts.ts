@@ -7,7 +7,8 @@ import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts, isSettledDebt } from "@/lib/debts/settled";
 import { convert, isSupportedCurrency } from "@/lib/currency";
-import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
+import { isUsableMoney, roundMoney } from "@/lib/utils";
+import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
 import type { LiabilityRow } from "@/types/finance";
 import { type LocalState, recomputeLiability } from "@/lib/api/local/state";
 import { ratesOf, sumInBase } from "@/lib/api/local/money";
@@ -84,23 +85,23 @@ export function upsertLiability(state: LocalState, body: unknown, method: "POST"
 export function payDebt(state: LocalState, body: unknown) {
   const input = toFormObject(body);
   const liability = state.liabilities.find((item) => item.id === input.id);
-  if (!liability) throw new Error("Такого долга нет.");
-  if (isSettledDebt(liability)) throw new Error("Этот долг уже закрыт.");
+  if (!liability) throw new Error(apiText("api.debt.notFound"));
+  if (isSettledDebt(liability)) throw new Error(apiText("api.debt.settled"));
   const amount = Number(
     String(input.amount ?? "")
       .replace(/[\s\u00a0]/g, "")
       .replace(",", ".")
   );
-  if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
+  if (!isUsableMoney(amount)) throw new Error(moneyRangeText());
   const account =
     state.accounts.find((item) => item.id === input.accountId && !item.isArchived) ??
     state.accounts.find((item) => item.id === liability.paymentAccountId && !item.isArchived);
-  if (!account) throw new Error("Выберите счёт, с которого платите.");
+  if (!account) throw new Error(apiText("api.debt.pickAccount"));
   const category =
     state.categories.find(
       (item) => item.id === liability.paymentCategoryId && item.kind === "EXPENSE"
     ) ?? state.categories.find((item) => item.kind === "EXPENSE");
-  if (!category) throw new Error("Нет категории расходов, под которую записать платёж.");
+  if (!category) throw new Error(apiText("api.debt.noCategory"));
 
   const date = input.date ? String(input.date) : new Date().toISOString();
   const spent = roundMoney(convert(amount, liability.currency, account.currency, ratesOf(state)));

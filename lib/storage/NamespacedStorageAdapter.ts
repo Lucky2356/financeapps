@@ -1,4 +1,5 @@
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
+import { apiText } from "@/lib/i18n/api-text";
 
 /**
  * Реестр людей устройства. Лежит РЯДОМ с их данными, а не внутри чьих-то.
@@ -68,9 +69,7 @@ export class NamespacedStorageAdapter implements StorageAdapter {
     this.ready.catch(() => {});
 
     this.watchdog = setTimeout(() => {
-      this.refuse(
-        new Error("Не удалось понять, чьи данные открывать: список людей устройства не прочитался.")
-      );
+      this.refuse(new Error(apiText("api.storage.rosterUnreadable")));
     }, waitMs);
   }
 

@@ -4,6 +4,7 @@ import { id } from "@/lib/api/local/helpers";
 import { roundMoney } from "@/lib/utils";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import { type LocalState, FAMILY_COLORS } from "@/lib/api/local/state";
+import { apiText } from "@/lib/i18n/api-text";
 
 /** Участники семьи и отметки «Рассчитались». */
 export type FamilyInput = Record<string, unknown>;
@@ -12,7 +13,7 @@ function memberName(input: FamilyInput): string {
   const text = String(input.name ?? "")
     .trim()
     .slice(0, 40);
-  if (!text) throw new Error("Как зовут участника?");
+  if (!text) throw new Error(apiText("api.family.nameRequired"));
   return text;
 }
 
@@ -39,7 +40,7 @@ export const FAMILY_ACTIONS = {
       ...(inUse ? { since: isoDay(new Date()) } : {})
     };
     if (members.some((item) => item.name.toLowerCase() === member.name.toLowerCase()))
-      throw new Error("Участник с таким именем уже есть.");
+      throw new Error(apiText("api.family.duplicate"));
     state.members = [...members, member];
     return member;
   },
@@ -47,7 +48,8 @@ export const FAMILY_ACTIONS = {
   renameMember: (state: LocalState, input: FamilyInput) => {
     const members = state.members ?? [];
     const memberId = String(input.id ?? "");
-    if (!members.some((item) => item.id === memberId)) throw new Error("Такого участника нет.");
+    if (!members.some((item) => item.id === memberId))
+      throw new Error(apiText("api.family.notFound"));
     const next = memberName(input);
     // «В семье с»: пусто — был всегда; дата — с этого дня.
     const since =
@@ -56,7 +58,8 @@ export const FAMILY_ACTIONS = {
         : String(input.since).trim() === ""
           ? null
           : String(input.since).trim();
-    if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error("Дата — ГГГГ-ММ-ДД.");
+    if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since))
+      throw new Error(apiText("api.family.dateFormat"));
     state.members = members.map((item) => {
       if (item.id !== memberId) return item;
       const renamed = { ...item, name: next };
@@ -88,8 +91,8 @@ export const FAMILY_ACTIONS = {
       !members.some((item) => item.id === to) ||
       from === to
     )
-      throw new Error("Выберите, кто кому отдал.");
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Сумма — больше нуля.");
+      throw new Error(apiText("api.family.pickWho"));
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error(apiText("api.amount.positive"));
     const settlement = {
       id: id("settle"),
       from,
@@ -104,5 +107,5 @@ export const FAMILY_ACTIONS = {
 
 /** Действие с семьёй, которого нет. */
 export function unknownFamilyAction(): never {
-  throw new Error("Неизвестное действие с семьёй.");
+  throw new Error(apiText("api.family.unknownAction"));
 }

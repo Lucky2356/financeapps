@@ -21,6 +21,7 @@
 // слияние.
 
 import type { SealedBook } from "@/lib/sync/vault-crypto";
+import { apiText } from "@/lib/i18n/api-text";
 
 /**
  * Ячейка на сервере — одна на каждый ключ хранилища, который синхронизируется.
@@ -162,7 +163,7 @@ export interface SyncTransport {
  */
 export class OfflineError extends Error {
   constructor(cause?: unknown) {
-    super("Нет связи с сервером.", { cause });
+    super(apiText("api.sync.offline"), { cause });
     this.name = "OfflineError";
   }
 }

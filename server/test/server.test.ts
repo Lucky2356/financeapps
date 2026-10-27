@@ -365,6 +365,21 @@ describe("служба", () => {
       assert.deepEqual(wrongName.body, wrongSecret.body);
     });
 
+    it("отказ несёт постоянный код рядом с русской фразой", async () => {
+      // По коду приложение переводит отказ на язык экрана; фраза остаётся для
+      // старых приложений и русского экрана — ровно прежней.
+      await signUp("петя");
+      const refused = await call("/auth/login", {
+        method: "POST",
+        body: { login: "петя", secret: "не тот" }
+      });
+      assert.equal(refused.status, 401);
+      assert.deepEqual(refused.body, {
+        error: "Не подходит имя или пароль.",
+        code: "bad_credentials"
+      });
+    });
+
     it("шестая попытка подряд отказывается по частоте", async () => {
       await signUp("петя");
       const attempts = [];
@@ -897,6 +912,8 @@ describe("служба", () => {
       });
       assert.equal(refused.status, 403);
       assert.match((refused.body as { error: string }).error, /главного — «проверка»/);
+      assert.equal((refused.body as { code: string }).code, "primary_only_named");
+      assert.deepEqual((refused.body as { params: unknown }).params, { name: "проверка" });
       // Компьютер по-прежнему на связи.
       assert.notEqual((await call("/vault/книга", { token: first.token })).status, 401);
 
@@ -1329,6 +1346,9 @@ describe("служба", () => {
       assert.equal(first.status, 200);
       assert.equal(second.status, 507);
       assert.match(String((second.body as { error: string }).error), /разрешено 1/);
+      // Числа — отдельно: приложение на другом языке соберёт из них свою фразу.
+      assert.equal((second.body as { code: string }).code, "quota_slots");
+      assert.deepEqual((second.body as { params: unknown }).params, { limit: 1, used: 1 });
     });
 
     it("фото чеков в предел книг не входят", async () => {

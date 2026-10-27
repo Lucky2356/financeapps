@@ -13,6 +13,7 @@ import {
   STANDARD_CATEGORY_IDS,
   withCurrentNames
 } from "@/lib/api/local/state";
+import { apiText } from "@/lib/i18n/api-text";
 
 export function rulesPage(state: LocalState): RulesPageData {
   return {
@@ -30,9 +31,9 @@ export function addRule(state: LocalState, body: unknown) {
   const input = toFormObject(body);
   const match = input.match?.trim();
   const categoryId = input.categoryId?.trim();
-  if (!match || !categoryId) throw new Error("Укажите текст и категорию для правила.");
+  if (!match || !categoryId) throw new Error(apiText("api.rule.needTextAndCategory"));
   if (!state.categories.some((category) => category.id === categoryId)) {
-    throw new Error("Выберите существующую категорию.");
+    throw new Error(apiText("api.category.pickExisting"));
   }
   const rule: CategorizationRule = { id: id("rule"), match, categoryId };
   state.rules = [rule, ...state.rules];
@@ -68,7 +69,7 @@ export function withSheetCategories(state: LocalState, raw: unknown): SheetImpor
     columns: Array<SheetImport["columns"][number] & { createCategory?: "INCOME" | "EXPENSE" }>;
   };
   if (!payload || !Array.isArray(payload.columns) || !Array.isArray(payload.rows))
-    throw new Error("Нечего переносить.");
+    throw new Error(apiText("api.sheet.nothingToImport"));
   for (const column of payload.columns) {
     if (!column.createCategory || column.categoryId) continue;
     const same = state.categories.find(
@@ -106,16 +107,16 @@ export function upsertCategory(state: LocalState, body: unknown, method: "POST" 
   const isEssential = input.isEssential === "true" || input.isEssential === "on";
   const isSubscription = input.isSubscription === "true" || input.isSubscription === "on";
 
-  if (name.length < 2) throw new Error("Название слишком короткое");
+  if (name.length < 2) throw new Error(apiText("api.name.tooShort"));
 
   if (method === "PUT" && input.id) {
     const existing = state.categories.find((c) => c.id === input.id);
-    if (!existing) throw new Error("Категория не найдена.");
+    if (!existing) throw new Error(apiText("api.category.notFound"));
     // Check uniqueness
     const duplicate = state.categories.find(
       (c) => c.id !== input.id && c.kind === kind && c.label.toLowerCase() === name.toLowerCase()
     );
-    if (duplicate) throw new Error("Категория с таким именем уже существует.");
+    if (duplicate) throw new Error(apiText("api.category.duplicate"));
 
     const updated: CategoryOption = {
       ...existing,
@@ -144,7 +145,7 @@ export function upsertCategory(state: LocalState, body: unknown, method: "POST" 
   const duplicate = state.categories.find(
     (c) => c.kind === kind && c.label.toLowerCase() === name.toLowerCase()
   );
-  if (duplicate) throw new Error("Категория с таким именем уже существует.");
+  if (duplicate) throw new Error(apiText("api.category.duplicate"));
 
   const category: CategoryOption = {
     id: id("cat"),

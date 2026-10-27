@@ -16,6 +16,7 @@ import {
   monthStart
 } from "@/lib/api/local/state";
 import { ratesOf } from "@/lib/api/local/money";
+import { apiText } from "@/lib/i18n/api-text";
 
 // Returns budget overflow info when an EXPENSE pushes its category over the limit.
 export function budgetWarningFor(
@@ -48,10 +49,10 @@ export function upsertBudget(state: LocalState, body: unknown) {
   const category = state.categories.find(
     (item) => item.id === input.categoryId && item.kind === "EXPENSE"
   );
-  if (!category) throw new Error("Выберите расходную категорию.");
+  if (!category) throw new Error(apiText("api.budget.pickExpenseCategory"));
 
   const limit = Number(input.limitAmount);
-  if (!Number.isFinite(limit) || limit < 0) throw new Error("Введите лимит от нуля.");
+  if (!Number.isFinite(limit) || limit < 0) throw new Error(apiText("api.budget.limitRange"));
   const monthKey = typeof input.month === "string" && input.month ? input.month : undefined;
 
   // A limit belongs to the month it was set in and holds until it is changed

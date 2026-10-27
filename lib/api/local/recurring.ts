@@ -17,12 +17,13 @@ import { type LocalState, withCurrentNames } from "@/lib/api/local/state";
 import { debtInBase, ratesOf } from "@/lib/api/local/money";
 import { upsertTransaction, accountsPage } from "@/lib/api/local/ledger";
 import { budgetRows } from "@/lib/api/local/budgets";
+import { apiText } from "@/lib/i18n/api-text";
 
 export function upsertRecurring(state: LocalState, body: unknown, method: "POST" | "PUT") {
   const input = toFormObject(body);
   const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
   const category = state.categories.find((item) => item.id === input.categoryId);
-  if (!account || !category) throw new Error("Выберите существующий счет и категорию.");
+  if (!account || !category) throw new Error(apiText("api.ledger.pickAccountCategory"));
 
   const service = new RecurringTransactionService();
   const frequency =

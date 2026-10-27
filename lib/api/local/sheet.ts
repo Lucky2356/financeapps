@@ -18,6 +18,7 @@ import {
 } from "@/lib/sheet/model";
 import { sheetTemplate, type SheetTemplate } from "@/lib/sheet/templates";
 import type { Stamped } from "@/lib/sync/row-stamps";
+import { apiText } from "@/lib/i18n/api-text";
 
 export type SheetCellRow = SheetCell & { id: string };
 
@@ -71,13 +72,13 @@ export function readSheet(state: SheetState): SheetPageData {
 
 function month(value: unknown): string {
   const text = String(value ?? "");
-  if (!MONTH.test(text)) throw new Error("Месяц должен быть в виде ГГГГ-ММ.");
+  if (!MONTH.test(text)) throw new Error(apiText("api.sheet.monthFormat"));
   return text;
 }
 
 function kind(value: unknown): SheetColumnKind {
   const text = String(value ?? "") as SheetColumnKind;
-  if (!SHEET_COLUMN_KINDS.includes(text)) throw new Error("Неизвестный вид столбца.");
+  if (!SHEET_COLUMN_KINDS.includes(text)) throw new Error(apiText("api.sheet.unknownColumnKind"));
   return text;
 }
 
@@ -85,7 +86,7 @@ function name(value: unknown): string {
   const text = String(value ?? "")
     .trim()
     .slice(0, 80);
-  if (!text) throw new Error("У столбца должно быть название.");
+  if (!text) throw new Error(apiText("api.sheet.columnName"));
   return text;
 }
 
@@ -274,7 +275,7 @@ export const SHEET_ACTIONS = {
   updateColumn: (state: SheetState, body: Body) => {
     const columns = state.sheetColumns ?? [];
     const id = String(body.id ?? "");
-    if (!columns.some((column) => column.id === id)) throw new Error("Такого столбца нет.");
+    if (!columns.some((column) => column.id === id)) throw new Error(apiText("api.sheet.noColumn"));
     state.sheetColumns = columns.map((column) => {
       if (column.id !== id) return column;
       const next = { ...column };
@@ -324,7 +325,7 @@ export const SHEET_ACTIONS = {
 
   setTarget: (state: SheetState, body: Body, makeId: () => string) => {
     const amount = Number(body.amount);
-    if (!Number.isFinite(amount)) throw new Error("Сумма цели — число.");
+    if (!Number.isFinite(amount)) throw new Error(apiText("api.sheet.goalNumber"));
     const target: SheetTarget = {
       id: body.id ? String(body.id) : makeId(),
       label: name(body.label),
@@ -345,7 +346,7 @@ export const SHEET_ACTIONS = {
 
   undoImport: (state: SheetState) => {
     const backup = state.sheetBackup;
-    if (!backup) throw new Error("Отменять нечего.");
+    if (!backup) throw new Error(apiText("api.sheet.nothingToUndo"));
     state.sheetColumns = backup.columns;
     state.sheetCells = backup.cells;
     state.sheetMonths = backup.months.map((id) => ({ id }));

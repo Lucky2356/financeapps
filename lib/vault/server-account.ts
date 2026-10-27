@@ -18,7 +18,8 @@
 
 import { LOCAL_ONLY_KEYS } from "@/lib/storage/SyncingStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
-import { LOST_LINK, ServerRefused } from "@/lib/sync/HttpSyncTransport";
+import { lostLink, ServerRefused } from "@/lib/sync/HttpSyncTransport";
+import { apiText, serverText } from "@/lib/i18n/api-text";
 import { shellFetch } from "@/lib/sync/shell-fetch";
 import { authSecret, unlockWithPassword, type Vault } from "@/lib/sync/vault-crypto";
 
@@ -141,7 +142,7 @@ async function ask(
     // бросает сюда нижний слой, человеку не говорит ничего — он про разрешение
     // имён и сокеты. А это ПЕРВОЕ, что человек видит, настраивая свой сервер, и
     // по этой строке он решает, что чинить.
-    throw new ServerRefused(0, `Не удалось связаться со службой по адресу ${root(base)}.`);
+    throw new ServerRefused(0, apiText("api.link.unreachable", { address: root(base) }));
   }
 
   const text = await response.text();
@@ -157,8 +158,7 @@ async function ask(
     } catch {
       throw new ServerRefused(
         response.status,
-        `По адресу ${root(base)} отвечает не служба (код ${response.status}). ` +
-          "Проверьте адрес и проксирование в Caddy."
+        apiText("api.link.notService", { address: root(base), status: response.status })
       );
     }
   }
@@ -167,12 +167,12 @@ async function ask(
 }
 
 function refuse(status: number, data: Record<string, unknown>, fallback: string): never {
-  throw new ServerRefused(status, String(data.error ?? fallback));
+  throw new ServerRefused(status, serverText(data, fallback));
 }
 
 /** Отказ на запрос С ВХОДОМ: 401 значит потерянную связь, а не опечатку. */
 function refuseLinked(status: number, data: Record<string, unknown>, fallback: string): never {
-  if (status === 401) throw new ServerRefused(401, LOST_LINK);
+  if (status === 401) throw new ServerRefused(401, lostLink());
   refuse(status, data, fallback);
 }
 
@@ -225,10 +225,10 @@ export async function probeServer(base: string): Promise<{ open: boolean; reacha
  */
 export async function redeemPairing(base: string, code: string): Promise<PairingAnswer> {
   const { status, data } = await ask(base, `/pairing/${encodeURIComponent(code.trim())}`);
-  if (status !== 200) refuse(status, data, "Код не подошёл.");
+  if (status !== 200) refuse(status, data, apiText("api.link.codeRejected"));
 
   const login = String(data.login ?? "");
-  if (!login) refuse(status, data, "Служба не назвала имени входа по этому коду.");
+  if (!login) refuse(status, data, apiText("api.link.noLogin"));
 
   const named = typeof data.address === "string" ? data.address.trim() : "";
   return { base: root(named || base), login };
@@ -289,16 +289,14 @@ export class ServerAccount {
     try {
       await unlockWithPassword(input.vault, input.password);
     } catch {
-      throw new Error(
-        "Пароль не подходит к данным на этом устройстве. Введите тот, которым они открываются."
-      );
+      throw new Error(apiText("api.link.passwordMismatch"));
     }
     const secret = await authSecret(input.vault, input.password);
     const { status, data } = await ask(input.base, "/auth/register", {
       method: "POST",
       body: { code: input.code, login: input.login, vault: input.vault, secret }
     });
-    if (status !== 201) refuse(status, data, "Не удалось завести запись.");
+    if (status !== 201) refuse(status, data, apiText("api.link.registerFailed"));
 
     await this.signIn(input);
   }
@@ -314,18 +312,17 @@ export class ServerAccount {
     device: string;
   }): Promise<{ vault: Vault }> {
     const params = await ask(input.base, `/auth/params?login=${encodeURIComponent(input.login)}`);
-    if (params.status !== 200) refuse(params.status, params.data, "Не подходит имя или пароль.");
+    if (params.status !== 200) refuse(params.status, params.data, apiText("api.link.badLogin"));
 
     const secret = await authSecret(stub(params.data as unknown as AuthParams), input.password);
     const entered = await ask(input.base, "/auth/login", {
       method: "POST",
       body: { login: input.login, secret, device: input.device }
     });
-    if (entered.status !== 200) refuse(entered.status, entered.data, "Не подходит имя или пароль.");
+    if (entered.status !== 200) refuse(entered.status, entered.data, apiText("api.link.badLogin"));
 
     const token = String(entered.data.token ?? "");
-    if (!token)
-      refuse(entered.status, entered.data, "Служба не пустила внутрь: не ответила на вход.");
+    if (!token) refuse(entered.status, entered.data, apiText("api.link.noSession"));
 
     await this.storage.setItem<ServerLink>(SERVER_KEY, {
       v: 1,
@@ -354,13 +351,9 @@ export class ServerAccount {
       body: { code: "", login, vault: emptyVault(), secret }
     });
     if (made.status === 403) {
-      throw new ServerRefused(
-        403,
-        "Служба синхронизации не принимает новых участников без приглашения. " +
-          "Попросите хозяина службы включить открытую запись или выдать приглашение."
-      );
+      throw new ServerRefused(403, apiText("api.link.inviteOnly"));
     }
-    if (made.status !== 201) refuse(made.status, made.data, "Не удалось включить синхронизацию.");
+    if (made.status !== 201) refuse(made.status, made.data, apiText("api.link.enableFailed"));
 
     const entered = await ask(input.base, "/auth/login", {
       method: "POST",
@@ -368,7 +361,7 @@ export class ServerAccount {
     });
     const token = String(entered.data.token ?? "");
     if (entered.status !== 200 || !token) {
-      refuse(entered.status, entered.data, "Служба не пустила внутрь: не ответила на вход.");
+      refuse(entered.status, entered.data, apiText("api.link.noSession"));
     }
     await this.storage.setItem<ServerLink>(SERVER_KEY, {
       v: 1,
@@ -394,13 +387,9 @@ export class ServerAccount {
       { method: "POST", body: { device: input.device } }
     );
     if (status === 401 || status === 405) {
-      throw new ServerRefused(
-        status,
-        "Служба синхронизации ещё не обновлена до версии 2.0. Обновите её на сервере " +
-          "(git pull и перезапуск) — или подключитесь по имени и паролю."
-      );
+      throw new ServerRefused(status, apiText("api.link.outdatedPairing"));
     }
-    if (status !== 200) refuse(status, data, "Код не подошёл.");
+    if (status !== 200) refuse(status, data, apiText("api.link.codeRejected"));
     return this.enter(input.base, input.device, status, data);
   }
 
@@ -413,7 +402,7 @@ export class ServerAccount {
   ): Promise<JoinAnswer> {
     const token = String(data.token ?? "");
     const sealed = String(data.sealed ?? "");
-    if (!token || !sealed) refuse(status, data, "Служба не отдала данных для подключения.");
+    if (!token || !sealed) refuse(status, data, apiText("api.link.noPairData"));
 
     const named = typeof data.address === "string" ? data.address.trim() : "";
     const base = root(named || asked);
@@ -436,13 +425,9 @@ export class ServerAccount {
     if (status !== 201) {
       // Служба до 2.0.1 принимает «request» за код связки и отвечает «не найден».
       if (status === 401 || status === 404 || status === 405) {
-        throw new ServerRefused(
-          status,
-          "Служба синхронизации ещё не обновлена: показать код на этом устройстве нельзя. " +
-            "Отсканируйте код с экрана другого устройства или вставьте ссылку."
-        );
+        throw new ServerRefused(status, apiText("api.link.outdatedRequest"));
       }
-      refuse(status, data, "Служба не открыла подключение.");
+      refuse(status, data, apiText("api.link.requestFailed"));
     }
     return { ticket: String(data.ticket ?? ""), expiresAt: String(data.expiresAt ?? "") };
   }
@@ -462,7 +447,7 @@ export class ServerAccount {
       { method: "POST", body: { device: input.device } }
     );
     if (status === 202) return null;
-    if (status !== 200) refuse(status, data, "Подключение не удалось.");
+    if (status !== 200) refuse(status, data, apiText("api.link.joinFailed"));
     return this.enter(input.base, input.device, status, data);
   }
 
@@ -480,7 +465,7 @@ export class ServerAccount {
       token: link.token,
       ...(sealed ? { body: request ? { sealed, request } : { sealed } } : {})
     });
-    if (status !== 201) refuseLinked(status, data, "Служба не выдала кода связки.");
+    if (status !== 201) refuseLinked(status, data, apiText("api.link.noPairCode"));
     return { code: String(data.code ?? ""), expiresAt: String(data.expiresAt ?? "") };
   }
 
@@ -517,7 +502,7 @@ export class ServerAccount {
   }> {
     const link = await this.need();
     const { status, data } = await ask(link.base, "/devices", { token: link.token });
-    if (status !== 200) refuseLinked(status, data, "Служба не отдала список устройств.");
+    if (status !== 200) refuseLinked(status, data, apiText("api.link.noDevices"));
     return {
       devices: (data.devices ?? []) as LinkedDevice[],
       current: (data.current as string | null) ?? null,
@@ -532,7 +517,7 @@ export class ServerAccount {
       method: "POST",
       token: link.token
     });
-    if (status !== 204) refuseLinked(status, data, "Не удалось сделать устройство главным.");
+    if (status !== 204) refuseLinked(status, data, apiText("api.link.primaryFailed"));
   }
 
   /** Переименовать своё устройство: два «Компьютер (Windows)» неотличимы. */
@@ -543,7 +528,7 @@ export class ServerAccount {
       token: link.token,
       body: { name }
     });
-    if (status !== 204) refuseLinked(status, data, "Не удалось переименовать устройство.");
+    if (status !== 204) refuseLinked(status, data, apiText("api.link.renameFailed"));
   }
 
   /**
@@ -560,7 +545,7 @@ export class ServerAccount {
       method: "DELETE",
       token: link.token
     });
-    if (status !== 204) refuseLinked(status, data, "Не удалось выкинуть устройство.");
+    if (status !== 204) refuseLinked(status, data, apiText("api.link.removeFailed"));
   }
 
   /**
@@ -641,7 +626,6 @@ export class ServerAccount {
     }
 
     const { status, data } = answer;
-    const said = typeof data.error === "string" ? data.error : "";
     if (status === 204 || status === 200) {
       await this.dropPending(pending);
       return { kind: "sent" };
@@ -660,10 +644,10 @@ export class ServerAccount {
     // службе действует ТОТ, а прежний — уже нет, и цель достигнута и так.
     if (status === 400 || status === 403) {
       await this.dropPending(pending);
-      return { kind: "refused", message: said || "Служба не приняла новый пароль." };
+      return { kind: "refused", message: serverText(data, apiText("api.link.passwordRejected")) };
     }
-    if (status === 401) return { kind: "failed", message: LOST_LINK };
-    return { kind: "failed", message: said || "Служба не приняла новый пароль." };
+    if (status === 401) return { kind: "failed", message: lostLink() };
+    return { kind: "failed", message: serverText(data, apiText("api.link.passwordRejected")) };
   }
 
   /**
@@ -682,7 +666,7 @@ export class ServerAccount {
   /** Запись о службе — или внятный отказ вместо «cannot read property of null». */
   private async need(): Promise<ServerLink> {
     const link = await this.link();
-    if (!link) throw new ServerRefused(0, "Это устройство не подключено к службе.");
+    if (!link) throw new ServerRefused(0, apiText("api.link.notLinked"));
     return link;
   }
 

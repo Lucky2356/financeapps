@@ -2,6 +2,7 @@
 
 import { apiClient } from "@/lib/api/client";
 import { decryptString, encryptString } from "@/lib/sync/crypto";
+import { apiText } from "@/lib/i18n/api-text";
 
 // Server-less cross-device sync via a cloud-synced folder (Dropbox / Google
 // Drive / OneDrive desktop client). The app writes an encrypted snapshot of the
@@ -40,13 +41,11 @@ export async function pullFromFolder(folder: string, passphrase: string): Promis
   try {
     encrypted = await fs.readTextFile(filePath(folder));
   } catch {
-    throw new Error(
-      "В папке нет файла синхронизации. Сначала выгрузите данные с другого устройства."
-    );
+    throw new Error(apiText("api.folder.noFile"));
   }
   const decoded = await decryptString(encrypted, passphrase);
   const parsed = JSON.parse(decoded) as { exportedAt?: string; backup?: unknown };
-  if (!parsed.backup) throw new Error("Файл синхронизации не содержит данных.");
+  if (!parsed.backup) throw new Error(apiText("api.folder.empty"));
   // /backup reads the document from the `backup` field of the request body —
   // the same shape the restore button sends. Posting the bare document made
   // every pull fail with «Файл не похож на резервную копию…».

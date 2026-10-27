@@ -29,7 +29,6 @@ import {
   type WorkbookImportSheet
 } from "@/lib/api/local/sheets";
 import { convert } from "@/lib/currency";
-import { countLabel, plural } from "@/lib/i18n/plural";
 import { roundMoney } from "@/lib/utils";
 import { transferKeyOf } from "@/lib/transactions/transfers";
 import { unusualFor } from "@/lib/analytics/watchdog";
@@ -75,6 +74,7 @@ import { savePlan } from "@/lib/api/local/plan";
 import { recordNetWorthSnapshot } from "@/lib/api/local/overview";
 import { updateFxRates, updateSettings } from "@/lib/api/local/settings";
 import { FAMILY_ACTIONS, unknownFamilyAction } from "@/lib/api/local/family";
+import { apiCount, apiText } from "@/lib/i18n/api-text";
 
 /** Что получает обработчик записи. */
 export type WriteRequest = {
@@ -405,20 +405,14 @@ export const STATE_DELETES = {
   }),
   "/categories": byId((state, itemId) => {
     if (STANDARD_CATEGORY_IDS.has(itemId)) {
-      throw new Error(
-        "Стандартную категорию удалить нельзя — её можно переименовать, перекрасить или сменить значок."
-      );
+      throw new Error(apiText("api.category.builtIn"));
     }
     const txCount = state.transactions.filter((t) => t.category.id === itemId).length;
     if (txCount > 0) {
-      // «привязана 1 операция», «привязаны 2 операции», «привязано 5 операций».
-      const bound = plural(txCount, { one: "привязана", few: "привязаны", many: "привязано" });
-      const operations = countLabel(txCount, {
-        one: "операция",
-        few: "операции",
-        many: "операций"
-      });
-      throw new Error(`Нельзя удалить категорию: к ней ${bound} ${operations}.`);
+      // «привязана 1 операция», «привязаны 2 операции», «привязано 5 операций»:
+      // формы обоих слов — в словаре, по числу n; count — то же число, но с
+      // разделителями языка экрана («1 234»).
+      throw new Error(apiText("api.category.inUse", { n: txCount, count: apiCount(txCount) }));
     }
     state.categories = state.categories.filter((c) => c.id !== itemId);
   })
