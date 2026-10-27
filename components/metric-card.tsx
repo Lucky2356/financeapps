@@ -1,3 +1,5 @@
+"use client";
+
 import { ArrowDownRight, ArrowUpRight, Minus, TrendingDown, TrendingUp } from "lucide-react";
 
 import { formatDecimal } from "@/lib/format";
@@ -5,6 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkline } from "@/components/charts/sparkline";
 import { AnimatedValue } from "@/components/ui/animated-value";
 import { METRIC_HINT_KEY, InfoHint } from "@/components/info-hint";
+import { metricDetail, metricTitle } from "@/components/metric-text";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useI18n } from "@/lib/i18n/context";
 import type { MetricCard as MetricCardType } from "@/types/finance";
 import { cn } from "@/lib/utils";
 
@@ -22,13 +27,18 @@ const toneIcon = {
   danger: ArrowDownRight
 };
 
-export function MetricCard({ metric }: { metric: MetricCardType }) {
+// `loading` — настоящих чисел ещё нет: вместо значения заглушка, а не «0 ₽»
+// из заготовки сборки, который выглядит как настоящий ноль.
+export function MetricCard({
+  metric,
+  loading = false
+}: {
+  metric: MetricCardType;
+  loading?: boolean;
+}) {
+  const { t } = useI18n();
   const tone = metric.tone ?? "default";
   const Icon = toneIcon[tone];
-  const trend = metric.trend;
-  const trendPositive = trend && trend.value > 0;
-  const trendNegative = trend && trend.value < 0;
-  const TrendIcon = trendPositive ? TrendingUp : TrendingDown;
 
   return (
     <Card
@@ -45,7 +55,7 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
-          {metric.title}
+          {metricTitle(metric, t)}
           {metric.key && METRIC_HINT_KEY[metric.key] ? (
             <InfoHint text={METRIC_HINT_KEY[metric.key]} />
           ) : null}
@@ -63,32 +73,59 @@ export function MetricCard({ metric }: { metric: MetricCardType }) {
         </span>
       </CardHeader>
       <CardContent>
-        <div className="flex items-end justify-between gap-3">
-          <div className="stat text-2xl">
-            <AnimatedValue text={metric.value} />
+        {loading ? (
+          <div data-testid="metric-skeleton" className="space-y-2">
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-3 w-40" />
           </div>
-          {metric.spark && metric.spark.length > 1 ? (
-            <Sparkline values={metric.spark} className={cn("shrink-0", toneText[tone])} />
-          ) : null}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">{metric.detail}</p>
-        {trend && (
-          <div
-            className={cn(
-              "mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium",
-              trendPositive && "bg-success/12 text-success",
-              trendNegative && "bg-destructive/10 text-destructive",
-              !trendPositive && !trendNegative && "bg-secondary text-secondary-foreground"
-            )}
-          >
-            {(trendPositive || trendNegative) && <TrendIcon className="size-3" />}
-            <span>
-              {trendPositive ? "+" : ""}
-              {formatDecimal(trend.value, 1)}% {trend.label}
-            </span>
-          </div>
+        ) : (
+          <MetricBody metric={metric} detail={metricDetail(metric, t)} tone={tone} />
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function MetricBody({
+  metric,
+  detail,
+  tone
+}: {
+  metric: MetricCardType;
+  detail: string;
+  tone: keyof typeof toneText;
+}) {
+  const trend = metric.trend;
+  const trendPositive = trend && trend.value > 0;
+  const trendNegative = trend && trend.value < 0;
+  const TrendIcon = trendPositive ? TrendingUp : TrendingDown;
+  return (
+    <>
+      <div className="flex items-end justify-between gap-3">
+        <div className="stat text-2xl">
+          <AnimatedValue text={metric.value} />
+        </div>
+        {metric.spark && metric.spark.length > 1 ? (
+          <Sparkline values={metric.spark} className={cn("shrink-0", toneText[tone])} />
+        ) : null}
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      {trend && (
+        <div
+          className={cn(
+            "mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium",
+            trendPositive && "bg-success/12 text-success",
+            trendNegative && "bg-destructive/10 text-destructive",
+            !trendPositive && !trendNegative && "bg-secondary text-secondary-foreground"
+          )}
+        >
+          {(trendPositive || trendNegative) && <TrendIcon className="size-3" />}
+          <span>
+            {trendPositive ? "+" : ""}
+            {formatDecimal(trend.value, 1)}% {trend.label}
+          </span>
+        </div>
+      )}
+    </>
   );
 }

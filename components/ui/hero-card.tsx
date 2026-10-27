@@ -4,6 +4,7 @@ import { formatDecimal } from "@/lib/format";
 import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { AnimatedValue } from "@/components/ui/animated-value";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 // The headline panel of a screen: the single number that matters, the change
@@ -23,6 +24,7 @@ export function HeroCard({
   progress,
   higherIsBetter = true,
   variant = "plain",
+  loading = false,
   className
 }: {
   label: string;
@@ -43,6 +45,12 @@ export function HeroCard({
    */
   higherIsBetter?: boolean;
   variant?: "accent" | "plain";
+  /**
+   * Настоящих чисел ещё нет (первое чтение не вернулось): на месте суммы,
+   * подписи с суммой и значка — заглушки. Иначе первым кадром экран
+   * показывал «0 ₽» из заготовки сборки, неотличимый от настоящего нуля.
+   */
+  loading?: boolean;
   className?: string;
 }) {
   const accent = variant === "accent";
@@ -60,11 +68,11 @@ export function HeroCard({
         className
       )}
     >
-      {trend && trend.length > 1 ? <Wave values={trend} accent={accent} /> : null}
+      {!loading && trend && trend.length > 1 ? <Wave values={trend} accent={accent} /> : null}
 
       <div className="relative flex items-start justify-between gap-3">
         <p className={cn("text-sm", accent ? "text-white/75" : "text-muted-foreground")}>{label}</p>
-        {badge ? (
+        {loading ? null : badge ? (
           <span
             className={cn(
               "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
@@ -91,10 +99,19 @@ export function HeroCard({
         ) : null}
       </div>
 
-      <p className="stat num relative mt-3 text-3xl sm:text-4xl">
-        <AnimatedValue text={value} />
-      </p>
-      {caption ? (
+      {loading ? (
+        <div data-testid="hero-skeleton" className="relative mt-3 space-y-2.5">
+          <Skeleton className={cn("h-9 w-44 sm:h-10", accent && "bg-white/20")} />
+          {caption ? (
+            <Skeleton className={cn("h-4 w-56 max-w-full", accent && "bg-white/20")} />
+          ) : null}
+        </div>
+      ) : (
+        <p className="stat num relative mt-3 text-3xl sm:text-4xl">
+          <AnimatedValue text={value} />
+        </p>
+      )}
+      {!loading && caption ? (
         <p
           className={cn(
             "relative mt-1.5 text-sm",
@@ -105,7 +122,7 @@ export function HeroCard({
         </p>
       ) : null}
 
-      {typeof progress === "number" ? (
+      {!loading && typeof progress === "number" ? (
         <div
           className={cn(
             "relative mt-4 h-1.5 overflow-hidden rounded-full",

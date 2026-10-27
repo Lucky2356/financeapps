@@ -14,7 +14,9 @@ import { useI18n } from "@/lib/i18n/context";
 // at, then the goal whose deadline is closest.
 export function GoalsSummary({ data }: { data: GoalsPageData }) {
   const { t } = useI18n();
-  const { data: pageData } = useApiPageData(data, "/goals");
+  // Пока первое чтение не вернулось — заглушки вместо «0 ₽» (см. HeroCard).
+  const { data: pageData, ready } = useApiPageData(data, "/goals");
+  const loading = !ready;
   const currency = pageData.currency;
 
   const saved = pageData.goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
@@ -34,15 +36,18 @@ export function GoalsSummary({ data }: { data: GoalsPageData }) {
         caption={t("goal.hero.caption", { target: formatCurrency(target, currency) })}
         changeLabel={target > 0 ? `${Math.round(share * 100)}%` : undefined}
         progress={target > 0 ? share : null}
+        loading={loading}
       />
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
+          loading={loading}
           label={t("goal.tile.count")}
           value={String(pageData.goals.length)}
           caption={t("goal.tile.countCaption")}
           icon={Target}
         />
         <StatTile
+          loading={loading}
           label={t("goal.tile.left")}
           hint="tip.goal.tile.left"
           value={formatCurrency(left, currency)}
@@ -50,6 +55,7 @@ export function GoalsSummary({ data }: { data: GoalsPageData }) {
           icon={Flag}
         />
         <StatTile
+          loading={loading}
           label={t("goal.tile.monthly")}
           hint="tip.goal.tile.monthly"
           value={formatCurrency(monthly, currency)}
@@ -58,9 +64,16 @@ export function GoalsSummary({ data }: { data: GoalsPageData }) {
           tone="success"
         />
         <StatTile
+          loading={loading}
           label={t("goal.tile.nearest")}
           value={nearest ? nearest.title : "—"}
-          caption={nearest ? formatDate(nearest.deadline) : t("goal.tile.nearestNone")}
+          caption={
+            loading
+              ? undefined
+              : nearest
+                ? formatDate(nearest.deadline)
+                : t("goal.tile.nearestNone")
+          }
           icon={CalendarClock}
         />
       </StatGrid>

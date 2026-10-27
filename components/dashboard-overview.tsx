@@ -4,6 +4,8 @@ import { PiggyBank, TrendingDown, TrendingUp, WalletCards, type LucideIcon } fro
 import Link from "next/link";
 
 import { HealthGauge } from "@/components/charts/health-gauge";
+import { metricDetail, metricTitle } from "@/components/metric-text";
+import { Skeleton } from "@/components/ui/skeleton";
 import { HeroCard } from "@/components/ui/hero-card";
 import { StatGrid } from "@/components/ui/stat-grid";
 import { StatTile, type StatTone } from "@/components/ui/stat-tile";
@@ -27,7 +29,15 @@ const METRIC_HREF: Record<string, string | undefined> = {
   freeCash: "/transactions"
 };
 
-export function DashboardOverview({ data }: { data: DashboardData }) {
+// `loading` — первое чтение ещё не вернулось, в `data` заготовка сборки: нули и
+// русские подписи. Вместо них — заглушки той же формы, чтобы экран не прыгал.
+export function DashboardOverview({
+  data,
+  loading = false
+}: {
+  data: DashboardData;
+  loading?: boolean;
+}) {
   const { t } = useI18n();
   const healthTone =
     data.health.score >= 75 ? "good" : data.health.score >= 50 ? "warning" : "critical";
@@ -69,15 +79,17 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
         caption={t("dash.netWorthDesc")}
         changePercent={changePercent}
         trend={trend}
+        loading={loading}
       />
 
       <StatGrid title={t("dash.widget.overview")}>
         {tiles.map((tile) => (
           <StatTile
-            key={tile.title}
-            label={tile.title}
+            key={tile.key ?? tile.title}
+            label={metricTitle(tile, t)}
             value={tile.value}
-            caption={tile.detail}
+            caption={metricDetail(tile, t)}
+            loading={loading}
             icon={tile.icon}
             tone={toTone(tile.tone)}
             href={METRIC_HREF[tile.key ?? ""]}
@@ -88,27 +100,41 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
       {/* Health keeps its dial: the score is a judgement, not a figure, and the
           sentence under it is what makes it actionable. Tapping it opens the
           analysis the sentence is drawn from. */}
-      <Link
-        href="/analytics"
-        className="flex items-center gap-4 rounded-lg border bg-card p-4 shadow-soft transition-colors hover:border-primary/40 hover:bg-foreground/[0.03] sm:p-5"
-      >
-        {data.health.noData ? (
-          // Nothing to score yet: a dash is honest, a full dial saying "100 —
-          // stable" for an empty ledger is not.
-          <span className="flex size-[92px] shrink-0 items-center justify-center rounded-full border border-dashed text-2xl text-muted-foreground">
-            —
-          </span>
-        ) : (
-          <HealthGauge score={data.health.score} tone={healthTone} size={92} strokeWidth={8} />
-        )}
-        <div className="min-w-0">
-          <p className="text-[13px] text-muted-foreground">{t("dash.health")}</p>
-          <p className="mt-0.5 text-base font-semibold">
-            {data.health.noData ? t("dash.health.noData") : healthLabel}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">{data.health.summary}</p>
+      {loading ? (
+        <div
+          data-testid="health-skeleton"
+          className="flex items-center gap-4 rounded-lg border bg-card p-4 shadow-soft sm:p-5"
+        >
+          <Skeleton className="size-[92px] shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="text-[13px] text-muted-foreground">{t("dash.health")}</p>
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-full max-w-sm" />
+          </div>
         </div>
-      </Link>
+      ) : (
+        <Link
+          href="/analytics"
+          className="flex items-center gap-4 rounded-lg border bg-card p-4 shadow-soft transition-colors hover:border-primary/40 hover:bg-foreground/[0.03] sm:p-5"
+        >
+          {data.health.noData ? (
+            // Nothing to score yet: a dash is honest, a full dial saying "100 —
+            // stable" for an empty ledger is not.
+            <span className="flex size-[92px] shrink-0 items-center justify-center rounded-full border border-dashed text-2xl text-muted-foreground">
+              —
+            </span>
+          ) : (
+            <HealthGauge score={data.health.score} tone={healthTone} size={92} strokeWidth={8} />
+          )}
+          <div className="min-w-0">
+            <p className="text-[13px] text-muted-foreground">{t("dash.health")}</p>
+            <p className="mt-0.5 text-base font-semibold">
+              {data.health.noData ? t("dash.health.noData") : healthLabel}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{data.health.summary}</p>
+          </div>
+        </Link>
+      )}
     </section>
   );
 }

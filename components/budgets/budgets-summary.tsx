@@ -21,7 +21,9 @@ function daysLeftInMonth(): number {
 // that leaves per remaining day.
 export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
   const { t } = useI18n();
-  const { data: pageData } = useApiPageData(data, "/budgets");
+  // Пока первое чтение не вернулось — заглушки вместо «0 ₽» (см. HeroCard).
+  const { data: pageData, ready } = useApiPageData(data, "/budgets");
+  const loading = !ready;
   const currency = pageData.currency;
 
   const withLimit = pageData.budgets.filter((budget) => budget.limitAmount > 0);
@@ -35,6 +37,7 @@ export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
   return (
     <>
       <HeroCard
+        loading={loading}
         label={t("bud.hero.label")}
         value={formatCurrency(spent, currency)}
         caption={t("bud.hero.caption", { limit: formatCurrency(limit, currency) })}
@@ -43,6 +46,7 @@ export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
       />
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
+          loading={loading}
           label={t("bud.tile.limit")}
           hint="tip.bud.tile.limit"
           value={formatCurrency(limit, currency)}
@@ -50,6 +54,7 @@ export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
           icon={Gauge}
         />
         <StatTile
+          loading={loading}
           label={t("bud.tile.left")}
           hint="tip.bud.tile.left"
           value={formatCurrency(left, currency)}
@@ -58,6 +63,7 @@ export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
           tone={left >= 0 ? "success" : "danger"}
         />
         <StatTile
+          loading={loading}
           label={t("bud.tile.perDay")}
           hint="tip.bud.tile.perDay"
           value={formatCurrency(Math.round(perDay), currency)}
@@ -65,6 +71,7 @@ export function BudgetsSummary({ data }: { data: BudgetsPageData }) {
           icon={CalendarDays}
         />
         <StatTile
+          loading={loading}
           label={t("bud.tile.exceeded")}
           value={String(exceeded.length)}
           caption={exceeded[0]?.category ?? t("bud.tile.exceededNone")}

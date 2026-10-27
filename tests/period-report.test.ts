@@ -58,9 +58,13 @@ describe("buildYoY", () => {
     expect(yoy.expenseChangePct).toBe(250); // (70k-20k)/20k
   });
 
+  // Под первым годом учёта стояло «+100% к пред. году» — рост вдвое из ничего.
+  // Сравнивать не с чем: процента нет, экран пишет «—».
   it("handles a prior year with no data", () => {
     const yoy = buildYoY(data, 2025);
     expect(yoy.previous.income).toBe(0);
-    expect(yoy.incomeChangePct).toBe(100);
+    expect(yoy.incomeChangePct).toBeNull();
+    expect(yoy.expenseChangePct).toBeNull();
+    expect(yoy.savingsChangePct).toBeNull();
   });
 });

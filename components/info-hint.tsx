@@ -7,21 +7,10 @@ import { createPortal } from "react-dom";
 import { clamp, cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
 
-// Plain-language explanations for finance terms used across the app. Keys are the
-// Russian metric titles (also used to look up by `metric.title`); values are
-// catalog keys so the hint text follows the user's locale.
-export const FINANCE_TERM_HINTS: Record<string, string> = {
-  "Чистый капитал": "hint.netWorth",
-  "Общий баланс": "hint.totalBalance",
-  "Свободный остаток": "hint.freeCash",
-  "Норма накоплений": "hint.savingsRate",
-  "Финансовая подушка": "hint.cushion",
-  "Риск-профиль": "hint.riskProfile"
-};
-
-// Locale-independent lookup by a metric's stable `key` (see MetricCard.key) →
-// catalog key. Used by the metric cards so hints also appear in English, where
-// the display title no longer matches the Russian keys above.
+// Plain-language explanations for finance terms, looked up by a metric's stable
+// `key` (see MetricCard.key) → catalog key, so the hint follows the user's locale.
+// Раньше рядом жила вторая таблица — по русскому заголовку метрики; в
+// английском интерфейсе заголовок с ней не совпадал, и подсказки пропадали.
 export const METRIC_HINT_KEY: Record<string, string> = {
   netWorth: "hint.netWorth",
   totalBalance: "hint.totalBalance",

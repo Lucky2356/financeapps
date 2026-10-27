@@ -16,6 +16,13 @@ import type { PathWithQuery, ReadPath, ReadResponses } from "@/lib/api/routes";
 
 type PageData<T> = {
   data: T;
+  /**
+   * Пришёл ли хоть один настоящий ответ (или есть память о прошлом показе).
+   * До этого в `data` — заготовка сборки, то есть нули: «0 ₽» на месте
+   * баланса, который просто ещё не прочитан. Экран, которому есть что
+   * показать вместо нулей, рисует по этому флагу заглушки.
+   */
+  ready: boolean;
   reload: () => Promise<void>;
   setData: Dispatch<SetStateAction<T>>;
 };
@@ -49,6 +56,7 @@ export function useApiPageData<P extends ReadPath, View>(
 ): PageData<View>;
 export function useApiPageData<T>(initialData: T, path: string): PageData<T> {
   const [data, setData] = useState<T>(() => readPageData<T>(path) ?? initialData);
+  const [ready, setReady] = useState(() => readPageData<T>(path) !== undefined);
   // Track the latest initialData for error fallback without adding it to
   // effect/callback dependency arrays — avoids a double-fetch on every
   // router.refresh() because that call creates a new object reference even
@@ -67,7 +75,9 @@ export function useApiPageData<T>(initialData: T, path: string): PageData<T> {
   if (lastPath !== path) {
     setLastPath(path);
     // initialData, а не ref: во время отрисовки берём то, что пришло в неё.
-    setData(readPageData<T>(path) ?? initialData);
+    const remembered = readPageData<T>(path);
+    setData(remembered ?? initialData);
+    setReady(remembered !== undefined);
   }
 
   const load = useCallback(async () => {
@@ -85,13 +95,18 @@ export function useApiPageData<T>(initialData: T, path: string): PageData<T> {
 
   const reload = useCallback(async () => {
     setData(await load());
+    setReady(true);
   }, [load]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const next = await load();
-      if (!cancelled) setData(next);
+      if (cancelled) return;
+      setData(next);
+      // И после неудачного чтения тоже: заглушка навсегда хуже честной
+      // заготовки, а ошибку покажет тот, кто её поймал.
+      setReady(true);
     })();
     return () => {
       cancelled = true;
@@ -104,5 +119,5 @@ export function useApiPageData<T>(initialData: T, path: string): PageData<T> {
   // showing the figures from before the write.
   useEffect(() => onDataChanged(() => void reload()), [reload]);
 
-  return { data, reload, setData };
+  return { data, ready, reload, setData };
 }

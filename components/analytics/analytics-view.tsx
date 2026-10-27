@@ -390,7 +390,7 @@ function StructureCard({
                       />
                       <span className="truncate">{cat.category}</span>
                       <span className="num ml-auto shrink-0 text-muted-foreground">
-                        {cat.share.toFixed(0)}%
+                        {formatDecimal(cat.share, 0)}%
                       </span>
                       {cat.total > 0 ? (
                         <span className="num shrink-0 whitespace-nowrap font-medium">
@@ -520,12 +520,12 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
               {trend.anomaly === "high" ? (
                 <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
                   <TrendingUp className="size-3" />
-                  {t("an.trends.more", { pct: Math.abs(trend.changePct).toFixed(0) })}
+                  {t("an.trends.more", { pct: formatDecimal(Math.abs(trend.changePct), 0) })}
                 </span>
               ) : trend.anomaly === "low" ? (
                 <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
                   <TrendingDown className="size-3" />
-                  {t("an.trends.less", { pct: Math.abs(trend.changePct).toFixed(0) })}
+                  {t("an.trends.less", { pct: formatDecimal(Math.abs(trend.changePct), 0) })}
                 </span>
               ) : null}
             </div>

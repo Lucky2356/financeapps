@@ -22,7 +22,9 @@ const EMPTY: Summary = { currency: "RUB", monthlyCashflow: [], categoryExpenses:
 // would only see a page of them.
 export function TransactionsSummary() {
   const { t } = useI18n();
-  const { data } = useApiPageData(EMPTY, "/dashboard");
+  // Пока первое чтение не вернулось — заглушки вместо «0 ₽» (см. HeroCard).
+  const { data, ready } = useApiPageData(EMPTY, "/dashboard");
+  const loading = !ready;
   const currency = data.currency;
 
   const months = data.monthlyCashflow;
@@ -45,9 +47,11 @@ export function TransactionsSummary() {
         changePercent={changePercent}
         higherIsBetter={false}
         trend={months.map((month) => month.expense)}
+        loading={loading}
       />
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
+          loading={loading}
           label={t("tx.tile.income")}
           value={formatCurrency(income, currency)}
           caption={t("tx.hero.caption")}
@@ -55,6 +59,7 @@ export function TransactionsSummary() {
           tone="success"
         />
         <StatTile
+          loading={loading}
           label={t("tx.tile.expense")}
           value={formatCurrency(expense, currency)}
           caption={t("tx.hero.caption")}
@@ -62,6 +67,7 @@ export function TransactionsSummary() {
           tone="warning"
         />
         <StatTile
+          loading={loading}
           label={t("tx.tile.net")}
           hint="tip.tx.tile.net"
           value={formatCurrency(income - expense, currency)}
@@ -70,9 +76,10 @@ export function TransactionsSummary() {
           tone={income - expense >= 0 ? "success" : "danger"}
         />
         <StatTile
+          loading={loading}
           label={t("tx.tile.biggest")}
           value={biggest ? formatCurrency(biggest.value, currency) : "—"}
-          caption={biggest ? biggest.name : t("tx.tile.biggestNone")}
+          caption={loading ? undefined : biggest ? biggest.name : t("tx.tile.biggestNone")}
           icon={Tag}
         />
       </StatGrid>

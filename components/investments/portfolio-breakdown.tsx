@@ -8,6 +8,7 @@ import { CHART_PALETTE } from "@/lib/charts/palette";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type { ChartDatum } from "@/types/finance";
+import { formatDecimal } from "@/lib/format";
 
 type Slice = { id: string; titleKey: string; descKey?: string; data: ChartDatum[] };
 
@@ -96,7 +97,7 @@ export function PortfolioBreakdown({
                     aria-hidden
                   />
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">{item.name}</span>
-                  <span className="num shrink-0 font-medium">{item.value.toFixed(1)}%</span>
+                  <span className="num shrink-0 font-medium">{formatDecimal(item.value, 1)}%</span>
                 </li>
               ))}
             </ul>

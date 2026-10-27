@@ -19,6 +19,7 @@ import { MetricCard } from "@/components/metric-card";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { periodRange } from "@/lib/transactions/filter-chips";
 import { useI18n } from "@/lib/i18n/context";
+import { cn } from "@/lib/utils";
 import type { DashboardData, ForecastData } from "@/types/finance";
 import { InfoHint } from "@/components/info-hint";
 
@@ -65,8 +67,15 @@ export function DashboardClient({
   // analytics section — this screen is a summary, not a place to fiddle.
   // Свой выбор у главной — из настроек, а не галка отчётов.
   const [includeTransfers] = useIncludeTransfers("home");
-  const { data } = useApiPageData(initialData, `/dashboard${transfersQuery(includeTransfers)}`);
-  const { data: forecast } = useApiPageData(initialForecast, "/forecast");
+  // `ready` — пришёл первый настоящий ответ. До него `data` — заготовка сборки
+  // (lib/data.ts): нули и русские подписи. Первое открытие показывало их
+  // около секунды — «0 ₽» на месте баланса, по-русски в английском приложении.
+  // Пока ответа нет, плитки рисуются заглушками той же формы.
+  const { data, ready } = useApiPageData(
+    initialData,
+    `/dashboard${transfersQuery(includeTransfers)}`
+  );
+  const { data: forecast, ready: forecastReady } = useApiPageData(initialForecast, "/forecast");
   const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT);
   // Which slice of the rings is being looked into. Both rings cover the month
   // in progress, so the period is the same for every one of them.
@@ -106,9 +115,17 @@ export function DashboardClient({
         </>
       ),
       watchdog: <WatchdogCard currency={data.currency} />,
-      overview: <DashboardOverview data={data} />,
-      forecast: <DashboardForecastStrip forecast={forecast} />,
-      emergencyFund: <EmergencyFundCard fund={data.emergencyFund} currency={data.currency} />,
+      overview: <DashboardOverview data={data} loading={!ready} />,
+      forecast: forecastReady ? (
+        <DashboardForecastStrip forecast={forecast} />
+      ) : (
+        <WidgetSkeleton className="h-64" />
+      ),
+      emergencyFund: ready ? (
+        <EmergencyFundCard fund={data.emergencyFund} currency={data.currency} />
+      ) : (
+        <WidgetSkeleton className="h-40" />
+      ),
       netWorth:
         data.netWorthTrend.length >= 2 ? (
           <Card>
@@ -127,11 +144,19 @@ export function DashboardClient({
       metrics: (
         <section className="stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {data.metrics.map((metric) => (
-            <MetricCard key={metric.title} metric={metric} />
+            <MetricCard key={metric.key ?? metric.title} metric={metric} loading={!ready} />
           ))}
         </section>
       ),
-      charts: (
+      charts: !ready ? (
+        <section className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <WidgetSkeleton className="h-80" />
+            <WidgetSkeleton className="h-80" />
+          </div>
+          <WidgetSkeleton className="h-80" />
+        </section>
+      ) : (
         <section className="space-y-4">
           {/* Two halves of the same month, side by side: what came in and what
               went out. Reading one without the other only tells half a story. */}
@@ -163,7 +188,7 @@ export function DashboardClient({
         </section>
       )
     }),
-    [data, forecast, t]
+    [data, forecast, ready, forecastReady, t]
   );
 
   return (
@@ -188,7 +213,7 @@ export function DashboardClient({
         return <div key={widget}>{content}</div>;
       })}
 
-      {showDistribute && freeCash && !isHidden(layout, "overview") ? (
+      {ready && showDistribute && freeCash && !isHidden(layout, "overview") ? (
         <DistributeCashflow freeCashflowLabel={freeCash.value} />
       ) : null}
 
@@ -221,6 +246,12 @@ export function DashboardClient({
       />
     </>
   );
+}
+
+// Заглушка блока главной на время первого чтения — той же высоты, что блок,
+// чтобы содержимое, придя, не сдвигало экран.
+function WidgetSkeleton({ className }: { className?: string }) {
+  return <Skeleton data-testid="widget-skeleton" className={cn("w-full rounded-lg", className)} />;
 }
 
 // A pie plus its legend — the same block for income and for spending, so the

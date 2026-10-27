@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { sectorLabel } from "@/lib/market/sectors";
 import { computeRebalance } from "@/lib/investments/rebalance";
@@ -123,7 +123,7 @@ export function RebalancePanel({
                 : "text-sm text-muted-foreground"
             }
           >
-            {t("inv.reb.sum", { pct: totalTargetPct.toFixed(0) })}
+            {t("inv.reb.sum", { pct: formatDecimal(totalTargetPct, 0) })}
           </span>
         </div>
 
@@ -140,12 +140,16 @@ export function RebalancePanel({
               {
                 header: t("inv.reb.actual"),
                 align: "right",
-                cell: (row) => <span className="tabular-nums">{row.actualPct.toFixed(1)}%</span>
+                cell: (row) => (
+                  <span className="tabular-nums">{formatDecimal(row.actualPct, 1)}%</span>
+                )
               },
               {
                 header: t("inv.reb.target"),
                 align: "right",
-                cell: (row) => <span className="tabular-nums">{row.targetPct.toFixed(0)}%</span>
+                cell: (row) => (
+                  <span className="tabular-nums">{formatDecimal(row.targetPct, 0)}%</span>
+                )
               },
               {
                 header: t("inv.reb.action"),
