@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { apiText } from "@/lib/i18n/api-text";
 
 type RunOptions<T> = {
   /** Toast shown on success (omit for silent success). */
@@ -27,7 +28,7 @@ export function useApiMutation() {
       return result;
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : (options?.error ?? "Что-то пошло не так")
+        error instanceof Error ? error.message : (options?.error ?? apiText("error.title"))
       );
       return undefined;
     } finally {

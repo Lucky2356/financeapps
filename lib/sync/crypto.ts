@@ -4,6 +4,7 @@
 // (who knows the passphrase) can read it. Pure and testable.
 
 import { fromBase64, toBase64 } from "@/lib/sync/bytes";
+import { apiText } from "@/lib/i18n/api-text";
 
 // 600 000 — как у основного замка (lib/sync/vault-crypto) и как советует
 // OWASP для PBKDF2-SHA256. Прежде здесь было 200 000: файл в облачной папке
@@ -57,7 +58,7 @@ async function deriveKey(
 
 // Encrypts a UTF-8 string, returning a self-describing JSON envelope (base64).
 export async function encryptString(plaintext: string, passphrase: string): Promise<string> {
-  if (!passphrase) throw new Error("Задайте пароль для синхронизации.");
+  if (!passphrase) throw new Error(apiText("api.folder.needPassword"));
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const key = await deriveKey(passphrase, salt);
@@ -83,10 +84,10 @@ export async function decryptString(payload: string, passphrase: string): Promis
   try {
     envelope = JSON.parse(payload) as EncryptedEnvelope;
   } catch {
-    throw new Error("Файл синхронизации повреждён.");
+    throw new Error(apiText("api.folder.corrupt"));
   }
   if (envelope.alg !== "AES-GCM" || !envelope.salt || !envelope.iv || !envelope.ct) {
-    throw new Error("Неизвестный формат файла синхронизации.");
+    throw new Error(apiText("api.folder.unknownFormat"));
   }
   const rounds = envelope.iterations === undefined ? LEGACY_ITERATIONS : envelope.iterations;
   if (
@@ -95,7 +96,7 @@ export async function decryptString(payload: string, passphrase: string): Promis
     rounds < MIN_ITERATIONS ||
     rounds > MAX_ITERATIONS
   ) {
-    throw new Error("Неизвестный формат файла синхронизации.");
+    throw new Error(apiText("api.folder.unknownFormat"));
   }
   const key = await deriveKey(passphrase, fromBase64(envelope.salt), rounds);
   try {
@@ -106,6 +107,6 @@ export async function decryptString(payload: string, passphrase: string): Promis
     );
     return new TextDecoder().decode(plaintext);
   } catch {
-    throw new Error("Неверный пароль или файл повреждён.");
+    throw new Error(apiText("api.folder.wrongPassword"));
   }
 }

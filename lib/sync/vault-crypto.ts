@@ -33,6 +33,7 @@
 
 import { fromBase64, toBase64 } from "@/lib/sync/bytes";
 import { RECOVERY_WORDS } from "@/lib/sync/recovery-words";
+import { apiText } from "@/lib/i18n/api-text";
 
 /**
  * Сколько раз прогоняется PBKDF2. Рекомендация OWASP на 2023 год для
@@ -165,7 +166,7 @@ async function unlockWith(
       ["encrypt", "decrypt"]
     );
   } catch {
-    throw new Error("Не подходит — проверьте пароль или код восстановления.");
+    throw new Error(apiText("api.vault.wrongSecret"));
   }
 }
 
@@ -200,14 +201,14 @@ export function normalizeRecoveryCode(input: string): string {
     .filter(Boolean);
   if (parts.length !== RECOVERY_CODE_WORDS) {
     throw new Error(
-      `В коде восстановления должно быть ${RECOVERY_CODE_WORDS} слов, а получено ${parts.length}.`
+      apiText("api.vault.recoveryWordCount", { need: RECOVERY_CODE_WORDS, got: parts.length })
     );
   }
   return parts
     .map((part) => {
       const full = RECOVERY_WORDS.find((word) => word.startsWith(part.slice(0, WORD_PREFIX)));
       if (!full || !full.startsWith(part)) {
-        throw new Error(`Слова «${part}» нет в словаре — проверьте, как оно записано.`);
+        throw new Error(apiText("api.vault.unknownWord", { word: part }));
       }
       return full;
     })
@@ -225,7 +226,7 @@ export async function createVault(
   password: string,
   options: { iterations?: number } = {}
 ): Promise<{ vault: Vault; recoveryCode: string; bookKey: CryptoKey }> {
-  if (!password) throw new Error("Задайте пароль.");
+  if (!password) throw new Error(apiText("api.vault.setPassword"));
   const iterations = options.iterations ?? VAULT_KDF_ITERATIONS;
   const recoveryCode = generateRecoveryCode();
   // Ключ книги — извлекаемый: его надо заворачивать, и при смене пароля
@@ -300,7 +301,7 @@ export async function changePassword(
   currentPassword: string,
   nextPassword: string
 ): Promise<Vault> {
-  if (!nextPassword) throw new Error("Задайте новый пароль.");
+  if (!nextPassword) throw new Error(apiText("api.vault.setNewPassword"));
   const rounds = roundsOf(vault);
   const bookKey = await unlockWith(vault.password, currentPassword, rounds, true);
   return { ...vault, password: await lockWith(bookKey, nextPassword, rounds) };
@@ -315,7 +316,7 @@ export async function resetPasswordWithRecoveryCode(
   code: string,
   nextPassword: string
 ): Promise<Vault> {
-  if (!nextPassword) throw new Error("Задайте новый пароль.");
+  if (!nextPassword) throw new Error(apiText("api.vault.setNewPassword"));
   const rounds = roundsOf(vault);
   const bookKey = await unlockWith(vault.recovery, normalizeRecoveryCode(code), rounds, true);
   return { ...vault, password: await lockWith(bookKey, nextPassword, rounds) };
@@ -339,7 +340,7 @@ export async function sealBook(plaintext: string, bookKey: CryptoKey): Promise<S
  */
 export async function openBook(sealed: SealedBook, bookKey: CryptoKey): Promise<string> {
   if (sealed?.alg !== "AES-GCM" || !sealed.iv || !sealed.ct) {
-    throw new Error("Данные с сервера пришли в неизвестном виде.");
+    throw new Error(apiText("api.vault.unknownServerFormat"));
   }
   try {
     const plaintext = await crypto.subtle.decrypt(
@@ -349,6 +350,6 @@ export async function openBook(sealed: SealedBook, bookKey: CryptoKey): Promise<
     );
     return new TextDecoder().decode(plaintext);
   } catch {
-    throw new Error("Данные не удалось прочитать — не тот ключ или файл повреждён.");
+    throw new Error(apiText("api.vault.cantDecrypt"));
   }
 }

@@ -176,7 +176,7 @@ curl -s -X POST https://finance.ваш-домен.ru/admin/invite \
 
 # 3. Без пропуска внутрь не пускают.
 curl -s -X POST https://finance.ваш-домен.ru/admin/invite
-# {"error":"Нужен пропуск управления."}
+# {"error":"Нужен пропуск управления.","code":"admin_required"}
 ```
 
 Третья — не формальность. Ответь она кодом приглашения, это значило бы, что

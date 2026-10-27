@@ -5,6 +5,7 @@
 // (очень пёстрый снимок) — ещё раз, погрубее.
 
 import { fitSize, PHOTO_MAX_CHARS, PHOTO_QUALITY } from "@/lib/photos/receipt-photo";
+import { apiText } from "@/lib/i18n/api-text";
 
 export type CompressedPhoto = { data: string; width: number; height: number };
 
@@ -37,12 +38,12 @@ async function decode(
 export async function compressPhoto(file: Blob): Promise<CompressedPhoto> {
   const { source, width, height } = await decode(file);
   const size = fitSize(width, height);
-  if (!size.width) throw new Error("Не получилось прочитать фото.");
+  if (!size.width) throw new Error(apiText("api.photo.unreadable"));
   const canvas = document.createElement("canvas");
   canvas.width = size.width;
   canvas.height = size.height;
   const context = canvas.getContext("2d");
-  if (!context) throw new Error("Не получилось прочитать фото.");
+  if (!context) throw new Error(apiText("api.photo.unreadable"));
   // Прозрачный PNG иначе станет чёрным.
   context.fillStyle = "#fff";
   context.fillRect(0, 0, size.width, size.height);
@@ -54,6 +55,6 @@ export async function compressPhoto(file: Blob): Promise<CompressedPhoto> {
     if (data.length <= TARGET_CHARS) break;
     data = canvas.toDataURL("image/jpeg", quality);
   }
-  if (data.length > PHOTO_MAX_CHARS) throw new Error("Фото слишком большое даже после сжатия.");
+  if (data.length > PHOTO_MAX_CHARS) throw new Error(apiText("api.photo.tooLarge"));
   return { data, width: size.width, height: size.height };
 }

@@ -59,6 +59,7 @@ import {
   sealPackage
 } from "@/lib/sync/pair-package";
 import { makePairingLink, makeRequestLink, readPairing } from "@/lib/sync/pairing-link";
+import { apiText } from "@/lib/i18n/api-text";
 
 /**
  * Настоящее хранилище устройства — пишет и читает как есть.
@@ -407,11 +408,7 @@ export async function refuseSharedServerAccount(base: string, login: string): Pr
   const me = roster?.lastUsedId ?? "";
   const busy = await whoAlreadyUses(device, base, login, me);
   if (busy) {
-    throw new Error(
-      `На этом компьютере под этой же учётной записью уже работает «${busy.name}». ` +
-        "Двое под одним именем получат общие данные: служба не различает людей за одним " +
-        "компьютером. Заведите на службе отдельную запись."
-    );
+    throw new Error(apiText("api.vault.sharedAccount", { name: busy.name }));
   }
 }
 
@@ -458,7 +455,7 @@ export type PairingOffer = { link: string; code: string; expiresAt: string };
  */
 export async function offerPairing(password?: string): Promise<PairingOffer> {
   const link = await serverAccount.link();
-  if (!link) throw new Error("Синхронизация на этом устройстве не включена.");
+  if (!link) throw new Error(apiText("api.sync.notEnabled"));
   const pack = await accountService.pairingPackage(password);
   const transfer = await newTransferKey();
   const sealed = await sealPackage(transfer.key, pack);
@@ -534,21 +531,13 @@ export async function checkPairingRequest(request: PairingRequest): Promise<bool
 export async function answerPairingRequest(raw: string, password?: string): Promise<void> {
   const parsed = readPairing(raw);
   if (!parsed?.ticket || !parsed.key) {
-    throw new Error(
-      parsed
-        ? "Это код для подключения ЭТОГО устройства. На новом устройстве откройте " +
-            "«Подключиться к другому устройству» — он появится там."
-        : "Это не код подключения. Покажите на новом устройстве его QR-код."
-    );
+    throw new Error(parsed ? apiText("api.pair.thisDeviceCode") : apiText("api.pair.notCodeNew"));
   }
   const link = await serverAccount.link();
-  if (!link) throw new Error("Сначала включите синхронизацию на этом устройстве.");
+  if (!link) throw new Error(apiText("api.sync.enableFirst"));
   const theirs = parsed.base?.replace(/\/+$/, "");
   if (theirs && theirs !== link.base.replace(/\/+$/, "")) {
-    throw new Error(
-      `Новое устройство подключается к другой службе (${theirs}), а это — к ${link.base}. ` +
-        "Выберите на новом устройстве ту же службу."
-    );
+    throw new Error(apiText("api.pair.otherService", { theirs, ours: link.base }));
   }
   const pack = await accountService.pairingPackage(password);
   const sealed = await sealPackage(await importTransferKey(parsed.key), pack);
@@ -557,18 +546,12 @@ export async function answerPairingRequest(raw: string, password?: string): Prom
 
 export async function joinWithLink(raw: string, fallbackBase: string): Promise<void> {
   const parsed = readPairing(raw);
-  if (!parsed) throw new Error("Это не код подключения. Покажите на первом устройстве новый.");
+  if (!parsed) throw new Error(apiText("api.pair.notCodeFirst"));
   if (parsed.ticket) {
-    throw new Error(
-      "Этот QR-код показывает новое устройство. Его нужно сканировать на том, где данные " +
-        "уже есть: Настройки → Синхронизация → «Сканировать QR-код нового устройства»."
-    );
+    throw new Error(apiText("api.pair.scanOnOld"));
   }
   if (!parsed.key) {
-    throw new Error(
-      "Этот код из старой версии приложения. Обновите приложение на первом устройстве " +
-        "и покажите новый код."
-    );
+    throw new Error(apiText("api.pair.oldVersion"));
   }
   await accountService.assertCanAdopt();
   const at = parsed.base ?? fallbackBase;

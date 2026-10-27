@@ -29,6 +29,7 @@ import {
 } from "@/lib/api/local/sheet";
 import type { SheetColumn, SheetTarget } from "@/lib/sheet/model";
 import type { Stamped } from "@/lib/sync/row-stamps";
+import { apiText } from "@/lib/i18n/api-text";
 
 export const MAIN_SHEET = "main";
 
@@ -80,7 +81,7 @@ function sheetName(value: unknown): string {
   const text = String(value ?? "")
     .trim()
     .slice(0, 60);
-  if (!text) throw new Error("У листа должно быть название.");
+  if (!text) throw new Error(apiText("api.sheets.name"));
   return text;
 }
 
@@ -102,7 +103,7 @@ export function listSheets(state: BookState): SheetTab[] {
 
 function findSheet(state: BookState, sheetId: string): SheetTab {
   const sheet = listSheets(state).find((item) => item.id === sheetId);
-  if (!sheet) throw new Error("Такого листа нет — возможно, его удалили на другом устройстве.");
+  if (!sheet) throw new Error(apiText("api.sheets.notFound"));
   return sheet;
 }
 
@@ -351,7 +352,7 @@ function onBudgetSheet<Result>(
   return (state: BookState, body: Body, makeId: () => string): Result => {
     const sheetId = targetSheet(body);
     if (findSheet(state, sheetId).kind === "free")
-      throw new Error("Это действие — для бюджетного листа.");
+      throw new Error(apiText("api.sheets.budgetOnly"));
     const scoped = sheetScope(state, sheetId);
     const result = run(scoped, body, makeId);
     putScope(state, sheetId, scoped);
@@ -364,7 +365,7 @@ function onFreeSheet<Result>(run: (state: BookState, sheetId: string, body: Body
   return (state: BookState, body: Body): Result => {
     const sheetId = targetSheet(body);
     if (findSheet(state, sheetId).kind !== "free")
-      throw new Error(`Неизвестное действие с таблицей: ${String(body.action ?? "")}`);
+      throw new Error(apiText("api.sheet.unknownAction", { action: String(body.action ?? "") }));
     return run(state, sheetId, body);
   };
 }
@@ -412,8 +413,8 @@ export const WORKBOOK_ACTIONS = {
 /** Действие, которого нет ни у одного листа, — та же ошибка, что и прежде. */
 export function unknownWorkbookAction(state: BookState, body: Body): never {
   if (findSheet(state, targetSheet(body)).kind === "free")
-    throw new Error("Это действие — для бюджетного листа.");
-  throw new Error(`Неизвестное действие с таблицей: ${String(body.action ?? "")}`);
+    throw new Error(apiText("api.sheets.budgetOnly"));
+  throw new Error(apiText("api.sheet.unknownAction", { action: String(body.action ?? "") }));
 }
 
 /** Перенос из Excel в бюджетный лист — через то же окно. */
@@ -461,7 +462,7 @@ export const SHEETS_ACTIONS = {
 
   remove: (state: BookState, body: Body) => {
     const id = String(body.id ?? "");
-    if (id === MAIN_SHEET) throw new Error("Главную таблицу удалить нельзя — её можно очистить.");
+    if (id === MAIN_SHEET) throw new Error(apiText("api.sheets.mainUndeletable"));
     findSheet(state, id);
     // Всё, что принадлежит листу, уходит вместе с ним; корзина (lib/trash)
     // соберёт это в одну запись «лист», чтобы вернуть целиком.
@@ -483,7 +484,7 @@ export const SHEETS_ACTIONS = {
 
 /** Действие с листами, которого нет. */
 export function unknownSheetsAction(body: Body): never {
-  throw new Error(`Неизвестное действие с листами: ${String(body.action ?? "")}`);
+  throw new Error(apiText("api.sheets.unknownAction", { action: String(body.action ?? "") }));
 }
 
 /** Лист из Excel для переноса книги целиком. */

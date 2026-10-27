@@ -4,7 +4,8 @@ import type { GoalsPageData } from "@/lib/data";
 import { id, toFormObject } from "@/lib/api/local/helpers";
 import { localCalendarDate, storedTransactionDate } from "@/lib/transactions/date";
 import { convert } from "@/lib/currency";
-import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
+import { isUsableMoney, roundMoney } from "@/lib/utils";
+import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
 import { goalFamily } from "@/lib/family/goal-shares";
 import { type LocalState, recomputeGoal, goalSharesFrom } from "@/lib/api/local/state";
 import { applyBalance, ratesOf } from "@/lib/api/local/money";
@@ -47,7 +48,7 @@ export function upsertGoal(state: LocalState, body: unknown, method: "POST" | "P
     convert(difference, state.currency, account.currency, ratesOf(state))
   );
   if (difference > 0 && accountDelta > account.balance)
-    throw new Error("Недостаточно средств на счёте.");
+    throw new Error(apiText("api.account.insufficient"));
   return applyGoalMovement(state, row, account, {
     accountDelta: -accountDelta,
     goalDelta: difference
@@ -64,8 +65,8 @@ export function depositToGoal(state: LocalState, body: unknown) {
   const goal = goalById(state, input.goalId);
   const account = goalAccount(state, input.accountId || goal.linkedAccountId);
   const amount = Number(input.amount);
-  if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
-  if (amount > account.balance) throw new Error("Недостаточно средств на счёте.");
+  if (!isUsableMoney(amount)) throw new Error(moneyRangeText());
+  if (amount > account.balance) throw new Error(apiText("api.account.insufficient"));
 
   // The amount is typed in the account's own currency — that is the money the
   // owner is looking at — and a goal is kept in the app's, like every total.
@@ -89,8 +90,8 @@ export function withdrawFromGoal(state: LocalState, body: unknown) {
   // Typed on the goal's side here: it is the jar being emptied, and the jar is
   // counted in the app's currency.
   const amount = Number(input.amount);
-  if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
-  if (amount > goal.currentAmount) throw new Error("В цели меньше денег, чем вы снимаете.");
+  if (!isUsableMoney(amount)) throw new Error(moneyRangeText());
+  if (amount > goal.currentAmount) throw new Error(apiText("api.goal.notEnough"));
 
   return applyGoalMovement(
     state,
@@ -106,14 +107,14 @@ export function withdrawFromGoal(state: LocalState, body: unknown) {
 
 export function goalById(state: LocalState, goalId: string | undefined) {
   const goal = state.goals.find((item) => item.id === goalId);
-  if (!goal) throw new Error("Цель не найдена.");
+  if (!goal) throw new Error(apiText("api.goal.notFound"));
   return goal;
 }
 
 export function goalAccount(state: LocalState, accountId: string | undefined) {
-  if (!accountId) throw new Error("Выберите счёт.");
+  if (!accountId) throw new Error(apiText("api.account.pick"));
   const account = state.accounts.find((item) => item.id === accountId && !item.isArchived);
-  if (!account) throw new Error("Выберите существующий активный счёт.");
+  if (!account) throw new Error(apiText("api.account.pickActive"));
   return account;
 }
 

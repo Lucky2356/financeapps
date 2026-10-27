@@ -27,16 +27,16 @@ import {
   type SyncTransport
 } from "@/lib/sync/protocol";
 import { shellFetch } from "@/lib/sync/shell-fetch";
+import { apiText, serverText } from "@/lib/i18n/api-text";
 
 /**
  * Служба больше не узнаёт билет этого устройства. Своими словами, а не «Нужен
  * вход.»: человеку, у которого на экране «Синхронизация включена», голое
  * «нужен вход» не говорит ни что случилось, ни что нажать.
  */
-export const LOST_LINK =
-  "Сервер больше не узнаёт это устройство: его отключили на другом устройстве или " +
-  "данные на сервере стёрты. Записи здесь целы — нажмите «Подключить заново» в разделе " +
-  "«Синхронизация».";
+export function lostLink(): string {
+  return apiText("api.sync.lostLink");
+}
 
 /** Сервер ответил отказом, который повторять бесполезно. */
 export class ServerRefused extends Error {
@@ -122,7 +122,7 @@ async function ask(
   limitMs = REQUEST_LIMIT_MS
 ): Promise<{ status: number; data: Json }> {
   if (!usable(credentials.token)) {
-    throw new ServerRefused(401, LOST_LINK);
+    throw new ServerRefused(401, lostLink());
   }
 
   // Срок — на весь обмен целиком, вместе с чтением тела: ответ может и
@@ -192,7 +192,7 @@ export class HttpSyncTransport implements SyncTransport {
   async list(): Promise<SlotSummary[]> {
     const { status, data } = await ask(this.credentials, ROUTES.slots, {}, this.requestMs);
     if (status !== 200)
-      throw new ServerRefused(status, String(data.error ?? "Не отдаёт перечень."));
+      throw new ServerRefused(status, serverText(data, apiText("api.sync.listFailed")));
     return (data.slots ?? []) as SlotSummary[];
   }
 
@@ -204,7 +204,7 @@ export class HttpSyncTransport implements SyncTransport {
       this.requestMs
     );
     if (status !== 200)
-      throw new ServerRefused(status, String(data.error ?? "Служба не отдаёт данные."));
+      throw new ServerRefused(status, serverText(data, apiText("api.sync.pullFailed")));
     return data as unknown as SlotSnapshot;
   }
 
@@ -220,7 +220,7 @@ export class HttpSyncTransport implements SyncTransport {
     // отказом приезжает то, что лежит на сервере, чтобы не ходить второй раз.
     if (status === 409) return data as unknown as PutResult;
     if (status !== 200)
-      throw new ServerRefused(status, String(data.error ?? "Не принимает запись."));
+      throw new ServerRefused(status, serverText(data, apiText("api.sync.pushFailed")));
     return data as unknown as PutResult;
   }
 

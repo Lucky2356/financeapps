@@ -17,6 +17,7 @@
 
 import { fromBase64, toBase64 } from "@/lib/sync/bytes";
 import type { Vault } from "@/lib/sync/vault-crypto";
+import { apiText } from "@/lib/i18n/api-text";
 
 /** Что едет внутри. Всё, чтобы второе устройство стало таким же, как первое. */
 export type PairPackage = {
@@ -58,7 +59,7 @@ export async function importTransferKey(text: string): Promise<CryptoKey> {
       "encrypt"
     ]);
   } catch {
-    throw new Error("Код с нового устройства не читается. Покажите на нём новый.");
+    throw new Error(apiText("api.pair.unreadable"));
   }
 }
 
@@ -97,10 +98,10 @@ export async function openPackage(keyText: string, sealed: string): Promise<Pair
     );
     pack = JSON.parse(new TextDecoder().decode(plain)) as PairPackage;
   } catch {
-    throw new Error("Код не подошёл к этому устройству. Покажите на первом устройстве новый.");
+    throw new Error(apiText("api.pair.wrongDevice"));
   }
   if (pack?.v !== 1 || !pack.bookKey || !pack.vault) {
-    throw new Error("Код не подошёл к этому устройству. Покажите на первом устройстве новый.");
+    throw new Error(apiText("api.pair.wrongDevice"));
   }
   return pack;
 }
