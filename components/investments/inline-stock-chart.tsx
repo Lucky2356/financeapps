@@ -6,7 +6,7 @@ import { StockPriceChart } from "@/components/charts/lazy";
 import type { StockPricePoint } from "@/components/charts/stock-price-chart";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 
 export type StockDetailSeed = {
@@ -31,7 +31,7 @@ function ChangeBadge({ value, suffix }: { value: number; suffix: string }) {
   return (
     <span className={up ? "text-success" : "text-destructive"}>
       {up ? "+" : ""}
-      {value.toFixed(2)}% <span className="text-xs text-muted-foreground">{suffix}</span>
+      {formatDecimal(value, 2)}% <span className="text-xs text-muted-foreground">{suffix}</span>
     </span>
   );
 }

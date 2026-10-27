@@ -4,4 +4,11 @@
 
 import type { Messages } from "@/lib/i18n/catalog";
 
-export const ru: Messages = {};
+export const ru: Messages = {
+  // Перенос таблицы из Excel: подсказка в поле для вставки (столбцы — через Tab)
+  "ui.sheetImport.pastePlaceholder": "Месяц\tОстаток\tДоходы\tПродукты\t…",
+  // Код связки устройств картинкой — для чтения с экрана
+  "ui.pairingQr.aria": "Код связки картинкой",
+  // Отчёт «Год к году», когда прошлого года в учёте нет
+  "ui.rep.noPrevYear": "за {prev} нет данных"
+};

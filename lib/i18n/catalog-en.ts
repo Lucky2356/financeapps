@@ -1846,7 +1846,7 @@ export const en: Messages = {
   "inv.tax.gain": "Gains on positions",
   "inv.tax.loss": "Losses on positions",
   "inv.tax.base": "Taxable base",
-  "inv.tax.estimated": "Estimated tax (НДФЛ)",
+  "inv.tax.estimated": "Estimated income tax",
   "inv.tax.disclaimer":
     "An estimate if you sold every position now. Russian PIT is 13% on the base up to ₽2.4M and 15% above. Excludes the long-term-holding exemption, commissions, dividends and already-realized trades. Guidance, not a tax report.",
   "inv.div.title": "Dividends",

@@ -174,8 +174,9 @@ describe("smaller figures", () => {
       { date: new Date(2025, 0, 10).toISOString(), type: "INCOME", amount: 0 }
     ];
     const yoy = buildYoY(rows as never, 2026);
-    // Savings went from 0 to −50 000; that used to read as +100% growth.
-    expect(yoy.savingsChangePct).toBe(-100);
+    // Savings went from 0 to −50 000; that used to read as +100% growth. A
+    // percentage of nothing means nothing either way, so there is none at all.
+    expect(yoy.savingsChangePct).toBeNull();
   });
 
   it("keeps the critical advice when a dozen budgets are exceeded", () => {

@@ -22,10 +22,13 @@
 import qrcode from "qrcode-generator";
 import { useMemo } from "react";
 
+import { useI18n } from "@/lib/i18n/context";
+
 /** Модулей тишины по краю. Меньше нельзя: так устроен формат. */
 const QUIET = 4;
 
 export function PairingQr({ value, size = 220 }: { value: string; size?: number }) {
+  const { t } = useI18n();
   const drawing = useMemo(() => {
     // Тип 0 — «подбери сам под длину»: ссылка растёт вместе с адресом службы,
     // и закреплять размер значило бы однажды не вместить чей-то длинный адрес.
@@ -54,7 +57,7 @@ export function PairingQr({ value, size = 220 }: { value: string; size?: number 
   return (
     <svg
       role="img"
-      aria-label="Код связки картинкой"
+      aria-label={t("ui.pairingQr.aria")}
       data-testid="pairing-qr"
       width={size}
       height={size}

@@ -147,6 +147,33 @@
     width: 0;
     height: 0;
   }
+  /* Край полосы, за которым есть ещё вкладки, гаснет — иначе последняя
+     обрывалась на полуслове без намёка, что полоса прокручивается
+     (data-fade ставит components/hub-tabs.tsx). */
+  .fa-hubstrip[data-fade="end"] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+  .fa-hubstrip[data-fade="start"] {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+  }
+  .fa-hubstrip[data-fade="both"] {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 32px,
+      #000 calc(100% - 32px),
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 32px,
+      #000 calc(100% - 32px),
+      transparent
+    );
+  }
 
   /* The headline card: one accent-filled panel at the top of the home screen,
      the single place in the app that is painted rather than outlined. The

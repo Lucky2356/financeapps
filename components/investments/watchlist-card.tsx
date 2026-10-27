@@ -5,7 +5,7 @@ import { ChevronDown, Trash2 } from "lucide-react";
 import { InlineStockChart } from "@/components/investments/inline-stock-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type { InvestmentData } from "@/types/finance";
@@ -60,11 +60,11 @@ export function WatchlistCard({
           <p className="flex items-center gap-2 text-xs">
             <span className={cn("font-medium", toneClass(security.changeDay >= 0))}>
               {t("inv.col.day")} {security.changeDay >= 0 ? "+" : ""}
-              {security.changeDay.toFixed(2)}%
+              {formatDecimal(security.changeDay, 2)}%
             </span>
             <span className={cn("font-medium", toneClass(security.change30d >= 0))}>
               {t("inv.col.30d")} {security.change30d >= 0 ? "+" : ""}
-              {security.change30d.toFixed(2)}%
+              {formatDecimal(security.change30d, 2)}%
             </span>
           </p>
         </div>

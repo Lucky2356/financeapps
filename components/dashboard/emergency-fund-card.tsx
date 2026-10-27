@@ -3,7 +3,7 @@
 import { ShieldCheck } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FINANCE_TERM_HINTS, InfoHint } from "@/components/info-hint";
+import { InfoHint, METRIC_HINT_KEY } from "@/components/info-hint";
 import { Progress } from "@/components/ui/progress";
 import type { EmergencyFundStatus } from "@/types/finance";
 import { formatCurrency, formatDecimal } from "@/lib/format";
@@ -24,7 +24,7 @@ export function EmergencyFundCard({
         <CardTitle className="flex items-center gap-2">
           <ShieldCheck className="size-4 text-primary" />
           {t("ef.title")}
-          <InfoHint text={FINANCE_TERM_HINTS["Финансовая подушка"]} />
+          <InfoHint text={METRIC_HINT_KEY.emergencyFund} />
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -8,6 +8,7 @@ import { AppSettingsSync } from "@/components/app-settings-sync";
 import { AutomationRunner } from "@/components/automation-runner";
 import { PhoneReminders } from "@/components/phone-reminders";
 import { CommandPalette } from "@/components/command-palette";
+import { DocumentTitle } from "@/components/document-title";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { WhatsNew } from "@/components/whats-new";
 import { PreferencesRoot } from "@/components/preferences-root";
@@ -29,6 +30,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange
       >
         <WindowTheme />
+        {/* Заголовок окна — на языке экрана, а не сборки (и за замком тоже). */}
+        <DocumentTitle />
         <ConfirmProvider>
           {/* Всё, что читает книгу, — за воротами замка, и ничего мимо них.
               Держи мы тут хоть что-то снаружи, оно принялось бы за работу над

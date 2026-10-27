@@ -4,7 +4,7 @@ import { ChevronDown, Edit2, Trash2 } from "lucide-react";
 
 import { InlineStockChart } from "@/components/investments/inline-stock-chart";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency, formatDecimal, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 import type { InvestmentData } from "@/types/finance";
@@ -58,7 +58,7 @@ export function HoldingCard({
             {position.ticker}
             {dayKnown ? (
               <span className={cn("text-xs font-medium tabular-nums", toneClass(dayPositive))}>
-                {dayPositive ? "▲" : "▼"} {Math.abs(dayChange ?? 0).toFixed(2)}%
+                {dayPositive ? "▲" : "▼"} {formatDecimal(Math.abs(dayChange ?? 0), 2)}%
               </span>
             ) : null}
           </p>
@@ -90,7 +90,7 @@ export function HoldingCard({
           </p>
           <p className={cn("text-xs", toneClass(pnlPositive))}>
             {pnlPositive ? "+" : ""}
-            {returnPct.toFixed(1)}%
+            {formatDecimal(returnPct, 1)}%
           </p>
         </div>
       </button>
