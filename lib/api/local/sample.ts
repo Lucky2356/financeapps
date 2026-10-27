@@ -5,16 +5,15 @@ import { sortLots, summarizeLots } from "@/lib/investments/lots";
 import { roundMoney } from "@/lib/utils";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import {
-  SAMPLE_ACCOUNTS,
   SAMPLE_BUDGETS,
-  SAMPLE_CATEGORIES,
   SAMPLE_DIVIDEND,
-  SAMPLE_GOALS,
   SAMPLE_PORTFOLIO,
-  SAMPLE_TRANSACTIONS,
+  sampleDataset,
   sampleDate,
   sampleDeadline
 } from "@/lib/sample-data";
+import type { Locale } from "@/lib/i18n/catalog";
+import { getClientLocale } from "@/lib/i18n/client-locale";
 import {
   currency,
   type CategoryOption,
@@ -27,15 +26,20 @@ import { buildBudgetRow } from "@/lib/api/local/budgets";
 // Builds a fully-populated example state (accounts, categories, transactions,
 // budgets, goals) from the shared sample dataset, so a new user can explore a
 // realistic app in one click.
-export function buildSampleState(): LocalState {
-  const accounts = SAMPLE_ACCOUNTS.map((account) => ({
+//
+// На языке интерфейса: человек с английским интерфейсом смотрит пример по-
+// английски. Пример — это его данные на время знакомства, и после загрузки
+// они не переводятся, как и любые другие.
+export function buildSampleState(locale: Locale = getClientLocale()): LocalState {
+  const sample = sampleDataset(locale);
+  const accounts = sample.accounts.map((account) => ({
     id: account.id,
     name: account.name,
     type: account.type,
     balance: account.balance,
     currency
   }));
-  const categories: CategoryOption[] = SAMPLE_CATEGORIES.map((category) => ({
+  const categories: CategoryOption[] = sample.categories.map((category) => ({
     id: category.id,
     label: category.label,
     kind: category.kind,
@@ -43,7 +47,7 @@ export function buildSampleState(): LocalState {
     ...(category.isEssential ? { isEssential: true } : {}),
     ...(category.isSubscription ? { isSubscription: true } : {})
   }));
-  const transactions = SAMPLE_TRANSACTIONS.map((tx, index) => {
+  const transactions = sample.transactions.map((tx, index) => {
     const account = accounts.find((item) => item.id === tx.accountId)!;
     const category = categories.find((item) => item.id === tx.categoryId)!;
     return {
@@ -56,7 +60,7 @@ export function buildSampleState(): LocalState {
       category: { id: category.id, label: category.label, color: category.color }
     };
   });
-  const goals = SAMPLE_GOALS.map((goal) =>
+  const goals = sample.goals.map((goal) =>
     recomputeGoal({
       id: goal.id,
       title: goal.title,

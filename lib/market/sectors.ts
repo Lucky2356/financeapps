@@ -71,7 +71,12 @@ const SECTOR_EN: Record<string, string> = {
   Облигации: "Bonds",
   Фонды: "Funds",
   "Драгоценные металлы": "Precious metals",
-  Прочее: "Other"
+  Прочее: "Other",
+  // Так записаны отрасли бумаг встроенного примера (lib/sample-data.ts) —
+  // и так их мог вписать человек руками.
+  Финансы: "Finance",
+  "Нефть и газ": "Oil & Gas",
+  Технологии: "Technology"
 };
 
 export function sectorLabel(sector: string, locale: "ru" | "en"): string {

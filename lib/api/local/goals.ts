@@ -8,6 +8,7 @@ import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
 import { goalFamily } from "@/lib/family/goal-shares";
 import { type LocalState, recomputeGoal, goalSharesFrom } from "@/lib/api/local/state";
 import { applyBalance, ratesOf } from "@/lib/api/local/money";
+import { dataText } from "@/lib/i18n/data-text";
 
 export function upsertGoal(state: LocalState, body: unknown, method: "POST" | "PUT") {
   const input = toFormObject(body);
@@ -26,7 +27,7 @@ export function upsertGoal(state: LocalState, body: unknown, method: "POST" | "P
 
   const row = recomputeGoal({
     id: previous?.id ?? id("goal"),
-    title: input.title?.trim() || "Новая цель",
+    title: input.title?.trim() || dataText("data.goal.new"),
     targetAmount: Number(input.targetAmount),
     // The money side is settled below, never here.
     currentAmount: held,

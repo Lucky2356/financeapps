@@ -11,7 +11,8 @@ import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
 import { convert, isSupportedCurrency } from "@/lib/currency";
 import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
 import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount";
-import { TRANSFER_CATEGORY_LABEL, transferKeyOf } from "@/lib/transactions/transfers";
+import { TRANSFER_CATEGORY_KEY, transferKeyOf } from "@/lib/transactions/transfers";
+import { dataText } from "@/lib/i18n/data-text";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { matchRule } from "@/lib/categorization-rules";
@@ -24,13 +25,15 @@ import {
   withCurrentNames,
   isBackupReminderDue,
   SAVINGS_ACCOUNT_TYPES,
-  DEFAULT_IMPORT_ACCOUNT,
-  RECONCILE_CATEGORY_LABEL,
+  DEFAULT_IMPORT_ACCOUNT_KEY,
+  RECONCILE_CATEGORY_KEY,
   familyFields
 } from "@/lib/api/local/state";
 import {
   applyBalance,
   findOrCreateAccount,
+  findOrCreateAppAccount,
+  findOrCreateAppCategory,
   findOrCreateCategory,
   ratesOf,
   sumInBase
@@ -47,7 +50,7 @@ export function upsertAccount(state: LocalState, body: unknown, method: "POST" |
   const account = {
     ...previous,
     id: method === "PUT" && input.id ? input.id : id("account"),
-    name: input.name?.trim() || "Новый счет",
+    name: input.name?.trim() || dataText("data.account.new"),
     type: input.type || "DEBIT_CARD",
     balance: Number(input.balance ?? 0),
     // Honour an explicitly chosen supported currency; fall back to the base.
@@ -354,7 +357,7 @@ export function reconcileAccount(state: LocalState, body: unknown) {
   const difference = roundMoney(bank - account.balance);
   if (difference === 0) return { recorded: false };
   const kind = difference > 0 ? "INCOME" : "EXPENSE";
-  const category = findOrCreateCategory(state, RECONCILE_CATEGORY_LABEL, kind);
+  const category = findOrCreateAppCategory(state, RECONCILE_CATEGORY_KEY, kind);
   const tx = upsertTransaction(
     state,
     {
@@ -363,7 +366,7 @@ export function reconcileAccount(state: LocalState, body: unknown) {
       accountId: account.id,
       categoryId: category.id,
       date: isoDay(new Date()),
-      description: "Сверка с банком",
+      description: dataText("data.tx.reconcile"),
       noTrip: "1"
     },
     "POST"
@@ -390,8 +393,8 @@ export function linkTransfer(state: LocalState, body: unknown) {
   if (Math.abs(expense.amount - income.amount) >= 0.005)
     throw new Error("Суммы списания и поступления не совпадают.");
   const transferId = id("transfer");
-  const out = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
-  const into = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
+  const out = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "EXPENSE");
+  const into = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "INCOME");
   const asTransfer = (
     row: TransactionRow,
     category: { id: string; label: string; color: string; icon?: string }
@@ -458,10 +461,11 @@ export function createTransfer(state: LocalState, body: unknown) {
     wanted ?? roundMoney(convert(amount, fromAccount.currency, toAccount.currency, rates));
 
   const transferId = id("transfer");
-  const expenseCategory = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
-  const incomeCategory = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
+  const expenseCategory = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "EXPENSE");
+  const incomeCategory = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "INCOME");
   const description =
-    input.description?.trim() || `Перевод ${fromAccount.name} -> ${toAccount.name}`;
+    input.description?.trim() ||
+    dataText("data.tx.transfer", undefined, { from: fromAccount.name, to: toAccount.name });
   const date = input.date || new Date().toISOString();
   const expense = upsertTransaction(
     state,
@@ -689,7 +693,7 @@ export function importCsvRows(state: LocalState, body: unknown) {
     const accountName = String(row[input.accountColumn ?? ""] ?? "").trim();
     const account = accountName
       ? findOrCreateAccount(state, accountName)
-      : (fallbackAccount ?? findOrCreateAccount(state, DEFAULT_IMPORT_ACCOUNT));
+      : (fallbackAccount ?? findOrCreateAppAccount(state, DEFAULT_IMPORT_ACCOUNT_KEY));
     // Rows without an account of their own follow the first one there is —
     // including one this import has just made.
     fallbackAccount = fallbackAccount ?? account;
@@ -720,7 +724,11 @@ export function importCsvRows(state: LocalState, body: unknown) {
         (suggestedId
           ? state.categories.find((item) => item.id === suggestedId && item.kind === type)
           : undefined) ??
-        findOrCreateCategory(state, type === "INCOME" ? "Импорт доходов" : "Импорт расходов", type);
+        findOrCreateAppCategory(
+          state,
+          type === "INCOME" ? "data.cat.importIncome" : "data.cat.importExpense",
+          type
+        );
     }
     // День строки файла — тот, что будет записан, а не UTC-день местной
     // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же

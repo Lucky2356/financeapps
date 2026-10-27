@@ -16,7 +16,7 @@ import {
   type SheetColumnKind,
   type SheetTarget
 } from "@/lib/sheet/model";
-import { SHEET_TEMPLATES, sheetTemplate, type SheetTemplate } from "@/lib/sheet/templates";
+import { sheetTemplate, type SheetTemplate } from "@/lib/sheet/templates";
 import type { Stamped } from "@/lib/sync/row-stamps";
 
 export type SheetCellRow = SheetCell & { id: string };
@@ -143,7 +143,7 @@ function readWizard(body: Body): Wizard | null {
     : (template?.articles ?? []).map((name) => ({ name }));
   const months = Math.round(Number(body.months) || template?.months || 12);
   return {
-    template: template ?? SHEET_TEMPLATES.categories,
+    template: template ?? sheetTemplate("categories")!,
     months: Math.max(1, Math.min(60, months)),
     opening: optionalAmount(body.opening),
     income: optionalAmount(body.income),

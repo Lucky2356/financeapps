@@ -9,6 +9,7 @@
 import type { NetWorthBreakdown, NetWorthPoint } from "@/types/finance";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/catalog";
 import { intlLocale } from "@/lib/i18n/display-locale";
+import { isDataLabel } from "@/lib/i18n/data-text";
 import { isoDay, snapshotAsOf, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import { roundMoney } from "@/lib/utils";
 
@@ -55,7 +56,9 @@ export type NetWorthFlowTx = {
 
 // Goal deposits are recorded as an expense in this category but do not change
 // net worth (money just moves from a balance into a goal), so they are skipped.
-const SAVINGS_CATEGORY = "Накопления";
+// Узнаётся под любым из имён — «Накопления» или «Savings», на каком бы языке
+// её ни завели.
+const SAVINGS_CATEGORY_KEY = "data.cat.savings";
 
 export function buildNetWorthTrend(params: {
   currentNetWorth: number;
@@ -74,7 +77,7 @@ export function buildNetWorthTrend(params: {
   // as paired EXPENSE+INCOME and cancel out; goal-deposit expenses are excluded.
   const flows = params.transactions
     .filter((tx) => tx.type === "INCOME" || tx.type === "EXPENSE")
-    .filter((tx) => (tx.category?.label ?? "") !== SAVINGS_CATEGORY)
+    .filter((tx) => !isDataLabel(tx.category?.label, SAVINGS_CATEGORY_KEY))
     // A debt payment takes money off an account and takes the same amount off
     // what is owed, so net worth does not move. Counted as plain spending, it
     // made every earlier point higher than it really was — the chart of someone

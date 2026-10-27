@@ -5,6 +5,8 @@
 // новая операция получает метку поездки сама, и на экране поездки видно,
 // сколько ушло из бюджета, на что и сколько можно в день до конца.
 
+import { dataText } from "@/lib/i18n/data-text";
+
 export type Trip = {
   id: string;
   name: string;
@@ -54,7 +56,8 @@ export function tripTag(name: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 32);
-  return tag || "поездка";
+  // Название без единой буквы и цифры — метка по умолчанию, на языке интерфейса.
+  return tag || dataText("data.trip.tag");
 }
 
 /** Поездка, идущая в этот день. Несколько — берётся начавшаяся позже. */

@@ -27,7 +27,8 @@ import type {
   TargetAllocation
 } from "@/types/finance";
 import type { LocalState } from "@/lib/api/local/state";
-import { findOrCreateCategory, ratesOf } from "@/lib/api/local/money";
+import { findOrCreateAppCategory, ratesOf } from "@/lib/api/local/money";
+import { dataText } from "@/lib/i18n/data-text";
 import { upsertTransaction, deleteTransaction } from "@/lib/api/local/ledger";
 
 /**
@@ -394,7 +395,7 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
   if (!account) throw new Error("Выберите существующий активный счёт.");
   const proceeds = roundMoney(event.quantity * event.sellPrice - event.fee);
   if (proceeds <= 0) return;
-  const category = findOrCreateCategory(state, "Инвестиции", "INCOME");
+  const category = findOrCreateAppCategory(state, "data.cat.investments", "INCOME");
   const posted = upsertTransaction(
     state,
     {
@@ -405,7 +406,7 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
       accountId: account.id,
       categoryId: category.id,
       date: event.date,
-      description: `Продажа ${event.ticker}`
+      description: dataText("data.tx.sale", undefined, { ticker: event.ticker })
     },
     "POST"
   );

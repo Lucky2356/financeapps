@@ -1,3 +1,5 @@
+import { dataText } from "@/lib/i18n/data-text";
+
 /**
  * Как это устройство назовётся в списке устройств учётной записи.
  *
@@ -12,10 +14,12 @@
  * откуда человек подключился.
  */
 export function deviceName(): string {
-  if (typeof navigator === "undefined") return "Устройство";
+  // На языке интерфейса в минуту подключения: имя уходит в список устройств
+  // учётной записи и дальше не переводится — как и любое имя, данное человеком.
+  if (typeof navigator === "undefined") return dataText("data.device.generic");
   const agent = navigator.userAgent;
-  if (/Android/i.test(agent)) return "Телефон (Android)";
-  if (/Windows/i.test(agent)) return "Компьютер (Windows)";
-  if (/Mac OS/i.test(agent)) return "Компьютер (Mac)";
-  return "Устройство";
+  if (/Android/i.test(agent)) return dataText("data.device.android");
+  if (/Windows/i.test(agent)) return dataText("data.device.windows");
+  if (/Mac OS/i.test(agent)) return dataText("data.device.mac");
+  return dataText("data.device.generic");
 }

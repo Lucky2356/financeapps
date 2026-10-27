@@ -29,6 +29,7 @@ import {
 } from "@/lib/api/local/sheet";
 import type { SheetColumn, SheetTarget } from "@/lib/sheet/model";
 import type { Stamped } from "@/lib/sync/row-stamps";
+import { dataText, isDataLabel } from "@/lib/i18n/data-text";
 
 export const MAIN_SHEET = "main";
 
@@ -74,7 +75,20 @@ const MAX_FREE_COLS = 200;
 
 type Body = Record<string, unknown>;
 
-const DEFAULT_MAIN_NAME = "Бюджет";
+const DEFAULT_MAIN_KEY = "data.sheet.main";
+
+/**
+ * Имя главной таблицы для показа. Пока человек её не переименовал, у неё
+ * имя по умолчанию — «Бюджет», заведённое на языке того устройства, что
+ * завело её первым. Такое имя показывается на языке интерфейса: у английского
+ * телефона в книге русского ноутбука главная таблица — «Budget». Имя, данное
+ * человеком, показывается как записано.
+ */
+function mainSheetName(stored: string | undefined): string {
+  return stored === undefined || isDataLabel(stored, DEFAULT_MAIN_KEY)
+    ? dataText(DEFAULT_MAIN_KEY)
+    : stored;
+}
 
 function sheetName(value: unknown): string {
   const text = String(value ?? "")
@@ -91,7 +105,7 @@ export function listSheets(state: BookState): SheetTab[] {
   const ordered = [
     {
       id: MAIN_SHEET,
-      name: main?.name ?? DEFAULT_MAIN_NAME,
+      name: mainSheetName(main?.name),
       kind: "budget" as const,
       order: main?.order ?? 0
     },
@@ -276,7 +290,10 @@ export function createSheet(
 function ensureOrders(state: BookState) {
   const rows = state.sheets ?? [];
   if (!rows.some((row) => row.id === MAIN_SHEET)) {
-    state.sheets = [{ id: MAIN_SHEET, name: DEFAULT_MAIN_NAME, kind: "budget", order: 0 }, ...rows];
+    state.sheets = [
+      { id: MAIN_SHEET, name: dataText(DEFAULT_MAIN_KEY), kind: "budget", order: 0 },
+      ...rows
+    ];
   }
 }
 

@@ -11,6 +11,7 @@ import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
 import type { LiabilityRow } from "@/types/finance";
 import { type LocalState, recomputeLiability } from "@/lib/api/local/state";
 import { ratesOf, sumInBase } from "@/lib/api/local/money";
+import { dataText } from "@/lib/i18n/data-text";
 import { recordDebtApplied, upsertTransaction } from "@/lib/api/local/ledger";
 
 export function upsertLiability(state: LocalState, body: unknown, method: "POST" | "PUT") {
@@ -25,7 +26,7 @@ export function upsertLiability(state: LocalState, body: unknown, method: "POST"
   const dueDayRaw = Number(input.dueDay);
   const stored: Omit<LiabilityRow, "progress"> = {
     id: method === "PUT" && input.id ? input.id : id("debt"),
-    name: input.name?.trim() || "Новое обязательство",
+    name: input.name?.trim() || dataText("data.debt.new"),
     kind,
     balance,
     originalAmount: Math.max(Number(input.originalAmount ?? 0), balance),

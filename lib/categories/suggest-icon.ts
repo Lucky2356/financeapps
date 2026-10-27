@@ -18,29 +18,56 @@ type IconRule = { icon: string; keys: string[] };
 // "доставка еды" beats "доставка".
 const RULES: IconRule[] = [
   // ── Food and drink ────────────────────────────────────────────────────────
-  { icon: "ShoppingCart", keys: ["продукт", "магазин", "супермаркет", "grocer", "supermarket"] },
+  {
+    icon: "ShoppingCart",
+    keys: ["продукт", "магазин", "супермаркет", "grocer", "supermarket", "food"]
+  },
   {
     icon: "Utensils",
-    keys: ["кафе", "ресторан", "столовая", "обед", "ужин", "доставка еды", "restaurant", "dining"]
+    keys: [
+      "кафе",
+      "ресторан",
+      "столовая",
+      "обед",
+      "ужин",
+      "доставка еды",
+      "restaurant",
+      "dining",
+      "cafe",
+      "eating out",
+      "takeaway",
+      "lunch",
+      "dinner",
+      "food delivery"
+    ]
   },
   { icon: "Coffee", keys: ["кофе", "кофейня", "чай", "coffee", "tea"] },
   { icon: "Pizza", keys: ["пицца", "фастфуд", "бургер", "pizza", "burger", "fast food"] },
   { icon: "Wine", keys: ["алкоголь", "вино", "бар", "alcohol", "wine"] },
   { icon: "Beer", keys: ["пиво", "beer"] },
-  { icon: "CakeSlice", keys: ["сладости", "десерт", "кондитер", "sweets", "dessert"] },
+  { icon: "CakeSlice", keys: ["сладости", "десерт", "кондитер", "sweets", "dessert", "snacks"] },
 
   // ── Getting around ────────────────────────────────────────────────────────
-  { icon: "Car", keys: ["авто", "машина", "автомобиль", "такси", "car", "taxi"] },
-  { icon: "Fuel", keys: ["бензин", "топливо", "азс", "заправка", "fuel", "petrol"] },
-  { icon: "Bus", keys: ["транспорт", "автобус", "проезд", "метро", "transport", "bus", "metro"] },
+  {
+    icon: "Car",
+    keys: ["авто", "машина", "автомобиль", "такси", "car", "cars", "taxi", "vehicle"]
+  },
+  { icon: "Fuel", keys: ["бензин", "топливо", "азс", "заправка", "fuel", "petrol", "gasoline"] },
+  {
+    icon: "Bus",
+    keys: ["транспорт", "автобус", "проезд", "метро", "transport", "bus", "metro", "commute"]
+  },
   { icon: "Train", keys: ["поезд", "ржд", "электричка", "train", "railway"] },
   { icon: "Plane", keys: ["самолет", "авиа", "перелет", "flight", "plane", "airline"] },
   { icon: "ParkingCircle", keys: ["парковка", "паркинг", "parking"] },
   { icon: "Bike", keys: ["велосипед", "самокат", "bike", "scooter"] },
 
   // ── Home and bills ────────────────────────────────────────────────────────
-  { icon: "Home", keys: ["аренда", "квартира", "жилье", "съем", "rent", "housing", "apartment"] },
-  { icon: "Receipt", keys: ["жкх", "коммуналка", "квартплата", "utilities", "bills"] },
+  {
+    icon: "Home",
+    keys: ["аренда", "квартира", "жилье", "съем", "rent", "housing", "apartment", "home"]
+  },
+  { icon: "Receipt", keys: ["жкх", "коммуналка", "квартплата", "utilities", "utility", "bills"] },
   { icon: "Zap", keys: ["электричество", "электроэнерг", "свет", "electricity", "power"] },
   { icon: "Droplet", keys: ["вода", "водоснабжение", "water"] },
   { icon: "Flame", keys: ["газ", "отопление", "heating"] },
@@ -52,13 +79,29 @@ const RULES: IconRule[] = [
   { icon: "Plug", keys: ["техника", "электроника", "гаджет", "electronics", "gadgets"] },
 
   // ── Body and health ───────────────────────────────────────────────────────
-  { icon: "Stethoscope", keys: ["здоровье", "врач", "медицин", "клиника", "health", "doctor"] },
+  {
+    icon: "Stethoscope",
+    keys: [
+      "здоровье",
+      "врач",
+      "медицин",
+      "клиника",
+      "health",
+      "doctor",
+      "medical",
+      "clinic",
+      "dentist"
+    ]
+  },
   { icon: "Pill", keys: ["аптека", "лекарств", "таблетк", "pharmacy", "medicine"] },
   { icon: "Syringe", keys: ["прививк", "вакцин", "анализ", "vaccine"] },
   { icon: "Scissors", keys: ["парикмахер", "стрижка", "барбершоп", "haircut", "barber"] },
   { icon: "Sparkles", keys: ["красота", "косметик", "салон", "уход", "beauty", "cosmetics"] },
   { icon: "Bath", keys: ["баня", "сауна", "spa", "sauna"] },
-  { icon: "Dumbbell", keys: ["спорт", "фитнес", "зал", "тренировк", "sport", "gym", "fitness"] },
+  {
+    icon: "Dumbbell",
+    keys: ["спорт", "фитнес", "зал", "тренировк", "sport", "gym", "fitness", "training"]
+  },
   { icon: "Waves", keys: ["бассейн", "плавание", "pool", "swimming"] },
 
   // ── Life and leisure ──────────────────────────────────────────────────────
@@ -75,12 +118,15 @@ const RULES: IconRule[] = [
   { icon: "Luggage", keys: ["командировк", "business trip"] },
 
   // ── People ────────────────────────────────────────────────────────────────
-  { icon: "Baby", keys: ["дети", "ребенок", "детск", "kids", "children", "baby"] },
-  { icon: "Dog", keys: ["собака", "питомец", "животн", "dog", "pet"] },
+  { icon: "Baby", keys: ["дети", "ребенок", "детск", "kids", "children", "child", "baby"] },
+  { icon: "Dog", keys: ["собака", "питомец", "животн", "dog", "pet", "pets"] },
   { icon: "Cat", keys: ["кот", "кошка", "cat"] },
   { icon: "Gift", keys: ["подарок", "подарк", "gift", "present"] },
   { icon: "Heart", keys: ["благотворительн", "пожертвован", "charity", "donation"] },
-  { icon: "GraduationCap", keys: ["образован", "учеба", "обучение", "курс", "education", "study"] },
+  {
+    icon: "GraduationCap",
+    keys: ["образован", "учеба", "обучение", "курс", "education", "study", "course", "tuition"]
+  },
   { icon: "Book", keys: ["книг", "литератур", "books"] },
   { icon: "School", keys: ["школа", "садик", "детсад", "school", "kindergarten"] },
 
@@ -92,17 +138,36 @@ const RULES: IconRule[] = [
   { icon: "Sprout", keys: ["дача", "огород", "растен", "garden", "plants"] },
 
   // ── Money in, money owed ──────────────────────────────────────────────────
-  { icon: "Banknote", keys: ["зарплата", "зп", "оклад", "аванс", "salary", "wage", "payroll"] },
-  { icon: "Briefcase", keys: ["работа", "бизнес", "фриланс", "подработк", "work", "freelance"] },
+  {
+    icon: "Banknote",
+    keys: ["зарплата", "зп", "оклад", "аванс", "salary", "wage", "payroll", "bonus"]
+  },
+  {
+    icon: "Briefcase",
+    keys: [
+      "работа",
+      "бизнес",
+      "фриланс",
+      "подработк",
+      "work",
+      "freelance",
+      "side income",
+      "side job",
+      "business"
+    ]
+  },
   { icon: "Coins", keys: ["доход", "процент", "income", "interest"] },
   { icon: "PiggyBank", keys: ["накоплен", "сбережен", "копилка", "savings"] },
   { icon: "TrendingUp", keys: ["инвестиц", "дивиденд", "акции", "investments", "dividends"] },
-  { icon: "Landmark", keys: ["банк", "кредит", "ипотека", "займ", "долг", "bank", "loan", "debt"] },
+  {
+    icon: "Landmark",
+    keys: ["банк", "кредит", "ипотека", "займ", "долг", "bank", "loan", "debt", "mortgage"]
+  },
   { icon: "CreditCard", keys: ["карта", "кредитка", "card"] },
   { icon: "HandCoins", keys: ["кэшбэк", "кешбэк", "возврат", "cashback", "refund"] },
   { icon: "ArrowRightLeft", keys: ["перевод", "transfer"] },
   { icon: "Repeat", keys: ["подписк", "subscription"] },
-  { icon: "FileText", keys: ["налог", "штраф", "документ", "tax", "fine"] },
+  { icon: "FileText", keys: ["налог", "штраф", "документ", "tax", "taxes", "fine", "fines"] },
   { icon: "Umbrella", keys: ["страхов", "insurance"] }
 ];
 
