@@ -22,6 +22,12 @@ beforeEach(() => {
 // jsdom lacks ResizeObserver, which recharts' ResponsiveContainer needs.
 if (typeof globalThis.ResizeObserver === "undefined") {
   class ResizeObserverStub {
+    // Колбэк принимается, как у настоящего ResizeObserver: код приложения
+    // передаёт его всегда, и заглушка без параметра выглядела бы для
+    // проверки кода (CodeQL) как вызов с лишним аргументом.
+    constructor(callback?: ResizeObserverCallback) {
+      void callback;
+    }
     observe() {
       /* no-op */
     }
