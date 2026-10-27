@@ -425,5 +425,27 @@ export function mergeBooks(base: Book | null, mine: Book, theirs: Book): MergeRe
     }
   }
 
-  return { state, conflicts, differs: !sameValue(state, theirs) };
+  // Какой профиль открыт — дело этого устройства, а не общих данных. Список
+  // профилей ездит одной книгой, и при слиянии открытый профиль брался с
+  // того устройства, чья правка свежее: подключил ноутбук — и он молча
+  // переключался на профиль телефона, а только что объединённые записи
+  // «пропадали» в другом профиле. Своё остаётся своим, если такой профиль в
+  // слитом списке есть. И в «есть ли что отправить» эта разница не входит:
+  // иначе два устройства с разными открытыми профилями перекидывали бы
+  // список друг другу без конца.
+  let compared = state;
+  for (const field of DEVICE_FIELDS) {
+    const own = mine[field];
+    const profiles = Array.isArray(state.profiles)
+      ? (state.profiles as Array<{ id?: unknown }>)
+      : [];
+    if (typeof own !== "string" || !profiles.some((profile) => profile.id === own)) continue;
+    state[field] = own;
+    compared = { ...compared, [field]: theirs[field] };
+  }
+
+  return { state, conflicts, differs: !sameValue(compared, theirs) };
 }
+
+/** Поля книги, которые у каждого устройства свои (см. конец mergeBooks). */
+const DEVICE_FIELDS = ["activeProfileId"] as const;
