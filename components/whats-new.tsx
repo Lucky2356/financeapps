@@ -3,8 +3,11 @@
 // «Что нового» — один раз после обновления.
 //
 // Слова — из CHANGELOG (lib/whats-new/releases.generated.json), без второго
-// места правды. Выпуск только с исправлениями так и называется — «Исправления
-// в …»: человеку, который ждал нового, честнее сказать, что это починка.
+// места правды. В английском интерфейсе — из его английского издания
+// (CHANGELOG.en.md → releases.generated.en.json); выпуск без перевода
+// показывается по-русски, а не пропадает. Выпуск только с исправлениями так и
+// называется — «Исправления в …»: человеку, который ждал нового, честнее
+// сказать, что это починка.
 // Пропустил несколько выпусков — видит их все, новый раскрыт, прежние свёрнуты.
 
 import { ChevronDown, RefreshCw, ShieldCheck, Sparkles, Trash2, Wrench } from "lucide-react";
@@ -23,7 +26,7 @@ import { APP_VERSION } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n/context";
 import { ONBOARDING_STORAGE_KEY } from "@/lib/onboarding";
 import { readMine, writeMine } from "@/lib/storage/mine";
-import type { WhatsNewItem, WhatsNewRelease } from "@/lib/whats-new/parse";
+import { pickReleases, type WhatsNewItem, type WhatsNewRelease } from "@/lib/whats-new/parse";
 import { decideWhatsNew, MAX_RELEASES, WHATS_NEW_KEY } from "@/lib/whats-new/seen";
 import { cn } from "@/lib/utils";
 
@@ -36,14 +39,23 @@ const loadReleases = () =>
     (module) => module.default as WhatsNewRelease[]
   );
 
+/**
+ * Английские слова — ещё одним куском и только в английском интерфейсе:
+ * русскому окну они не нужны вовсе.
+ */
+const loadEnglishReleases = () =>
+  import("@/lib/whats-new/releases.generated.en.json").then(
+    (module) => module.default as WhatsNewRelease[]
+  );
+
 /** «Настройки → О приложении» открывает окно этим событием. */
 export const WHATS_NEW_OPEN_EVENT = "finapps:whats-new-open";
 
 function sectionIcon(title: string) {
-  if (/^исправлен/i.test(title)) return Wrench;
-  if (/^безопасность/i.test(title)) return ShieldCheck;
-  if (/^убрано/i.test(title)) return Trash2;
-  if (/^изменено/i.test(title)) return RefreshCw;
+  if (/^(исправлен|fix)/i.test(title)) return Wrench;
+  if (/^(безопасность|security)/i.test(title)) return ShieldCheck;
+  if (/^(убрано|removed)/i.test(title)) return Trash2;
+  if (/^(изменено|changed)/i.test(title)) return RefreshCw;
   return Sparkles;
 }
 
@@ -278,8 +290,13 @@ export function WhatsNewDialog({
 
 /** Сам решает, показать ли окно после обновления; открывается и из настроек. */
 export function WhatsNew() {
+  const { locale } = useI18n();
+  // Решение «показать ли» — по русскому списку: он главный и полный, а версии
+  // в обоих одни и те же. Язык выбирается уже при показе.
   const [releases, setReleases] = useState<WhatsNewRelease[]>([]);
+  const [english, setEnglish] = useState<WhatsNewRelease[] | null>(null);
   const [open, setOpen] = useState(false);
+  const wantsEnglish = locale === "en";
 
   useEffect(() => {
     let seen: string | null;
@@ -319,10 +336,29 @@ export function WhatsNew() {
     return () => window.removeEventListener(WHATS_NEW_OPEN_EVENT, openHistory);
   }, []);
 
+  // Язык приходит не сразу (словарь грузится после первого кадра) и может
+  // смениться при открытом окне — поэтому английский кусок грузится здесь, по
+  // языку, а не вместе с русским списком.
+  useEffect(() => {
+    if (!wantsEnglish || !open || english) return;
+    let cancelled = false;
+    loadEnglishReleases()
+      .catch(() => [] as WhatsNewRelease[]) // не загрузился — покажем по-русски
+      .then((list) => {
+        if (!cancelled) setEnglish(list);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsEnglish, open, english]);
+
+  // Пока английские слова в пути, окно ждёт: мелькнуть русским и тут же
+  // перевестись — хуже, чем открыться на долю секунды позже.
+  const waiting = wantsEnglish && !english;
   return (
     <WhatsNewDialog
-      releases={releases}
-      open={open}
+      releases={wantsEnglish ? pickReleases(releases, english) : releases}
+      open={open && !waiting}
       onOpenChange={(value) => {
         if (!value) remember();
         setOpen(value);

@@ -15,6 +15,9 @@
 // Usage:
 //   node scripts/verify-release-version.mjs          # the files agree with each other
 //   node scripts/verify-release-version.mjs v1.22.2  # ...and with the tag
+//
+// С тегом проверяется ещё и CHANGELOG.en.md: в нём обязан быть раздел этой
+// версии (см. ниже).
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -95,6 +98,25 @@ if (tag) {
           "Релиз с таким расхождением будет вечно предлагать обновление, которое ничего не меняет."
       );
     }
+  }
+
+  // Английские слова выпуска. Окно «Что нового» в английском интерфейсе берёт
+  // их из CHANGELOG.en.md; забытый перевод выпуск не спрячет (окно покажет
+  // русскую запись), но английская версия заговорит по-русски — и уже у всех,
+  // кто обновился. Только с тегом: на обычном pull request это ловит
+  // tests/whats-new.test.tsx, а здесь — последний рубеж перед сборкой.
+  let english = "";
+  try {
+    english = read("CHANGELOG.en.md");
+  } catch {
+    // Нет файла — та же беда, что и нет раздела: скажем ниже одной строкой.
+  }
+  const hasSection = english.split(/\r?\n/).some((line) => line.startsWith(`## [${expected}]`));
+  if (!hasSection) {
+    problems.push(
+      `В CHANGELOG.en.md нет раздела «## [${expected}]». ` +
+        "Переведите записи выпуска из CHANGELOG.md и пересоберите окно: npm run whats-new."
+    );
   }
 }
 

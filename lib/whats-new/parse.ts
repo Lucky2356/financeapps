@@ -1,4 +1,5 @@
-// Разбор CHANGELOG.md для окна «Что нового».
+// Разбор CHANGELOG.md (и его английского издания CHANGELOG.en.md) для окна
+// «Что нового».
 //
 // Источник один — CHANGELOG. Второе место, где «что нового» писалось бы
 // отдельно для приложения, однажды разошлось бы с первым: на странице выпуска
@@ -25,6 +26,10 @@ export type WhatsNewRelease = {
 /**
  * Разделы, которые людям в приложении ни к чему: они про службу, проверки и
  * устройство кода. На странице выпуска они остаются.
+ *
+ * Заголовки — на обоих языках: английское издание разбирается этой же
+ * функцией, и раздел «Internal», пропущенный мимо списка, вывалил бы людям
+ * пути к файлам и названия проверок.
  */
 const HIDDEN_SECTIONS = [
   /^внутреннее/i,
@@ -32,11 +37,22 @@ const HIDDEN_SECTIONS = [
   /^под капотом/i,
   /^служба/i,
   /владельца службы/i,
-  /держит службу/i
+  /держит службу/i,
+  /^internal/i,
+  /^checks/i,
+  /^tests/i,
+  /^under the hood/i,
+  /^(sync )?service\b/i,
+  /service owners?\b/i,
+  /(runs|hosts) the service/i,
+  /self-host/i
 ];
 
-/** Выпуск, где видимые разделы только такие, — выпуск исправлений. */
-const FIX_SECTIONS = [/^исправлен/i, /^безопасность/i];
+/**
+ * Выпуск, где видимые разделы только такие, — выпуск исправлений. По-английски
+ * — «Fixed», «Fixed — sync», «Fixes», «Security».
+ */
+const FIX_SECTIONS = [/^исправлен/i, /^безопасность/i, /^fix/i, /^security/i];
 
 const HEADING = /^## \[(\d+\.\d+\.\d+)\]\s*[—–-]\s*(\d{4}-\d{2}-\d{2})/;
 
@@ -134,4 +150,32 @@ export function parseChangelog(markdown: string, limit = 12): WhatsNewRelease[] 
   }
   if (head && releases.length < limit) releases.push(release(head[1], head[2], body));
   return releases;
+}
+
+/**
+ * Английские выпуски — ровно для тех версий, что попали в русский список.
+ *
+ * Русский CHANGELOG главный: он решает, какие выпуски окно показывает.
+ * Английское издание лишь даёт им слова. Лишний старый выпуск в нём не нужен,
+ * а недостающий — не беда: окно возьмёт русскую запись (см. pickReleases).
+ */
+export function englishReleases(markdown: string, russian: WhatsNewRelease[]): WhatsNewRelease[] {
+  const wanted = new Set(russian.map((r) => r.version));
+  return parseChangelog(markdown, Number.POSITIVE_INFINITY).filter((r) => wanted.has(r.version));
+}
+
+/**
+ * Выпуски на языке экрана: английская запись, если она есть, иначе русская.
+ *
+ * Перевод, забытый для одного выпуска, не должен прятать сам выпуск: лучше
+ * прочитать о нём по-русски, чем не узнать вовсе. Порядок и состав — по
+ * русскому списку.
+ */
+export function pickReleases(
+  russian: WhatsNewRelease[],
+  english: WhatsNewRelease[] | null
+): WhatsNewRelease[] {
+  if (!english) return russian;
+  const byVersion = new Map(english.map((r) => [r.version, r]));
+  return russian.map((r) => byVersion.get(r.version) ?? r);
 }
