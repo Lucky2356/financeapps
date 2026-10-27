@@ -46,6 +46,9 @@ version, date and sections.
 - Polling again while connecting a device (when the answer got lost on the
   way) gets the same answer, not “code not found”.
 - “Server storage is full” is shown as such, not as “no connection”.
+- Syncing no longer switches the open profile to the one open on your other
+  device — after “Merge” your records no longer seemed to vanish into
+  another profile.
 
 ### Changed
 - CSV exports of transactions and reports in Russian use “;” and a decimal

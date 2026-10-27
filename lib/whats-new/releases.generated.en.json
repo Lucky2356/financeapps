@@ -61,6 +61,10 @@
           {
             "lead": "",
             "text": "“Server storage is full” is shown as such, not as “no connection”."
+          },
+          {
+            "lead": "",
+            "text": "Syncing no longer switches the open profile to the one open on your other device — after “Merge” your records no longer seemed to vanish into another profile."
           }
         ]
       },
