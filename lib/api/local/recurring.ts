@@ -6,7 +6,8 @@ import { localCalendarDate, todayDay } from "@/lib/transactions/date";
 import { monthlyInterestAverage, upcomingInterest } from "@/lib/accounts/interest";
 import { plannedDebtMonthlyTotal, plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts } from "@/lib/debts/settled";
-import { roundMoney } from "@/lib/utils";
+import { isUsableMoney, roundMoney } from "@/lib/utils";
+import { startOfToday } from "date-fns";
 import { baseAmountContext, baseAmountOf, countableAmount } from "@/lib/transactions/base-amount";
 import {
   anchorDayOf,
@@ -17,7 +18,7 @@ import { type LocalState, withCurrentNames } from "@/lib/api/local/state";
 import { debtInBase, ratesOf } from "@/lib/api/local/money";
 import { upsertTransaction, accountsPage } from "@/lib/api/local/ledger";
 import { budgetRows } from "@/lib/api/local/budgets";
-import { apiText } from "@/lib/i18n/api-text";
+import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
 
 export function upsertRecurring(state: LocalState, body: unknown, method: "POST" | "PUT") {
   const input = toFormObject(body);
@@ -30,6 +31,9 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
     input.frequency as RecurringTransactionsPageData["recurringTransactions"][number]["frequency"];
   const isActive = input.isActive === "true" || input.isActive === "on";
   const amount = Number(input.amount);
+  // Ноль или «1,5» записывались как есть, а схема книги их не принимает: при
+  // следующем запуске шаблон молча пропадал.
+  if (!isUsableMoney(amount)) throw new Error(moneyRangeText());
   const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
   const description = input.description?.trim() || null;
   // Пробный период до — сторож напомнит за три дня, пока он не стал платным.
@@ -40,7 +44,7 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
   const categoryRef = { id: category.id, label: category.label, color: category.color };
   // Местный день, а не UTC-полночь: западнее Гринвича «2026-01-31» иначе
   // становился 30-м (см. localCalendarDate).
-  const nextDateInput = localCalendarDate(input.nextDate);
+  let nextDateInput = localCalendarDate(input.nextDate);
   // Дату в форме не трогали — число остаётся прежним. Иначе правка одной
   // суммы у платежа на 31-е, стоящего сейчас на 28 февраля, перевела бы его
   // на 28-е навсегда.
@@ -50,6 +54,17 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
     previous && todayDay(new Date(previous.nextDate)) === String(input.nextDate).trim()
       ? anchorDayOf(previous)
       : dayOfMonthFrom(input.nextDate);
+
+  // Шаблон стоял на паузе и снова включён — без этого он сохранял прежнюю
+  // дату, и первая же запись (автоматическая — при запуске, молча) проводила
+  // все платежи за время паузы задним числом. Пауза — значит, платежей не
+  // было: следующий — первый не раньше сегодняшнего дня.
+  if (previous && !previous.isActive && isActive) {
+    const today = startOfToday();
+    for (let step = 0; nextDateInput < today && step < 1000; step += 1) {
+      nextDateInput = service.getNextDate(nextDateInput, frequency, dayOfMonth);
+    }
+  }
 
   if (method === "PUT" && input.id) {
     // A template is a plan, not a record: editing it never rewrites operations

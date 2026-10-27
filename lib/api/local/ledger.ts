@@ -51,7 +51,9 @@ export function upsertAccount(state: LocalState, body: unknown, method: "POST" |
   const account = {
     ...previous,
     id: method === "PUT" && input.id ? input.id : id("account"),
-    name: input.name?.trim() || dataText("data.account.new"),
+    // Длиннее 100 знаков схема книги не примет — счёт с остатком пропал бы
+    // при следующем запуске. Обрезаем.
+    name: (input.name?.trim() || dataText("data.account.new")).slice(0, 100),
     type: input.type || "DEBIT_CARD",
     balance: Number(input.balance ?? 0),
     // Honour an explicitly chosen supported currency; fall back to the base.
@@ -67,7 +69,8 @@ export function upsertAccount(state: LocalState, body: unknown, method: "POST" |
       const period = input.interestCompounding;
       const compounding: AccountRow["interestCompounding"] =
         period === "QUARTERLY" || period === "YEARLY" ? period : "MONTHLY";
-      return { interestRate: rate, interestCompounding: compounding };
+      // Больше 1000 % схема не примет; такую ставку вводят только по ошибке.
+      return { interestRate: Math.min(rate, 1000), interestCompounding: compounding };
     })(),
     // Срок вклада — только у сберегательного счёта; пусто — накопительный.
     depositEndsOn:
@@ -118,9 +121,11 @@ export function upsertTransaction(
   const linkedRecurringId = recurringId ?? previous?.recurringId;
   const linkedLiabilityId =
     (typeof input.liabilityId === "string" && input.liabilityId) || previous?.liabilityId;
+  // Метка длиннее 40 знаков записывалась, а схема книги её не принимает: при
+  // следующем запуске пропадала вся операция, а остаток счёта — с ней.
   const tags = String(input.tags ?? "")
     .split(",")
-    .map((value) => value.trim())
+    .map((value) => value.trim().slice(0, 40).trim())
     .filter(Boolean)
     .slice(0, 12);
   // Идёт поездка — новая трата получает её метку сама (lib/trips). Плановые

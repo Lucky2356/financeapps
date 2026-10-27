@@ -57,10 +57,14 @@ export function findOrCreateAccount(state: LocalState, name: string, aliases: st
  */
 export function findOrCreateCategory(
   state: LocalState,
-  label: string,
+  name: string,
   kind: "INCOME" | "EXPENSE",
   aliases: string[] = []
 ) {
+  // Длиннее 100 знаков категорию схема книги не примет: текст категории из
+  // выписки банка бывает целым предложением, и импорт таких строк при
+  // следующем запуске исчезал целиком. Как у счетов — обрезаем.
+  const label = name.trim().slice(0, 100);
   const names = new Set([label, ...aliases].map((item) => item.toLowerCase()));
   const existing = state.categories.find(
     (item) => item.kind === kind && names.has(item.label.toLowerCase())

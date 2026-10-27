@@ -548,9 +548,12 @@ export class LocalApiClient implements ApiClient {
       payload && typeof payload === "object" && "backup" in payload
         ? (payload as { backup?: unknown }).backup
         : payload;
-    const parsed = localStateSchema.safeParse(document);
-    if (!parsed.success) throw new Error(apiText("api.backup.notBackup"));
-    const restored = migrateLocalState(parsed.data);
+    // Своя же выгрузка с одной кривой строкой (длинная метка, лимит старой
+    // версии) отвергалась целиком — «файл не похож на копию». Читается так
+    // же, как своя книга при запуске: кривое отбрасывается, остальное — на месте.
+    const readable = readableState(document);
+    if (!readable) throw new Error(apiText("api.backup.notBackup"));
+    const restored = migrateLocalState(readable);
 
     // The key does not travel in the file (see `backup`), so a copy carries an
     // empty one. Writing that over the key set on THIS machine would quietly
@@ -951,6 +954,7 @@ export class LocalApiClient implements ApiClient {
       options.stamp === false
         ? state
         : trackDeletions(stampRows(state, previous, now), previous, now);
+    assertStorable(next, options.stamp === false ? null : now);
     await this.storage.setItem(key, next);
     // Без копии: следующая запись всё равно начнёт с writableCopy, а чтения
     // книгу не трогают (см. freeze-state.ts — вне поставки она заморожена).
@@ -1404,19 +1408,28 @@ export class LocalApiClient implements ApiClient {
       throw new Error(apiText("api.clear.noCopy"));
     }
     const stored = (await this.storage.getItem<BeforeClearStored>(BEFORE_CLEAR_KEY))!;
+    // Раньше профиль, не прошедший строгую проверку, молча пропускался, копия
+    // стиралась, а экран говорил «вернули». Одна кривая строка — и все
+    // записи профиля пропадали насовсем. Теперь кривое отбрасывается, а
+    // если профиль не читается вовсе, копия остаётся и об этом сказано.
+    let unreadable = 0;
     for (const [profileId, raw] of Object.entries(stored.states)) {
-      const parsed = localStateSchema.safeParse(raw);
-      if (!parsed.success) continue;
+      const readable = readableState(raw);
+      if (!readable) {
+        unreadable += 1;
+        continue;
+      }
       await this.storage.setItem(PROFILE_LIST_KEY, {
         ...stored.list,
         activeProfileId: profileId
       } satisfies ProfileList);
       this.invalidateStateCache();
-      await this.save(migrateLocalState(parsed.data), { stamp: false });
+      await this.save(migrateLocalState(readable), { stamp: false });
     }
     await this.storage.setItem(PROFILE_LIST_KEY, stored.list);
-    await this.storage.removeItem(BEFORE_CLEAR_KEY);
     this.invalidateStateCache();
+    if (unreadable > 0) throw new Error(apiText("api.copy.partlyUnreadable"));
+    await this.storage.removeItem(BEFORE_CLEAR_KEY);
   }
 
   /** Копии на этом устройстве, свежие первыми. */
@@ -1488,9 +1501,14 @@ export class LocalApiClient implements ApiClient {
     const stored = await this.storage.getItem<LocalCopyStored>(localCopyKey(id));
     if (!stored?.states) throw new Error(apiText("api.backup.noSuchCopy"));
     await this.takeLocalCopy("before-restore");
+    let unreadable = 0;
     for (const [profileId, raw] of Object.entries(stored.states)) {
-      const parsed = localStateSchema.safeParse(raw);
-      if (!parsed.success) continue;
+      // Как и отмена очистки: кривое отбрасывается, а не весь профиль.
+      const readable = readableState(raw);
+      if (!readable) {
+        unreadable += 1;
+        continue;
+      }
       await this.storage.setItem(PROFILE_LIST_KEY, {
         ...stored.list,
         activeProfileId: profileId
@@ -1498,10 +1516,11 @@ export class LocalApiClient implements ApiClient {
       this.invalidateStateCache();
       // С новой отметкой: возвращённое — это правка, сделанная сейчас, и на
       // других устройствах она обязана перевесить то, что было после копии.
-      await this.save(migrateLocalState(parsed.data));
+      await this.save(migrateLocalState(readable));
     }
     await this.storage.setItem(PROFILE_LIST_KEY, stored.list);
     this.invalidateStateCache();
+    if (unreadable > 0) throw new Error(apiText("api.copy.partlyUnreadable"));
   }
 
   /** Завести профиль «Пример» (или взять прежний) и сделать его текущим. */
@@ -2023,4 +2042,49 @@ function freeSheetName(state: LocalState, name: string): string {
     candidate = `${name.slice(0, 54)} (${n})`;
   }
   return candidate;
+}
+
+/**
+ * Книга из копии или файла — строго, а если строго не выходит, тем же
+ * спасением, что и своя книга при запуске (salvageLocalState).
+ */
+function readableState(raw: unknown) {
+  const parsed = localStateSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  return salvageLocalState(raw)?.state ?? null;
+}
+
+/**
+ * Не записывать то, что следующий запуск не прочитает.
+ *
+ * Запись ничего не проверяла, а чтение проверяет строго — и строку, которую
+ * схема не принимает, при следующем запуске молча выбрасывало спасение. Так
+ * пропадали операция с меткой длиннее 40 знаков, цель с нулевой суммой,
+ * шаблон на «0»: на экране всё было, после перезапуска — нет, а остаток
+ * счёта, посчитанный с ними, оставался. Теперь такая запись отвергается
+ * сразу, с понятной ошибкой, и в книге остаётся прежнее.
+ *
+ * Проверяются только строки, правленные этой записью (их отметка — `now`), и
+ * всё, что не строки: целиком книга из тысяч операций проверялась бы на
+ * каждое нажатие. Без отметок (`now` — null: пример, отмена очистки) —
+ * целиком: это редкие записи.
+ */
+function assertStorable(next: object, now: string | null): void {
+  const probe: Record<string, unknown> = { ...(next as Record<string, unknown>) };
+  if (now !== null) {
+    for (const [field, value] of Object.entries(probe)) {
+      if (!Array.isArray(value)) continue;
+      probe[field] = value.filter(
+        (row) =>
+          typeof row !== "object" ||
+          row === null ||
+          !("updatedAt" in row) ||
+          (row as { updatedAt?: unknown }).updatedAt === now
+      );
+    }
+  }
+  const checked = localStateSchema.safeParse(probe);
+  if (checked.success) return;
+  const where = checked.error.issues[0]?.path.join(".") ?? "";
+  throw new Error(apiText("api.save.rejected", { where }));
 }

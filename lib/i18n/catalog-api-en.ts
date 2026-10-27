@@ -264,5 +264,9 @@ export const en: Messages = {
     "The code from the new device wasn't found. Show a new one on it.",
   "api.server.request_expired": "The code on the new device has expired. Show a new one on it.",
   "api.server.request_answered":
-    "This code has already been answered. Show a new one on the new device."
+    "This code has already been answered. Show a new one on the new device.",
+  "api.copy.partlyUnreadable":
+    "Part of the copy could not be read, so those profiles were not restored. The copy is still there — please report this without deleting anything.",
+  "api.save.rejected":
+    "Not saved: a value is not allowed (too long, empty or out of range) — field {where}. Correct it and save again."
 };

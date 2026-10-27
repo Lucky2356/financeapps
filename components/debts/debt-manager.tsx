@@ -351,7 +351,7 @@ function DebtDialog({
         {liability ? <input type="hidden" name="id" value={liability.id} /> : null}
         <div className="space-y-2">
           <Label>{t("common.name")}</Label>
-          <Input name="name" defaultValue={liability?.name ?? ""} required />
+          <Input name="name" defaultValue={liability?.name ?? ""} maxLength={100} required />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">

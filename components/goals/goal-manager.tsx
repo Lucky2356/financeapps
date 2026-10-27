@@ -573,14 +573,14 @@ function GoalDialog({
         {goal ? <input type="hidden" name="id" value={goal.id} /> : null}
         <div className="space-y-2">
           <Label>{t("common.name")}</Label>
-          <Input name="title" defaultValue={goal?.title ?? ""} required />
+          <Input name="title" defaultValue={goal?.title ?? ""} maxLength={120} required />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <FieldLabel help={t("help.goal.target")}>{t("goal.dialog.target")}</FieldLabel>
             <AmountInput
               name="targetAmount"
-              min="0"
+              min="0.01"
               step="0.01"
               defaultValue={goal?.targetAmount ?? ""}
               required

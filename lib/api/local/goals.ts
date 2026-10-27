@@ -26,10 +26,16 @@ export function upsertGoal(state: LocalState, body: unknown, method: "POST" | "P
   const held = previous?.currentAmount ?? 0;
   const difference = roundMoney(wanted - held);
 
+  // Цель «на 0» записывалась, а схема книги требует суммы больше нуля: при
+  // следующем запуске цель пропадала вместе с отложенными в неё деньгами.
+  const targetAmount = Number(input.targetAmount);
+  if (!isUsableMoney(targetAmount)) throw new Error(moneyRangeText());
+
   const row = recomputeGoal({
     id: previous?.id ?? id("goal"),
-    title: input.title?.trim() || dataText("data.goal.new"),
-    targetAmount: Number(input.targetAmount),
+    // Длиннее 120 знаков схема не принимает — обрезаем, а не теряем цель.
+    title: (input.title?.trim() || dataText("data.goal.new")).slice(0, 120),
+    targetAmount,
     // The money side is settled below, never here.
     currentAmount: held,
     // Срок — местный день: в Нью-Йорке «31 декабря» из формы иначе хранился

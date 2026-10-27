@@ -27,7 +27,8 @@ export function upsertLiability(state: LocalState, body: unknown, method: "POST"
   const dueDayRaw = Number(input.dueDay);
   const stored: Omit<LiabilityRow, "progress"> = {
     id: method === "PUT" && input.id ? input.id : id("debt"),
-    name: input.name?.trim() || dataText("data.debt.new"),
+    // Длиннее 100 знаков схема книги не примет — долг пропал бы при запуске.
+    name: (input.name?.trim() || dataText("data.debt.new")).slice(0, 100),
     kind,
     balance,
     originalAmount: Math.max(Number(input.originalAmount ?? 0), balance),

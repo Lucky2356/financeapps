@@ -1216,9 +1216,12 @@ describe("служба", () => {
       assert.equal(answer.login, "петя");
       assert.equal((await call("/devices", { token: answer.token })).status, 200);
 
-      // Билет погашен, пакет из базы стёрт.
+      // Билет погашен, пакет из базы стёрт. Повторный опрос того же билета
+      // (ответ потерялся по дороге) получает тот же ответ, а не «не найден» —
+      // и второго входа устройства не заводится.
       const again = await call(`/pairing/request/${ticket}`, { method: "POST", body: {} });
-      assert.equal(again.status, 404);
+      assert.equal(again.status, 200);
+      assert.equal((again.body as { token: string }).token, answer.token);
       const left = app.db
         .prepare("select count(*) as n from pairings where sealed is not null")
         .get<{ n: number }>();
