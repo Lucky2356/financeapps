@@ -15,6 +15,7 @@
 
 import type { BankSuggestion } from "@/lib/bank/notification-parse";
 import { suggestCategoryId } from "@/lib/category-suggest";
+import { dataKeyOf, isDataLabel } from "@/lib/i18n/data-text";
 
 export type LoliItem =
   | {
@@ -123,6 +124,11 @@ function byName(name: string, own: readonly CategoryRef[]): string | null {
   if (!wanted) return null;
   const exact = own.find((category) => normal(category.label) === wanted);
   if (exact) return exact.id;
+  // Лоли пишет по-русски, а книга могла завестись по-английски: «Продукты»
+  // находят стандартные «Groceries» — по общему ключу словаря данных.
+  const key = dataKeyOf(name, "data.cat.");
+  const twin = key ? own.find((category) => isDataLabel(category.label, key)) : undefined;
+  if (twin) return twin.id;
   const stem = wanted.slice(0, Math.max(4, Math.min(6, wanted.length)));
   const close = own.find((category) => {
     const label = normal(category.label);

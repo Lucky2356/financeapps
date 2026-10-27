@@ -5,6 +5,7 @@ import {
 } from "@/lib/storage/NamespacedStorageAdapter";
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { DEVICE_KEY, VAULT_KEY } from "@/lib/vault/account";
+import { dataText } from "@/lib/i18n/data-text";
 
 /**
  * Кто живёт на этом устройстве.
@@ -122,7 +123,10 @@ export async function readRoster(device: StorageAdapter): Promise<Roster> {
 }
 
 function nameFor(id: string, index: number): string {
-  return id === FIRST_PERSON ? "Человек 1" : `Человек ${index + 1}`;
+  // На языке интерфейса: имя-заглушка, пока человек не назвался сам.
+  return dataText("data.person.numbered", undefined, {
+    n: id === FIRST_PERSON ? 1 : index + 1
+  });
 }
 
 export async function writeRoster(device: StorageAdapter, roster: Roster): Promise<void> {

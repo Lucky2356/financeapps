@@ -74,6 +74,7 @@ import {
 import { buildInvestmentsPage, investmentMarketFor } from "@/lib/api/local/investments";
 import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
+import { dataKeyOf, dataText } from "@/lib/i18n/data-text";
 import { createSheet, listSheets, MAIN_SHEET, putScope, sheetScope } from "@/lib/api/local/sheets";
 
 // Прежде жили здесь — потребители импортируют их отсюда.
@@ -165,6 +166,8 @@ function profileStateKey(profileId: string): string {
   return `localFinanceState_${profileId}`;
 }
 
+// Имя — русский образец; профиль, который заводится, называется на языке
+// интерфейса (dataText("data.profile.main")), и дальше имя — его.
 const DEFAULT_PROFILE: UserProfile = {
   id: "profile-default",
   name: "Основной",
@@ -492,7 +495,10 @@ export class LocalApiClient implements ApiClient {
     "/photos": ({ state, body }: WriteRequest) => this.attachPhoto(state, body),
     "/profiles/create": ({ body }: WriteRequest) => {
       const input = toFormObject(body);
-      return this.createProfile(input.name ?? "Профиль", input.color ?? "#0d9488");
+      return this.createProfile(
+        input.name ?? dataText("data.profile.default"),
+        input.color ?? "#0d9488"
+      );
     },
     "/profiles/switch": async ({ body }: WriteRequest) => {
       await this.switchProfile(toFormObject(body).profileId ?? "");
@@ -644,7 +650,7 @@ export class LocalApiClient implements ApiClient {
     if (same) return same.id;
     const created: UserProfile = {
       id: profile.id || id("profile"),
-      name: profile.name.trim().slice(0, 40) || "Профиль",
+      name: profile.name.trim().slice(0, 40) || dataText("data.profile.default"),
       color: profile.color || DEFAULT_PROFILE.color,
       createdAt: profile.createdAt || new Date().toISOString()
     };
@@ -1253,7 +1259,7 @@ export class LocalApiClient implements ApiClient {
     const legacy = await this.storage.getItem<unknown>(LEGACY_STATE_KEY);
     const defaultProfile: UserProfile = {
       id: "profile-default",
-      name: "Основной",
+      name: dataText("data.profile.main"),
       color: "#0d9488",
       createdAt: new Date().toISOString()
     };
@@ -1277,7 +1283,7 @@ export class LocalApiClient implements ApiClient {
     const list = await this.profileList();
     const profile: UserProfile = {
       id: id("profile"),
-      name: name.trim().slice(0, 40) || "Новый профиль",
+      name: name.trim().slice(0, 40) || dataText("data.profile.new"),
       color,
       createdAt: new Date().toISOString()
     };
@@ -1357,7 +1363,7 @@ export class LocalApiClient implements ApiClient {
       await this.storage.setItem(key, createBlankState([]));
     }
     await this.storage.setItem(PROFILE_LIST_KEY, {
-      profiles: [DEFAULT_PROFILE],
+      profiles: [{ ...DEFAULT_PROFILE, name: dataText("data.profile.main") }],
       activeProfileId: DEFAULT_PROFILE.id
     } satisfies ProfileList);
 
@@ -1516,7 +1522,7 @@ export class LocalApiClient implements ApiClient {
     if (!list.profiles.some((p) => p.id === SAMPLE_PROFILE_ID)) {
       list.profiles.push({
         id: SAMPLE_PROFILE_ID,
-        name: "Пример",
+        name: dataText("data.profile.sample"),
         color: "#a855f7",
         createdAt: new Date().toISOString()
       });
@@ -1535,7 +1541,7 @@ export class LocalApiClient implements ApiClient {
       list.profiles.find((p) => p.id !== SAMPLE_PROFILE_ID);
     if (!back) {
       // Кроме примера профилей нет — заводим основной, пустой.
-      await this.createProfile("Основной", "#0d9488");
+      await this.createProfile(dataText("data.profile.main"), "#0d9488");
       return this.leaveSampleProfile(remove);
     }
     list.activeProfileId = back.id;
@@ -1580,6 +1586,12 @@ export class LocalApiClient implements ApiClient {
 /** Одно и то же имя — без оглядки на регистр и пробелы по краям. */
 function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** Два имени одной категории приложения на разных языках («Продукты» и «Groceries»). */
+function sameAppCategory(a: string, b: string): boolean {
+  const key = dataKeyOf(a, "data.cat.");
+  return key !== null && key === dataKeyOf(b, "data.cat.");
 }
 
 function isProfilesBackup(value: unknown): value is ProfilesBackup {
@@ -1703,6 +1715,12 @@ function mergeRecords(state: LocalState, incoming: LocalState): number {
       categories.find((existing) => existing.id === category.id) ??
       categories.find(
         (existing) => existing.kind === category.kind && sameName(existing.label, category.label)
+      ) ??
+      // Своя категория приложения под именем на другом языке: «Переводы» с
+      // русского устройства и «Transfers» с английского — одна категория.
+      categories.find(
+        (existing) =>
+          existing.kind === category.kind && sameAppCategory(existing.label, category.label)
       );
     if (same) {
       categoryOf.set(category.id, same);

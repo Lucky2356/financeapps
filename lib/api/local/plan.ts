@@ -7,7 +7,7 @@ import { roundMoney } from "@/lib/utils";
 import {
   countableRows,
   isTransfer,
-  TRANSFER_CATEGORY_LABEL,
+  isTransferCategoryLabel,
   transferKeyOf
 } from "@/lib/transactions/transfers";
 import { budgetInForce } from "@/lib/budget-rollover";
@@ -168,8 +168,7 @@ export function planFactPage(
       (isTransfer(transaction) ? withTransfers : withOwnRows).add(transaction.category.id);
     for (const category of state.categories) {
       const isTransferCategory =
-        withTransfers.has(category.id) ||
-        category.label.toLowerCase() === TRANSFER_CATEGORY_LABEL.toLowerCase();
+        withTransfers.has(category.id) || isTransferCategoryLabel(category.label);
       if (isTransferCategory && !withOwnRows.has(category.id)) transferOnly.add(category.id);
     }
   }

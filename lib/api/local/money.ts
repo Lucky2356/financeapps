@@ -12,6 +12,7 @@ import {
   toBaseRows
 } from "@/lib/transactions/base-amount";
 import { countableRows } from "@/lib/transactions/transfers";
+import { dataText, dataVariants } from "@/lib/i18n/data-text";
 import {
   type CategoryOption,
   type LocalState,
@@ -31,10 +32,11 @@ export function applyBalance(state: LocalState, accountId: string, delta: number
  * from the operations posted onto it, so a new account starts at zero and
  * ends up holding exactly what was imported into it.
  */
-export function findOrCreateAccount(state: LocalState, name: string) {
+export function findOrCreateAccount(state: LocalState, name: string, aliases: string[] = []) {
   const label = name.trim().slice(0, 60) || DEFAULT_IMPORT_ACCOUNT;
+  const names = new Set([label, ...aliases].map((item) => item.toLowerCase()));
   const existing = state.accounts.find(
-    (item) => !item.isArchived && item.name.toLowerCase() === label.toLowerCase()
+    (item) => !item.isArchived && names.has(item.name.toLowerCase())
   );
   if (existing) return existing;
   const account = {
@@ -48,9 +50,20 @@ export function findOrCreateAccount(state: LocalState, name: string) {
   return account;
 }
 
-export function findOrCreateCategory(state: LocalState, label: string, kind: "INCOME" | "EXPENSE") {
+/**
+ * Категория с этим именем, заведённая, если её ещё нет. `aliases` — другие
+ * имена той же категории: так своя категория приложения («Переводы») находится
+ * и под английским именем, и под русским, а не заводится второй рядом.
+ */
+export function findOrCreateCategory(
+  state: LocalState,
+  label: string,
+  kind: "INCOME" | "EXPENSE",
+  aliases: string[] = []
+) {
+  const names = new Set([label, ...aliases].map((item) => item.toLowerCase()));
   const existing = state.categories.find(
-    (item) => item.kind === kind && item.label.toLowerCase() === label.toLowerCase()
+    (item) => item.kind === kind && names.has(item.label.toLowerCase())
   );
   if (existing) return existing;
   const category = {
@@ -61,6 +74,26 @@ export function findOrCreateCategory(state: LocalState, label: string, kind: "IN
   } satisfies CategoryOption;
   state.categories = [...state.categories, category];
   return category;
+}
+
+/**
+ * Своя категория приложения — «Переводы», «Импорт расходов», «Сверка с банком».
+ *
+ * Ищется под любым из её имён: книгу ведут и с русского устройства, и с
+ * английского, и «Переводы», заведённые одним, второе обязано найти, а не
+ * завести рядом «Transfers». Не нашлась — заводится на языке интерфейса.
+ */
+export function findOrCreateAppCategory(
+  state: LocalState,
+  key: string,
+  kind: "INCOME" | "EXPENSE"
+) {
+  return findOrCreateCategory(state, dataText(key), kind, dataVariants(key));
+}
+
+/** Свой счёт приложения (счёт «Импорт») — так же, как findOrCreateAppCategory. */
+export function findOrCreateAppAccount(state: LocalState, key: string) {
+  return findOrCreateAccount(state, dataText(key), dataVariants(key));
 }
 
 // Cached FX table (RUB per unit) for cross-currency aggregation. Falls back to

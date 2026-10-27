@@ -23,8 +23,9 @@ import {
   type RawLocalState
 } from "@/lib/storage/migrations/runLocalStateMigrations";
 import { clamp, percent, roundMoney } from "@/lib/utils";
-import { translate } from "@/lib/i18n/catalog";
+import { translate, type Locale } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
+import { knownCategoryLabel } from "@/lib/categories/known";
 import { budgetInForce } from "@/lib/budget-rollover";
 import type { NetWorthSnapshot } from "@/lib/net-worth-snapshots";
 import type { PortfolioSnapshot } from "@/lib/investments/snapshots";
@@ -209,6 +210,19 @@ export const STANDARD_CATEGORY_IDS: ReadonlySet<string> = new Set(
 );
 
 /**
+ * Стандартные категории на языке интерфейса — для книги, которая заводится
+ * сейчас. Список выше — русский образец (номера, цвета, значки); имя берётся
+ * из словаря данных. Книга, уже заведённая, не переименовывается: имя
+ * категории с этой минуты принадлежит человеку (см. lib/i18n/data-text.ts).
+ */
+export function defaultCategoriesFor(locale: Locale = getClientLocale()): CategoryOption[] {
+  return defaultCategories.map((category) => ({
+    ...category,
+    label: knownCategoryLabel(category.id, category.label, locale)
+  }));
+}
+
+/**
  * Стандартные категории из того, что лежит сейчас, — с правками человека.
  * Пропавшая (удалённая в прежних версиях, когда это ещё было можно) или
  * испорченная возвращается такой, какой ставилась.
@@ -232,7 +246,7 @@ export function standardCategoriesFrom(existing: unknown): CategoryOption[] {
       }
     }
   }
-  return defaultCategories.map((category) => held.get(category.id) ?? { ...category });
+  return defaultCategoriesFor().map((category) => held.get(category.id) ?? category);
 }
 
 export function recomputeGoal(
@@ -366,7 +380,7 @@ export function createInitialState(): LocalState {
     expectedDividends: [],
     targetAllocations: [],
     marketAlerts: [],
-    categories: defaultCategories,
+    categories: defaultCategoriesFor(),
     plans: [],
     planNotes: [],
     transactions: [],
@@ -457,8 +471,13 @@ export const SAVINGS_TRANSFER_ID = "__toSavings__";
 export const SAVINGS_ACCOUNT_TYPES = ["SAVINGS", "BROKERAGE"];
 export const MONTH_KEY = /^\d{4}-\d{2}$/;
 
-/** What an imported operation is filed under when the file names no account. */
+/**
+ * What an imported operation is filed under when the file names no account.
+ * Русское имя — образец; счёт заводится на языке интерфейса, а найти прежний
+ * можно по любому из языков (ключ ниже, см. findOrCreateAccount).
+ */
 export const DEFAULT_IMPORT_ACCOUNT = "Импорт";
+export const DEFAULT_IMPORT_ACCOUNT_KEY = "data.account.import";
 
 export function cellOf(plan: number, fact: number): PlanFactCell {
   const rounded = { plan: roundMoney(plan), fact: roundMoney(fact) };
@@ -505,8 +524,9 @@ export function goalSharesFrom(
   return Object.keys(shares).length > 0 ? { shares } : {};
 }
 
-/** Статья для разницы, найденной сверкой с банком. */
+/** Статья для разницы, найденной сверкой с банком (русский образец имени). */
 export const RECONCILE_CATEGORY_LABEL = "Сверка с банком";
+export const RECONCILE_CATEGORY_KEY = "data.cat.reconcile";
 
 export const FAMILY_COLORS = ["#0ea5e9", "#f97316", "#22c55e", "#e11d48", "#a855f7", "#eab308"];
 
