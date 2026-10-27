@@ -30,6 +30,7 @@ import {
   type BudgetSuggestion
 } from "@/lib/ai/budget-plan";
 import { buildGoalPlanPrompt, type GoalPlanInput } from "@/lib/ai/goal-plan";
+import { apiText } from "@/lib/i18n/api-text";
 
 // Thin wrapper over an LLM Messages/Chat API for AI-assisted transaction entry.
 // Used in two places with the same signature:
@@ -58,10 +59,10 @@ export async function requestTransactionDraft({
   effort
 }: RequestTransactionDraftArgs): Promise<AiTransactionDraft> {
   if (!apiKey) {
-    throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+    throw new Error(apiText("api.ai.noKey"));
   }
   if (!text.trim()) {
-    throw new Error("Введите описание операции.");
+    throw new Error(apiText("api.ai.noDescription"));
   }
 
   // Resolve the provider explicitly, or infer it from the model id; then pick
@@ -94,13 +95,13 @@ export async function requestFinancialAnswer({
   effort,
   locale = "ru"
 }: RequestFinancialAnswerArgs): Promise<string> {
-  if (!apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
-  if (!question.trim()) throw new Error("Введите вопрос.");
+  if (!apiKey) throw new Error(apiText("api.ai.noKey"));
+  if (!question.trim()) throw new Error(apiText("api.ai.noQuestion"));
 
   const { buildInsightPrompt } = await import("@/lib/ai/insight-prompt");
   const { system, user } = buildInsightPrompt(question, summary, locale);
   const answer = await complete({ apiKey, model, provider, effort, system, user });
-  if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте переформулировать.");
+  if (!answer.trim()) throw new Error(apiText("api.ai.noAnswerRephrase"));
   return answer.trim();
 }
 
@@ -117,7 +118,7 @@ type BaseAiArgs = {
 export async function requestBatchCategorization(
   args: BaseAiArgs & { items: BatchItem[]; categories: BatchCategory[] }
 ): Promise<BatchSuggestion[]> {
-  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (!args.apiKey) throw new Error(apiText("api.ai.noKey"));
   if (args.items.length === 0) return [];
   const { system, user } = buildCategorizePrompt(args.items, args.categories, args.locale);
   const reply = await complete({ ...args, system, user });
@@ -128,11 +129,11 @@ export async function requestBatchCategorization(
 export async function requestFinancialReview(
   args: BaseAiArgs & { summary: string }
 ): Promise<string> {
-  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
-  if (!args.summary.trim()) throw new Error("Недостаточно данных для разбора.");
+  if (!args.apiKey) throw new Error(apiText("api.ai.noKey"));
+  if (!args.summary.trim()) throw new Error(apiText("api.ai.notEnoughData"));
   const { system, user } = buildReviewPrompt(args.summary, args.locale);
   const answer = await complete({ ...args, system, user });
-  if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте ещё раз.");
+  if (!answer.trim()) throw new Error(apiText("api.ai.noAnswerRetry"));
   return answer.trim();
 }
 
@@ -144,7 +145,7 @@ export async function requestBudgetPlan(
     currency: string;
   }
 ): Promise<BudgetSuggestion[]> {
-  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (!args.apiKey) throw new Error(apiText("api.ai.noKey"));
   if (args.categories.length === 0) return [];
   const { system, user } = buildBudgetPlanPrompt(
     args.categories,
@@ -158,10 +159,10 @@ export async function requestBudgetPlan(
 
 // AI savings plan for a single goal (free-text advisory).
 export async function requestGoalPlan(args: BaseAiArgs & { goal: GoalPlanInput }): Promise<string> {
-  if (!args.apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (!args.apiKey) throw new Error(apiText("api.ai.noKey"));
   const { system, user } = buildGoalPlanPrompt(args.goal, args.locale);
   const answer = await complete({ ...args, system, user });
-  if (!answer.trim()) throw new Error("Ассистент не дал ответа. Попробуйте ещё раз.");
+  if (!answer.trim()) throw new Error(apiText("api.ai.noAnswerRetry"));
   return answer.trim();
 }
 
@@ -194,7 +195,7 @@ export async function requestReceiptDraft({
   model,
   provider
 }: RequestReceiptDraftArgs): Promise<AiTransactionDraft> {
-  if (!apiKey) throw new Error("Не задан API-ключ выбранного AI-провайдера.");
+  if (!apiKey) throw new Error(apiText("api.ai.noKey"));
   if (!imageBase64) throw new Error("Прикрепите фото чека.");
 
   const resolvedProvider = provider ?? providerForModel(model);

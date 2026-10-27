@@ -128,7 +128,7 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
 export function materializeRecurring(state: LocalState, body: unknown) {
   const recurringId = (body as { id?: string })?.id;
   const recurring = state.recurringTransactions.find((item) => item.id === recurringId);
-  if (!recurring) throw new Error("Recurring transaction not found.");
+  if (!recurring) throw new Error(apiText("api.recurring.notFound"));
 
   const service = new RecurringTransactionService();
   const anchorDay = anchorDayOf(recurring);

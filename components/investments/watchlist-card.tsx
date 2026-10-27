@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { sectorLabel } from "@/lib/market/sectors";
 import { cn } from "@/lib/utils";
 import type { InvestmentData } from "@/types/finance";
 
@@ -32,7 +33,7 @@ export function WatchlistCard({
   onToggle: () => void;
   onRemove: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const toneClass = (positive: boolean) => (positive ? "text-success" : "text-destructive");
 
   return (
@@ -52,7 +53,7 @@ export function WatchlistCard({
         <div className="min-w-0 flex-1">
           <p className="font-semibold leading-tight">{security.ticker}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {security.name} · {security.sector}
+            {security.name} · {sectorLabel(security.sector, locale)}
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">

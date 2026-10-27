@@ -8,6 +8,7 @@ import {
   SAMPLE_BUDGETS,
   SAMPLE_DIVIDEND,
   SAMPLE_PORTFOLIO,
+  sampleSecurityName,
   sampleDataset,
   sampleDate,
   sampleDeadline
@@ -92,7 +93,7 @@ export function buildSampleState(locale: Locale = getClientLocale()): LocalState
     const price = lots[lots.length - 1].price;
     return {
       ticker: position.ticker,
-      name: position.name,
+      name: sampleSecurityName(position.ticker, position.name, locale),
       assetKind: "STOCK" as const,
       sector: position.sector,
       quantity: summary.quantity,
@@ -110,7 +111,7 @@ export function buildSampleState(locale: Locale = getClientLocale()): LocalState
       id: "sample-dividend",
       type: "DIVIDEND",
       ticker: SAMPLE_DIVIDEND.ticker,
-      name: SAMPLE_DIVIDEND.name,
+      name: sampleSecurityName(SAMPLE_DIVIDEND.ticker, SAMPLE_DIVIDEND.name, locale),
       date: isoDay(sampleDate(-SAMPLE_DIVIDEND.monthsAgo, 18)),
       quantity: 0,
       sellPrice: 0,

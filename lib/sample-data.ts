@@ -332,6 +332,22 @@ export const SAMPLE_PORTFOLIO: SamplePosition[] = [
   }
 ];
 
+/**
+ * Имена бумаг примера по-английски — как их пишут за пределами России. Когда
+ * приложение достучится до биржи, имена придут оттуда (биржа пишет по-русски):
+ * это уже настоящие данные, а не пример.
+ */
+const SAMPLE_SECURITY_NAMES_EN: Record<string, string> = {
+  SBER: "Sberbank",
+  LKOH: "Lukoil",
+  YDEX: "Yandex"
+};
+
+/** Имя бумаги примера на языке интерфейса. */
+export function sampleSecurityName(ticker: string, name: string, locale: Locale): string {
+  return locale === "en" ? (SAMPLE_SECURITY_NAMES_EN[ticker] ?? name) : name;
+}
+
 /** Полученный дивиденд примера — чтобы «Весь доход» и «Доход» было на чём показать. */
 export const SAMPLE_DIVIDEND = { ticker: "SBER", name: "Сбербанк", amount: 1_650, monthsAgo: 3 };
 

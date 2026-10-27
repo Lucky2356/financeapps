@@ -138,12 +138,12 @@ export const INVESTMENT_ACTIONS = {
 
   addWatchlist: (state: LocalState, body: unknown, market: InvestmentMarket) => {
     const ticker = toFormObject(body).ticker?.toUpperCase();
-    if (!ticker) throw new Error("Ticker is required.");
+    if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
     // The search spans the whole MOEX board, so a picked ticker may be outside
     // the curated list — it was resolved live before the queue (see
     // investmentWriteMarket).
     const security = market.byTicker.get(ticker);
-    if (!security) throw new Error("Security not found in the market directory.");
+    if (!security) throw new Error(apiText("api.inv.securityNotFound"));
     const exists = state.investments.watchlist.some((item) => item.ticker === ticker);
     state.investments.watchlist = exists
       ? state.investments.watchlist
@@ -154,7 +154,7 @@ export const INVESTMENT_ACTIONS = {
 
   removeWatchlist: (state: LocalState, body: unknown, market: InvestmentMarket) => {
     const ticker = toFormObject(body).ticker?.toUpperCase();
-    if (!ticker) throw new Error("Ticker is required.");
+    if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
     state.investments.watchlist = state.investments.watchlist.filter(
       (item) => item.ticker !== ticker
     );
@@ -164,7 +164,7 @@ export const INVESTMENT_ACTIONS = {
 
   delete: (state: LocalState, body: unknown, market: InvestmentMarket) => {
     const ticker = toFormObject(body).ticker?.toUpperCase();
-    if (!ticker) throw new Error("Ticker is required.");
+    if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
     state.investments.portfolio = state.investments.portfolio.filter(
       (item) => item.ticker !== ticker
     );
@@ -200,13 +200,13 @@ export function savePosition(state: LocalState, body: unknown, market: Investmen
   const input = toFormObject(body);
   const action = input.action ?? "";
   const ticker = input.ticker?.toUpperCase();
-  if (!ticker) throw new Error("Ticker is required.");
+  if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
   // Бумага вне справочника найдена по всей доске ещё до очереди
   // (investmentWriteMarket); биржа молчит — бумага из портфеля идёт по своей
   // последней цене.
   const held = state.investments.portfolio.find((item) => item.ticker === ticker);
   const security = market.byTicker.get(ticker) ?? (held ? storedSecurity(held) : undefined);
-  if (!security) throw new Error("Security not found in the market directory.");
+  if (!security) throw new Error(apiText("api.inv.securityNotFound"));
 
   // «Докупить» — одна покупка к тому, что уже есть. Раньше подборка слала
   // количество и среднюю, и позиция с тем же тикером заменялась целиком:

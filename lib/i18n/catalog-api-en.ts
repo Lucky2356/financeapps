@@ -268,5 +268,15 @@ export const en: Messages = {
   "api.copy.partlyUnreadable":
     "Part of the copy could not be read, so those profiles were not restored. The copy is still there — please report this without deleting anything.",
   "api.save.rejected":
-    "Not saved: a value is not allowed (too long, empty or out of range) — field {where}. Correct it and save again."
+    "Not saved: a value is not allowed (too long, empty or out of range) — field {where}. Correct it and save again.",
+  "api.ai.noKey": "No API key is set for the selected AI provider.",
+  "api.ai.noDescription": "Enter a description of the transaction.",
+  "api.ai.noQuestion": "Enter a question.",
+  "api.ai.noAnswerRephrase": "The assistant gave no answer. Try rephrasing.",
+  "api.ai.notEnoughData": "Not enough data for an analysis.",
+  "api.ai.noAnswerRetry": "The assistant gave no answer. Please try again.",
+  "api.profile.notFound": "Profile not found.",
+  "api.recurring.notFound": "Recurring transaction not found.",
+  "api.inv.tickerRequired": "Enter the security's ticker.",
+  "api.inv.securityNotFound": "This security is not in the exchange directory.",
 };
