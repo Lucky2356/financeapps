@@ -19,6 +19,7 @@ import Papa from "papaparse";
 
 import { evaluate, roundHalfAway } from "@/lib/sheet/formula";
 import { computeSheet, type SheetColumn, type SheetColumnKind } from "@/lib/sheet/model";
+import { dataKeyOf, dataText, isDataLabel } from "@/lib/i18n/data-text";
 
 export type Grid = string[][];
 
@@ -246,6 +247,11 @@ export function matchCategory(
   const own = categories.filter((category) => category.kind === kind);
   const exact = own.find((category) => normalize(category.label) === target);
   if (exact) return exact.id;
+  // Русская таблица в книге, заведённой по-английски (и наоборот): столбец
+  // «Продукты» находит стандартные «Groceries» по общему ключу словаря данных.
+  const key = dataKeyOf(name, "data.cat.");
+  const twin = key ? own.find((category) => isDataLabel(category.label, key)) : undefined;
+  if (twin) return twin.id;
   const stem = (text: string) => normalize(text).split(" ")[0]?.slice(0, 5) ?? "";
   const head = stem(name);
   if (head.length < 4) return null;
@@ -268,7 +274,7 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
       columns: [],
       rows: [],
       markers: [],
-      warnings: ["Не нашлось строки с месяцами. Скопируйте таблицу вместе с шапкой."]
+      warnings: [dataText("data.sheetImport.noMonths")]
     };
   }
 
@@ -281,7 +287,7 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
     const month = parseMonth(row[monthIndex] ?? "");
     if (!month) continue;
     if (rows.some((item) => item.month === month)) {
-      warnings.push(`Месяц ${month} встречается дважды — взята первая строка.`);
+      warnings.push(dataText("data.sheetImport.duplicateMonth", undefined, { month }));
       continue;
     }
     rows.push({ month, cells: row });
@@ -302,10 +308,10 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
     const categoryId = categoryKind ? matchCategory(name, categoryKind, categories) : null;
     // «Доходы» — сумма всех доходов, а не статья: заводить под неё категорию
     // незачем (а «Зарплата» или «Подработка» — пожалуйста).
-    const generic = role === "income" && /^доход/.test(normalize(name));
+    const generic = role === "income" && /^(доход|income)/.test(normalize(name));
     columns.push({
       index,
-      name: name || `Столбец ${index + 1}`,
+      name: name || dataText("data.sheetImport.column", undefined, { n: index + 1 }),
       role,
       categoryId,
       createCategory: categoryKind && !categoryId && !generic ? categoryKind : null
@@ -322,12 +328,14 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
       const next = row.slice(index + 1).find((value) => value.trim());
       const amount = next ? parseAmount(next) : null;
       if (amount === null) return;
-      const label = cell.replace(/(\d{1,2})[./](\d{1,2})[./](\d{4})/, "").trim() || "Цель";
+      const label =
+        cell.replace(/(\d{1,2})[./](\d{1,2})[./](\d{4})/, "").trim() ||
+        dataText("data.sheetImport.target");
       markers.push({ label, date, amount });
     });
   }
 
-  if (rows.length === 0) warnings.push("Под шапкой не нашлось ни одного месяца.");
+  if (rows.length === 0) warnings.push(dataText("data.sheetImport.noRows"));
   // Таблицу ведут и сверху вниз, и свежим месяцем вверх. Дальше всё — Остаток
   // из прошлого Итога, сверка с Итогом файла, отметки сбережений — считает
   // строки по порядку, и порядок должен быть порядком месяцев.
@@ -382,7 +390,7 @@ export function buildPayload(plan: ImportPlan): ImportPayload {
   if (!hasSavingsOpening) {
     columns.push({
       key: SAVINGS_OPENING_KEY,
-      name: savingsAt[0]?.label || "Подушка на начало",
+      name: savingsAt[0]?.label || dataText("data.sheet.col.cushionOpening"),
       kind: "savingsOpening",
       categoryId: null
     });

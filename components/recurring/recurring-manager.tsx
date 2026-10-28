@@ -624,7 +624,7 @@ function RecurringDialog({
             <AmountInput
               name="amount"
               inputMode="decimal"
-              min="0"
+              min="0.01"
               step="0.01"
               value={amount}
               onValueChange={(next) => {

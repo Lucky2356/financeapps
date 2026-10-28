@@ -15,7 +15,9 @@ import { useI18n } from "@/lib/i18n/context";
 // so every figure here is built from the active ones only.
 export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
   const { t } = useI18n();
-  const { data: pageData } = useApiPageData(data, "/debts");
+  // Пока первое чтение не вернулось — заглушки вместо «0 ₽» (см. HeroCard).
+  const { data: pageData, ready } = useApiPageData(data, "/debts");
+  const loading = !ready;
   const currency = pageData.currency;
 
   const active = activeDebts(pageData.liabilities);
@@ -35,6 +37,7 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
   return (
     <>
       <HeroCard
+        loading={loading}
         label={t("debt.hero.label")}
         value={formatCurrency(balance, currency)}
         caption={t("debt.hero.caption", { count: active.length })}
@@ -45,6 +48,7 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
       />
       <StatGrid title={t("dash.widget.overview")}>
         <StatTile
+          loading={loading}
           label={t("debt.tile.monthly")}
           hint="tip.debt.tile.monthly"
           value={formatCurrency(monthly, currency)}
@@ -52,6 +56,7 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
           icon={Wallet}
         />
         <StatTile
+          loading={loading}
           label={t("debt.tile.rate")}
           hint="tip.debt.tile.rate"
           value={`${formatDecimal(rate, 1)}%`}
@@ -60,6 +65,7 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
           tone={rate >= 20 ? "danger" : "default"}
         />
         <StatTile
+          loading={loading}
           label={t("debt.tile.due")}
           value={nextDue ? (nextDue.isDue ? t("debt.tile.dueNow") : formatDate(nextDue.date)) : "—"}
           caption={nextDue?.isDue ? t("debt.tile.dueNowCaption") : t("debt.tile.dueCaption")}
@@ -67,6 +73,7 @@ export function DebtsSummary({ data }: { data: LiabilitiesPageData }) {
           tone={nextDue?.isDue ? "danger" : "default"}
         />
         <StatTile
+          loading={loading}
           label={t("debt.tile.repaid")}
           hint="tip.debt.tile.repaid"
           value={formatCurrency(repaid, currency)}

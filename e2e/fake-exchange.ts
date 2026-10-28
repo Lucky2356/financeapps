@@ -10,18 +10,18 @@ import type { Page } from "@playwright/test";
 // ответами в формате MOEX ISS, на те же адреса, по которым ходит приложение.
 // Проверяется код приложения, а не то, отвечает ли сегодня биржа.
 
-/** Бумаги доски акций: тикер, короткое имя, цена. */
-const SHARES: Array<[string, string, number]> = [
-  ["SBER", "Сбербанк", 300],
-  ["SBERP", "Сбербанк-п", 295],
-  ["GAZP", "ГАЗПРОМ ао", 130],
-  ["LKOH", "ЛУКОЙЛ", 6900],
-  ["YDEX", "Яндекс", 4100],
-  ["SNGS", "Сургнфгз", 24],
-  ["SNGSP", "Сургнфгз-п", 55],
-  ["VTBR", "ВТБ ао", 90],
-  ["MGNT", "Магнит", 5200],
-  ["T", "Т-Технологии", 3100]
+/** Бумаги доски акций: тикер, короткое имя, имя латиницей, цена. */
+const SHARES: Array<[string, string, string, number]> = [
+  ["SBER", "Сбербанк", "Sberbank", 300],
+  ["SBERP", "Сбербанк-п", "Sberbank-p", 295],
+  ["GAZP", "ГАЗПРОМ ао", "Gazprom", 130],
+  ["LKOH", "ЛУКОЙЛ", "LUKOIL", 6900],
+  ["YDEX", "Яндекс", "Yandex", 4100],
+  ["SNGS", "Сургнфгз", "Surgutneftegas", 24],
+  ["SNGSP", "Сургнфгз-п", "Surgutneftegas-p", 55],
+  ["VTBR", "ВТБ ао", "VTB", 90],
+  ["MGNT", "Магнит", "Magnit", 5200],
+  ["T", "Т-Технологии", "T-Technologies", 3100]
 ];
 
 /** Индексы — с доски индексов. */
@@ -36,25 +36,25 @@ function table(columns: string[], data: (string | number | null)[][] = []) {
 function boardSnapshot(board: string) {
   if (board !== "TQBR") {
     return {
-      securities: table(["SECID", "SHORTNAME"]),
+      securities: table(["SECID", "SHORTNAME", "LATNAME"]),
       marketdata: table(["SECID", "LAST", "LASTTOPREVPRICE", "MARKETPRICE"])
     };
   }
   return {
     securities: table(
-      ["SECID", "SHORTNAME", "SECTYPE", "LOTSIZE"],
-      SHARES.map(([ticker, name]) => [ticker, name, "1", 1])
+      ["SECID", "SHORTNAME", "LATNAME", "SECTYPE", "LOTSIZE"],
+      SHARES.map(([ticker, name, latName]) => [ticker, name, latName, "1", 1])
     ),
     marketdata: table(
       ["SECID", "LAST", "LCURRENTPRICE", "LASTTOPREVPRICE", "MARKETPRICE"],
-      SHARES.map(([ticker, , price]) => [ticker, price, price, 0.5, price])
+      SHARES.map(([ticker, , , price]) => [ticker, price, price, 0.5, price])
     )
   };
 }
 
 /** Закрытия по будням от `from` до `till`: плавный рост к сегодняшней цене. */
 function history(ticker: string, from: string, till: string, start: number) {
-  const base = INDEXES[ticker] ?? SHARES.find(([secid]) => secid === ticker)?.[2] ?? 100;
+  const base = INDEXES[ticker] ?? SHARES.find(([secid]) => secid === ticker)?.[3] ?? 100;
   const days: string[] = [];
   for (
     let day = new Date(`${from}T00:00:00Z`);

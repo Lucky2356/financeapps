@@ -10,6 +10,7 @@
 // (lib/api/routes.ts).
 
 import { id, routeOf } from "@/lib/api/local/helpers";
+import { storedTransactionDate } from "@/lib/transactions/date";
 import {
   CASHBACK_ACTIONS,
   deductionKindOf,
@@ -29,7 +30,6 @@ import {
   type WorkbookImportSheet
 } from "@/lib/api/local/sheets";
 import { convert } from "@/lib/currency";
-import { countLabel, plural } from "@/lib/i18n/plural";
 import { roundMoney } from "@/lib/utils";
 import { transferKeyOf } from "@/lib/transactions/transfers";
 import { unusualFor } from "@/lib/analytics/watchdog";
@@ -75,6 +75,7 @@ import { savePlan } from "@/lib/api/local/plan";
 import { recordNetWorthSnapshot } from "@/lib/api/local/overview";
 import { updateFxRates, updateSettings } from "@/lib/api/local/settings";
 import { FAMILY_ACTIONS, unknownFamilyAction } from "@/lib/api/local/family";
+import { apiCount, apiText } from "@/lib/i18n/api-text";
 
 /** Что получает обработчик записи. */
 export type WriteRequest = {
@@ -104,6 +105,12 @@ export const PRICED_WRITES: Record<
   "/networth/snapshot": async (state) => ({ prices: await marketPricesFor(state) }),
   "/investments": async (state, body) => ({ market: await investmentWriteMarket(state, body) })
 };
+
+/**
+ * «Счёт» последнего движения цели, деньги которой списали, а не вернули на
+ * счёт: такого счёта нет, и ни один счёт его за свой не примет.
+ */
+const WRITTEN_OFF = "written-off";
 
 /** Что получает обработчик удаления. */
 export type DeleteRequest = {
@@ -351,10 +358,17 @@ export const STATE_DELETES = {
     // capital fell by the amount, no account got it back, and the record of
     // how it got there stayed behind and kept being counted. The money goes
     // somewhere first — onto a chosen account, or written off deliberately.
+    //
+    // Движения цели остаются, а к ним добавляется последнее — деньги ушли из
+    // цели сегодня. Раньше движения стирались вместе с целью, и история
+    // капитала переписывалась задним числом: отложенные в марте 50 000
+    // пропадали из каждого месяца с марта, а остатки на начало месяца в
+    // план/факте перебегали между «основными» и «сбережениями».
     const goal = state.goals.find((item) => item.id === itemId);
     if (goal && goal.currentAmount > 0) {
       const writeOff = searchParams.get("writeOff") === "1";
       const accountId = searchParams.get("accountId") || goal.linkedAccountId;
+      let returnedTo = WRITTEN_OFF;
       if (!writeOff) {
         const account = goalAccount(state, accountId);
         applyBalance(
@@ -362,12 +376,20 @@ export const STATE_DELETES = {
           account.id,
           roundMoney(convert(goal.currentAmount, state.currency, account.currency, ratesOf(state)))
         );
+        returnedTo = account.id;
       }
+      state.goalMovements = [
+        {
+          id: id("goalmove"),
+          goalId: goal.id,
+          accountId: returnedTo,
+          amount: -goal.currentAmount,
+          date: storedTransactionDate(new Date())
+        },
+        ...(state.goalMovements ?? [])
+      ];
     }
     state.goals = state.goals.filter((item) => item.id !== itemId);
-    state.goalMovements = (state.goalMovements ?? []).filter(
-      (movement) => movement.goalId !== itemId
-    );
   }),
   "/debts": byId((state, itemId) => {
     state.liabilities = state.liabilities.filter((liability) => liability.id !== itemId);
@@ -405,20 +427,14 @@ export const STATE_DELETES = {
   }),
   "/categories": byId((state, itemId) => {
     if (STANDARD_CATEGORY_IDS.has(itemId)) {
-      throw new Error(
-        "Стандартную категорию удалить нельзя — её можно переименовать, перекрасить или сменить значок."
-      );
+      throw new Error(apiText("api.category.builtIn"));
     }
     const txCount = state.transactions.filter((t) => t.category.id === itemId).length;
     if (txCount > 0) {
-      // «привязана 1 операция», «привязаны 2 операции», «привязано 5 операций».
-      const bound = plural(txCount, { one: "привязана", few: "привязаны", many: "привязано" });
-      const operations = countLabel(txCount, {
-        one: "операция",
-        few: "операции",
-        many: "операций"
-      });
-      throw new Error(`Нельзя удалить категорию: к ней ${bound} ${operations}.`);
+      // «привязана 1 операция», «привязаны 2 операции», «привязано 5 операций»:
+      // формы обоих слов — в словаре, по числу n; count — то же число, но с
+      // разделителями языка экрана («1 234»).
+      throw new Error(apiText("api.category.inUse", { n: txCount, count: apiCount(txCount) }));
     }
     state.categories = state.categories.filter((c) => c.id !== itemId);
   })

@@ -1,4 +1,5 @@
 import type { TransactionRow } from "@/types/finance";
+import { isDataLabel } from "@/lib/i18n/data-text";
 
 // Moving money between your own accounts is not income and not spending — the
 // total you own does not change. The app records it as a pair of ordinary
@@ -16,6 +17,19 @@ import type { TransactionRow } from "@/types/finance";
  * are not being counted.
  */
 export const TRANSFER_CATEGORY_LABEL = "Переводы";
+
+/**
+ * Ключ того же имени в словаре данных. TRANSFER_CATEGORY_LABEL — русский
+ * образец; заводится категория на языке интерфейса, а узнаётся под любым из
+ * имён: книгу, где «Переводы» завёл русский ноутбук, ведёт и английский
+ * телефон — и его «Transfers» должны лечь туда же, а не рядом.
+ */
+export const TRANSFER_CATEGORY_KEY = "data.cat.transfers";
+
+/** Имя категории — одно из имён категории переводов, на любом языке. */
+export function isTransferCategoryLabel(label: string | null | undefined): boolean {
+  return isDataLabel(label, TRANSFER_CATEGORY_KEY);
+}
 
 const LEGACY_MARKER = /\[transfer:[^\]]+\]/;
 

@@ -59,7 +59,9 @@ WebDriver до них не дотягивается. Остаётся ручно
 
 Four files must agree: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`
 and the `financial-assistant` entry in `src-tauri/Cargo.lock`. Regenerate `package-lock.json`
-with `npm install --package-lock-only`, add the CHANGELOG section, commit, then
+with `npm install --package-lock-only`, add the CHANGELOG section and its English
+translation to `CHANGELOG.en.md` (with the tag, the gate below refuses a version that has
+no section there), run `npm run whats-new`, commit, then
 `git tag -a vX.Y.Z` and push the tag.
 
 This no longer rests on remembering. `scripts/verify-release-version.mjs` reads all four

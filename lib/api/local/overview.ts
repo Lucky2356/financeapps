@@ -15,6 +15,7 @@ import { CashflowForecastService } from "@/services/CashflowForecastService";
 import { categoryBreakdown, topCategories } from "@/lib/categories/breakdown";
 import { pickBestWorstMonth } from "@/lib/analytics/best-month";
 import { countableRows } from "@/lib/transactions/transfers";
+import { isDiscretionaryCategory } from "@/lib/categories/known";
 import { FinanceRecommendationService } from "@/services/FinanceRecommendationService";
 import { buildAnalyticsDerived } from "@/services/AnalyticsInsightService";
 import { buildEmergencyFund } from "@/lib/emergency-fund";
@@ -446,10 +447,10 @@ export function financeInput(state: LocalState, alreadyFiltered = false) {
   const softExpense = expenseRows
     .filter((row) => {
       const category = state.categories.find((item) => item.id === row.category.id);
-      // Discretionary = subscriptions + entertainment + restaurants.
-      return (
-        category?.isSubscription || ["Развлечения", "Рестораны"].includes(category?.label ?? "")
-      );
+      // Discretionary = subscriptions + entertainment + restaurants — узнанные
+      // по номеру стандартной категории или по имени на любом языке, а не по
+      // русскому слову: у книги, заведённой по-английски, оно другое.
+      return isDiscretionaryCategory(category);
     })
     .reduce((sum, row) => sum + row.amount, 0);
   const essentialExpense = expenseRows

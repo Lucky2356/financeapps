@@ -15,7 +15,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useApiPageData } from "@/hooks/use-api-page-data";
 import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/catalog";
 import { useI18n } from "@/lib/i18n/context";
+import { intlLocale } from "@/lib/i18n/display-locale";
 import { isTransfer } from "@/lib/transactions/transfers";
 import { cn } from "@/lib/utils";
 import type { ForecastData } from "@/types/finance";
@@ -24,13 +26,17 @@ const pad = (value: number) => String(value).padStart(2, "0");
 const dayKey = (year: number, month: number, day: number) =>
   `${year}-${pad(month + 1)}-${pad(day)}`;
 
-/** Коротко для клетки: 1 234 → «1,2 т», 15 000 → «15 т». */
-function compact(value: number, locale: string): string {
+/**
+ * Коротко для клетки: 1 234 → «1,2 т», 15 000 → «15 т». Единицы — из словаря
+ * (те же, что у подписей графиков), разделитель — языка экрана.
+ */
+function compact(value: number, locale: Locale, t: (key: string) => string): string {
+  const tag = intlLocale(locale);
   if (value >= 1_000_000)
-    return `${(value / 1_000_000).toLocaleString(locale, { maximumFractionDigits: 1 })} ${locale === "en" ? "M" : "млн"}`;
+    return `${(value / 1_000_000).toLocaleString(tag, { maximumFractionDigits: 1 })} ${t("chart.million")}`;
   if (value >= 1_000)
-    return `${(value / 1_000).toLocaleString(locale, { maximumFractionDigits: value >= 10_000 ? 0 : 1 })} ${locale === "en" ? "k" : "т"}`;
-  return Math.round(value).toLocaleString(locale);
+    return `${(value / 1_000).toLocaleString(tag, { maximumFractionDigits: value >= 10_000 ? 0 : 1 })} ${t("chart.thousandShort")}`;
+  return Math.round(value).toLocaleString(tag);
 }
 
 const EMPTY_TX = { transactions: [] } as unknown as TransactionsPageData;
@@ -171,11 +177,11 @@ export function TransactionsCalendar() {
                 <span>{day}</span>
                 {cell && cell.expense > 0 ? (
                   <span className="mt-0.5 text-[10px] leading-none tabular-nums text-foreground">
-                    {compact(cell.expense, locale)}
+                    {compact(cell.expense, locale, t)}
                   </span>
                 ) : plan ? (
                   <span className="mt-0.5 text-[10px] leading-none tabular-nums text-muted-foreground/70">
-                    {compact(plan, locale)}
+                    {compact(plan, locale, t)}
                   </span>
                 ) : null}
                 {cell && cell.income > 0 ? (

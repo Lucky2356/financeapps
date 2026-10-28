@@ -115,9 +115,10 @@ export type YoYComparison = {
   year: number;
   current: PeriodTotals;
   previous: PeriodTotals;
-  incomeChangePct: number;
-  expenseChangePct: number;
-  savingsChangePct: number;
+  /** `null` — сравнивать не с чем: в прошлом году этой величины не было. */
+  incomeChangePct: number | null;
+  expenseChangePct: number | null;
+  savingsChangePct: number | null;
 };
 
 function yearTotals(transactions: ReportTransaction[], year: number): PeriodTotals {
@@ -135,10 +136,12 @@ function yearTotals(transactions: ReportTransaction[], year: number): PeriodTota
   return finalizeTotals(income, expense);
 }
 
-function changePct(current: number, previous: number): number {
-  // From nothing to something is 100% either way — but which way matters:
-  // savings going 0 → −50 000 was reported as growth of +100%.
-  if (previous === 0) return current === 0 ? 0 : current > 0 ? 100 : -100;
+function changePct(current: number, previous: number): number | null {
+  // От нуля процент не считается: «+100% к пред. году» под первым же годом
+  // учёта выглядело ростом вдвое, хотя прошлого года в книге просто нет. И
+  // знак тут ничего не спасает — сбережения 0 → −50 000 раньше читались как
+  // рост, потом как «−100%», а на деле сравнивать не с чем. Экран пишет «—».
+  if (previous === 0) return null;
   return round2(((current - previous) / Math.abs(previous)) * 100);
 }
 

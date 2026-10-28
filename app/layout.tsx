@@ -9,6 +9,10 @@ import { DENSITY_FOUC_SCRIPT } from "@/lib/appearance";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"], display: "swap" });
 
+// Метаданные статические — их пишет сборка, без окна и без выбора языка, поэтому
+// они по-русски (язык по умолчанию; для поисковиков так и надо). На экране
+// заголовок окна переписывает DocumentTitle — на языке, который выбран, — а
+// `<html lang>` ставит I18nProvider: от него зависят переносы по слогам.
 export const metadata: Metadata = {
   title: {
     default: APP_NAME,
@@ -29,6 +33,7 @@ export const metadata: Metadata = {
       "Учёт личных финансов: операции, бюджеты, цели, долги, прогноз и аналитика. Офлайн, на компьютере и на телефоне.",
     type: "website",
     locale: "ru_RU",
+    alternateLocale: ["en_GB"],
     siteName: APP_NAME
   }
 };

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import type { MarketSecurity } from "@/services/market/MarketDataService";
 import { Input } from "@/components/ui/input";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useListKeyboard } from "@/hooks/use-list-keyboard";
 import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
@@ -242,7 +242,7 @@ export function SecuritySearch({
                           }
                         >
                           {row.changeDay >= 0 ? "+" : ""}
-                          {row.changeDay.toFixed(2)}%
+                          {formatDecimal(row.changeDay, 2)}%
                         </span>
                       ) : null}
                     </span>

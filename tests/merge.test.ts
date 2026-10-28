@@ -304,4 +304,20 @@ describe("слияние книг", () => {
       expect(months).toEqual(["2026-01", "2026-02", "2026-03"]);
     });
   });
+  describe("открытый профиль — у каждого устройства свой", () => {
+    const list = (active: string, ids = ["main", "sample"]) => ({
+      profiles: ids.map((id) => ({ id, name: id })),
+      activeProfileId: active
+    });
+
+    it("слияние списка профилей не переключает профиль этого устройства", () => {
+      const { state } = mergeBooks(list("main"), list("main"), list("sample"));
+      expect(state.activeProfileId).toBe("main");
+    });
+
+    it("разница только в открытом профиле — отправлять нечего", () => {
+      const { differs } = mergeBooks(list("main"), list("main"), list("sample"));
+      expect(differs).toBe(false);
+    });
+  });
 });

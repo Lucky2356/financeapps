@@ -32,7 +32,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
+import { formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { intlLocale } from "@/lib/i18n/display-locale";
 import type { ImportPageData } from "@/lib/data";
 import {
   buildPayload,
@@ -217,7 +219,7 @@ export function SheetImportDialog({
             rows={4}
             className="font-mono text-xs"
             value={text}
-            placeholder="Месяц	Остаток	Доходы	Продукты	…"
+            placeholder={t("ui.sheetImport.pastePlaceholder")}
             onChange={(event) => {
               setText(event.target.value);
               setSheets([]);
@@ -341,7 +343,7 @@ export function SheetImportDialog({
                   items: plan.markers
                     .map(
                       (marker) =>
-                        `${marker.label} ${marker.date.split("-").reverse().join(".")} — ${marker.amount.toLocaleString("ru-RU")}`
+                        `${marker.label} ${formatDate(marker.date)} — ${marker.amount.toLocaleString(intlLocale(locale === "en" ? "en" : "ru"))}`
                     )
                     .join("; ")
                 })}
@@ -362,8 +364,12 @@ export function SheetImportDialog({
                   {format(words.importTotalsBad, {
                     months: count(totals.mismatched.length, "monthsIn"),
                     month: monthLabel(totals.mismatched[0].month, locale),
-                    file: totals.mismatched[0].file.toLocaleString("ru-RU"),
-                    ours: totals.mismatched[0].ours.toLocaleString("ru-RU")
+                    file: totals.mismatched[0].file.toLocaleString(
+                      intlLocale(locale === "en" ? "en" : "ru")
+                    ),
+                    ours: totals.mismatched[0].ours.toLocaleString(
+                      intlLocale(locale === "en" ? "en" : "ru")
+                    )
                   })}
                 </p>
               )

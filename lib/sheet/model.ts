@@ -11,6 +11,7 @@
 // Основные деньги и сбережения разведены, как в план/факте: перевод «в
 // сбережения» уменьшает основной Итог и увеличивает подушку.
 
+import { dataText } from "@/lib/i18n/data-text";
 import { evaluate, roundHalfAway } from "@/lib/sheet/formula";
 
 export const SHEET_COLUMN_KINDS = [
@@ -225,11 +226,19 @@ export function computeSheet(input: {
   return { rows, totals };
 }
 
-/** Столбцы новой таблицы: Остаток, Доходы — и подушка в сбережениях. */
+/**
+ * Столбцы новой таблицы: Остаток, Доходы — и подушка в сбережениях. Названия —
+ * на языке интерфейса в минуту создания; дальше это названия человека.
+ */
 export function starterColumns(makeId: () => string): SheetColumn[] {
   return [
-    { id: makeId(), name: "Остаток", kind: "opening", order: 0 },
-    { id: makeId(), name: "Доходы", kind: "income", order: 1 },
-    { id: makeId(), name: "Подушка на начало", kind: "savingsOpening", order: 1000 }
+    { id: makeId(), name: dataText("data.sheet.col.opening"), kind: "opening", order: 0 },
+    { id: makeId(), name: dataText("data.sheet.col.income"), kind: "income", order: 1 },
+    {
+      id: makeId(),
+      name: dataText("data.sheet.col.cushionOpening"),
+      kind: "savingsOpening",
+      order: 1000
+    }
   ];
 }

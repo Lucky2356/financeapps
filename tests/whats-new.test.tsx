@@ -6,7 +6,13 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseChangelog, type WhatsNewRelease } from "@/lib/whats-new/parse";
+import {
+  englishReleases,
+  parseChangelog,
+  pickReleases,
+  type WhatsNewRelease
+} from "@/lib/whats-new/parse";
+import generatedEn from "@/lib/whats-new/releases.generated.en.json";
 import generated from "@/lib/whats-new/releases.generated.json";
 import { decideWhatsNew, MAX_RELEASES, WHATS_NEW_KEY } from "@/lib/whats-new/seen";
 import { updateTeaser } from "@/lib/updates/latest";
@@ -51,6 +57,42 @@ const SAMPLE = `# Changelog
 - Всё иначе.
 `;
 
+// Английское издание того же: 3.1.0 и 3.0.0 переведены, 3.0.1 — забыт.
+const SAMPLE_EN = `# Changelog (English edition)
+
+Translation of CHANGELOG.md.
+
+## [3.1.0] — 2026-10-02
+
+✨ The main thing in one line.
+
+### Added
+- **New button** — does \`everything\` at once.
+
+### Internal
+- Nobody cares.
+
+### Under the hood
+- Neither here.
+
+### For service owners
+- Nor here.
+
+## [3.0.0] — 2026-09-30
+
+A big release.
+
+### Changed
+- Everything is different.
+
+## [2.0.0] — 2026-01-01
+
+Too old for the Russian list.
+
+### Added
+- Something.
+`;
+
 describe("разбор CHANGELOG", () => {
   const releases = parseChangelog(SAMPLE);
 
@@ -81,6 +123,51 @@ describe("разбор CHANGELOG", () => {
   });
 });
 
+describe("разбор английского издания", () => {
+  it("служебные разделы по-английски тоже скрыты", () => {
+    const [release] = parseChangelog(SAMPLE_EN);
+    expect(release.sections.map((s) => s.title)).toEqual(["Added"]);
+    expect(release.sections[0].items[0]).toEqual({
+      lead: "New button",
+      text: "— does everything at once."
+    });
+  });
+
+  it("выпуск из одних «Fixed…» и «Security» — выпуск исправлений", () => {
+    const [release] = parseChangelog(`## [1.0.1] — 2026-01-02
+
+🔧 Fixed.
+
+### Fixed — sync
+- **Crashed** on start.
+
+### Security
+- Closed a hole.
+
+### Checks
+- A new guard.
+
+### Tests
+- More of them.
+`);
+    expect(release.kind).toBe("fixes");
+    expect(release.sections.map((s) => s.title)).toEqual(["Fixed — sync", "Security"]);
+  });
+
+  it("берутся только версии из русского списка", () => {
+    const english = englishReleases(SAMPLE_EN, parseChangelog(SAMPLE));
+    expect(english.map((r) => r.version)).toEqual(["3.1.0", "3.0.0"]);
+  });
+
+  it("выпуск без перевода показывается по-русски, а не пропадает", () => {
+    const russian = parseChangelog(SAMPLE);
+    const picked = pickReleases(russian, englishReleases(SAMPLE_EN, russian));
+    expect(picked.map((r) => r.version)).toEqual(["3.1.0", "3.0.1", "3.0.0"]);
+    expect(picked.map((r) => r.sections[0].title)).toEqual(["Added", "Исправлено", "Changed"]);
+    expect(pickReleases(russian, null)).toBe(russian);
+  });
+});
+
 describe("файл для приложения не отстал от CHANGELOG", () => {
   it("совпадает с разбором CHANGELOG — иначе: npm run whats-new", () => {
     const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8");
@@ -89,6 +176,46 @@ describe("файл для приложения не отстал от CHANGELOG"
 
   it("в нём есть текущая версия — окну будет что показать", () => {
     expect((generated as WhatsNewRelease[]).some((r) => r.version === pkgVersion)).toBe(true);
+  });
+
+  it("английский файл совпадает с разбором CHANGELOG.en.md — иначе: npm run whats-new", () => {
+    const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8");
+    const english = readFileSync(resolve(root, "CHANGELOG.en.md"), "utf8");
+    expect(generatedEn).toEqual(englishReleases(english, parseChangelog(changelog)));
+  });
+});
+
+// GUARD: новый выпуск пишется сразу на двух языках. Окно в английском
+// интерфейсе показало бы забытый выпуск по-русски — не пропало бы, но
+// английская версия перестала бы быть английской.
+describe("английское издание CHANGELOG", () => {
+  const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8");
+  const english = readFileSync(resolve(root, "CHANGELOG.en.md"), "utf8");
+  const russian = parseChangelog(changelog);
+  const translated = englishReleases(english, russian);
+
+  it("у свежего выпуска CHANGELOG.md есть английская запись в CHANGELOG.en.md", () => {
+    expect(translated.map((r) => r.version)).toContain(russian[0].version);
+  });
+
+  it("у текущей версии приложения — тоже", () => {
+    expect(translated.map((r) => r.version)).toContain(pkgVersion);
+  });
+
+  // Перевод — того же выпуска: та же дата, тот же вид, столько же пунктов в
+  // каждом разделе. Пропущенный при переводе пункт виден здесь, а не по
+  // жалобе читателя.
+  it("перевод повторяет выпуск: дата, вид и число пунктов по разделам", () => {
+    const shape = (r: WhatsNewRelease) => ({
+      version: r.version,
+      date: r.date,
+      kind: r.kind,
+      items: r.sections.map((s) => s.items.length)
+    });
+    const byVersion = new Map(russian.map((r) => [r.version, r]));
+    for (const release of translated) {
+      expect(shape(release)).toEqual(shape(byVersion.get(release.version)!));
+    }
   });
 });
 
@@ -170,8 +297,9 @@ describe("окно", () => {
     vi.resetModules();
   });
 
-  async function mount(releases: WhatsNewRelease[]) {
+  async function mount(releases: WhatsNewRelease[], english: WhatsNewRelease[] = []) {
     vi.doMock("@/lib/whats-new/releases.generated.json", () => ({ default: releases }));
+    vi.doMock("@/lib/whats-new/releases.generated.en.json", () => ({ default: english }));
     vi.doMock("@/lib/constants", async (original) => ({
       ...(await original<typeof import("@/lib/constants")>()),
       APP_VERSION: releases[0].version
@@ -224,5 +352,26 @@ describe("окно", () => {
     // Список выпусков грузится отдельным куском — запоминается чуть позже.
     await waitFor(() => expect(localStorage.getItem(WHATS_NEW_KEY)).toBe("3.1.0"));
     expect(screen.queryByTestId("whats-new")).toBeNull();
+  });
+
+  it("по-английски — английские слова, а выпуск без перевода — по-русски", async () => {
+    localStorage.setItem("app-locale", "en");
+    localStorage.setItem("onboarding-v2-done", "1");
+    localStorage.setItem(WHATS_NEW_KEY, "2.9.0");
+    const russian = parseChangelog(SAMPLE);
+    await mount(russian, englishReleases(SAMPLE_EN, russian));
+
+    expect(await screen.findByText("What's new in 3.1.0")).toBeInTheDocument();
+    expect(screen.getByText("✨ The main thing in one line.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New button" })).toBeInTheDocument();
+    expect(screen.queryByText("Новая кнопка")).toBeNull();
+
+    // 3.0.1 не переведён — раскрывается русским текстом.
+    await userEvent.click(screen.getByRole("button", { name: /^3\.0\.1/ }));
+    expect(screen.getByText("🔧 Починили.")).toBeInTheDocument();
+    expect(screen.getByText("Падало")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^3\.0\.0/ }));
+    expect(screen.getByText("Everything is different.")).toBeInTheDocument();
   });
 });

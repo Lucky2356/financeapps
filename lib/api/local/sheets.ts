@@ -29,6 +29,8 @@ import {
 } from "@/lib/api/local/sheet";
 import type { SheetColumn, SheetTarget } from "@/lib/sheet/model";
 import type { Stamped } from "@/lib/sync/row-stamps";
+import { apiText } from "@/lib/i18n/api-text";
+import { dataText, isDataLabel } from "@/lib/i18n/data-text";
 
 export const MAIN_SHEET = "main";
 
@@ -74,13 +76,26 @@ const MAX_FREE_COLS = 200;
 
 type Body = Record<string, unknown>;
 
-const DEFAULT_MAIN_NAME = "Бюджет";
+const DEFAULT_MAIN_KEY = "data.sheet.main";
+
+/**
+ * Имя главной таблицы для показа. Пока человек её не переименовал, у неё
+ * имя по умолчанию — «Бюджет», заведённое на языке того устройства, что
+ * завело её первым. Такое имя показывается на языке интерфейса: у английского
+ * телефона в книге русского ноутбука главная таблица — «Budget». Имя, данное
+ * человеком, показывается как записано.
+ */
+function mainSheetName(stored: string | undefined): string {
+  return stored === undefined || isDataLabel(stored, DEFAULT_MAIN_KEY)
+    ? dataText(DEFAULT_MAIN_KEY)
+    : stored;
+}
 
 function sheetName(value: unknown): string {
   const text = String(value ?? "")
     .trim()
     .slice(0, 60);
-  if (!text) throw new Error("У листа должно быть название.");
+  if (!text) throw new Error(apiText("api.sheets.name"));
   return text;
 }
 
@@ -91,7 +106,7 @@ export function listSheets(state: BookState): SheetTab[] {
   const ordered = [
     {
       id: MAIN_SHEET,
-      name: main?.name ?? DEFAULT_MAIN_NAME,
+      name: mainSheetName(main?.name),
       kind: "budget" as const,
       order: main?.order ?? 0
     },
@@ -102,7 +117,7 @@ export function listSheets(state: BookState): SheetTab[] {
 
 function findSheet(state: BookState, sheetId: string): SheetTab {
   const sheet = listSheets(state).find((item) => item.id === sheetId);
-  if (!sheet) throw new Error("Такого листа нет — возможно, его удалили на другом устройстве.");
+  if (!sheet) throw new Error(apiText("api.sheets.notFound"));
   return sheet;
 }
 
@@ -276,7 +291,10 @@ export function createSheet(
 function ensureOrders(state: BookState) {
   const rows = state.sheets ?? [];
   if (!rows.some((row) => row.id === MAIN_SHEET)) {
-    state.sheets = [{ id: MAIN_SHEET, name: DEFAULT_MAIN_NAME, kind: "budget", order: 0 }, ...rows];
+    state.sheets = [
+      { id: MAIN_SHEET, name: dataText(DEFAULT_MAIN_KEY), kind: "budget", order: 0 },
+      ...rows
+    ];
   }
 }
 
@@ -351,7 +369,7 @@ function onBudgetSheet<Result>(
   return (state: BookState, body: Body, makeId: () => string): Result => {
     const sheetId = targetSheet(body);
     if (findSheet(state, sheetId).kind === "free")
-      throw new Error("Это действие — для бюджетного листа.");
+      throw new Error(apiText("api.sheets.budgetOnly"));
     const scoped = sheetScope(state, sheetId);
     const result = run(scoped, body, makeId);
     putScope(state, sheetId, scoped);
@@ -364,7 +382,7 @@ function onFreeSheet<Result>(run: (state: BookState, sheetId: string, body: Body
   return (state: BookState, body: Body): Result => {
     const sheetId = targetSheet(body);
     if (findSheet(state, sheetId).kind !== "free")
-      throw new Error(`Неизвестное действие с таблицей: ${String(body.action ?? "")}`);
+      throw new Error(apiText("api.sheet.unknownAction", { action: String(body.action ?? "") }));
     return run(state, sheetId, body);
   };
 }
@@ -412,8 +430,8 @@ export const WORKBOOK_ACTIONS = {
 /** Действие, которого нет ни у одного листа, — та же ошибка, что и прежде. */
 export function unknownWorkbookAction(state: BookState, body: Body): never {
   if (findSheet(state, targetSheet(body)).kind === "free")
-    throw new Error("Это действие — для бюджетного листа.");
-  throw new Error(`Неизвестное действие с таблицей: ${String(body.action ?? "")}`);
+    throw new Error(apiText("api.sheets.budgetOnly"));
+  throw new Error(apiText("api.sheet.unknownAction", { action: String(body.action ?? "") }));
 }
 
 /** Перенос из Excel в бюджетный лист — через то же окно. */
@@ -461,7 +479,7 @@ export const SHEETS_ACTIONS = {
 
   remove: (state: BookState, body: Body) => {
     const id = String(body.id ?? "");
-    if (id === MAIN_SHEET) throw new Error("Главную таблицу удалить нельзя — её можно очистить.");
+    if (id === MAIN_SHEET) throw new Error(apiText("api.sheets.mainUndeletable"));
     findSheet(state, id);
     // Всё, что принадлежит листу, уходит вместе с ним; корзина (lib/trash)
     // соберёт это в одну запись «лист», чтобы вернуть целиком.
@@ -483,7 +501,7 @@ export const SHEETS_ACTIONS = {
 
 /** Действие с листами, которого нет. */
 export function unknownSheetsAction(body: Body): never {
-  throw new Error(`Неизвестное действие с листами: ${String(body.action ?? "")}`);
+  throw new Error(apiText("api.sheets.unknownAction", { action: String(body.action ?? "") }));
 }
 
 /** Лист из Excel для переноса книги целиком. */

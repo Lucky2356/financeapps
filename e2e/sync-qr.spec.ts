@@ -31,8 +31,15 @@ async function toLocalService(context: BrowserContext) {
   await context.route(`${DEFAULT}/**`, async (route) => {
     const url = route.request().url();
     if (url.includes("/events")) return route.abort();
-    const response = await route.fetch({ url: url.replace(DEFAULT, local) });
-    await route.fulfill({ response });
+    // Окно закрывают, пока запрос ещё в пути (поток событий, опрос
+    // устройств), — ответить на него уже некому. Это конец проверки, а не
+    // её ошибка: Playwright при этом бросает «response has been disposed».
+    try {
+      const response = await route.fetch({ url: url.replace(DEFAULT, local) });
+      await route.fulfill({ response });
+    } catch (error) {
+      if (!/disposed|closed|Target page, context or browser/i.test(String(error))) throw error;
+    }
   });
 }
 

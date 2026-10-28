@@ -11,7 +11,7 @@ import { ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 
 import { HoldingDetails } from "@/components/investments/holding-card";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { sectorLabel } from "@/lib/market/sectors";
 import { cn } from "@/lib/utils";
@@ -164,7 +164,7 @@ export function HoldingsTable({
                           style={{ width: `${Math.min(Math.max(row.share, 0), 100)}%` }}
                         />
                       </div>
-                      <span className="w-10 text-right">{row.share.toFixed(0)}%</span>
+                      <span className="w-10 text-right">{formatDecimal(row.share, 0)}%</span>
                     </div>
                   </td>
                   <td className={cn("py-2.5 text-right tabular-nums", tone(row.pnl >= 0))}>
@@ -174,7 +174,7 @@ export function HoldingsTable({
                     </p>
                     <p className="text-xs">
                       {pct >= 0 ? "+" : ""}
-                      {pct.toFixed(1)}%
+                      {formatDecimal(pct, 1)}%
                     </p>
                   </td>
                   <td
@@ -183,7 +183,7 @@ export function HoldingsTable({
                       day === undefined ? "text-muted-foreground" : tone(day >= 0)
                     )}
                   >
-                    {day === undefined ? "—" : `${day >= 0 ? "+" : ""}${day.toFixed(2)}%`}
+                    {day === undefined ? "—" : `${day >= 0 ? "+" : ""}${formatDecimal(day, 2)}%`}
                   </td>
                 </tr>
                 {open ? (

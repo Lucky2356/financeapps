@@ -6,8 +6,9 @@ import { StockPriceChart } from "@/components/charts/lazy";
 import type { StockPricePoint } from "@/components/charts/stock-price-chart";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api/client";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { sectorLabel } from "@/lib/market/sectors";
 
 export type StockDetailSeed = {
   ticker: string;
@@ -31,7 +32,7 @@ function ChangeBadge({ value, suffix }: { value: number; suffix: string }) {
   return (
     <span className={up ? "text-success" : "text-destructive"}>
       {up ? "+" : ""}
-      {value.toFixed(2)}% <span className="text-xs text-muted-foreground">{suffix}</span>
+      {formatDecimal(value, 2)}% <span className="text-xs text-muted-foreground">{suffix}</span>
     </span>
   );
 }
@@ -40,7 +41,7 @@ function ChangeBadge({ value, suffix }: { value: number; suffix: string }) {
 // real MOEX history chart + range switcher + key figures. Opened by expanding a
 // row in the portfolio or watchlist.
 export function InlineStockChart({ seed, currency }: { seed: StockDetailSeed; currency: string }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [range, setRange] = useState("6m");
   const [points, setPoints] = useState<StockPricePoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -85,7 +86,9 @@ export function InlineStockChart({ seed, currency }: { seed: StockDetailSeed; cu
         ) : null}
         {seed.change30d ? <ChangeBadge value={seed.change30d} suffix={t("inv.30days")} /> : null}
         {seed.sector ? (
-          <span className="text-xs text-muted-foreground">· {seed.sector}</span>
+          <span className="text-xs text-muted-foreground">
+            · {sectorLabel(seed.sector, locale)}
+          </span>
         ) : null}
       </div>
 

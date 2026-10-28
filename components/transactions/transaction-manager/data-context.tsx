@@ -41,6 +41,6 @@ export function useSharedTransactionsData(): TransactionsPage | null {
 /** Общая копия списка; вне TransactionsDataProvider — ошибка сборки экрана. */
 export function useTransactionsPage(): TransactionsPage {
   const value = useContext(TransactionsDataContext);
-  if (!value) throw new Error("useTransactionsPage: нет TransactionsDataProvider выше по дереву");
+  if (!value) throw new Error("useTransactionsPage: no TransactionsDataProvider above in the tree");
   return value;
 }

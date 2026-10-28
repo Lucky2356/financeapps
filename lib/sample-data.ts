@@ -3,6 +3,10 @@
 // their own data. Consumed by both the desktop seeder (LocalApiClient) and the
 // web seeder (app/api/sample) so the example is identical in both modes.
 
+import { knownCategoryLabel } from "@/lib/categories/known";
+import type { Locale } from "@/lib/i18n/catalog";
+import { dataText } from "@/lib/i18n/data-text";
+
 export type SampleAccount = {
   id: string;
   name: string;
@@ -328,8 +332,97 @@ export const SAMPLE_PORTFOLIO: SamplePosition[] = [
   }
 ];
 
+/**
+ * Имена бумаг примера по-английски — как их пишут за пределами России. Когда
+ * приложение достучится до биржи, имена придут оттуда (биржа пишет по-русски):
+ * это уже настоящие данные, а не пример.
+ */
+const SAMPLE_SECURITY_NAMES_EN: Record<string, string> = {
+  SBER: "Sberbank",
+  LKOH: "Lukoil",
+  YDEX: "Yandex"
+};
+
+/** Имя бумаги примера на языке интерфейса. */
+export function sampleSecurityName(ticker: string, name: string, locale: Locale): string {
+  return locale === "en" ? (SAMPLE_SECURITY_NAMES_EN[ticker] ?? name) : name;
+}
+
 /** Полученный дивиденд примера — чтобы «Весь доход» и «Доход» было на чём показать. */
 export const SAMPLE_DIVIDEND = { ticker: "SBER", name: "Сбербанк", amount: 1_650, monthsAgo: 3 };
+
+/**
+ * Пример на языке интерфейса.
+ *
+ * Русский — это сами списки выше, слово в слово (на них смотрят проверки
+ * экрана). Для английского те же записи получают имена из словаря данных:
+ * счета и цели — по номеру, категории — по номеру стандартной категории,
+ * описания операций — по русскому описанию. Бумаги портфеля остаются как есть:
+ * так их называет биржа, и цены придут оттуда же под этими именами.
+ */
+export type SampleDataset = {
+  accounts: SampleAccount[];
+  categories: SampleCategory[];
+  transactions: SampleTransaction[];
+  goals: SampleGoal[];
+};
+
+const SAMPLE_ACCOUNT_KEYS: Record<string, string> = {
+  "sample-cash": "data.sample.account.cash",
+  "sample-card": "data.sample.account.card",
+  "sample-savings": "data.sample.account.savings",
+  "sample-broker": "data.sample.account.broker"
+};
+
+const SAMPLE_DESCRIPTION_KEYS: Record<string, string> = {
+  "Зарплата за месяц": "data.sample.tx.salary",
+  Подработка: "data.sample.tx.sideJob",
+  Продукты: "data.sample.tx.groceries",
+  "Проезд и такси": "data.sample.tx.transport",
+  ЖКХ: "data.sample.tx.utilities",
+  Подписки: "data.sample.tx.subscriptions",
+  "Кино и мероприятия": "data.sample.tx.events",
+  Кафе: "data.sample.tx.cafe",
+  "Разовая задача": "data.sample.tx.oneOff",
+  "Кафе и рестораны": "data.sample.tx.dining",
+  "Аптека и врач": "data.sample.tx.pharmacy"
+};
+
+const SAMPLE_GOAL_KEYS: Record<string, string> = {
+  "sample-goal-cushion": "data.sample.goal.cushion",
+  "sample-goal-vacation": "data.sample.goal.vacation"
+};
+
+export function sampleDataset(locale: Locale): SampleDataset {
+  if (locale === "ru") {
+    return {
+      accounts: SAMPLE_ACCOUNTS,
+      categories: SAMPLE_CATEGORIES,
+      transactions: SAMPLE_TRANSACTIONS,
+      goals: SAMPLE_GOALS
+    };
+  }
+  const text = (key: string | undefined, fallback: string) =>
+    key ? dataText(key, locale) : fallback;
+  return {
+    accounts: SAMPLE_ACCOUNTS.map((account) => ({
+      ...account,
+      name: text(SAMPLE_ACCOUNT_KEYS[account.id], account.name)
+    })),
+    categories: SAMPLE_CATEGORIES.map((category) => ({
+      ...category,
+      label: knownCategoryLabel(category.id, category.label, locale)
+    })),
+    transactions: SAMPLE_TRANSACTIONS.map((tx) => ({
+      ...tx,
+      description: text(SAMPLE_DESCRIPTION_KEYS[tx.description], tx.description)
+    })),
+    goals: SAMPLE_GOALS.map((goal) => ({
+      ...goal,
+      title: text(SAMPLE_GOAL_KEYS[goal.id], goal.title)
+    }))
+  };
+}
 
 export function sampleDate(monthOffset: number, day: number): Date {
   const date = new Date();

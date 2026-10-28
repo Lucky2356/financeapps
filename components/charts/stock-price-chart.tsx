@@ -13,6 +13,7 @@ import {
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { chartAxisTick, chartGridProps, chartTokens } from "@/lib/charts/palette";
 import { useI18n } from "@/lib/i18n/context";
+import { formatDecimal } from "@/lib/format";
 
 export type StockPricePoint = { date: string; price: number };
 
@@ -23,7 +24,7 @@ export function StockPriceChart({ data, up }: { data: StockPricePoint[]; up: boo
   const axisPrice = (value: number) => {
     if (Math.abs(value) >= 1000) return `${Math.round(value / 1000)}${t("chart.thousandShort")}`;
     if (Math.abs(value) >= 1) return `${Math.round(value)}`;
-    return value.toFixed(2);
+    return formatDecimal(value, 2);
   };
   const points = data.map((p) => ({
     label: new Date(p.date).toLocaleDateString(locale === "en" ? "en-US" : "ru", {

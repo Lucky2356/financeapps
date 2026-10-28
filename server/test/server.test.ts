@@ -365,6 +365,21 @@ describe("служба", () => {
       assert.deepEqual(wrongName.body, wrongSecret.body);
     });
 
+    it("отказ несёт постоянный код рядом с русской фразой", async () => {
+      // По коду приложение переводит отказ на язык экрана; фраза остаётся для
+      // старых приложений и русского экрана — ровно прежней.
+      await signUp("петя");
+      const refused = await call("/auth/login", {
+        method: "POST",
+        body: { login: "петя", secret: "не тот" }
+      });
+      assert.equal(refused.status, 401);
+      assert.deepEqual(refused.body, {
+        error: "Не подходит имя или пароль.",
+        code: "bad_credentials"
+      });
+    });
+
     it("шестая попытка подряд отказывается по частоте", async () => {
       await signUp("петя");
       const attempts = [];
@@ -897,6 +912,8 @@ describe("служба", () => {
       });
       assert.equal(refused.status, 403);
       assert.match((refused.body as { error: string }).error, /главного — «проверка»/);
+      assert.equal((refused.body as { code: string }).code, "primary_only_named");
+      assert.deepEqual((refused.body as { params: unknown }).params, { name: "проверка" });
       // Компьютер по-прежнему на связи.
       assert.notEqual((await call("/vault/книга", { token: first.token })).status, 401);
 
@@ -1199,9 +1216,12 @@ describe("служба", () => {
       assert.equal(answer.login, "петя");
       assert.equal((await call("/devices", { token: answer.token })).status, 200);
 
-      // Билет погашен, пакет из базы стёрт.
+      // Билет погашен, пакет из базы стёрт. Повторный опрос того же билета
+      // (ответ потерялся по дороге) получает тот же ответ, а не «не найден» —
+      // и второго входа устройства не заводится.
       const again = await call(`/pairing/request/${ticket}`, { method: "POST", body: {} });
-      assert.equal(again.status, 404);
+      assert.equal(again.status, 200);
+      assert.equal((again.body as { token: string }).token, answer.token);
       const left = app.db
         .prepare("select count(*) as n from pairings where sealed is not null")
         .get<{ n: number }>();
@@ -1329,6 +1349,9 @@ describe("служба", () => {
       assert.equal(first.status, 200);
       assert.equal(second.status, 507);
       assert.match(String((second.body as { error: string }).error), /разрешено 1/);
+      // Числа — отдельно: приложение на другом языке соберёт из них свою фразу.
+      assert.equal((second.body as { code: string }).code, "quota_slots");
+      assert.deepEqual((second.body as { params: unknown }).params, { limit: 1, used: 1 });
     });
 
     it("фото чеков в предел книг не входят", async () => {

@@ -360,26 +360,29 @@ function ExtendedReport({
             <div>
               <p className="text-xs text-muted-foreground">{t("rep.income")}</p>
               <p className="font-medium">{formatCurrency(yoy.current.income, currency)}</p>
-              <p className={`text-xs ${pctClass(-yoy.incomeChangePct)}`}>
-                {yoy.incomeChangePct >= 0 ? "+" : ""}
-                {formatDecimal(yoy.incomeChangePct, 1)}% {t("rep.ext.vsPrevYear")}
-              </p>
+              <YoYChange
+                pct={yoy.incomeChangePct}
+                className={pctClass(-(yoy.incomeChangePct ?? 0))}
+                prev={yoy.year - 1}
+              />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{t("rep.expense")}</p>
               <p className="font-medium">{formatCurrency(yoy.current.expense, currency)}</p>
-              <p className={`text-xs ${pctClass(yoy.expenseChangePct)}`}>
-                {yoy.expenseChangePct >= 0 ? "+" : ""}
-                {formatDecimal(yoy.expenseChangePct, 1)}% {t("rep.ext.vsPrevYear")}
-              </p>
+              <YoYChange
+                pct={yoy.expenseChangePct}
+                className={pctClass(yoy.expenseChangePct ?? 0)}
+                prev={yoy.year - 1}
+              />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">{t("rep.savings")}</p>
               <p className="font-medium">{formatCurrency(yoy.current.savings, currency)}</p>
-              <p className={`text-xs ${savingsPctClass(yoy.savingsChangePct)}`}>
-                {yoy.savingsChangePct >= 0 ? "+" : ""}
-                {formatDecimal(yoy.savingsChangePct, 1)}% {t("rep.ext.vsPrevYear")}
-              </p>
+              <YoYChange
+                pct={yoy.savingsChangePct}
+                className={savingsPctClass(yoy.savingsChangePct ?? 0)}
+                prev={yoy.year - 1}
+              />
             </div>
           </div>
         </div>
@@ -394,5 +397,33 @@ function ReportStat({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>
+  );
+}
+
+// Изменение к прошлому году. `null` — прошлого года нет (или величина в нём
+// была нулём): процент от нуля ничего не значит, поэтому «—» и пояснение
+// вместо «+100,0% к пред. году».
+export function YoYChange({
+  pct,
+  className,
+  prev
+}: {
+  pct: number | null;
+  className: string;
+  prev: number;
+}) {
+  const { t } = useI18n();
+  if (pct === null) {
+    return (
+      <p className="text-xs text-muted-foreground" data-testid="yoy-change">
+        — {t("ui.rep.noPrevYear", { prev })}
+      </p>
+    );
+  }
+  return (
+    <p className={`text-xs ${className}`} data-testid="yoy-change">
+      {pct >= 0 ? "+" : ""}
+      {formatDecimal(pct, 1)}% {t("rep.ext.vsPrevYear")}
+    </p>
   );
 }

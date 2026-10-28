@@ -483,7 +483,7 @@ function AccountDialog({
         {account ? <input type="hidden" name="id" value={account.id} /> : null}
         <div className="space-y-2">
           <Label>{t("common.name")}</Label>
-          <Input name="name" defaultValue={account?.name ?? ""} required />
+          <Input name="name" defaultValue={account?.name ?? ""} maxLength={100} required />
         </div>
         <div className="space-y-2">
           <Label>{t("common.currency")}</Label>

@@ -94,7 +94,7 @@ export function issuePairing(
 ): IssuedCode {
   sweepPairings(db, now);
   if (Buffer.byteLength(sealed) > MAX_SEALED_BYTES) {
-    throw new AuthError(413, "Слишком большой пакет связки.");
+    throw new AuthError(413, "pairing_too_large", "Слишком большой пакет связки.");
   }
 
   const live = db
@@ -103,7 +103,7 @@ export function issuePairing(
     )
     .get<{ n: number }>(personId, now);
   if ((live?.n ?? 0) >= MAX_LIVE) {
-    throw new AuthError(429, "Слишком много кодов подряд. Подождите пять минут.");
+    throw new AuthError(429, "too_many_codes", "Слишком много кодов подряд. Подождите пять минут.");
   }
 
   const code = fresh();
@@ -148,12 +148,21 @@ function burnHash(
       sealed: string | null;
     }>(hash);
 
-  if (!row) throw new AuthError(404, "Код не найден. Он живёт пять минут — попросите новый.");
+  if (!row)
+    throw new AuthError(
+      404,
+      "code_not_found",
+      "Код не найден. Он живёт пять минут — попросите новый."
+    );
   if (row.used_at) {
-    throw new AuthError(410, "Этот код уже использован. Попросите на первом устройстве новый.");
+    throw new AuthError(
+      410,
+      "code_used",
+      "Этот код уже использован. Попросите на первом устройстве новый."
+    );
   }
   if (row.expires_at < now) {
-    throw new AuthError(410, "Код истёк. Он живёт пять минут — попросите новый.");
+    throw new AuthError(410, "code_expired", "Код истёк. Он живёт пять минут — попросите новый.");
   }
 
   const burned = db
@@ -162,13 +171,22 @@ function burnHash(
     )
     .run(now, hash);
   if (burned.changes === 0) {
-    throw new AuthError(410, "Этот код уже использован. Попросите на первом устройстве новый.");
+    throw new AuthError(
+      410,
+      "code_used",
+      "Этот код уже использован. Попросите на первом устройстве новый."
+    );
   }
 
   const person = db
     .prepare("select login from people where id = ?")
     .get<{ login: string }>(row.person_id);
-  if (!person) throw new AuthError(404, "Код не найден. Он живёт пять минут — попросите новый.");
+  if (!person)
+    throw new AuthError(
+      404,
+      "code_not_found",
+      "Код не найден. Он живёт пять минут — попросите новый."
+    );
 
   return { personId: row.person_id, login: person.login, sealed: row.sealed ?? "" };
 }
@@ -235,13 +253,17 @@ function ticketHash(ticket: string): string {
 
 function requestRow(db: DatabaseSync, ticket: string, now: string): { code_hash: string | null } {
   const lost = "Код с нового устройства не найден. Покажите на нём новый.";
-  if (!TICKET.test(ticket)) throw new AuthError(404, lost);
+  if (!TICKET.test(ticket)) throw new AuthError(404, "request_not_found", lost);
   const row = db
     .prepare("select expires_at, code_hash from pair_requests where ticket_hash = ?")
     .get<{ expires_at: string; code_hash: string | null }>(ticketHash(ticket));
-  if (!row) throw new AuthError(404, lost);
+  if (!row) throw new AuthError(404, "request_not_found", lost);
   if (row.expires_at < now) {
-    throw new AuthError(410, "Код на новом устройстве истёк. Покажите на нём новый.");
+    throw new AuthError(
+      410,
+      "request_expired",
+      "Код на новом устройстве истёк. Покажите на нём новый."
+    );
   }
   return row;
 }
@@ -269,7 +291,11 @@ export function answerRequest(
 ): IssuedCode {
   const row = requestRow(db, ticket, now);
   if (row.code_hash) {
-    throw new AuthError(410, "На этот код уже ответили. Покажите на новом устройстве новый.");
+    throw new AuthError(
+      410,
+      "request_answered",
+      "На этот код уже ответили. Покажите на новом устройстве новый."
+    );
   }
   const issued = issuePairing(db, personId, now, sealed);
   // Запись с условием — по той же причине, что и в burn: два ответа подряд
@@ -278,7 +304,11 @@ export function answerRequest(
     .prepare("update pair_requests set code_hash = ? where ticket_hash = ? and code_hash is null")
     .run(fingerprint(issued.code), ticketHash(ticket));
   if (took.changes === 0) {
-    throw new AuthError(410, "На этот код уже ответили. Покажите на новом устройстве новый.");
+    throw new AuthError(
+      410,
+      "request_answered",
+      "На этот код уже ответили. Покажите на новом устройстве новый."
+    );
   }
   return issued;
 }
@@ -293,11 +323,34 @@ export function pollRequest(
   now: string,
   device: string
 ): JoinAnswer | null {
+  forgetOldAnswers(now);
+  const key = ticketHash(ticket);
+  const given = ANSWERED.get(key);
+  if (given) return given.answer;
   const row = requestRow(db, ticket, now);
   if (!row.code_hash) return null;
   const gone = db
     .prepare("delete from pair_requests where ticket_hash = ? and code_hash = ?")
-    .run(ticketHash(ticket), row.code_hash);
-  if (gone.changes === 0) throw new AuthError(410, "Этот код уже использован.");
-  return enter(db, burnHash(db, row.code_hash, now), now, device);
+    .run(key, row.code_hash);
+  if (gone.changes === 0) throw new AuthError(410, "code_used_short", "Этот код уже использован.");
+  const answer = enter(db, burnHash(db, row.code_hash, now), now, device);
+  ANSWERED.set(key, { answer, until: Date.parse(now) + ANSWER_KEPT_MS });
+  return answer;
+}
+
+/**
+ * Ответ на опрос, уже выданный, — ещё немного живёт в памяти.
+ *
+ * Запрос гасится, как только ответ выдан. Потеряйся ответ по дороге (связь
+ * моргнула), следующий опрос получал «код не найден», а на службе оставался
+ * вход устройства, которым никто не воспользуется. Теперь повторный опрос того
+ * же билета две минуты получает тот же ответ. Только в памяти: на диск вход не
+ * пишется, а после перезапуска службы новое устройство просто покажет новый код.
+ */
+const ANSWER_KEPT_MS = 2 * 60 * 1000;
+const ANSWERED = new Map<string, { answer: JoinAnswer; until: number }>();
+
+function forgetOldAnswers(now: string): void {
+  const moment = Date.parse(now);
+  for (const [key, entry] of ANSWERED) if (entry.until <= moment) ANSWERED.delete(key);
 }

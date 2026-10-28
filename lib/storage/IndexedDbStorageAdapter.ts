@@ -1,6 +1,7 @@
 "use client";
 
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
+import { apiText } from "@/lib/i18n/api-text";
 
 export class IndexedDbStorageAdapter implements StorageAdapter {
   constructor(
@@ -65,7 +66,8 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
       request.onerror = () => reject(request.error);
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error ?? new Error("Запись отменена."));
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error(apiText("api.storage.aborted")));
     });
   }
 

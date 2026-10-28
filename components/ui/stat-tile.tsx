@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { InfoHint } from "@/components/info-hint";
 import { AnimatedValue } from "@/components/ui/animated-value";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export type StatTone = "default" | "success" | "warning" | "danger";
@@ -25,7 +26,8 @@ export function StatTile({
   tone = "default",
   visual,
   href,
-  hint
+  hint,
+  loading = false
 }: {
   label: string;
   value: string;
@@ -42,6 +44,8 @@ export function StatTile({
    * которое уводит со страницы вместо того, чтобы объяснить.
    */
   hint?: string;
+  /** Число ещё не прочитано — заглушка вместо него (см. HeroCard). */
+  loading?: boolean;
 }) {
   const body = (
     <>
@@ -75,9 +79,13 @@ export function StatTile({
             </span>
           ) : null)}
       </div>
-      <p className="stat num mt-2 truncate text-lg sm:text-xl">
-        <AnimatedValue text={value} />
-      </p>
+      {loading ? (
+        <Skeleton data-testid="stat-skeleton" className="mt-2 h-6 w-24 sm:h-7" />
+      ) : (
+        <p className="stat num mt-2 truncate text-lg sm:text-xl">
+          <AnimatedValue text={value} />
+        </p>
+      )}
       {/* Пояснение переносится, а не обрывается. Одной строкой оно на телефоне
           превращалось в «Текущий календарн…», «Доходы минус расх…», «Цели
           требуют боль…» — то есть не говорило ничего. В отличие от суммы выше,

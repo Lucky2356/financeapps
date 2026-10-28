@@ -27,8 +27,10 @@ import type {
   TargetAllocation
 } from "@/types/finance";
 import type { LocalState } from "@/lib/api/local/state";
-import { findOrCreateCategory, ratesOf } from "@/lib/api/local/money";
+import { findOrCreateAppCategory, ratesOf } from "@/lib/api/local/money";
+import { dataText } from "@/lib/i18n/data-text";
 import { upsertTransaction, deleteTransaction } from "@/lib/api/local/ledger";
+import { apiText } from "@/lib/i18n/api-text";
 
 /**
  * Что портфель берёт с биржи. Запрашивается ДО очереди записей, как и
@@ -136,12 +138,12 @@ export const INVESTMENT_ACTIONS = {
 
   addWatchlist: (state: LocalState, body: unknown, market: InvestmentMarket) => {
     const ticker = toFormObject(body).ticker?.toUpperCase();
-    if (!ticker) throw new Error("Ticker is required.");
+    if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
     // The search spans the whole MOEX board, so a picked ticker may be outside
     // the curated list — it was resolved live before the queue (see
     // investmentWriteMarket).
     const security = market.byTicker.get(ticker);
-    if (!security) throw new Error("Security not found in the market directory.");
+    if (!security) throw new Error(apiText("api.inv.securityNotFound"));
     const exists = state.investments.watchlist.some((item) => item.ticker === ticker);
     state.investments.watchlist = exists
       ? state.investments.watchlist
@@ -152,7 +154,7 @@ export const INVESTMENT_ACTIONS = {
 
   removeWatchlist: (state: LocalState, body: unknown, market: InvestmentMarket) => {
     const ticker = toFormObject(body).ticker?.toUpperCase();
-    if (!ticker) throw new Error("Ticker is required.");
+    if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
     state.investments.watchlist = state.investments.watchlist.filter(
       (item) => item.ticker !== ticker
     );
@@ -162,7 +164,7 @@ export const INVESTMENT_ACTIONS = {
 
   delete: (state: LocalState, body: unknown, market: InvestmentMarket) => {
     const ticker = toFormObject(body).ticker?.toUpperCase();
-    if (!ticker) throw new Error("Ticker is required.");
+    if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
     state.investments.portfolio = state.investments.portfolio.filter(
       (item) => item.ticker !== ticker
     );
@@ -198,13 +200,13 @@ export function savePosition(state: LocalState, body: unknown, market: Investmen
   const input = toFormObject(body);
   const action = input.action ?? "";
   const ticker = input.ticker?.toUpperCase();
-  if (!ticker) throw new Error("Ticker is required.");
+  if (!ticker) throw new Error(apiText("api.inv.tickerRequired"));
   // Бумага вне справочника найдена по всей доске ещё до очереди
   // (investmentWriteMarket); биржа молчит — бумага из портфеля идёт по своей
   // последней цене.
   const held = state.investments.portfolio.find((item) => item.ticker === ticker);
   const security = market.byTicker.get(ticker) ?? (held ? storedSecurity(held) : undefined);
-  if (!security) throw new Error("Security not found in the market directory.");
+  if (!security) throw new Error(apiText("api.inv.securityNotFound"));
 
   // «Докупить» — одна покупка к тому, что уже есть. Раньше подборка слала
   // количество и среднюю, и позиция с тем же тикером заменялась целиком:
@@ -216,7 +218,7 @@ export function savePosition(state: LocalState, body: unknown, market: Investmen
       ? String(input.date)
       : isoDay(new Date());
     const lot = { date, quantity: Number(input.quantity), price: Number(input.price) };
-    if (!isUsableLot(lot)) throw new Error("Введите количество и цену больше нуля.");
+    if (!isUsableLot(lot)) throw new Error(apiText("api.inv.lotPositive"));
     const before: PurchaseLot[] =
       held?.lots && held.lots.length > 0
         ? held.lots
@@ -234,9 +236,9 @@ export function savePosition(state: LocalState, body: unknown, market: Investmen
   const quantity = fromLots ? fromLots.quantity : Number(input.quantity);
   const averageBuyPrice = fromLots ? fromLots.averageBuyPrice : Number(input.averageBuyPrice);
   if (!Number.isFinite(quantity) || quantity <= 0)
-    throw new Error("Введите количество больше нуля.");
+    throw new Error(apiText("api.inv.quantityPositive"));
   if (!Number.isFinite(averageBuyPrice) || averageBuyPrice <= 0)
-    throw new Error("Введите среднюю цену больше нуля.");
+    throw new Error(apiText("api.inv.pricePositive"));
 
   // The industry can be corrected by hand: the market directory knows the
   // liquid names, and a bond or a fresh listing is nobody's to classify but
@@ -326,7 +328,12 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
   const position = state.investments.portfolio.find((item) => item.ticker === event.ticker);
   if (!position || event.quantity <= 0) return;
   if (event.quantity > position.quantity)
-    throw new Error(`В портфеле ${position.quantity} ${position.ticker}, продать больше нельзя.`);
+    throw new Error(
+      apiText("api.inv.sellTooMuch", {
+        quantity: position.quantity,
+        ticker: position.ticker
+      })
+    );
 
   const left = roundMoney(position.quantity - event.quantity);
   // The lots the sold shares came out of, oldest first. Both halves are kept:
@@ -391,10 +398,10 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
   // Named an account that no longer takes money? Say so. Passing over it left
   // the shares sold and the proceeds nowhere at all.
   const account = state.accounts.find((item) => item.id === accountId && !item.isArchived);
-  if (!account) throw new Error("Выберите существующий активный счёт.");
+  if (!account) throw new Error(apiText("api.account.pickActive"));
   const proceeds = roundMoney(event.quantity * event.sellPrice - event.fee);
   if (proceeds <= 0) return;
-  const category = findOrCreateCategory(state, "Инвестиции", "INCOME");
+  const category = findOrCreateAppCategory(state, "data.cat.investments", "INCOME");
   const posted = upsertTransaction(
     state,
     {
@@ -405,7 +412,7 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
       accountId: account.id,
       categoryId: category.id,
       date: event.date,
-      description: `Продажа ${event.ticker}`
+      description: dataText("data.tx.sale", undefined, { ticker: event.ticker })
     },
     "POST"
   );

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { onDataChanged } from "@/lib/api/data-events";
 import type { AnalyticsData } from "@/lib/data";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDecimal } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -108,7 +108,7 @@ export function TransactionsAnalytics() {
           value: formatCurrency(data.avgMonthlyExpense, currency),
           testId: "txa-expense"
         },
-        { label: t("txa.savingsRate"), value: `${data.avgSavingsRate.toFixed(1)}%` },
+        { label: t("txa.savingsRate"), value: `${formatDecimal(data.avgSavingsRate, 1)}%` },
         { label: t("txa.bestMonth"), value: data.bestMonth }
       ]
     : [];

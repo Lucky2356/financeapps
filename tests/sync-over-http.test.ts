@@ -709,6 +709,26 @@ describe("служба, которая не отвечает", () => {
       await proxy.close();
     }
   });
+
+  it("507 «место кончилось» — отказ со словами службы, а не «нет связи»", async () => {
+    const full = await fake((_req, res) => {
+      res.writeHead(507, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: "Место для ваших данных на сервере закончилось.",
+          code: "quota_bytes"
+        })
+      );
+    });
+    try {
+      const transport = new HttpSyncTransport({ base: full.at, token: "bilet" });
+      const failure = await transport.pull("книга").catch((error: unknown) => error);
+      expect(isOffline(failure)).toBe(false);
+      expect(String((failure as Error).message)).toMatch(/закончилось/);
+    } finally {
+      await full.close();
+    }
+  });
 });
 
 describe("двое на одном устройстве — через настоящую службу", () => {

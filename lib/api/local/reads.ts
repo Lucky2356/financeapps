@@ -34,6 +34,7 @@ import {
 } from "@/lib/analytics/payday";
 import type { LocalState } from "@/lib/api/local/state";
 import { countingState, inBase, ratesOf, sumInBase } from "@/lib/api/local/money";
+import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount";
 import {
   accountsPage,
   balanceHistoryPage,
@@ -263,6 +264,9 @@ function transferPairs({ state, searchParams }: ReadRequest) {
 
 function watchdog({ state }: ReadRequest) {
   const counted = countingState(inBase(state), false);
+  // Сумма шаблона — в валюте его счёта, а экран пишет находки в основной:
+  // пробный период за 9,99 $ показывался как «9,99 ₽».
+  const context = baseAmountContext(state.accounts, ratesOf(state), state.currency);
   return {
     findings: findLeaks({
       rows: watchRows(counted),
@@ -272,7 +276,7 @@ function watchdog({ state }: ReadRequest) {
           id: item.id,
           name: item.description || item.category.label,
           trialEndsOn: String(item.trialEndsOn),
-          amount: item.amount
+          amount: baseAmountOf(item, context)
         })),
       today: isoDay(new Date())
     })

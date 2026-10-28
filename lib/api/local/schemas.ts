@@ -719,7 +719,10 @@ export function salvageLocalState(
 ): { state: z.infer<typeof localStateSchema>; dropped: number } | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
 
-  const copy: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+  // Глубокая копия: ниже из неё вырезаются строки и на вложенных уровнях, а
+  // прочитанное с диска должно остаться как было — его же кладут в запасную
+  // копию.
+  const copy = structuredClone(raw) as Record<string, unknown>;
   let dropped = 0;
   for (const [field, schema] of Object.entries(SALVAGEABLE)) {
     const value = copy[field];
@@ -729,6 +732,52 @@ export function salvageLocalState(
     copy[field] = kept;
   }
 
-  const parsed = localStateSchema.safeParse(copy);
-  return parsed.success ? { state: parsed.data, dropped } : null;
+  // Остальное — по месту ошибки, а не по списку. Список выше помнит не всё:
+  // одна лишняя строка в участниках семьи, расчётах или снимках капитала, одно
+  // число вне рамок в настройке — и спасение возвращало null, то есть книга
+  // не читалась целиком. Поэтому: строка массива, на которую указала ошибка,
+  // убирается; поле верхнего уровня, не массив, убирается, и на его место
+  // встаёт значение по умолчанию. Кругов — с запасом, но не бесконечно.
+  for (let round = 0; round < 50; round += 1) {
+    const parsed = localStateSchema.safeParse(copy);
+    if (parsed.success) return { state: parsed.data, dropped };
+    let changed = false;
+    for (const issue of parsed.error.issues) {
+      if (dropAt(copy, issue.path)) {
+        changed = true;
+        if (issue.path.some((step) => typeof step === "number")) dropped += 1;
+        break;
+      }
+    }
+    if (!changed) return null;
+  }
+  return null;
+}
+
+/**
+ * Убрать то, на что указала ошибка: строку самого глубокого массива на пути
+ * («investments.portfolio.3» — третью бумагу, а не весь портфель), а если
+ * массивов на пути нет — поле верхнего уровня, чтобы встало значение по
+ * умолчанию. Номер версии не трогается никогда: без него книга не та.
+ */
+function dropAt(root: Record<string, unknown>, path: readonly PropertyKey[]): boolean {
+  let node: unknown = root;
+  let deepest: { list: unknown[]; index: number } | null = null;
+  for (const step of path) {
+    if (node === null || typeof node !== "object") break;
+    if (Array.isArray(node) && typeof step === "number" && step < node.length) {
+      deepest = { list: node, index: step };
+    }
+    node = (node as Record<PropertyKey, unknown>)[step as string];
+  }
+  if (deepest) {
+    deepest.list.splice(deepest.index, 1);
+    return true;
+  }
+  const field = path[0];
+  if (typeof field === "string" && field !== "schemaVersion" && field in root) {
+    delete root[field];
+    return true;
+  }
+  return false;
 }

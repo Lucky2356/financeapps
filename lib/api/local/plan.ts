@@ -7,7 +7,7 @@ import { roundMoney } from "@/lib/utils";
 import {
   countableRows,
   isTransfer,
-  TRANSFER_CATEGORY_LABEL,
+  isTransferCategoryLabel,
   transferKeyOf
 } from "@/lib/transactions/transfers";
 import { budgetInForce } from "@/lib/budget-rollover";
@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/local/state";
 import { ratesOf } from "@/lib/api/local/money";
 import { upsertBudget, buildBudgetRow } from "@/lib/api/local/budgets";
+import { apiText } from "@/lib/i18n/api-text";
 
 // Plan versus fact, laid out the way the owner's own spreadsheet is: every
 // category is a column, every month a row, in three bands — what was
@@ -168,8 +169,7 @@ export function planFactPage(
       (isTransfer(transaction) ? withTransfers : withOwnRows).add(transaction.category.id);
     for (const category of state.categories) {
       const isTransferCategory =
-        withTransfers.has(category.id) ||
-        category.label.toLowerCase() === TRANSFER_CATEGORY_LABEL.toLowerCase();
+        withTransfers.has(category.id) || isTransferCategoryLabel(category.label);
       if (isTransferCategory && !withOwnRows.has(category.id)) transferOnly.add(category.id);
     }
   }
@@ -393,7 +393,7 @@ export function openingBalances(state: LocalState): (month: string, savings: boo
 export function savePlan(state: LocalState, body: unknown) {
   const input = toFormObject(body);
   const month = String(input.month ?? "");
-  if (!MONTH_KEY.test(month)) throw new Error("Укажите месяц в виде ГГГГ-ММ.");
+  if (!MONTH_KEY.test(month)) throw new Error(apiText("api.plan.monthFormat"));
 
   // A month the owner wants a row for. Before this, the grid could only be
   // asked for months AHEAD of the current one, so an earlier month with
@@ -448,17 +448,17 @@ export function savePlan(state: LocalState, body: unknown) {
   }
 
   const categoryId = String(input.categoryId ?? "");
-  if (!categoryId) throw new Error("Выберите категорию.");
+  if (!categoryId) throw new Error(apiText("api.category.pick"));
   if (
     categoryId !== OPENING_BALANCE_ID &&
     categoryId !== SAVINGS_BALANCE_ID &&
     categoryId !== SAVINGS_TRANSFER_ID &&
     !state.categories.some((category) => category.id === categoryId)
   )
-    throw new Error("Категория не найдена.");
+    throw new Error(apiText("api.category.notFound"));
 
   const amount = Number(input.amount);
-  if (!Number.isFinite(amount) || amount < 0) throw new Error("Введите сумму от нуля.");
+  if (!Number.isFinite(amount) || amount < 0) throw new Error(apiText("api.plan.amountRange"));
 
   // План расхода и лимит — одно число (spendingPlan): клетка расходной
   // категории пишется туда же, куда и лимит, и появляется в «Лимитах» сама.

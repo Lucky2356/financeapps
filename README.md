@@ -241,7 +241,8 @@ npm run android:build:debug   # отладочный APK, ставится бе�
 ## Релизы и обновления
 
 1. Версия поднимается в `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` и
-   `Cargo.lock`; в `CHANGELOG.md` добавляется секция релиза.
+   `Cargo.lock`; в `CHANGELOG.md` добавляется секция релиза, в `CHANGELOG.en.md` — её перевод,
+   и окно «Что нового» пересобирается: `npm run whats-new`.
 2. Тег `vX.Y.Z` или ручной запуск [`desktop-release.yml`](.github/workflows/desktop-release.yml):
    гейты → сборка подписанного установщика → проверка подписи апдейтера против вшитого публичного
    ключа → генерация и валидация `latest.json` → публикация релиза с описанием из `CHANGELOG.md`.

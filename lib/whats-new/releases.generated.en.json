@@ -1,0 +1,700 @@
+[
+  {
+    "version": "2.8.0",
+    "date": "2026-10-27",
+    "summary": "🌍 A complete English version: every screen, message, category and example is in English. Plus a big review: what you record no longer disappears on restart, backups come back in full, and sync no longer stalls on one damaged record.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Added",
+        "items": [
+          {
+            "lead": "The whole app in English.",
+            "text": "Before, the shell was in English and the rest only where we had got to it. Now English covers: error messages from data, sync and the service (the service returns codes, and the app translates them into the screen language); default categories of a new install, the example data, profile names, the Sheet tab and its templates, investment sectors; the window title, screen reader labels and hints; security names, in Latin script as the exchange writes them."
+          },
+          {
+            "lead": "",
+            "text": "Russian and English devices on the same data understand each other: “Переводы” and “Transfers”, “Импорт расходов” and “Imported expenses” are one category, with no duplicates."
+          },
+          {
+            "lead": "",
+            "text": "An e2e guard: not a single Russian string on 23 screens of the English version."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — data",
+        "items": [
+          {
+            "lead": "What you record survives a restart.",
+            "text": "Some values were accepted and then silently dropped together with their record on the next launch: a transaction with a tag longer than 40 characters, a goal of 0, a template of 0, a statement category longer than 100 characters, a long account or debt name. Now such values are trimmed or rejected with a clear error, and the whole record is validated before it is saved."
+          },
+          {
+            "lead": "“Undo clear”, restoring the local copy and restoring from a file",
+            "text": "lost the entire profile because of one damaged row. Now only that row is dropped."
+          },
+          {
+            "lead": "",
+            "text": "A template switched back on after a pause no longer backfills payments for the whole paused period."
+          },
+          {
+            "lead": "",
+            "text": "Deleting a goal no longer rewrites the net worth history of past months."
+          },
+          {
+            "lead": "",
+            "text": "A subscription created from the detected ones goes to the account it was paid from, not the first one in the list."
+          },
+          {
+            "lead": "",
+            "text": "The Sheet wizard no longer replaces amounts you already typed with averages when the screen reloads its data while the window is open."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — sync",
+        "items": [
+          {
+            "lead": "",
+            "text": "One record on the server that could not be opened no longer stops all your other changes from being sent."
+          },
+          {
+            "lead": "",
+            "text": "Polling again while connecting a device (when the answer got lost on the way) gets the same answer, not “code not found”."
+          },
+          {
+            "lead": "",
+            "text": "“Server storage is full” is shown as such, not as “no connection”."
+          },
+          {
+            "lead": "",
+            "text": "Syncing no longer switches the open profile to the one open on your other device — after “Merge” your records no longer seemed to vanish into another profile."
+          }
+        ]
+      },
+      {
+        "title": "Changed",
+        "items": [
+          {
+            "lead": "",
+            "text": "CSV exports of transactions and reports in Russian use “;” and a decimal comma, so Excel opens them in columns."
+          },
+          {
+            "lead": "",
+            "text": "Amounts with kopecks/cents now work in debt payments and purchase splits."
+          },
+          {
+            "lead": "",
+            "text": "Home and other screens show placeholders while loading, not “0 ₽” with Russian headings."
+          },
+          {
+            "lead": "",
+            "text": "The year-over-year comparison without data shows “—”, not “+100 %”."
+          },
+          {
+            "lead": "",
+            "text": "Percentages use a decimal comma in Russian; on a phone it is clear that the tab row scrolls."
+          },
+          {
+            "lead": "",
+            "text": "The trial amount in the price watch is in your main currency; today's payment east of Greenwich is no longer “tomorrow”."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.7",
+    "date": "2026-10-23",
+    "summary": "🛡️ A big review: sync no longer loses changes made on another device, “Merge” brings over all profiles, money adds up correctly across currency changes, transfers and debts, and without the exchange your portfolio is no longer valued at made-up prices.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Fixed — sync and data",
+        "items": [
+          {
+            "lead": "A change from another device could be lost.",
+            "text": "If a write on this device landed right while it was merging with the server, the other device's change was overwritten — on the server and on every other device. Both races are closed."
+          },
+          {
+            "lead": "“Merge” lost every profile except the open one,",
+            "text": "and the merge threw away the plan, notes, portfolio, family members, Sheet, cashback, trips and more. Now all profiles and all sections come across, and category rules point to categories that exist. If your own records could not be added, the screen shows an error and offers to retry or save them to a file, instead of silently reloading."
+          },
+          {
+            "lead": "",
+            "text": "“Save a copy and replace” saves each profile to its own file."
+          },
+          {
+            "lead": "",
+            "text": "A hung request to the service no longer leaves device connection spinning forever: after 30 s it says “no connection”."
+          },
+          {
+            "lead": "",
+            "text": "“Load” from the sync folder always answered “the file doesn't look like a backup” — fixed."
+          },
+          {
+            "lead": "",
+            "text": "Service: request size is limited before sign-in, and the secret's length is checked."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — money",
+        "items": [
+          {
+            "lead": "Changing your main currency",
+            "text": "recalculates goals, limits, the plan and the net worth history. Before, 90,000 ₽ in a goal was read as $90,000."
+          },
+          {
+            "lead": "Editing one half of a transfer",
+            "text": "changes the other half too — the difference no longer vanishes from your net worth."
+          },
+          {
+            "lead": "A loan payment made in advance",
+            "text": "is no longer subtracted a second time in “Safe to spend”, “Until payday” and the forecast."
+          },
+          {
+            "lead": "An overdue unconfirmed scheduled payment",
+            "text": "stays in the forecast instead of disappearing until its next due date."
+          },
+          {
+            "lead": "",
+            "text": "Limit rollover no longer takes the limit from a month where it did not exist."
+          },
+          {
+            "lead": "",
+            "text": "A foreign-currency account's history correctly accounts for goal top-ups."
+          },
+          {
+            "lead": "",
+            "text": "A foreign-currency account's negative balance before archiving is settled with an amount in its own currency."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — investments",
+        "items": [
+          {
+            "lead": "Without a connection to the exchange, the portfolio was valued at made-up prices",
+            "text": "(VTB at 0.02 ₽) and those were saved. Now the last real prices stay."
+          },
+          {
+            "lead": "",
+            "text": "Portfolio work no longer holds up recording transactions while the exchange is silent, and a sale recorded during a price update is no longer undone."
+          },
+          {
+            "lead": "",
+            "text": "Profit in the portfolio header no longer includes bond accrued interest — same as in the rows."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — import and reports",
+        "items": [
+          {
+            "lead": "",
+            "text": "“1 234,56 руб.” in a statement was read as 123,456."
+          },
+          {
+            "lead": "",
+            "text": "Category rules also work for statements with a category column; loading the same statement again no longer doubles it."
+          },
+          {
+            "lead": "",
+            "text": "Reports for periods older than two years no longer show zeros."
+          }
+        ]
+      },
+      {
+        "title": "Changed",
+        "items": [
+          {
+            "lead": "",
+            "text": "Months on the income and expense chart are spelled out, percentages in Russian use a decimal comma, and long tile labels on a phone are no longer cut off."
+          },
+          {
+            "lead": "",
+            "text": "Next.js 16.4.3 and zod 4.6.7 — fresh vulnerabilities closed."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.6",
+    "date": "2026-10-21",
+    "summary": "🔗 “Merge” when connecting a device no longer hangs for half a minute when the exchange doesn't respond.",
+    "kind": "fixes",
+    "sections": [
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "“Merge with the other device's data”",
+            "text": "starts with a backup, and the backup used to revalue the investment portfolio against the exchange. If MOEX didn't respond, the button silently hung for up to half a minute. Now the portfolio goes into the backup with the last known prices, and the connection proceeds right away. “Save a copy and replace”, manual backup export and scheduled backups got faster too; quotes refresh the next time you open Investments."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.5",
+    "date": "2026-10-15",
+    "summary": "🧭 The Transactions filters are back where they belong, and on a phone card headings and chart labels are no longer covered by anything.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Changed",
+        "items": [
+          {
+            "lead": "The Transactions filters are back where they belong",
+            "text": "— in the Transactions card, under “List / Calendar”. In 2.7.4 they were moved into a separate card at the top of the screen, although only the filter button was meant to move. The new first row — Transactions, the filter button, “All categories” — and the even field edges stayed. As before 2.7.4, the calendar shows the month without the list filters."
+          }
+        ]
+      },
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "“Balance history” on Accounts:",
+            "text": "on a phone the “All money” and “12 mo.” pickers sat on top of the heading, and the first digits of the axis labels were cut off by the edge (“) k ₽”). Now the heading has its own row, the pickers the next one, and the axis is wider."
+          },
+          {
+            "lead": "“Compare months” in Analytics:",
+            "text": "on a narrow phone the month picker covered the heading — fixed the same way."
+          },
+          {
+            "lead": "The Filters panel near the bottom of a phone screen",
+            "text": "opened downwards — under the bottom navigation bar. Now, if there is no room below, it opens upwards."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.4",
+    "date": "2026-10-15",
+    "summary": "📱 Transactions on a phone is more compact and no longer slides sideways, “Safe to spend” remembers last month, “Until payday” supports several paydays, the Sheet gets a chart and templates — and seven fixes, including password changes on the service and cp1251 statements.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Added",
+        "items": [
+          {
+            "lead": "“Until payday” — several paydays.",
+            "text": "You can pick several days of the month (advance and salary, “last day of the month”), a day of the week or “every day”. The forecast runs to the nearest payday. From your history the app guesses both the advance and the salary if they arrive regularly. The old setting — a single day — keeps working."
+          },
+          {
+            "lead": "Sheet:",
+            "text": "a “Total by month” chart above the table (tapping a bar takes you to that month); highlighting of spending above usual (“34% above usual” — against the median of past months); templates for a new sheet — “Family budget”, “Renovation”, “Holiday”, “From scratch”."
+          }
+        ]
+      },
+      {
+        "title": "Changed",
+        "items": [
+          {
+            "lead": "“Safe to spend today” takes last month's result into account.",
+            "text": "What was left over is added to this month's budget, and an overspend is subtracted; in “How it adds up” it is a separate line."
+          },
+          {
+            "lead": "Transactions on a phone:",
+            "text": "filters and search are the first card on the screen, in an even grid with one right edge; the button for rarely used settings is in the heading row. Transaction cards are almost half as tall: the paperclip and bin sit in one row with the amount, and the date is not repeated under the day heading. The day heading is brighter and sticks to the top while you scroll through that day."
+          },
+          {
+            "lead": "Sheet:",
+            "text": "help opens by itself only the first time; months are abbreviated consistently (Jan … Nov Dec); the month result is called “Total” everywhere; a negative Total is red digits with a red line; the floating “+” on desktop no longer covers the Total column."
+          }
+        ]
+      },
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "The screen slid sideways on a phone",
+            "text": "as your finger moved: the window stretched to the widest content. Now the shell clips it."
+          },
+          {
+            "lead": "Password changes and resets did not reach the sync service",
+            "text": "— the old password still let a new device in. Now the new password goes to the service right away or, without a connection, at the first opportunity."
+          },
+          {
+            "lead": "Restoring the service from a backup",
+            "text": "is now noticed by the device even if other devices have written further: fresh records are not lost."
+          },
+          {
+            "lead": "A debt payment restored from the trash together with its account",
+            "text": "did not reduce the debt; a debt and a payment restored one after the other were deducted twice. Now the result is the same in any order."
+          },
+          {
+            "lead": "cp1251 statements in the Windows and Android apps",
+            "text": "came out as gibberish — now they read the same as in the browser."
+          },
+          {
+            "lead": "Words with numbers:",
+            "text": "“1 days” and wrong Russian plural forms — now “1 day” and the right form for every number across the app."
+          },
+          {
+            "lead": "English mode:",
+            "text": "dates, amounts and percentages were formatted the Russian way, and currency and sector names were in Russian."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.3",
+    "date": "2026-10-12",
+    "summary": "📊 A friendlier Sheet — “Total” always in view, pasting from Excel without losses — and seventeen fixes: sync, foreign-currency debts, dates and statement import.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Changed",
+        "items": [
+          {
+            "lead": "“Total” in the Sheet is always in view.",
+            "text": "In a 1280 px window the items filled the whole width, and Total — the reason you keep the sheet at all — slid off the right edge. Now it is pinned to the edge, and the items scroll under it."
+          },
+          {
+            "lead": "",
+            "text": "The Sheet is shorter at the top: the “Large / Compact” switch moved under “More” and no longer takes a row of its own."
+          },
+          {
+            "lead": "",
+            "text": "Column labels don't repeat the name: “To savings” under “To savings” and “Income” under “Income” are gone. Balance and the opening cushion have no “Total” and “Average” — adding up balances across months makes no sense."
+          }
+        ]
+      },
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "Pasting from Excel into the Sheet overwrote neighbouring cells.",
+            "text": "A single cell “1500,50” was split at the comma: 1500 into the cell, 50 into the next column over whatever was there. A block from Excel wiped the cell below it (Excel adds a line break at the end), and an empty cell in the middle of a column shifted every number below it a month earlier. The same in a free sheet."
+          },
+          {
+            "lead": "Bringing a table over from Excel:",
+            "text": "amounts like “1 234,00р.” and “500 руб.” ended up in the notes; a table with the latest month on top gave false mismatches with the file's Total; a comma-separated file fell apart if a comment contained “;”; the date “15.13.2026” created month 13, and “01.08.26” wasn't understood."
+          },
+          {
+            "lead": "Formulas:",
+            "text": "“=SUM(1, 2)” gave 1.2 instead of 3; half a kopeck was rounded differently from Excel (1.005 → 1.00, −0.125 → −0.12)."
+          },
+          {
+            "lead": "A free sheet calculated phone numbers and dates:",
+            "text": "“+7 912 345-67-89” showed up as the number 7 912 189, “2026-08-01” as 2017. Now they are text."
+          },
+          {
+            "lead": "Sheet export to Excel:",
+            "text": "an item with “;” in its name shifted all columns to the right, and a note starting with “=” ran in Excel as a formula."
+          },
+          {
+            "lead": "",
+            "text": "Sheet wizard: two items with the same name wrote both amounts into one column. In the help, the “current month” was always “Sep 2026”."
+          },
+          {
+            "lead": "Restoring the sync service from an old backup erased fresh records on all devices.",
+            "text": "Now the device notices the rollback and sends its data back. Restoring from a backup file is no longer rolled back by the very first sync, and a deleted profile doesn't come back from the server."
+          },
+          {
+            "lead": "Connecting to an account on a device where the book was started before the lock erased it.",
+            "text": "Now you are asked what to do with your records instead."
+          },
+          {
+            "lead": "Debts and templates in another currency",
+            "text": "were counted as roubles in the forecast, “Until payday”, “Safe to spend today” and the weekly amount: a $500 payment counted as 500 ₽. Now the exchange rate is applied."
+          },
+          {
+            "lead": "Deleting a debt overpayment",
+            "text": "gave the debt back the whole payment, not the part that was taken off, and the debt grew. A transfer is restored from the trash entirely or not at all — half a transfer no longer loses money."
+          },
+          {
+            "lead": "“Safe to spend today”",
+            "text": "counted this month's income recorded ahead of time, but not expenses: rent recorded for the 25th didn't make it into the budget."
+          },
+          {
+            "lead": "Dates west of Moscow:",
+            "text": "a template's next run and a goal's deadline shifted a day earlier (a salary could be posted twice), and a transaction's day was shown and re-saved as the previous date."
+          },
+          {
+            "lead": "Statement import:",
+            "text": "dates with a time (“01.08.2026 14:35”) mixed up day and month or were lost, “01.08.26” gave the year 1926, amounts in parentheses “(1 200,00)” were read as income, and cp1251 files came out as gibberish. The duplicate filter dropped genuinely identical purchases and ignored kopecks."
+          },
+          {
+            "lead": "Quick add:",
+            "text": "in “5.09 1200 coffee” the wrong amount was picked."
+          },
+          {
+            "lead": "The tax refund file:",
+            "text": "a category with “;” shifted the columns, text with “=” ran as a formula, and the header was in Russian even in English mode."
+          },
+          {
+            "lead": "",
+            "text": "Zero is no longer shown as “-0 ₽”."
+          },
+          {
+            "lead": "",
+            "text": "Sync service: a non-object request body gave 500 instead of 400, and the book limit could be bypassed by adding “receiptPhoto_” to the name."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.2",
+    "date": "2026-10-08",
+    "summary": "🖥️ A window that fits your screen — from a laptop to 4K, saving on a large book 4–6 times faster, and eleven fixes.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Changed",
+        "items": [
+          {
+            "lead": "Saving on a large book is 4–6 times faster.",
+            "text": "The book is encrypted as a whole on every save, and the ciphertext was converted to text one character per byte — with twenty thousand transactions that was ~0.7 s on every save, longer than the encryption itself. Now one save on such a book takes ~0.1 s, and with fifty thousand ~0.45 s instead of 2.6 s."
+          }
+        ]
+      },
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "The app window didn't fit a laptop screen.",
+            "text": "The window opened at 1280×820 on any monitor, and a 1920×1080 laptop at 125–150 % scaling or a 1366×768 screen has less room — the bottom of the window with its buttons went under the taskbar. Now the window checks the screen at launch: on a small one it opens maximized, on a medium one it shrinks and centres, on a large one it stays as before. The remembered size is checked too: a window stretched on a 4K monitor no longer spills over the edges on a laptop, and a window left on a disconnected monitor comes back onto the screen. On a screen smaller than the minimum window size, the minimum shrinks to the screen. The window no longer flashes at its old size — it appears already in place."
+          },
+          {
+            "lead": "On Full HD and wider monitors the Overview tiles took two thirds of the row.",
+            "text": "From a 1536 px window the tile grid became six columns, while every screen has four tiles — two columns on the right stood empty. Now it is four in a row on any monitor."
+          },
+          {
+            "lead": "Table columns were jammed together.",
+            "text": "In an amount breakdown (Plan vs actual and other screens) a long account name merged with the description next to it: “Larisa Groceries”. Columns now have spacing — in all tables in the desktop layout."
+          },
+          {
+            "lead": "Transactions on a foreign-currency account showed a ₽ sign",
+            "text": "— “100 ₽ (9 000 ₽)” instead of “$100 (9 000 ₽)”. The currency was taken from the page's empty placeholder rather than the loaded data."
+          },
+          {
+            "lead": "A month note in Plan vs actual could overwrite a newer one.",
+            "text": "If the note was changed on another device, the field showed the old one, and a tap without editing wrote it over the new one. On a phone, deleting the open month took you to the first month instead of the current one."
+          },
+          {
+            "lead": "A few more places didn't refresh after changes:",
+            "text": "“Compare with Transactions” and the actual amount in a cell's row in the Sheet, the account list for “Default account” in Settings, goal and dividend milestones in the forecast calendar, and detected recurring charges in Subscriptions."
+          },
+          {
+            "lead": "The Sheet in the English interface:",
+            "text": "the cell dialog on a phone wrote numbers the Russian way, and a new goal got a Russian name."
+          },
+          {
+            "lead": "“Create” in the new account dialog (and any other save) could hang for seconds right after launch.",
+            "text": "The net worth snapshot the app takes on every load waited for the Moscow Exchange inside the write queue — and all writes stood behind it until the exchange answered. Now quotes for the snapshot are fetched before the queue, and inside it the snapshot is only calculated and saved."
+          },
+          {
+            "lead": "Some cards didn't refresh after sync or your own edits",
+            "text": "— until you switched screens: dividends, the sales and tax log, security signals (Investments), the rates update date (Accounts), the AI assistant switch, and the theme and density chosen on another device. Now they reread the data whenever it changes. For example, “Received” in upcoming payouts shows up in the dividends card right away."
+          },
+          {
+            "lead": "Debts: the “Auto-pay category” list had items without names.",
+            "text": "The dialog asked the category directory for a field it doesn't return."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.1",
+    "date": "2026-10-04",
+    "summary": "🐞 Switches in Settings switch again.",
+    "kind": "fixes",
+    "sections": [
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "The “Loli voice assistant”, “Expenses from bank notifications” and “Evening reminder to log spending” switches didn't change on screen:",
+            "text": "the tap was saved, but the switch stayed where it was — it looked as if it didn't work. Now the settings section redraws on any change, and no switch will “stick” again."
+          },
+          {
+            "lead": "Loli:",
+            "text": "if she isn't installed or is signed with someone else's key, the switch is greyed out with the reason next to it (and whose signature was found). Once the link is on, the summary for Loli and the expenses she sends refresh right away, not after the next edit in Transactions."
+          },
+          {
+            "lead": "",
+            "text": "A month without income: Loli no longer says “budget used up” — the assistant simply has nothing to calculate “safe to spend today” from."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.7.0",
+    "date": "2026-10-03",
+    "summary": "🎙️ Loli integration: expenses spoken to Loli land here, and Loli answers money questions using the numbers here.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Added",
+        "items": [
+          {
+            "lead": "Expenses from Loli.",
+            "text": "“Loli, I spent 850 on groceries” — the expense appears in Suggestions on Home and is recorded with one tap. Turn on “Record straight away” and it goes straight into Transactions. Edit or cancel the expense in Loli and the same transaction changes, and anything sent twice is not doubled. The category is matched by name (“Cafes and restaurants” → “Restaurants”), income by description (“salary came in” → “Salary”)."
+          },
+          {
+            "lead": "Loli answers money questions:",
+            "text": "“how much can I spend today?”, “will I make it to payday?”, “how much is left for groceries?”, “how much money do I have?”. Loli gets only totals — not a single transaction, description or shop. You can choose not to share the summary."
+          },
+          {
+            "lead": "",
+            "text": "Works on Android only, offline, and only with the genuine Loli (her signature is checked). Turn it on in Settings → “Loli voice assistant”; the link is off by default."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.6.1",
+    "date": "2026-10-03",
+    "summary": "🐞 Rent is no longer recorded twice on two devices, debts and their payments add up, and the app is faster on a large book and has animations.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "Deleted a debt payment — the debt is back.",
+            "text": "Before, the money returned to the account but the debt stayed reduced. Restore a payment from the trash or change its amount, and the debt changes with it."
+          },
+          {
+            "lead": "Auto-pay on a debt in another currency",
+            "text": "(for example, a dollar loan paid from a rouble card) is charged at the exchange rate, not as the same number."
+          },
+          {
+            "lead": "Rent is not recorded twice on two devices.",
+            "text": "Scheduled payments and auto-payments are written after the first check with the server (no longer than 10 seconds): a phone opened after the computer no longer records the same rent again."
+          },
+          {
+            "lead": "A scheduled payment remembers its template:",
+            "text": "rent charged while you are on holiday doesn't go into the trip budget, and “will I make it to payday” doesn't count it twice."
+          },
+          {
+            "lead": "Two identical coffees in one morning:",
+            "text": "statement import and bank notification suggestions no longer take the second identical purchase for a repeat of the first."
+          },
+          {
+            "lead": "",
+            "text": "The monthly report shows large expenses from foreign-currency accounts at the exchange rate."
+          }
+        ]
+      },
+      {
+        "title": "Changed",
+        "items": [
+          {
+            "lead": "Faster on a large book:",
+            "text": "recording a transaction is about 5 times faster, Transactions, Limits, Home and “Safe to spend” 2–5 times, “It's a transfer?” dozens of times. The app loads less code at launch: the English dictionary, “What's new” and charts load only when needed."
+          },
+          {
+            "lead": "Animations:",
+            "text": "amounts on Home, in Accounts, “Safe to spend” and goals glide to the new value and briefly change colour (up — green, down — red); a just-recorded transaction is highlighted in Transactions; the details of “Safe to spend” and “until payday” expand smoothly; a reached goal gets a green bar and a “Goal reached” mark; the “+” button responds to taps. The system “reduce motion” setting turns all of it off."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.6.0",
+    "date": "2026-10-03",
+    "summary": "✨ “It's a transfer?”, bank reconciliation, year in review, balance history, month comparison, “will I make it to payday”, shared family goals, more detailed subscriptions and a monthly PDF report.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "New",
+        "items": [
+          {
+            "lead": "“It's a transfer?”",
+            "text": "(Transactions): pairs of “left one of your accounts — arrived on another” for the same amount on the same or the next day are linked into a transfer with one button — and stop counting as income and expense. This fixes the doubling after importing a bank statement."
+          },
+          {
+            "lead": "Bank reconciliation",
+            "text": "(Accounts → the scales next to an account): the balance from the bank, the difference and the latest transactions; if nothing turns up, the difference is recorded as one transaction."
+          },
+          {
+            "lead": "Year in review",
+            "text": "(Reports): earned, spent, saved, top categories, best and worst month, biggest expense, growth of money and cushion, compared with last year."
+          },
+          {
+            "lead": "Balance history",
+            "text": "(Accounts): a chart at the end of each month — all money, the cushion or one account."
+          },
+          {
+            "lead": "Compare months",
+            "text": "(Analytics): two months side by side by category."
+          },
+          {
+            "lead": "Will I make it to payday",
+            "text": "(Home): days to payday, money on cards, payments before it and how much you can spend per day; payday comes from your history or is set by you."
+          },
+          {
+            "lead": "Shared family goals",
+            "text": "(Goals): who topped up, members' shares (equal or custom), who is behind their share."
+          },
+          {
+            "lead": "More detailed subscriptions:",
+            "text": "how much you paid over the year, “price went up”, “Turn off” with a hint of how much it will save."
+          },
+          {
+            "lead": "Monthly report (PDF)",
+            "text": "(Reports): one page — totals, plan vs actual by category, large expenses."
+          }
+        ]
+      },
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "A sync conflict with nothing to choose no longer appears.",
+            "text": "If only service stamps differ, or it is a service record without a single field you entered (for example, a Sheet month), the merge decides by itself and loses nothing. Such empty conflicts (“Record”, “Mismatch: 0”) accumulated earlier disappear on their own."
+          },
+          {
+            "lead": "Clear names in the conflict dialog:",
+            "text": "each section has its own name (“Sheet month”, “Trip”, “Family member”…), an account, category and member are shown by name rather than by number; service fields (column, order, sheet) are hidden. The dialog title is no longer repeated twice."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "2.5.2",
+    "date": "2026-10-03",
+    "summary": "🐞 More fixes: a trip doesn't count debt payments, old transfers are deleted in full, and cashback isn't earned on paying off a loan.",
+    "kind": "fixes",
+    "sections": [
+      {
+        "title": "Fixed",
+        "items": [
+          {
+            "lead": "Trip:",
+            "text": "a debt payment and a transfer between your own accounts no longer get the trip tag or count towards its spending."
+          },
+          {
+            "lead": "Transfers recorded before 1.10",
+            "text": "(only a tag in the description) are also deleted and restored from the trash in full."
+          },
+          {
+            "lead": "“What if”:",
+            "text": "only debts with a minimum payment are subtracted separately; paying off a credit card without one stays a regular expense instead of disappearing."
+          },
+          {
+            "lead": "Bank notifications:",
+            "text": "a rouble expense is not recorded to a foreign-currency account."
+          },
+          {
+            "lead": "Cashback:",
+            "text": "paying off a loan with a card doesn't count as a purchase."
+          }
+        ]
+      }
+    ]
+  }
+]

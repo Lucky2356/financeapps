@@ -36,6 +36,12 @@ describe("the repository itself", () => {
   it("spells the same version in all four files", () => {
     expect(() => run(REPO)).not.toThrow();
   });
+
+  // Тег текущей версии проходит — значит, и английские слова выпуска на месте.
+  it("passes the gate for its own version, English notes included", () => {
+    const version = JSON.parse(readFileSync(resolve(REPO, "package.json"), "utf8")).version;
+    expect(() => run(REPO, `v${version}`)).not.toThrow();
+  });
 });
 
 describe("verify-release-version", () => {
@@ -61,6 +67,10 @@ describe("verify-release-version", () => {
     write(
       "src-tauri/Cargo.lock",
       `[[package]]\nname = "serde"\nversion = "1.0.0"\n\n[[package]]\nname = "financial-assistant"\nversion = "${at("src-tauri/Cargo.lock")}"\ndependencies = []\n`
+    );
+    write(
+      "CHANGELOG.en.md",
+      "# Changelog (English edition)\n\n## [1.2.3] — 2026-01-01\n\n- Notes.\n"
     );
   }
 
@@ -104,6 +114,27 @@ describe("verify-release-version", () => {
       `[package]\nname = "financial-assistant"\n`
     );
     expect(() => run(workspace)).toThrow();
+  });
+
+  // Английские слова выпуска: без них окно «Что нового» в английском
+  // интерфейсе заговорило бы по-русски у всех, кто обновился.
+  it("rejects a tag whose version has no section in CHANGELOG.en.md", () => {
+    seed();
+    write("CHANGELOG.en.md", "# Changelog (English edition)\n\n## [1.2.2] — 2025-12-01\n");
+    expect(() => run(workspace, "v1.2.3")).toThrow();
+    // Без тега — как раньше: только версии в файлах.
+    expect(() => run(workspace)).not.toThrow();
+  });
+
+  it("rejects a tag when CHANGELOG.en.md is missing altogether", () => {
+    seed();
+    rmSync(join(workspace, "CHANGELOG.en.md"));
+    try {
+      run(workspace, "v1.2.3");
+      throw new Error("скрипт обязан был упасть");
+    } catch (error) {
+      expect(`${(error as { stderr?: string }).stderr ?? ""}`).toContain("CHANGELOG.en.md");
+    }
   });
 
   it("names the release trap in the failure, so the log says why it matters", () => {

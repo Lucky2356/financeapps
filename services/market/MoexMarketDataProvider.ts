@@ -4,6 +4,7 @@ import { format, subDays } from "date-fns";
 import type { AssetKind } from "@/types/enums";
 import { rankSecurities } from "@/lib/investments/security-match";
 import { sectorForTicker } from "@/lib/market/sectors";
+import { displayLocale } from "@/lib/i18n/display-locale";
 import type { HistoricalPrice, MarketDataService, MarketSecurity } from "./MarketDataService";
 
 // Curated universe of liquid Russian blue chips. MOEX ISS provides live prices
@@ -144,7 +145,7 @@ export const BOARDS: BoardSpec[] = [
     // Shares and exchange-traded funds share this board — SECTYPE tells them
     // apart, so a fund is labelled a fund rather than an odd-looking share.
     assetKind: null,
-    securityColumns: ["SECID", "SHORTNAME", "SECTYPE", "LOTSIZE"],
+    securityColumns: ["SECID", "SHORTNAME", "LATNAME", "SECTYPE", "LOTSIZE"],
     marketColumns: STOCK_MARKET_COLUMNS
   },
   {
@@ -153,7 +154,7 @@ export const BOARDS: BoardSpec[] = [
     market: "bonds",
     assetKind: "BOND",
     quotedInPercent: true,
-    securityColumns: ["SECID", "SHORTNAME", "FACEVALUE", "ACCRUEDINT", "FACEUNIT"],
+    securityColumns: ["SECID", "SHORTNAME", "LATNAME", "FACEVALUE", "ACCRUEDINT", "FACEUNIT"],
     marketColumns: STOCK_MARKET_COLUMNS
   },
   {
@@ -162,7 +163,7 @@ export const BOARDS: BoardSpec[] = [
     market: "bonds",
     assetKind: "BOND",
     quotedInPercent: true,
-    securityColumns: ["SECID", "SHORTNAME", "FACEVALUE", "ACCRUEDINT", "FACEUNIT"],
+    securityColumns: ["SECID", "SHORTNAME", "LATNAME", "FACEVALUE", "ACCRUEDINT", "FACEUNIT"],
     marketColumns: STOCK_MARKET_COLUMNS
   },
   {
@@ -173,7 +174,7 @@ export const BOARDS: BoardSpec[] = [
     // The whole FX board is thousands of instruments the app has no business
     // offering; these two are the metals people actually hold.
     only: ["GLDRUB_TOM", "SLVRUB_TOM"],
-    securityColumns: ["SECID", "SHORTNAME"],
+    securityColumns: ["SECID", "SHORTNAME", "LATNAME"],
     marketColumns: ["SECID", "LAST", "LASTTOPREVPRICE", "MARKETPRICE"]
   }
 ];
@@ -220,11 +221,48 @@ export const INDEX_BOARD: BoardSpec = {
 // live → last historical close → marketPrice. Both are already in roubles: a
 // bond's percentage quote is converted here, once, so nothing downstream has to
 // know that bonds are priced differently from everything else.
+/**
+ * Английские имена бумаг из списка — на случай, когда биржа не ответила и
+ * имя берётся отсюда, а интерфейс по-английски.
+ */
+const STATIC_NAMES_EN: Partial<Record<Ticker, string>> = {
+  SBER: "Sberbank",
+  GAZP: "Gazprom",
+  LKOH: "Lukoil",
+  YDEX: "Yandex",
+  T: "T-Technologies",
+  VTBR: "VTB Bank",
+  MGNT: "Magnit",
+  NVTK: "Novatek",
+  ROSN: "Rosneft",
+  MOEX: "Moscow Exchange",
+  PLZL: "Polyus",
+  PHOR: "PhosAgro",
+  CHMF: "Severstal",
+  SNGS: "Surgutneftegas",
+  AFLT: "Aeroflot"
+};
+
+/**
+ * Имя бумаги на языке интерфейса: биржа пишет по-русски (SHORTNAME) и
+ * латиницей (LATNAME). В английской версии «ЛУКОЙЛ» и «ЯНДЕКС» были
+ * единственным русским текстом на экране.
+ */
+function securityName(ticker: string, row: SnapshotRow | undefined): string {
+  const meta = STATIC_META[ticker as Ticker];
+  if (displayLocale() === "en") {
+    return row?.latName || STATIC_NAMES_EN[ticker as Ticker] || row?.name || meta?.name || ticker;
+  }
+  return row?.name || meta?.name || ticker;
+}
+
 type SnapshotRow = {
   live: number;
   marketPrice: number;
   changeDay: number;
   name: string;
+  /** Имя латиницей (LATNAME биржи) — для английского интерфейса. */
+  latName: string;
   assetKind: AssetKind;
   /** Exchange lot: the smallest number of shares that can actually be bought. */
   lotSize: number;
@@ -317,7 +355,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         const meta = STATIC_META[ticker];
         results.push({
           ticker,
-          name: row?.name || meta.name,
+          name: securityName(ticker, row),
           assetKind: "STOCK",
           // One table decides the industry for every security, curated or not,
           // so the sector chart cannot end up speaking two vocabularies at once.
@@ -507,6 +545,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         lotSize: lot > 0 ? lot : 1,
         accruedInterest: roundKopecks(accrued),
         name: String(security?.["SHORTNAME"] ?? ""),
+        latName: String(security?.["LATNAME"] ?? ""),
         assetKind: spec.assetKind ?? kindFromSecType(String(security?.["SECTYPE"] ?? "")),
         board: spec
       });
@@ -532,7 +571,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         if (kind && row.assetKind !== kind) continue;
         candidates.push({
           ticker: secid,
-          name: row.name || STATIC_META[secid as Ticker]?.name || secid,
+          name: securityName(secid, row),
           row
         });
       }

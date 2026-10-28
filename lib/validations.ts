@@ -1,7 +1,17 @@
 import { z } from "zod";
 
 import { CURRENCY_CODES } from "@/lib/currency";
-import { MAX_MONEY, MONEY_RANGE_ERROR } from "@/lib/utils";
+import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
+import { MAX_MONEY } from "@/lib/utils";
+
+/**
+ * Текст отказа — функцией, а не строкой. Схемы строятся один раз, при загрузке
+ * модуля, когда язык экрана ещё не выбран; строка застыла бы русской навсегда.
+ * Функцию zod зовёт при каждой проверке — и фраза выходит на языке экрана.
+ */
+function say(key: string): { error: () => string } {
+  return { error: () => apiText(key) };
+}
 
 const optionalId = z.string().trim().optional();
 // The same ceiling the ledger itself enforces (lib/utils): past it a double
@@ -10,34 +20,34 @@ const optionalId = z.string().trim().optional();
 const positiveMoney = z.coerce
   .number()
   .finite()
-  .positive("Введите сумму больше нуля")
-  .max(MAX_MONEY, MONEY_RANGE_ERROR);
+  .positive(say("api.validation.amountPositive"))
+  .max(MAX_MONEY, { error: moneyRangeText });
 const nonNegativeMoney = z.coerce
   .number()
   .finite()
-  .min(0, "Сумма не может быть отрицательной")
-  .max(MAX_MONEY, MONEY_RANGE_ERROR);
+  .min(0, say("api.validation.amountNonNegative"))
+  .max(MAX_MONEY, { error: moneyRangeText });
 
 export const transactionSchema = z.object({
   id: optionalId,
   amount: positiveMoney,
   type: z.enum(["INCOME", "EXPENSE"]),
-  categoryId: z.string().min(1, "Выберите категорию"),
-  accountId: z.string().min(1, "Выберите счет"),
-  date: z.string().min(1, "Укажите дату"),
+  categoryId: z.string().min(1, say("api.validation.category")),
+  accountId: z.string().min(1, say("api.validation.account")),
+  date: z.string().min(1, say("api.validation.date")),
   description: z.string().trim().max(180).optional()
 });
 
 export const transferSchema = z
   .object({
     amount: positiveMoney,
-    fromAccountId: z.string().min(1, "Выберите счет списания"),
-    toAccountId: z.string().min(1, "Выберите счет зачисления"),
-    date: z.string().min(1, "Укажите дату"),
+    fromAccountId: z.string().min(1, say("api.validation.fromAccount")),
+    toAccountId: z.string().min(1, say("api.validation.toAccount")),
+    date: z.string().min(1, say("api.validation.date")),
     description: z.string().trim().max(180).optional()
   })
   .refine((input) => input.fromAccountId !== input.toAccountId, {
-    message: "Счета списания и зачисления должны отличаться.",
+    ...say("api.transfer.distinct"),
     path: ["toAccountId"]
   });
 
@@ -56,7 +66,7 @@ export const transactionFilterSchema = z.object({
 
 export const accountSchema = z.object({
   id: optionalId,
-  name: z.string().trim().min(2, "Название слишком короткое").max(80),
+  name: z.string().trim().min(2, say("api.name.tooShort")).max(80),
   type: z.enum(["CASH", "DEBIT_CARD", "SAVINGS", "BROKERAGE"]),
   balance: z.coerce.number().finite(),
   currency: z.string().trim().default("RUB")
@@ -86,7 +96,7 @@ export const savingGoalSchema = z.object({
 
 export const liabilitySchema = z.object({
   id: optionalId,
-  name: z.string().trim().min(1, "Введите название").max(100),
+  name: z.string().trim().min(1, say("api.validation.name")).max(100),
   kind: z.enum(["CREDIT_CARD", "LOAN", "MORTGAGE", "INSTALLMENT", "OTHER"]),
   balance: nonNegativeMoney,
   originalAmount: z.coerce.number().finite().min(0).default(0),
@@ -118,10 +128,10 @@ export const recurringTransactionSchema = z.object({
   id: optionalId,
   amount: positiveMoney,
   type: z.enum(["INCOME", "EXPENSE"]),
-  categoryId: z.string().min(1, "Выберите категорию"),
-  accountId: z.string().min(1, "Выберите счет"),
+  categoryId: z.string().min(1, say("api.validation.category")),
+  accountId: z.string().min(1, say("api.validation.account")),
   frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
-  nextDate: z.string().min(1, "Укажите следующую дату"),
+  nextDate: z.string().min(1, say("api.validation.nextDate")),
   description: z.string().trim().max(180).optional(),
   isActive: z.preprocess(
     (value) => (value === undefined ? true : value === "on" || value === true || value === "true"),
@@ -136,8 +146,8 @@ export const portfolioPositionSchema = z.object({
     .min(1)
     .max(12)
     .transform((value) => value.toUpperCase()),
-  quantity: z.coerce.number().finite().positive("Количество должно быть больше нуля"),
-  averageBuyPrice: z.coerce.number().finite().positive("Средняя цена должна быть больше нуля")
+  quantity: z.coerce.number().finite().positive(say("api.validation.quantityPositive")),
+  averageBuyPrice: z.coerce.number().finite().positive(say("api.validation.pricePositive"))
 });
 
 export const watchlistItemSchema = z.object({
@@ -156,7 +166,7 @@ export const MAX_IMPORT_ROWS = 20_000;
 const MAX_IMPORT_PAYLOAD_CHARS = 8_000_000;
 
 export const csvImportSchema = z.object({
-  rows: z.string().min(2).max(MAX_IMPORT_PAYLOAD_CHARS, "Файл слишком большой для импорта."),
+  rows: z.string().min(2).max(MAX_IMPORT_PAYLOAD_CHARS, say("api.validation.importTooLarge")),
   dateColumn: z.string().min(1),
   amountColumn: z.string().min(1),
   descriptionColumn: z.string().optional(),
@@ -166,11 +176,11 @@ export const csvImportSchema = z.object({
 
 export const categoryInputSchema = z.object({
   id: optionalId,
-  name: z.string().trim().min(2, "Название слишком короткое").max(80),
+  name: z.string().trim().min(2, say("api.name.tooShort")).max(80),
   kind: z.enum(["INCOME", "EXPENSE"]),
   color: z
     .string()
-    .regex(/^#[0-9a-fA-F]{6}$/, "Неверный формат цвета")
+    .regex(/^#[0-9a-fA-F]{6}$/, say("api.validation.color"))
     .default("#64748b"),
   isEssential: z.preprocess(
     (v) => v === "on" || v === true || v === "true",

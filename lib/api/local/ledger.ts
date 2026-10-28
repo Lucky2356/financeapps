@@ -9,9 +9,11 @@ import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { parseSort, sortTransactions } from "@/lib/transactions/sort";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
 import { convert, isSupportedCurrency } from "@/lib/currency";
-import { isUsableMoney, MONEY_RANGE_ERROR, roundMoney } from "@/lib/utils";
+import { isUsableMoney, roundMoney } from "@/lib/utils";
+import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
 import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount";
-import { TRANSFER_CATEGORY_LABEL, transferKeyOf } from "@/lib/transactions/transfers";
+import { TRANSFER_CATEGORY_KEY, transferKeyOf } from "@/lib/transactions/transfers";
+import { dataText } from "@/lib/i18n/data-text";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { suggestCategoryId } from "@/lib/category-suggest";
 import { matchRule } from "@/lib/categorization-rules";
@@ -24,13 +26,15 @@ import {
   withCurrentNames,
   isBackupReminderDue,
   SAVINGS_ACCOUNT_TYPES,
-  DEFAULT_IMPORT_ACCOUNT,
-  RECONCILE_CATEGORY_LABEL,
+  DEFAULT_IMPORT_ACCOUNT_KEY,
+  RECONCILE_CATEGORY_KEY,
   familyFields
 } from "@/lib/api/local/state";
 import {
   applyBalance,
   findOrCreateAccount,
+  findOrCreateAppAccount,
+  findOrCreateAppCategory,
   findOrCreateCategory,
   ratesOf,
   sumInBase
@@ -47,7 +51,9 @@ export function upsertAccount(state: LocalState, body: unknown, method: "POST" |
   const account = {
     ...previous,
     id: method === "PUT" && input.id ? input.id : id("account"),
-    name: input.name?.trim() || "Новый счет",
+    // Длиннее 100 знаков схема книги не примет — счёт с остатком пропал бы
+    // при следующем запуске. Обрезаем.
+    name: (input.name?.trim() || dataText("data.account.new")).slice(0, 100),
     type: input.type || "DEBIT_CARD",
     balance: Number(input.balance ?? 0),
     // Honour an explicitly chosen supported currency; fall back to the base.
@@ -63,7 +69,8 @@ export function upsertAccount(state: LocalState, body: unknown, method: "POST" |
       const period = input.interestCompounding;
       const compounding: AccountRow["interestCompounding"] =
         period === "QUARTERLY" || period === "YEARLY" ? period : "MONTHLY";
-      return { interestRate: rate, interestCompounding: compounding };
+      // Больше 1000 % схема не примет; такую ставку вводят только по ошибке.
+      return { interestRate: Math.min(rate, 1000), interestCompounding: compounding };
     })(),
     // Срок вклада — только у сберегательного счёта; пусто — накопительный.
     depositEndsOn:
@@ -97,7 +104,7 @@ export function upsertTransaction(
   const input = toFormObject(body);
   const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
   const category = state.categories.find((item) => item.id === input.categoryId);
-  if (!account || !category) throw new Error("Выберите существующий счет и категорию.");
+  if (!account || !category) throw new Error(apiText("api.ledger.pickAccountCategory"));
 
   const previous =
     method === "PUT" && input.id
@@ -109,14 +116,16 @@ export function upsertTransaction(
   // Checked here because the stored schema demands a positive number: a zero
   // or a stray letter used to be written happily and made the whole document
   // unreadable on the next start.
-  if (!isUsableMoney(amount)) throw new Error(MONEY_RANGE_ERROR);
+  if (!isUsableMoney(amount)) throw new Error(moneyRangeText());
   const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
   const linkedRecurringId = recurringId ?? previous?.recurringId;
   const linkedLiabilityId =
     (typeof input.liabilityId === "string" && input.liabilityId) || previous?.liabilityId;
+  // Метка длиннее 40 знаков записывалась, а схема книги её не принимает: при
+  // следующем запуске пропадала вся операция, а остаток счёта — с ней.
   const tags = String(input.tags ?? "")
     .split(",")
-    .map((value) => value.trim())
+    .map((value) => value.trim().slice(0, 40).trim())
     .filter(Boolean)
     .slice(0, 12);
   // Идёт поездка — новая трата получает её метку сама (lib/trips). Плановые
@@ -241,22 +250,21 @@ export function createSplit(state: LocalState, body: unknown): TransactionRow[] 
   } catch {
     parts = [];
   }
-  if (!Array.isArray(parts) || parts.length < 2)
-    throw new Error("Разделить можно минимум на две части.");
+  if (!Array.isArray(parts) || parts.length < 2) throw new Error(apiText("api.split.minParts"));
   const cleaned = parts.map((part) => ({
     categoryId: String(part?.categoryId ?? ""),
     amount: Number(String(part?.amount ?? "").replace(",", "."))
   }));
   if (cleaned.some((part) => !part.categoryId || !(part.amount > 0)))
-    throw new Error("У каждой части нужны категория и сумма больше нуля.");
+    throw new Error(apiText("api.split.partInvalid"));
 
   // Проверить всё до первой записи: upsertTransaction меняет состояние сразу,
   // и отказ на третьей части оставил бы две первые в памяти.
   if (!state.accounts.some((item) => item.id === input.accountId && !item.isArchived))
-    throw new Error("Выберите существующий счет и категорию.");
+    throw new Error(apiText("api.ledger.pickAccountCategory"));
   if (cleaned.some((part) => !state.categories.some((item) => item.id === part.categoryId)))
-    throw new Error("Выберите существующий счет и категорию.");
-  if (cleaned.some((part) => !isUsableMoney(part.amount))) throw new Error(MONEY_RANGE_ERROR);
+    throw new Error(apiText("api.ledger.pickAccountCategory"));
+  if (cleaned.some((part) => !isUsableMoney(part.amount))) throw new Error(moneyRangeText());
 
   const group = id("split");
   const { parts: _parts, action: _action, ...common } = input;
@@ -344,17 +352,17 @@ export function balanceHistoryPage(state: LocalState, months: string[]) {
 export function reconcileAccount(state: LocalState, body: unknown) {
   const input = toFormObject(body);
   const account = state.accounts.find((item) => item.id === input.id && !item.isArchived);
-  if (!account) throw new Error("Такого счёта нет.");
+  if (!account) throw new Error(apiText("api.account.notFound"));
   const bank = Number(
     String(input.balance ?? "")
       .replace(/[\s\u00a0]/g, "")
       .replace(",", ".")
   );
-  if (!Number.isFinite(bank)) throw new Error("Остаток в банке — число.");
+  if (!Number.isFinite(bank)) throw new Error(apiText("api.reconcile.bankNumber"));
   const difference = roundMoney(bank - account.balance);
   if (difference === 0) return { recorded: false };
   const kind = difference > 0 ? "INCOME" : "EXPENSE";
-  const category = findOrCreateCategory(state, RECONCILE_CATEGORY_LABEL, kind);
+  const category = findOrCreateAppCategory(state, RECONCILE_CATEGORY_KEY, kind);
   const tx = upsertTransaction(
     state,
     {
@@ -363,7 +371,7 @@ export function reconcileAccount(state: LocalState, body: unknown) {
       accountId: account.id,
       categoryId: category.id,
       date: isoDay(new Date()),
-      description: "Сверка с банком",
+      description: dataText("data.tx.reconcile"),
       noTrip: "1"
     },
     "POST"
@@ -380,18 +388,18 @@ export function linkTransfer(state: LocalState, body: unknown) {
   const input = toFormObject(body);
   const expense = state.transactions.find((item) => item.id === input.expenseId);
   const income = state.transactions.find((item) => item.id === input.incomeId);
-  if (!expense || !income) throw new Error("Одной из операций уже нет.");
+  if (!expense || !income) throw new Error(apiText("api.transfer.oneGone"));
   if (expense.type !== "EXPENSE" || income.type !== "INCOME")
-    throw new Error("Перевод — это списание с одного счёта и поступление на другой.");
+    throw new Error(apiText("api.transfer.shape"));
   if (transferKeyOf(expense) || transferKeyOf(income))
-    throw new Error("Эта операция уже часть перевода.");
+    throw new Error(apiText("api.transfer.alreadyLinked"));
   if (expense.account.id === income.account.id)
-    throw new Error("Перевод — между двумя разными счетами.");
+    throw new Error(apiText("api.transfer.sameAccount"));
   if (Math.abs(expense.amount - income.amount) >= 0.005)
-    throw new Error("Суммы списания и поступления не совпадают.");
+    throw new Error(apiText("api.transfer.amountMismatch"));
   const transferId = id("transfer");
-  const out = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
-  const into = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
+  const out = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "EXPENSE");
+  const into = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "INCOME");
   const asTransfer = (
     row: TransactionRow,
     category: { id: string; label: string; color: string; icon?: string }
@@ -429,10 +437,8 @@ export function createTransfer(state: LocalState, body: unknown) {
   const toAccount = state.accounts.find(
     (item) => item.id === input.toAccountId && !item.isArchived
   );
-  if (!fromAccount || !toAccount)
-    throw new Error("Выберите существующие активные счета для перевода.");
-  if (fromAccount.id === toAccount.id)
-    throw new Error("Счета списания и зачисления должны отличаться.");
+  if (!fromAccount || !toAccount) throw new Error(apiText("api.transfer.pickAccounts"));
+  if (fromAccount.id === toAccount.id) throw new Error(apiText("api.transfer.distinct"));
 
   // Money moving between currencies is still the same money: 100 $ leaving a
   // dollar card arrives as roubles, not as 100 ₽. Both halves used to carry
@@ -453,15 +459,16 @@ export function createTransfer(state: LocalState, body: unknown) {
       : Math.ceil(convert(wanted, toAccount.currency, fromAccount.currency, rates) * 100 - 1e-6) /
         100;
   if (!isUsableMoney(amount) || (wanted !== null && !isUsableMoney(wanted)))
-    throw new Error(MONEY_RANGE_ERROR);
+    throw new Error(moneyRangeText());
   const credited =
     wanted ?? roundMoney(convert(amount, fromAccount.currency, toAccount.currency, rates));
 
   const transferId = id("transfer");
-  const expenseCategory = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "EXPENSE");
-  const incomeCategory = findOrCreateCategory(state, TRANSFER_CATEGORY_LABEL, "INCOME");
+  const expenseCategory = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "EXPENSE");
+  const incomeCategory = findOrCreateAppCategory(state, TRANSFER_CATEGORY_KEY, "INCOME");
   const description =
-    input.description?.trim() || `Перевод ${fromAccount.name} -> ${toAccount.name}`;
+    input.description?.trim() ||
+    dataText("data.tx.transfer", undefined, { from: fromAccount.name, to: toAccount.name });
   const date = input.date || new Date().toISOString();
   const expense = upsertTransaction(
     state,
@@ -508,13 +515,12 @@ export function restoreTransaction(state: LocalState, body: unknown): Transactio
   const parsed = transactionRowSchema
     .omit({ updatedAt: true })
     .safeParse(typeof raw === "string" ? JSON.parse(raw) : raw);
-  if (!parsed.success) throw new Error("Не получилось вернуть операцию.");
+  if (!parsed.success) throw new Error(apiText("api.tx.restoreFailed"));
   const { photo: _photo, ...row } = parsed.data as TransactionRow;
   void _photo;
   const account = state.accounts.find((item) => item.id === row.account.id && !item.isArchived);
   const category = state.categories.find((item) => item.id === row.category.id);
-  if (!account || !category)
-    throw new Error("Счёт или категория этой операции уже удалены — вернуть её нельзя.");
+  if (!account || !category) throw new Error(apiText("api.tx.restoreOrphan"));
   if (state.transactions.some((item) => item.id === row.id)) return row;
   state.transactions = [row, ...state.transactions];
   applyBalance(state, account.id, row.type === "INCOME" ? row.amount : -row.amount);
@@ -689,7 +695,7 @@ export function importCsvRows(state: LocalState, body: unknown) {
     const accountName = String(row[input.accountColumn ?? ""] ?? "").trim();
     const account = accountName
       ? findOrCreateAccount(state, accountName)
-      : (fallbackAccount ?? findOrCreateAccount(state, DEFAULT_IMPORT_ACCOUNT));
+      : (fallbackAccount ?? findOrCreateAppAccount(state, DEFAULT_IMPORT_ACCOUNT_KEY));
     // Rows without an account of their own follow the first one there is —
     // including one this import has just made.
     fallbackAccount = fallbackAccount ?? account;
@@ -720,7 +726,11 @@ export function importCsvRows(state: LocalState, body: unknown) {
         (suggestedId
           ? state.categories.find((item) => item.id === suggestedId && item.kind === type)
           : undefined) ??
-        findOrCreateCategory(state, type === "INCOME" ? "Импорт доходов" : "Импорт расходов", type);
+        findOrCreateAppCategory(
+          state,
+          type === "INCOME" ? "data.cat.importIncome" : "data.cat.importExpense",
+          type
+        );
     }
     // День строки файла — тот, что будет записан, а не UTC-день местной
     // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же

@@ -18,6 +18,7 @@
 
 import type { StorageAdapter } from "@/lib/storage/StorageAdapter";
 import { openBook, sealBook, type SealedBook } from "@/lib/sync/vault-crypto";
+import { apiText } from "@/lib/i18n/api-text";
 
 /**
  * Ключи, которые не шифруются. Каждый — с причиной, и причина одна из двух.
@@ -59,7 +60,7 @@ export const UNSEALED_KEYS: readonly string[] = [
  */
 export class BookLockedError extends Error {
   constructor() {
-    super("Данные заперты — введите пароль.");
+    super(apiText("api.storage.locked"));
     this.name = "BookLockedError";
   }
 }

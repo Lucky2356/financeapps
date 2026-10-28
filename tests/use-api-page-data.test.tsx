@@ -13,7 +13,7 @@ async function loadHook(get = vi.fn()) {
   const useApiPageData = mod.useApiPageData as unknown as <T>(
     initialData: T,
     path: string
-  ) => { data: T };
+  ) => { data: T; ready: boolean };
   return { useApiPageData, get, cache };
 }
 
@@ -116,5 +116,44 @@ describe("useApiPageData", () => {
 
     const second = renderHook(() => useApiPageData({ value: "оболочка" }, "/dashboard"));
     expect(second.result.current.data).toEqual({ value: "оболочка" });
+  });
+
+  // По `ready` экран решает, рисовать ли заглушки: до первого ответа в `data`
+  // заготовка сборки, и её «0 ₽» выглядит как настоящий ноль.
+  it("ready ложно до первого ответа и истинно после", async () => {
+    let answer: (value: { value: string }) => void = () => undefined;
+    const get = vi.fn(() => new Promise<{ value: string }>((resolve) => (answer = resolve)));
+    const { useApiPageData } = await loadHook(get);
+
+    const { result } = renderHook(() => useApiPageData({ value: "оболочка" }, "/dashboard"));
+    expect(result.current.ready).toBe(false);
+
+    answer({ value: "местные-числа" });
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.data).toEqual({ value: "местные-числа" });
+  });
+
+  it("ready истинно сразу, если маршрут уже показывали", async () => {
+    const get = vi.fn(async () => ({ value: "местные-числа" }));
+    const { useApiPageData } = await loadHook(get);
+
+    const first = renderHook(() => useApiPageData({ value: "оболочка" }, "/goals"));
+    await waitFor(() => expect(first.result.current.ready).toBe(true));
+    first.unmount();
+
+    const second = renderHook(() => useApiPageData({ value: "оболочка" }, "/goals"));
+    expect(second.result.current.ready).toBe(true);
+  });
+
+  // Заглушка навсегда хуже честной заготовки: и после сбоя чтения — ready.
+  it("ready истинно и после неудачного чтения", async () => {
+    const get = vi.fn(async () => {
+      throw new Error("storage unavailable");
+    });
+    const { useApiPageData } = await loadHook(get);
+
+    const { result } = renderHook(() => useApiPageData({ value: "оболочка" }, "/goals"));
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.data).toEqual({ value: "оболочка" });
   });
 });

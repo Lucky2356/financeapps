@@ -12,6 +12,7 @@ export type DetectableTransaction = {
   date: string;
   description?: string | null;
   category?: { id: string; label: string } | null;
+  account?: { id: string } | null;
 };
 
 export type DetectedFrequency = "WEEKLY" | "MONTHLY" | "YEARLY";
@@ -28,6 +29,12 @@ export type DetectedSubscription = {
   lastDate: string;
   categoryId?: string;
   categoryLabel?: string;
+  /**
+   * Счёт последнего платежа. Шаблон из найденной подписки ставился на первый
+   * счёт в списке — подписка с карты списывалась с «Наличных», а 9,99 $
+   * становились 9,99 ₽: сумма записана в валюте своего счёта.
+   */
+  accountId?: string;
 };
 
 // Strips card masks, digits and punctuation so "YANDEX*4121" and "Yandex 5537"
@@ -75,7 +82,13 @@ export function detectSubscriptions(
 
   const groups = new Map<
     string,
-    { merchant: string; date: number; amount: number; category?: { id: string; label: string } }[]
+    {
+      merchant: string;
+      date: number;
+      amount: number;
+      category?: { id: string; label: string };
+      accountId?: string;
+    }[]
   >();
 
   for (const transaction of transactions) {
@@ -89,7 +102,8 @@ export function detectSubscriptions(
       merchant: transaction.description ?? key,
       date: time,
       amount: Math.abs(transaction.amount),
-      category: transaction.category ?? undefined
+      category: transaction.category ?? undefined,
+      accountId: transaction.account?.id
     });
     groups.set(key, bucket);
   }
@@ -123,7 +137,8 @@ export function detectSubscriptions(
       occurrences: entries.length,
       lastDate: new Date(last.date).toISOString(),
       categoryId: last.category?.id,
-      categoryLabel: last.category?.label
+      categoryLabel: last.category?.label,
+      ...(last.accountId ? { accountId: last.accountId } : {})
     });
   }
 

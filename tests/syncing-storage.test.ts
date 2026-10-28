@@ -707,4 +707,25 @@ describe("синхронизирующее хранилище", () => {
       expect(pull).not.toHaveBeenCalled();
     });
   });
+  describe("ячейка, которую не принять", () => {
+    it("не держит очередь: свои правки уезжают, а она ждёт следующего захода", async () => {
+      // Раньше испорченная ячейка на сервере (не открылась, слияние отказало)
+      // стояла первой в очереди и падала на каждом повторе — и ни одна правка
+      // этого устройства больше не уезжала.
+      const BROKEN = "localFinanceState_broken";
+      server.seed(BROKEN, box("битое"));
+      const picky: Merge = async (slot, mine, theirs, base) => {
+        if (slot === BROKEN) throw new Error("не открывается");
+        return glue(slot, mine, theirs, base);
+      };
+      await storage.start(server, picky);
+      await storage.setItem(SLOT, box("моё"));
+      await storage.flush();
+
+      expect(server.peek(SLOT)?.body).toEqual(box("моё"));
+      expect(storage.status).toBe("error");
+      // Повтор поставлен — не навсегда «ошибка».
+      expect(timers.length).toBeGreaterThan(0);
+    });
+  });
 });

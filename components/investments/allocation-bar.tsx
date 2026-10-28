@@ -4,6 +4,7 @@ import { InfoHint } from "@/components/info-hint";
 import { CHART_PALETTE } from "@/lib/charts/palette";
 import { useI18n } from "@/lib/i18n/context";
 import type { ChartDatum } from "@/types/finance";
+import { formatDecimal } from "@/lib/format";
 
 // "Where your money is" at a glance: a compact horizontal stacked bar of the
 // portfolio's position weights with a small legend. Reads the same `structure`
@@ -51,7 +52,7 @@ export function AllocationBar({ data }: { data: ChartDatum[] }) {
           <div
             key={s.name}
             style={{ width: `${(s.value / total) * 100}%`, backgroundColor: s.color }}
-            title={`${s.name}: ${s.value.toFixed(1)}%`}
+            title={`${s.name}: ${formatDecimal(s.value, 1)}%`}
           />
         ))}
       </div>
@@ -64,7 +65,7 @@ export function AllocationBar({ data }: { data: ChartDatum[] }) {
               aria-hidden
             />
             <span className="text-muted-foreground">{s.name}</span>
-            <span className="font-medium">{s.value.toFixed(1)}%</span>
+            <span className="font-medium">{formatDecimal(s.value, 1)}%</span>
           </li>
         ))}
       </ul>

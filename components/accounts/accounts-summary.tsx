@@ -15,7 +15,9 @@ import { useI18n } from "@/lib/i18n/context";
 // static export ships an empty server snapshot.
 export function AccountsSummary({ data }: { data: AccountsPageData }) {
   const { t } = useI18n();
-  const { data: pageData } = useApiPageData(data, "/accounts");
+  // Пока первое чтение не вернулось — заглушки вместо «0 ₽» (см. HeroCard).
+  const { data: pageData, ready } = useApiPageData(data, "/accounts");
+  const loading = !ready;
   const currency = pageData.currency;
 
   // Balances are summed per kind. Multi-currency accounts are already converted
@@ -66,6 +68,7 @@ export function AccountsSummary({ data }: { data: AccountsPageData }) {
   return (
     <>
       <HeroCard
+        loading={loading}
         label={t("acc.hero.label")}
         value={formatCurrency(pageData.totalBalance, currency)}
         caption={t("acc.hero.caption", { count: pageData.accounts.length })}
@@ -74,6 +77,7 @@ export function AccountsSummary({ data }: { data: AccountsPageData }) {
         {tiles.map((tile) => (
           <StatTile
             key={tile.key}
+            loading={loading}
             label={tile.label}
             value={tile.value}
             icon={tile.icon}

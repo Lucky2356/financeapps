@@ -76,16 +76,42 @@ export type RegisterInput = {
   secret: string;
 };
 
+/** Подстановки в текст отказа: имя устройства, пределы места. */
+export type RefusalParams = Record<string, string | number>;
+
+/**
+ * Тело отказа: `error` — фраза по-русски, `code` — постоянный код.
+ *
+ * Фразу показывает человеку приложение, а приложение бывает и по-английски.
+ * Переводить по самой фразе нельзя — её правят, и перевод молча отвалился бы.
+ * Код не меняется никогда: по нему приложение берёт фразу из своего словаря
+ * («api.server.<код>»), а подстановки (`params`) вставляет в неё само. Поле
+ * `error` остаётся ради старых приложений, которые кода не знают, — и ради
+ * русского экрана, где служба говорит своими словами.
+ */
+export function refusal(
+  code: string,
+  error: string,
+  params?: RefusalParams
+): { error: string; code: string; params?: RefusalParams } {
+  return params ? { error, code, params } : { error, code };
+}
+
 export class AuthError extends Error {
   // Поле объявлено и присвоено отдельно, а не свойством-параметром: Node снимает
   // типы, но не порождает код, и свойство-параметр ему не по зубам. Ограничение
   // полезное — именно оно и держит службу без сборки.
   readonly status: number;
+  /** Постоянный код отказа — см. refusal. */
+  readonly code: string;
+  readonly params: RefusalParams | undefined;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, code: string, message: string, params?: RefusalParams) {
     super(message);
     this.name = "AuthError";
     this.status = status;
+    this.code = code;
+    this.params = params;
   }
 }
 
@@ -104,6 +130,7 @@ export function authParams(db: DatabaseSync, login: string): { vaultMeta: string
   if (!person)
     throw new AuthError(
       404,
+      "unknown_login",
       "На этом сервере нет учётной записи с таким именем. Проверьте имя или заведите новую."
     );
 
@@ -160,7 +187,7 @@ const CONTROL = /[\u0000-\u001f\u007f]/;
  */
 function checkVault(raw: string): void {
   if (!raw || Buffer.byteLength(raw) > MAX_VAULT_BYTES) {
-    throw new AuthError(400, "Неверная шкатулка.");
+    throw new AuthError(400, "bad_vault", "Неверная шкатулка.");
   }
   let vault: { kdf?: unknown; iterations?: unknown; password?: { salt?: unknown } } | null;
   try {
@@ -175,7 +202,7 @@ function checkVault(raw: string): void {
     Number.isFinite(vault.iterations) &&
     vault.iterations > 0 &&
     typeof vault.password?.salt === "string";
-  if (!good) throw new AuthError(400, "Неверная шкатулка.");
+  if (!good) throw new AuthError(400, "bad_vault", "Неверная шкатулка.");
 }
 
 /** Свободно ли имя и годится ли приглашение — отказ, если нет. */
@@ -184,11 +211,12 @@ function checkFree(db: DatabaseSync, login: string, code: string): void {
     const invitation = db
       .prepare("select used_by from invitations where code = ?")
       .get<{ used_by: string | null }>(code);
-    if (!invitation) throw new AuthError(403, "Приглашение не найдено.");
-    if (invitation.used_by) throw new AuthError(403, "Приглашение уже использовано.");
+    if (!invitation) throw new AuthError(403, "invite_not_found", "Приглашение не найдено.");
+    if (invitation.used_by)
+      throw new AuthError(403, "invite_used", "Приглашение уже использовано.");
   }
   if (db.prepare("select id from people where login = ?").get(login)) {
-    throw new AuthError(409, "Такое имя уже занято.");
+    throw new AuthError(409, "login_taken", "Такое имя уже занято.");
   }
 }
 
@@ -197,17 +225,21 @@ export const MAX_SECRET = 512;
 
 export async function register(db: DatabaseSync, input: RegisterInput, now: string, open = false) {
   const login = normalizeLogin(input.login);
-  if (login.length < 3) throw new AuthError(400, "Имя входа короче трёх знаков.");
-  if (login.length > MAX_LOGIN) throw new AuthError(400, "Имя входа длиннее 64 знаков.");
-  if (CONTROL.test(login)) throw new AuthError(400, "В имени входа есть недопустимые знаки.");
-  if (!input.secret) throw new AuthError(400, "Нет секрета входа.");
+  if (login.length < 3)
+    throw new AuthError(400, "login_too_short", "Имя входа короче трёх знаков.");
+  if (login.length > MAX_LOGIN)
+    throw new AuthError(400, "login_too_long", "Имя входа длиннее 64 знаков.");
+  if (CONTROL.test(login))
+    throw new AuthError(400, "login_bad_chars", "В имени входа есть недопустимые знаки.");
+  if (!input.secret) throw new AuthError(400, "no_secret", "Нет секрета входа.");
   // Длина — до scrypt: проверка смены пароля (/auth/vault) это уже делала, а
   // регистрация и вход — нет, и мегабайтный «секрет» шёл в вывод ключа целиком.
-  if (input.secret.length > MAX_SECRET) throw new AuthError(400, "Неверный секрет входа.");
+  if (input.secret.length > MAX_SECRET)
+    throw new AuthError(400, "bad_secret", "Неверный секрет входа.");
   checkVault(input.vault);
 
   const code = input.code.trim();
-  if (code === "" && !open) throw new AuthError(403, "Приглашение не найдено.");
+  if (code === "" && !open) throw new AuthError(403, "invite_not_found", "Приглашение не найдено.");
 
   // Проверки — до scrypt, чтобы отказать быстро и не жечь на отказе
   // процессор...
@@ -237,7 +269,8 @@ export async function register(db: DatabaseSync, input: RegisterInput, now: stri
           "update invitations set used_by = ?, used_at = ? where code = ? and used_by is null"
         )
         .run(personId, now, code);
-      if (burned.changes !== 1) throw new AuthError(403, "Приглашение уже использовано.");
+      if (burned.changes !== 1)
+        throw new AuthError(403, "invite_used", "Приглашение уже использовано.");
     }
     db.exec("commit");
   } catch (error) {
@@ -256,7 +289,8 @@ export async function login(
   // Такого секрета не может быть ни у кого (см. register), и гнать его через
   // scrypt незачем. Отказ тот же, что и на неверный, — по нему не узнать,
   // заведено ли имя.
-  if (input.secret.length > MAX_SECRET) throw new AuthError(401, "Не подходит имя или пароль.");
+  if (input.secret.length > MAX_SECRET)
+    throw new AuthError(401, "bad_credentials", "Не подходит имя или пароль.");
   const person = db
     .prepare("select * from people where login = ?")
     .get<Person>(normalizeLogin(input.login));
@@ -267,7 +301,7 @@ export async function login(
   const salt = person?.secret_salt ?? randomBytes(16).toString("hex");
   const hash = (await derive(input.secret, salt)).toString("hex");
   if (!person || !sameHash(hash, person.secret_hash)) {
-    throw new AuthError(401, "Не подходит имя или пароль.");
+    throw new AuthError(401, "bad_credentials", "Не подходит имя или пароль.");
   }
 
   const session = openSession(db, person.id, input.device, now);
@@ -293,7 +327,7 @@ export function checkFullVault(raw: string): void {
       [fields.salt, fields.iv, fields.wrapped].every(
         (value) => typeof value === "string" && value.length > 0
       );
-    if (!good) throw new AuthError(400, "Неверная шкатулка.");
+    if (!good) throw new AuthError(400, "bad_vault", "Неверная шкатулка.");
   }
 }
 
@@ -321,7 +355,7 @@ export type ReplaceVaultInput = {
 
 export type ReplaceVaultOutcome =
   | { ok: true }
-  | { ok: false; status: 403 | 409; reason: string; error: string };
+  | { ok: false; status: 403 | 409; reason: string; code: string; error: string };
 
 /**
  * Заменить шкатулку и секрет входа после смены пароля на устройстве.
@@ -366,12 +400,12 @@ export async function replaceVault(
   input: ReplaceVaultInput
 ): Promise<ReplaceVaultOutcome> {
   checkFullVault(input.vault);
-  if (!input.secret) throw new AuthError(400, "Нет секрета входа.");
+  if (!input.secret) throw new AuthError(400, "no_secret", "Нет секрета входа.");
 
   const person = db
     .prepare("select secret_hash, secret_salt, vault from people where id = ?")
     .get<Pick<Person, "secret_hash" | "secret_salt" | "vault">>(personId);
-  if (!person) throw new AuthError(401, "Нужен вход.");
+  if (!person) throw new AuthError(401, "auth_required", "Нужен вход.");
 
   const stored = JSON.parse(person.vault) as {
     password?: StoredLock;
@@ -382,6 +416,7 @@ export async function replaceVault(
       ok: false,
       status: 409,
       reason: "keyless",
+      code: "vault_keyless",
       error: "У этой записи на службе нет входа по паролю — менять на службе нечего."
     };
   }
@@ -393,6 +428,7 @@ export async function replaceVault(
         ok: false,
         status: 403,
         reason: "secret",
+        code: "vault_stale_password",
         error: "Прежний пароль не подходит к службе — похоже, его уже сменили с другого устройства."
       };
     }
@@ -403,6 +439,7 @@ export async function replaceVault(
         ok: false,
         status: 403,
         reason: "recovery",
+        code: "vault_recovery_mismatch",
         error: "Код восстановления на этом устройстве не тот, что на службе."
       };
     }
@@ -425,6 +462,7 @@ export async function replaceVault(
       ok: false,
       status: 409,
       reason: "race",
+      code: "vault_race",
       error: "Пароль на службе только что сменили с другого устройства — попробуйте ещё раз."
     };
   }
@@ -512,12 +550,13 @@ export function renameDevice(
   name: string
 ): void {
   const clean = name.trim().slice(0, 80);
-  if (!clean) throw new AuthError(400, "Пустое имя устройства.");
+  if (!clean) throw new AuthError(400, "device_name_empty", "Пустое имя устройства.");
 
   const changed = db
     .prepare("update devices set name = ? where id = ? and person_id = ?")
     .run(clean, deviceId, personId);
-  if (changed.changes === 0) throw new AuthError(404, "Такого устройства у вас нет.");
+  if (changed.changes === 0)
+    throw new AuthError(404, "device_not_found", "Такого устройства у вас нет.");
 }
 
 /**
@@ -584,12 +623,18 @@ export function forgetDevice(
       const name = primary
         ? db.prepare("select name from devices where id = ?").get<{ name: string }>(primary)?.name
         : null;
-      throw new AuthError(
-        403,
-        name
-          ? `Выкидывать другие устройства можно только с главного — «${name}».`
-          : "Выкидывать другие устройства можно только с главного."
-      );
+      throw name
+        ? new AuthError(
+            403,
+            "primary_only_named",
+            `Выкидывать другие устройства можно только с главного — «${name}».`,
+            { name }
+          )
+        : new AuthError(
+            403,
+            "primary_only",
+            "Выкидывать другие устройства можно только с главного."
+          );
     }
   }
   db.prepare("delete from sessions where person_id = ? and device_id = ?").run(
@@ -610,12 +655,16 @@ export function makePrimary(
   now: string
 ): void {
   if (primaryDevice(db, who.personId, now) !== who.deviceId) {
-    throw new AuthError(403, "Главным назначает только нынешнее главное устройство.");
+    throw new AuthError(
+      403,
+      "primary_assign_only",
+      "Главным назначает только нынешнее главное устройство."
+    );
   }
   const own = db
     .prepare("select id from devices where id = ? and person_id = ?")
     .get<{ id: string }>(deviceId, who.personId);
-  if (!own) throw new AuthError(404, "Такого устройства у вас нет.");
+  if (!own) throw new AuthError(404, "device_not_found", "Такого устройства у вас нет.");
   db.prepare("update people set primary_device_id = ? where id = ?").run(deviceId, who.personId);
 }
 

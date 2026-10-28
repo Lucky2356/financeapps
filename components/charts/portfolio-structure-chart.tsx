@@ -6,6 +6,7 @@ import type { ChartDatum } from "@/types/finance";
 import { chartTooltipProps } from "@/components/charts/chart-tooltip";
 import { CHART_PALETTE as colors } from "@/lib/charts/palette";
 import { useI18n } from "@/lib/i18n/context";
+import { formatDecimal } from "@/lib/format";
 
 export function PortfolioStructureChart({ data }: { data: ChartDatum[] }) {
   const { t } = useI18n();
@@ -30,7 +31,10 @@ export function PortfolioStructureChart({ data }: { data: ChartDatum[] }) {
               <Cell key={entry.name} fill={entry.fill ?? colors[index % colors.length]} />
             ))}
           </Pie>
-          <Tooltip {...chartTooltipProps} formatter={(value) => `${Number(value).toFixed(1)}%`} />
+          <Tooltip
+            {...chartTooltipProps}
+            formatter={(value) => `${formatDecimal(Number(value), 1)}%`}
+          />
         </PieChart>
       </ResponsiveContainer>
     </div>

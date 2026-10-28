@@ -27,6 +27,7 @@ import {
   type TripSpend,
   type TripView
 } from "@/lib/trips/trips";
+import { apiText } from "@/lib/i18n/api-text";
 
 export type DeductionYearRow = { id: string; taxPaid?: number; children?: number };
 
@@ -81,7 +82,7 @@ export const CASHBACK_ACTIONS = {
   },
   copyPrevious: (state: ExtrasState, body: Body, makeId: () => string) => {
     const month = String(body.month ?? "");
-    if (!MONTH.test(month)) throw new Error("Не тот месяц.");
+    if (!MONTH.test(month)) throw new Error(apiText("api.month.invalid"));
     const copied = copyRules(state.cashbackRules, previousMonthOf(month), month, makeId);
     state.cashbackRules = [...state.cashbackRules, ...copied];
     return { copied: copied.length };
@@ -106,14 +107,14 @@ export function saveCashbackRule(
     .replace(",", ".")
     .replace(/\s/g, "");
   const limit = limitRaw ? Number(limitRaw) : undefined;
-  if (!MONTH.test(month)) throw new Error("Не тот месяц.");
-  if (!exists.account(accountId)) throw new Error("Выберите карту.");
+  if (!MONTH.test(month)) throw new Error(apiText("api.month.invalid"));
+  if (!exists.account(accountId)) throw new Error(apiText("api.cashback.pickCard"));
   if (categoryId !== ANY_CATEGORY && !exists.category(categoryId))
-    throw new Error("Выберите категорию.");
+    throw new Error(apiText("api.category.pick"));
   if (!Number.isFinite(percent) || percent <= 0 || percent > 100)
-    throw new Error("Процент — от 0,1 до 100.");
+    throw new Error(apiText("api.cashback.percentRange"));
   if (limit !== undefined && (!Number.isFinite(limit) || limit < 0))
-    throw new Error("Лимит — сумма в рублях или пусто.");
+    throw new Error(apiText("api.cashback.limit"));
 
   // Та же карта и категория в том же месяце — правка, а не второе правило.
   // Правили условие и поставили карту/категорию, у которой условие уже есть, —
@@ -181,10 +182,10 @@ export function saveTrip(state: ExtrasState, body: Body, makeId: () => string): 
       .replace(",", ".")
       .replace(/\s/g, "") || 0
   );
-  if (!name) throw new Error("Назовите поездку.");
-  if (!DAY.test(from) || !DAY.test(to)) throw new Error("Укажите даты поездки.");
-  if (to < from) throw new Error("Поездка кончается раньше, чем начинается.");
-  if (!Number.isFinite(budget) || budget < 0) throw new Error("Бюджет — сумма или ноль.");
+  if (!name) throw new Error(apiText("api.trip.name"));
+  if (!DAY.test(from) || !DAY.test(to)) throw new Error(apiText("api.trip.dates"));
+  if (to < from) throw new Error(apiText("api.trip.endsBeforeStart"));
+  if (!Number.isFinite(budget) || budget < 0) throw new Error(apiText("api.trip.budget"));
   const previous = state.trips.find((trip) => trip.id === body.id);
   const trip: Trip = {
     id: previous?.id ?? makeId(),
@@ -252,13 +253,13 @@ export function readDeductions(
 
 export function writeDeductionYear(state: ExtrasState, body: Body): unknown {
   const id = String(body.year ?? "");
-  if (!/^\d{4}$/.test(id)) throw new Error("Не тот год.");
+  if (!/^\d{4}$/.test(id)) throw new Error(apiText("api.year.invalid"));
   const taxRaw = String(body.taxPaid ?? "")
     .replace(",", ".")
     .replace(/\s/g, "");
   const taxPaid = taxRaw ? Number(taxRaw) : undefined;
   if (taxPaid !== undefined && (!Number.isFinite(taxPaid) || taxPaid < 0))
-    throw new Error("Налог — сумма в рублях или пусто.");
+    throw new Error(apiText("api.deduction.tax"));
   const childrenRaw = Number(body.children ?? 1);
   const children = Number.isFinite(childrenRaw)
     ? Math.min(Math.max(Math.floor(childrenRaw), 1), 20)

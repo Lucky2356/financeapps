@@ -63,6 +63,11 @@ export function AmountInput({
     // including inside a flex row next to a button.
     <div className="relative w-full min-w-0">
       <Input
+        // Шаг по умолчанию у поля-числа — единица: браузер не отправлял форму
+        // с копейками («15234.56 — недопустимое значение»), в том числе сумму,
+        // подставленную кнопкой «по графику» в оплате долга. Копейка — шаг
+        // любой суммы; поле, которому нужно своё, передаёт step само.
+        step="0.01"
         {...props}
         type="number"
         value={current}
