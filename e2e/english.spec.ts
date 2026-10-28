@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { fakeExchange } from "./fake-exchange";
 import { openSettled } from "./helpers";
 
 // GUARD: английская версия — целиком по-английски.
@@ -43,6 +44,9 @@ test.use({ locale: "en-US" });
 
 test("английская версия: ни одной русской строки на экранах", async ({ page }) => {
   test.setTimeout(600_000);
+  // Биржа — своя, как в проверках инвестиций: настоящая в CI то отвечает, то
+  // нет, а ответила — и имена бумаг приходят с неё, по-русски и латиницей.
+  await fakeExchange(page);
   await page.addInitScript(() => window.localStorage.setItem("app-locale", "en"));
   await page.goto("/");
   const button = page.getByRole("button", { name: "Load example" });

@@ -22,6 +22,41 @@ afterEach(() => {
   vi.resetModules(); // fresh module-level caches per test
 });
 
+describe("имя бумаги на языке интерфейса", () => {
+  const named = {
+    securities: {
+      columns: ["SECID", "SHORTNAME", "LATNAME"],
+      data: [["LKOH", "ЛУКОЙЛ", "LUKOIL"]]
+    },
+    marketdata: {
+      columns: ["SECID", "LAST", "LASTTOPREVPRICE", "MARKETPRICE"],
+      data: [["LKOH", 6900, 0.5, 6900]]
+    }
+  };
+
+  it("по-английски — латиницей (LATNAME), по-русски — как пишет биржа", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const body = String(url).includes("/history/") ? historyJson : named;
+        return { ok: true, json: async () => body } as Response;
+      })
+    );
+    const { setDisplayLocale } = await import("@/lib/i18n/display-locale");
+    const { MoexMarketDataProvider } = await import("@/services/market/MoexMarketDataProvider");
+    try {
+      setDisplayLocale("en");
+      const english = await new MoexMarketDataProvider().getSecurities();
+      expect(english.find((item) => item.ticker === "LKOH")?.name).toBe("LUKOIL");
+      setDisplayLocale("ru");
+      const russian = await new MoexMarketDataProvider().getSecurities();
+      expect(russian.find((item) => item.ticker === "LKOH")?.name).toBe("ЛУКОЙЛ");
+    } finally {
+      setDisplayLocale("ru");
+    }
+  });
+});
+
 describe("MoexMarketDataProvider", () => {
   it("parses live price, day change (LASTTOPREVPRICE) and 30d change from history", async () => {
     vi.stubGlobal(

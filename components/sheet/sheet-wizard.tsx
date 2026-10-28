@@ -124,10 +124,18 @@ export function SheetWizard({
 
   // Подсказка из учёта: средние суммы за последние месяцы. Читается, когда окно
   // открыли, — не раньше, чтобы не ходить за фактом тем, кто мастер не открывал.
+  //
+  // «Человек уже выбирал» сбрасывается только при открытии окна. Подсказка
+  // перечитывается и тогда, когда пришёл новый список категорий (экран
+  // перечитал свои данные), — и раньше вместе с ней сбрасывалось и это: уже
+  // введённые суммы молча заменялись средними («25 000» становилось «41 000»).
+  useEffect(() => {
+    if (open) touched.current = false;
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    touched.current = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoaded(false);
     const from = shiftMonth(current, -LOOKBACK);
