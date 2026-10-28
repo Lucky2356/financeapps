@@ -17,7 +17,8 @@ version, date and sections.
     codes, and the app translates them into the screen language);
   - default categories of a new install, the example data, profile names,
     the Sheet tab and its templates, investment sectors;
-  - the window title, screen reader labels and hints.
+  - the window title, screen reader labels and hints;
+  - security names, in Latin script as the exchange writes them.
 - Russian and English devices on the same data understand each other:
   “Переводы” and “Transfers”, “Импорт расходов” and “Imported expenses” are
   one category, with no duplicates.
@@ -39,6 +40,8 @@ version, date and sections.
 - Deleting a goal no longer rewrites the net worth history of past months.
 - A subscription created from the detected ones goes to the account it was
   paid from, not the first one in the list.
+- The Sheet wizard no longer replaces amounts you already typed with averages
+  when the screen reloads its data while the window is open.
 
 ### Fixed — sync
 - One record on the server that could not be opened no longer stops all your
