@@ -316,6 +316,12 @@ export function answerRequest(
 /**
  * Шаг 3: новое устройство спрашивает, ответили ли. Пока нет — null. Ответили —
  * запрос гасится, и устройство входит так же, как по прямой связке.
+ *
+ * Ответ выдаётся ОДИН раз. Повтор ответа тому же билету (на случай, если
+ * ответ потерялся по дороге) отдавал вход и ключ каждому, кто знает билет, —
+ * то есть и тому, кто сфотографировал картинку, причём тихо: настоящее
+ * устройство тоже входило, и кражу было не заметить. Потерянный ответ — редкость,
+ * и новое устройство просто покажет новую картинку.
  */
 export function pollRequest(
   db: DatabaseSync,
@@ -323,34 +329,12 @@ export function pollRequest(
   now: string,
   device: string
 ): JoinAnswer | null {
-  forgetOldAnswers(now);
   const key = ticketHash(ticket);
-  const given = ANSWERED.get(key);
-  if (given) return given.answer;
   const row = requestRow(db, ticket, now);
   if (!row.code_hash) return null;
   const gone = db
     .prepare("delete from pair_requests where ticket_hash = ? and code_hash = ?")
     .run(key, row.code_hash);
   if (gone.changes === 0) throw new AuthError(410, "code_used_short", "Этот код уже использован.");
-  const answer = enter(db, burnHash(db, row.code_hash, now), now, device);
-  ANSWERED.set(key, { answer, until: Date.parse(now) + ANSWER_KEPT_MS });
-  return answer;
-}
-
-/**
- * Ответ на опрос, уже выданный, — ещё немного живёт в памяти.
- *
- * Запрос гасится, как только ответ выдан. Потеряйся ответ по дороге (связь
- * моргнула), следующий опрос получал «код не найден», а на службе оставался
- * вход устройства, которым никто не воспользуется. Теперь повторный опрос того
- * же билета две минуты получает тот же ответ. Только в памяти: на диск вход не
- * пишется, а после перезапуска службы новое устройство просто покажет новый код.
- */
-const ANSWER_KEPT_MS = 2 * 60 * 1000;
-const ANSWERED = new Map<string, { answer: JoinAnswer; until: number }>();
-
-function forgetOldAnswers(now: string): void {
-  const moment = Date.parse(now);
-  for (const [key, entry] of ANSWERED) if (entry.until <= moment) ANSWERED.delete(key);
+  return enter(db, burnHash(db, row.code_hash, now), now, device);
 }

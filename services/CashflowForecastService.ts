@@ -4,7 +4,7 @@ import { enUS, ru } from "date-fns/locale";
 
 import { upcomingInterest } from "@/lib/accounts/interest";
 import { isSettledDebt } from "@/lib/debts/settled";
-import { storedTransactionDate } from "@/lib/transactions/date";
+import { dayAsLocalDate, storedTransactionDate } from "@/lib/transactions/date";
 import { anchorDayOf, RecurringTransactionService } from "@/services/RecurringTransactionService";
 import type {
   AccountRow,
@@ -229,6 +229,11 @@ export class CashflowForecastService {
     return events;
   }
 
+  // День события здесь и ниже читается как местный день (dayAsLocalDate), а не
+  // `new Date(...)`: события хранятся UTC-полночью своего дня, и к западу от
+  // Гринвича `new Date("2026-11-15T00:00:00.000Z")` — вечер 14-го. Платёж через
+  // 31 день попадал в «30 дней», через 8 — в точку «через неделю», а в
+  // предупреждении «уйдёт в минус к …» стояло число на день раньше.
   private buildPoints(
     startingBalance: number,
     events: ForecastEvent[],
@@ -241,7 +246,7 @@ export class CashflowForecastService {
     for (let day = 0; day <= horizonDays; day += day === 0 ? 7 : 7) {
       const date = addDays(today, day);
       const dayEvents = events.filter(
-        (event) => differenceInCalendarDays(new Date(event.date), today) <= day
+        (event) => differenceInCalendarDays(dayAsLocalDate(event.date), today) <= day
       );
       const income = dayEvents
         .filter((event) => event.type === "INCOME")
@@ -265,7 +270,7 @@ export class CashflowForecastService {
     ) {
       const date = addDays(today, horizonDays);
       const dayEvents = events.filter(
-        (event) => differenceInCalendarDays(new Date(event.date), today) <= horizonDays
+        (event) => differenceInCalendarDays(dayAsLocalDate(event.date), today) <= horizonDays
       );
       const income = dayEvents
         .filter((event) => event.type === "INCOME")
@@ -290,7 +295,8 @@ export class CashflowForecastService {
       events
         .filter(
           (event) =>
-            event.type === type && differenceInCalendarDays(new Date(event.date), today) <= days
+            event.type === type &&
+            differenceInCalendarDays(dayAsLocalDate(event.date), today) <= days
         )
         .reduce((sum, event) => sum + event.amount, 0)
     );
@@ -326,7 +332,7 @@ export class CashflowForecastService {
         id: "negative-balance",
         title: t("svc.fc.negBalance.title"),
         description: t("svc.fc.negBalance.desc", {
-          date: format(new Date(firstNegativeEvent.date), "d MMMM", { locale: dfLocale })
+          date: format(dayAsLocalDate(firstNegativeEvent.date), "d MMMM", { locale: dfLocale })
         }),
         severity: "CRITICAL"
       });

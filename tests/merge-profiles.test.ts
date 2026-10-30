@@ -105,6 +105,31 @@ describe("«Объединить»: все профили", () => {
     expect(rows.map((row) => row.description)).toEqual(["аренда офиса"]);
   });
 
+  it("открытый на ноутбуке «Бизнес» не вливается в общий «Основной»", async () => {
+    // Найдено разбором 2.8.1: открытый профиль копии ложился в открытый
+    // профиль здесь, какой бы тот ни был. «Бизнес» исчезал, а его счета
+    // оказывались в «Основном» — и уезжали на все устройства семьи.
+    const storage = new MemoryStorageAdapter();
+    const laptop = new LocalApiClient(storage);
+    await account(laptop, "Карта");
+    await laptop.post("/profiles/create", { name: "Бизнес", color: "#f59e0b" });
+    await openProfile(laptop, "Бизнес");
+    await account(laptop, "Бизнес-счёт");
+
+    const phoneStorage = new MemoryStorageAdapter();
+    const phone = new LocalApiClient(phoneStorage);
+    await account(phone, "Наличные");
+
+    const carried = await laptop.get("/backup/profiles");
+    await laptop.delete("/storage/clear");
+    await join(laptop, storage, phoneStorage);
+    await laptop.post("/backup/merge", { backup: carried });
+
+    expect(await accountNames(laptop)).toEqual(["Карта", "Наличные"]);
+    await openProfile(laptop, "Бизнес");
+    expect(await accountNames(laptop)).toEqual(["Бизнес-счёт"]);
+  });
+
   it("одноимённый профиль другого устройства получает записи добавкой", async () => {
     const storage = new MemoryStorageAdapter();
     const laptop = new LocalApiClient(storage);

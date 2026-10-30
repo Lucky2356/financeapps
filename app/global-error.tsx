@@ -9,7 +9,14 @@ import { translate, DEFAULT_LOCALE, LOCALES, type Locale } from "@/lib/i18n/cata
 // last-resort screen still follows the user's language choice.
 function readLocale(): Locale {
   if (typeof window === "undefined") return DEFAULT_LOCALE;
-  const saved = window.localStorage.getItem("app-locale");
+  // Последний экран ошибки сам падать не должен: при запрещённом хранилище
+  // localStorage бросает SecurityError.
+  let saved: string | null = null;
+  try {
+    saved = window.localStorage.getItem("app-locale");
+  } catch {
+    saved = null;
+  }
   return (LOCALES as readonly string[]).includes(saved ?? "") ? (saved as Locale) : DEFAULT_LOCALE;
 }
 

@@ -325,6 +325,22 @@ async function flushSyncWithin(limitMs = PAIRING_WAIT_MS): Promise<void> {
   }
 }
 
+/**
+ * Приехали ли общие данные — для «Объединить» при подключении.
+ *
+ * Подключение ждёт первую сверку не дольше PAIRING_WAIT_MS и идёт дальше. Но
+ * свои записи вливать в книгу, которой ещё нет, нельзя: они легли бы целиком,
+ * а приехавшая потом общая книга сливалась бы с ними без общей основы — и
+ * одноимённые «Кофе» и «Карта» задваивались бы вместо того, чтобы склеиться.
+ */
+export async function sharedBooksArrived(limitMs = 60_000): Promise<boolean> {
+  await flushSyncWithin(limitMs);
+  // «Ошибка» — не «ещё едет»: она от ожидания не пройдёт (одна ячейка не
+  // открылась), а остальное уже приехало. Держать человека из-за неё нельзя.
+  const status = syncStorage.status;
+  return status === "synced" || status === "error";
+}
+
 export function stopSync(): void {
   syncStorage.stop();
 }

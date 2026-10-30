@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useApiPageData } from "@/hooks/use-api-page-data";
+import { plannedExpenseByDay, plannedOnDay } from "@/lib/calendar/planned";
 import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/catalog";
@@ -69,16 +70,12 @@ export function TransactionsCalendar() {
     return map;
   }, [data.transactions]);
 
-  const planned = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const event of forecast.events ?? []) {
-      const key = event.date.slice(0, 10);
-      if (key <= todayKey || !key.startsWith(from.slice(0, 7)) || event.type !== "EXPENSE")
-        continue;
-      map.set(key, (map.get(key) ?? 0) + event.amount);
-    }
-    return map;
-  }, [forecast.events, from, todayKey]);
+  // С сегодняшнего дня, а не с завтрашнего: неподтверждённый платёж прогноз
+  // ставит на сегодня (см. lib/calendar/planned).
+  const planned = useMemo(
+    () => plannedExpenseByDay(forecast.events ?? [], todayKey, from.slice(0, 7)),
+    [forecast.events, from, todayKey]
+  );
 
   const maxExpense = Math.max(1, ...[...byDay.values()].map((cell) => cell.expense));
   // Неделя с понедельника: так её видят в России, и так её печатают календари.
@@ -106,9 +103,7 @@ export function TransactionsCalendar() {
   }
 
   const dayRows = (data.transactions ?? []).filter((row) => row.date.slice(0, 10) === picked);
-  const dayPlanned = (forecast.events ?? []).filter(
-    (event) => event.date.slice(0, 10) === picked && picked > todayKey
-  );
+  const dayPlanned = plannedOnDay(forecast.events ?? [], picked, todayKey);
 
   return (
     <Card data-testid="transactions-calendar">

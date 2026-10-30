@@ -314,6 +314,15 @@ export function addRealizedEvent(state: LocalState, body: unknown): RealizedInve
 }
 
 /**
+ * Количество бумаг — до шести знаков, как в summarizeLots, а не до копеек:
+ * доли биткоина и дробные акции бывают тысячными. roundMoney превращал остаток
+ * 0,004 после продажи 0,006 из 0,01 в ноль — позиция пропадала из портфеля.
+ */
+function roundQuantity(value: number): number {
+  return Number(value.toFixed(6));
+}
+
+/**
  * A sale leaves the portfolio as well as the tax ledger.
  *
  * Recording one used to do neither: the shares stayed in the holdings, the
@@ -335,7 +344,7 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
       })
     );
 
-  const left = roundMoney(position.quantity - event.quantity);
+  const left = roundQuantity(position.quantity - event.quantity);
   // The lots the sold shares came out of, oldest first. Both halves are kept:
   // what stays in the position, and what left it — the latter so deleting the
   // record can put the shares back where they were.
@@ -344,9 +353,9 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
   const taken: PurchaseLot[] = [];
   for (const lot of sortLots(position.lots ?? [])) {
     const off = Math.min(lot.quantity, Math.max(remaining, 0));
-    remaining = roundMoney(remaining - off);
+    remaining = roundQuantity(remaining - off);
     if (off > 0) taken.push({ ...lot, quantity: off });
-    const rest = roundMoney(lot.quantity - off);
+    const rest = roundQuantity(lot.quantity - off);
     if (rest > 0) kept.push({ ...lot, quantity: rest });
   }
   // What is left cost what the lots behind it cost. Selling the oldest — the
@@ -448,7 +457,7 @@ export function undoSale(state: LocalState, event: RealizedInvestmentEvent) {
   // of them would not add up to the quantity beside it.
   const lots =
     current.lots && sold.lots?.length ? sortLots([...current.lots, ...sold.lots]) : current.lots;
-  const quantity = roundMoney(current.quantity + event.quantity);
+  const quantity = roundQuantity(current.quantity + event.quantity);
   const average = lots?.length ? summarizeLots(lots).averageBuyPrice : sold.averageBuyPrice;
   state.investments = {
     ...state.investments,

@@ -54,6 +54,15 @@ type Bookkeeping = {
    * сделанные до него, читаются как раньше, без этой проверки.
    */
   stamps?: Record<SlotName, string>;
+  /**
+   * Ячейки с правками, которые ещё не уехали. Очередь на отправку живёт в
+   * памяти, и без этого списка правка, сделанная без связи, после
+   * перезапуска приложения не уезжала вовсе: запуск забирал серверное, видел
+   * «та же версия» и считал, что всё сошлось. Значок говорил «всё на
+   * сервере», а другие устройства правку не видели, пока человек не напишет
+   * здесь что-нибудь ещё.
+   */
+  dirty?: SlotName[];
 };
 
 /**
@@ -111,6 +120,13 @@ const MAX_RACES = 3;
 
 /** Повтор после ошибки, которая не про связь. */
 const ERROR_RETRY_MS = 60_000;
+/**
+ * Дальше повторы после ошибки реже — вдвое за раз, до получаса. Ошибка,
+ * которая не проходит сама (на устройстве кончилось место, книга не
+ * записывается), иначе гоняла бы с сервера всю книгу раз в минуту, сколько
+ * бы приложение ни было открыто, — а на телефоне это и трафик, и батарея.
+ */
+const ERROR_RETRY_MAX_MS = 30 * 60_000;
 
 function sealed(value: unknown): value is SealedBook {
   if (value === null || typeof value !== "object") return false;
@@ -218,8 +234,9 @@ function first(set: Set<SlotName>): SlotName | null {
   return null;
 }
 
-function firstKey(map: Map<SlotName, number>): SlotName | null {
-  for (const key of map.keys()) return key;
+/** Первая ячейка очереди, кроме отложенных в этом заходе. */
+function firstKey(map: Map<SlotName, number>, skip: Set<SlotName>): SlotName | null {
+  for (const key of map.keys()) if (!skip.has(key)) return key;
   return null;
 }
 
@@ -257,7 +274,11 @@ export class SyncingStorageAdapter implements StorageAdapter {
    * забрало бы чужое и не отправило бы своё. Время записи у двух пятых разное.
    */
   private stamps: Record<SlotName, string> = {};
+  /** Ячейки с неотправленными правками — переживают перезапуск (см. Bookkeeping). */
+  private dirty = new Set<SlotName>();
   private loaded = false;
+  /** Ошибок подряд — для паузы перед следующим повтором. */
+  private errors = 0;
   /**
    * Надо ли спросить у сервера перечень ячеек.
    *
@@ -406,6 +427,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
     // общего предка книги, которой здесь уже нет.
     if (syncableKey(key)) await this.inner.removeItem(baseKey(key));
     this.outbox.delete(key);
+    this.dirty.delete(key);
     if (this.versions[key] !== undefined) {
       delete this.versions[key];
       delete this.stamps[key];
@@ -417,6 +439,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
     await this.inner.clear();
     this.outbox.clear();
     this.inbox.clear();
+    this.dirty.clear();
     this.versions = {};
     this.stamps = {};
     await this.persist();
@@ -474,6 +497,11 @@ export class SyncingStorageAdapter implements StorageAdapter {
     for (const slot of Object.keys(this.versions)) {
       if (syncableKey(slot)) this.inbox.add(slot);
     }
+    // Правки, не уехавшие до прошлого закрытия, — снова в очередь.
+    for (const slot of this.dirty) {
+      if (syncableKey(slot) && !this.outbox.has(slot)) this.outbox.set(slot, this.writes);
+    }
+    await this.persist();
 
     // Спросить сервер, что у него вообще есть, — но НЕ здесь, а в очереди.
     // Запуск не имеет права ждать сеть: сервер, который отвечает не сразу или
@@ -666,6 +694,8 @@ export class SyncingStorageAdapter implements StorageAdapter {
     const stored = await this.inner.getItem<Bookkeeping>(SYNC_STATE_KEY);
     this.versions = stored?.v === 1 ? { ...stored.versions } : {};
     this.stamps = stored?.v === 1 && stored.stamps ? { ...stored.stamps } : {};
+    // Записанное до запуска (в памяти) и записанное в прошлый раз — вместе.
+    for (const slot of stored?.v === 1 ? (stored.dirty ?? []) : []) this.dirty.add(slot);
     this.loaded = true;
   }
 
@@ -674,7 +704,8 @@ export class SyncingStorageAdapter implements StorageAdapter {
     await this.inner.setItem<Bookkeeping>(SYNC_STATE_KEY, {
       v: 1,
       versions: this.versions,
-      stamps: this.stamps
+      stamps: this.stamps,
+      dirty: [...this.dirty]
     });
   }
 
@@ -741,22 +772,37 @@ export class SyncingStorageAdapter implements StorageAdapter {
           }
           continue;
         }
-        const outgoing = firstKey(this.outbox);
+        const outgoing = firstKey(this.outbox, stuck);
         if (outgoing === null) break;
         // Отметка снимается ДО отправки и сверяется ПОСЛЕ. Совпала — из
         // очереди уходит ровно то, что уехало. Не совпала — значит человек
         // написал, пока мы отправляли, и его запись остаётся в очереди.
         const queued = this.outbox.get(outgoing);
-        await this.send(outgoing);
-        if (this.outbox.get(outgoing) === queued) this.outbox.delete(outgoing);
+        try {
+          await this.send(outgoing);
+        } catch (error) {
+          if (isOffline(error)) throw error;
+          // Не отправилась (слияние с серверным отказало) — остаётся в
+          // очереди до следующего захода, а очередь идёт дальше. Прежде она
+          // стояла первой и роняла прогонку целиком, и ни одна другая ячейка
+          // этого устройства больше не уезжала.
+          stuck.add(outgoing);
+          continue;
+        }
+        if (this.outbox.get(outgoing) === queued) {
+          this.outbox.delete(outgoing);
+          this.dirty.delete(outgoing);
+          await this.persist();
+        }
       }
       for (const slot of [...stuck, ...later]) this.inbox.add(slot);
       if (stuck.size > 0) {
         this.set("error");
-        this.arm(ERROR_RETRY_MS);
+        this.armAfterError();
         return;
       }
       this.attempt = 0;
+      this.errors = 0;
       this.set("synced");
       if (later.size > 0) this.arm();
     } catch (error) {
@@ -769,7 +815,7 @@ export class SyncingStorageAdapter implements StorageAdapter {
         // перезапуска приложения, а значок так и висел. Ошибка сервера чаще
         // всего проходит сама (служба перезапускалась, гонка устройств), и
         // пробовать снова надо — но не часто.
-        this.arm(ERROR_RETRY_MS);
+        this.armAfterError();
       }
     }
   }
@@ -777,6 +823,12 @@ export class SyncingStorageAdapter implements StorageAdapter {
   /** Поставить ячейку в очередь на отправку, пометив её текущей записью. */
   private queue(slot: SlotName): void {
     this.outbox.set(slot, this.writes);
+    // На диск — только когда ячейка становится «грязной», а не на каждую
+    // правку: пока человек печатает, отметка уже стоит.
+    if (!this.dirty.has(slot)) {
+      this.dirty.add(slot);
+      void this.persist().catch(() => {});
+    }
   }
 
   /**
@@ -796,6 +848,13 @@ export class SyncingStorageAdapter implements StorageAdapter {
   /** Писал ли человек с отметки `mark` — или пишет прямо сейчас. */
   private touched(mark: number): boolean {
     return this.writes !== mark || this.writing > 0;
+  }
+
+  /** Повтор после ошибки: минута, две, четыре… до получаса. */
+  private armAfterError(): void {
+    const delay = Math.min(ERROR_RETRY_MS * 2 ** this.errors, ERROR_RETRY_MAX_MS);
+    if (!this.retryArmed) this.errors += 1;
+    this.arm(delay);
   }
 
   /** Ставит повтор. Задержка растёт, но не бесконечно. */

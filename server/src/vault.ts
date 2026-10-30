@@ -261,7 +261,11 @@ function tooMuch(
 
   if (limits.bytes !== null) {
     const before = existing ? costOf(slot, existing.bytes) : 0;
-    const after = mine.bytes - before + costOf(slot, Buffer.byteLength(text));
+    // Каждая запись добавляет и строку истории — она тоже в счёт. Когда
+    // история уже полна, старая строка уйдёт, и счёт выходит на строку больше
+    // настоящего: запас в сотню байт против обхода предела.
+    const after =
+      mine.bytes - before + costOf(slot, Buffer.byteLength(text)) + historyCostOf(slot, 1);
     if (after > limits.bytes) {
       return {
         code: "quota_bytes",
@@ -347,6 +351,21 @@ function costOf(slot: string, bodyBytes: number): number {
 }
 
 /**
+ * Во что обходится одна строка истории версий: имя ячейки повторяется в ней
+ * целиком, плюс номер, время и место в указателе.
+ *
+ * Историю прежде не считали вовсе, а у каждой ячейки её до HISTORY_DEPTH строк.
+ * Ячейка с телом в один байт и именем в двести знаков стоила по пределу пол-
+ * килобайта, а в базе занимала в десятки раз больше: шестьдесят четыре
+ * перезаписи — и предел по мегабайтам обходился раз в семьдесят.
+ */
+export const HISTORY_ROW_BYTES = 96;
+
+function historyCostOf(slot: string, rows: number): number {
+  return rows * (Buffer.byteLength(slot) + HISTORY_ROW_BYTES);
+}
+
+/**
  * Сколько места занимают книги человека — для страницы управления и для
  * пределов.
  *
@@ -365,5 +384,9 @@ export function usageOf(db: DatabaseSync, personId: string): { slots: number; by
     if (!isAttachment(row.slot)) slots += 1;
     bytes += costOf(row.slot, row.bytes);
   }
+  const history = db
+    .prepare("select slot, count(*) as rows from book_versions where person_id = ? group by slot")
+    .all<{ slot: string; rows: number }>(personId);
+  for (const row of history) bytes += historyCostOf(row.slot, row.rows);
   return { slots, bytes };
 }

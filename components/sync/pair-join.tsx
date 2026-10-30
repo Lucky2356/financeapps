@@ -24,7 +24,7 @@ import type { ProfilesBackup } from "@/lib/api/LocalApiClient";
 import { createFileSystemAdapter } from "@/lib/files/createFileSystemAdapter";
 import { carryOver, peekCarryOver, takeCarryOver } from "@/lib/sync/carry-over";
 import { OwnRecordsError } from "@/lib/vault/account";
-import { joinWithLink } from "@/lib/vault/runtime";
+import { joinWithLink, sharedBooksArrived } from "@/lib/vault/runtime";
 
 export function PairJoin({
   onJoined,
@@ -75,6 +75,13 @@ export function PairJoin({
     // повторить или сохранить их в файл.
     const carried = takeCarryOver();
     if (carried) {
+      // Сначала — общие данные. Связь медленная, и они ещё едут — записи
+      // ждут в памяти, а человек видит «повторить» и «сохранить в файл».
+      if (!(await sharedBooksArrived())) {
+        carryOver(carried);
+        setMergeFailed(t("sync2.merge.notArrived"));
+        return;
+      }
       try {
         await apiClient.post("/backup/merge", { backup: carried });
       } catch (cause) {
@@ -85,7 +92,7 @@ export function PairJoin({
     }
     setMergeFailed(null);
     await finish();
-  }, [finish]);
+  }, [finish, t]);
 
   async function retryMerge() {
     setBusy(true);

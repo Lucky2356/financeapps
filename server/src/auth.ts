@@ -124,9 +124,12 @@ export class AuthError extends Error {
  * личным приглашениям это не та цена, ради которой стоит усложнять вход.
  */
 export function authParams(db: DatabaseSync, login: string): { vaultMeta: string } {
+  // Имя — в общем виде, как его хранит запись и сравнивает вход. Без этого
+  // «Петя» получал «нет такого имени» на первом же шаге входа, хотя сам вход
+  // его бы пустил.
   const person = db
     .prepare("select vault from people where login = ?")
-    .get<{ vault: string }>(login);
+    .get<{ vault: string }>(normalizeLogin(login));
   if (!person)
     throw new AuthError(
       404,
@@ -472,27 +475,30 @@ export async function replaceVault(
 /**
  * Выдать билет — при входе или по коду связки.
  *
- * Устройство заводится, когда названо: без имени билет есть, а в списке
- * «Мои устройства» его нет — так входят проверки и старые сборки.
+ * Устройство заводится всегда. Раньше — только когда названо, и вход без
+ * имени давал билет, которого нет в «Моих устройствах»: ни увидеть, ни
+ * отключить, ни дождаться конца — продлевается на каждом запросе. Узнавший
+ * пароль или подсмотревший код связки оставался внутри навсегда.
  */
+/** Имя устройства, вошедшего без имени (старые сборки, проверки). */
+const UNNAMED_DEVICE = "Устройство без имени";
+
 export function openSession(
   db: DatabaseSync,
   personId: string,
   device: string | undefined,
   now: string
-): { token: string; deviceId: string | null } {
+): { token: string; deviceId: string } {
   sweepSessions(db, now);
 
   const raw = token();
   const expires = new Date(Date.parse(now) + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  let deviceId: string | null = null;
-  if (device) {
-    deviceId = id("device");
-    db.prepare(
-      "insert into devices (id, person_id, name, last_seen_at, created_at) values (?,?,?,?,?)"
-    ).run(deviceId, personId, uniqueName(db, personId, device.slice(0, 80)), now, now);
-  }
+  const deviceId = id("device");
+  const name = (device ?? "").trim().slice(0, 80) || UNNAMED_DEVICE;
+  db.prepare(
+    "insert into devices (id, person_id, name, last_seen_at, created_at) values (?,?,?,?,?)"
+  ).run(deviceId, personId, uniqueName(db, personId, name), now, now);
 
   db.prepare(
     "insert into sessions (token_hash, person_id, device_id, created_at, expires_at) values (?,?,?,?,?)"

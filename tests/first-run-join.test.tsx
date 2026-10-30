@@ -23,6 +23,7 @@ vi.mock("@/lib/vault/runtime", () => ({
   accountService: { adopt: async () => undefined },
   enableSync: async () => undefined,
   joinWithLink: async () => undefined,
+  sharedBooksArrived: async () => true,
   flushSync: async () => undefined,
   refuseSharedServerAccount: async () => undefined,
   rememberMyServer: async () => undefined,

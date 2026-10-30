@@ -52,6 +52,19 @@ export class ServerRefused extends Error {
 /** Сколько тишины в потоке событий терпеть, прежде чем счесть его мёртвым. */
 const SILENCE_LIMIT_MS = 70_000;
 
+/**
+ * Сколько поток должен прожить, чтобы его разрыв считался обычным, а пауза
+ * перед новой попыткой начиналась сначала, с секунды.
+ *
+ * Сбрасывать паузу на самом открытии нельзя: посредник, который отвечает 200 и
+ * тут же закрывает соединение, превращал подписку в стук раз в секунду — без
+ * конца, и каждое открытие ещё и тянуло сверку списка ячеек. Служба
+ * здоровается сразу (": здравствуйте"), так что и первый пришедший кусок —
+ * не признак живого потока. Двадцать секунд — меньше шага сердцебиения службы
+ * (25 с): поток, который его дождался, точно жил.
+ */
+const STABLE_STREAM_MS = 20_000;
+
 export function isRefused(error: unknown): boolean {
   return error instanceof ServerRefused;
 }
@@ -266,6 +279,8 @@ export class HttpSyncTransport implements SyncTransport {
         };
         control.signal.addEventListener("abort", stopConnection);
         let silence: ReturnType<typeof setTimeout> | undefined;
+        // Когда поток открылся; пусто — не открылся вовсе.
+        let openedAt: number | undefined;
         // Служба стучит раз в 25 секунд. Тишина дольше — соединение мертво, хотя
         // с виду открыто: телефон уснул, сменилась сеть, посредник его бросил.
         // Такой поток не рвётся сам НИКОГДА, и устройство до перезапуска ждало
@@ -286,7 +301,7 @@ export class HttpSyncTransport implements SyncTransport {
           if (!response.ok || !response.body)
             throw new Error(`поток не открылся: ${response.status}`);
 
-          attempt = 0;
+          openedAt = Date.now();
           onOpen?.();
           reader = response.body.getReader();
           const decoder = new TextDecoder();
@@ -324,6 +339,10 @@ export class HttpSyncTransport implements SyncTransport {
           control.signal.removeEventListener("abort", stopConnection);
           connection.abort();
         }
+
+        // Поток пожил — разрыв обычный, и ждать долго незачем: переподключение
+        // (и сверка при нём) — через секунду. Закрылся сразу — пауза растёт.
+        if (openedAt !== undefined && Date.now() - openedAt >= STABLE_STREAM_MS) attempt = 0;
 
         // Пауза перед новой попыткой, растущая до минуты: соединение рвётся
         // пачками, и долбить сервер в такие минуты незачем.

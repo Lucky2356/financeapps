@@ -43,6 +43,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyStore
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -139,6 +140,7 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
   override fun load(webView: WebView) {
     super.load(webView)
     remember(activity.intent)
+    forgetOldDownloads()
   }
 
   override fun onNewIntent(intent: Intent) {
@@ -424,6 +426,29 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
     return generator.generateKey()
   }
 
+  // Идёт ли уже загрузка. Каждое нажатие «Обновить» или «Повторить» заводило
+  // свой поток, и два потока писали один и тот же update.apk: установщик
+  // получал смесь двух загрузок — «ошибка при разборе пакета».
+  private val downloading = AtomicBoolean(false)
+
+  private fun updatesDir() = File(activity.cacheDir, "updates")
+
+  /**
+   * Прежний APK больше не нужен: приложение уже запущено — значит, он либо
+   * установлен, либо брошен. Лежал бы в кэше до следующего обновления — это
+   * десятки мегабайт. Недокачанный кусок — тем более.
+   */
+  private fun forgetOldDownloads() {
+    Thread {
+      try {
+        File(updatesDir(), "update.apk").delete()
+        File(updatesDir(), "update.apk.part").delete()
+      } catch (ignored: Exception) {
+        // Кэш — не данные: не удалилось сейчас, удалится в следующий раз.
+      }
+    }.start()
+  }
+
   @Command
   fun install(invoke: Invoke) {
     val args = invoke.parseArgs(InstallArgs::class.java)
@@ -431,14 +456,27 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
       invoke.reject("Обновление скачивается только со страницы выпусков приложения.")
       return
     }
+    if (!downloading.compareAndSet(false, true)) {
+      invoke.reject("Обновление уже скачивается — дождитесь конца загрузки.")
+      return
+    }
 
     // Сеть — не в главном потоке: иначе Android остановит приложение.
     Thread {
       try {
-        val dir = File(activity.cacheDir, "updates")
+        val dir = updatesDir()
         dir.mkdirs()
         val apk = File(dir, "update.apk")
-        download(args.url, apk, args.onProgress)
+        // Сначала во временный файл, и только целиком скачанный — под своё имя:
+        // оборванная загрузка не оставляет «битый» update.apk на месте целого.
+        val part = File(dir, "update.apk.part")
+        try {
+          download(args.url, part, args.onProgress)
+          if (apk.exists()) apk.delete()
+          if (!part.renameTo(apk)) throw Exception("Не удалось сохранить обновление.")
+        } finally {
+          if (part.exists()) part.delete()
+        }
 
         val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", apk)
         val intent = Intent(Intent.ACTION_VIEW)
@@ -454,6 +492,10 @@ class InstallerPlugin(private val activity: Activity) : Plugin(activity) {
         }
       } catch (error: Exception) {
         invoke.reject(say(error))
+      } finally {
+        // Файл уже на месте (или загрузка не удалась) — следующее нажатие
+        // вправе начать заново.
+        downloading.set(false)
       }
     }.start()
   }

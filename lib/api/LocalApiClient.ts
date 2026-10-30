@@ -333,11 +333,18 @@ export class LocalApiClient implements ApiClient {
     return this.serialize(async () => {
       const fresh = await this.state();
       const invData = buildInvestmentsPage(fresh, market);
+      // В книгу — имена на языке биржи, а не экрана (см. storedName): иначе
+      // русское и английское устройства переписывали бы их друг у друга.
+      const forBook = <Row extends { ticker: string; name: string }>(row: Row): Row => {
+        const { storedName, ...rest } = row as Row & { storedName?: string };
+        const neutral = storedName ?? market.byTicker.get(row.ticker)?.storedName;
+        return neutral ? ({ ...rest, name: neutral } as Row) : (rest as Row);
+      };
       fresh.investments = {
         ...fresh.investments,
-        securities: invData.securities,
-        watchlist: invData.watchlist,
-        portfolio: invData.portfolio,
+        securities: invData.securities.map(forBook),
+        watchlist: invData.watchlist.map(forBook),
+        portfolio: invData.portfolio.map(forBook),
         structure: invData.structure,
         sectorStructure: invData.sectorStructure,
         assetStructure: invData.assetStructure
@@ -604,12 +611,16 @@ export class LocalApiClient implements ApiClient {
   /**
    * Все профили копии — по своим местам.
    *
-   * Текущий профиль копии ложится в текущий профиль здесь, как и раньше: это
-   * то, с чем человек работал, и туда он и посмотрит после подключения.
-   * Остальные ищут себе пару среди здешних профилей — по id (так совпадают
+   * Каждый профиль копии ищет себе пару среди здешних — по id (так совпадают
    * «Основной» двух устройств и профили, уже приехавшие прошлым объединением),
    * затем по имени. Нашёлся — записи добавляются к нему; нет — профиль
    * заводится заново, с тем же id, именем и цветом.
+   *
+   * Открытый профиль копии — так же, как остальные. Прежде он ложился в
+   * открытый профиль здесь, какой бы тот ни был: открыт на ноутбуке «Бизнес»
+   * или «Пример» — и при подключении его счета и операции вливались в общий
+   * «Основной» и разъезжались по всем устройствам семьи, а сам профиль
+   * пропадал. «Основной» в «Основной» попадает и так — по общему id.
    *
    * Сначала читается ВСЁ, и только потом пишется: копия, у которой третий
    * профиль не прочитался, не должна успеть влить первые два, а потом упасть —
@@ -624,9 +635,7 @@ export class LocalApiClient implements ApiClient {
     let added = 0;
     try {
       for (const { profile, incoming } of entries) {
-        const target =
-          profile.id === bundle.activeProfileId ? activeId : await this.profileForMerge(profile);
-        added += await this.mergeIntoProfile(target, incoming);
+        added += await this.mergeIntoProfile(await this.profileForMerge(profile), incoming);
       }
     } finally {
       // Книги пишутся через «текущий профиль» — по пути он переключался. Вернуть

@@ -1,5 +1,109 @@
 [
   {
+    "version": "2.8.1",
+    "date": "2026-10-30",
+    "summary": "🔒 A security review of the sync service, sync that survives a restart, correct dates in any time zone, and fast statement import.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Fixed — sync and “Merge”",
+        "items": [
+          {
+            "lead": "An edit made offline is sent after a restart.",
+            "text": "Before, it waited for the next edit on that device while the badge said “everything is on the server”."
+          },
+          {
+            "lead": "“Merge” no longer mixes profiles.",
+            "text": "A “Business” or “Example” profile that was open when joining was poured into the shared main profile and spread to every device. Now each profile finds its match or arrives whole."
+          },
+          {
+            "lead": "",
+            "text": "“Merge” waits for the shared data to arrive: on a slow connection, categories and accounts are no longer duplicated."
+          },
+          {
+            "lead": "",
+            "text": "One damaged record with a local edit no longer blocks sending the rest; an error that doesn't go away retries less and less often instead of pulling the data from the server every minute."
+          },
+          {
+            "lead": "",
+            "text": "Russian and English devices no longer overwrite each other's security names."
+          },
+          {
+            "lead": "",
+            "text": "A change stream that closes right away no longer reconnects every second."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — money and dates",
+        "items": [
+          {
+            "lead": "“Safe to spend today” and the calendar count payments due today",
+            "text": "and overdue unconfirmed ones — the rent no longer disappears from the budget."
+          },
+          {
+            "lead": "",
+            "text": "The forecast, net worth trend, limit suggestion, cashback, account reconciliation and portfolio chart no longer shift dates by a day west of Greenwich or around midnight."
+          },
+          {
+            "lead": "",
+            "text": "Selling a fractional quantity of a security no longer wipes out the rest."
+          },
+          {
+            "lead": "",
+            "text": "Family goal shares and alert thresholds accept a decimal comma; account balances accept “1 000,50”; an empty alert value is an error, not zero."
+          },
+          {
+            "lead": "",
+            "text": "Percentages no longer show as “-0 %”."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — sync service",
+        "items": [
+          {
+            "lead": "",
+            "text": "Every sign-in shows up in the device list and can be revoked; a revoked device and signing out close the change stream at once."
+          },
+          {
+            "lead": "",
+            "text": "An answer to QR pairing is handed out only once."
+          },
+          {
+            "lead": "",
+            "text": "Someone else's wrong passwords no longer lock the owner out; IPv6 limits count by network, not by address."
+          },
+          {
+            "lead": "",
+            "text": "Version history counts toward the storage quota; concurrent writes are limited; a deeply nested request is refused instead of failing the service."
+          }
+        ]
+      },
+      {
+        "title": "Improved",
+        "items": [
+          {
+            "lead": "",
+            "text": "Importing a statement without a category column is dozens of times faster (1000 rows: 0.2 s instead of 15 s)."
+          },
+          {
+            "lead": "",
+            "text": "Android: pressing “Update” again doesn't start a second download; the downloaded APK is removed after the update."
+          },
+          {
+            "lead": "",
+            "text": "Desktop: a failed update download is shown with a “Retry” button."
+          },
+          {
+            "lead": "",
+            "text": "Blocked browser storage no longer crashes the app."
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.8.0",
     "date": "2026-10-27",
     "summary": "🌍 A complete English version: every screen, message, category and example is in English. Plus a big review: what you record no longer disappears on restart, backups come back in full, and sync no longer stalls on one damaged record.",
@@ -659,39 +763,6 @@
           {
             "lead": "Clear names in the conflict dialog:",
             "text": "each section has its own name (“Sheet month”, “Trip”, “Family member”…), an account, category and member are shown by name rather than by number; service fields (column, order, sheet) are hidden. The dialog title is no longer repeated twice."
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "version": "2.5.2",
-    "date": "2026-10-03",
-    "summary": "🐞 More fixes: a trip doesn't count debt payments, old transfers are deleted in full, and cashback isn't earned on paying off a loan.",
-    "kind": "fixes",
-    "sections": [
-      {
-        "title": "Fixed",
-        "items": [
-          {
-            "lead": "Trip:",
-            "text": "a debt payment and a transfer between your own accounts no longer get the trip tag or count towards its spending."
-          },
-          {
-            "lead": "Transfers recorded before 1.10",
-            "text": "(only a tag in the description) are also deleted and restored from the trash in full."
-          },
-          {
-            "lead": "“What if”:",
-            "text": "only debts with a minimum payment are subtracted separately; paying off a credit card without one stays a regular expense instead of disappearing."
-          },
-          {
-            "lead": "Bank notifications:",
-            "text": "a rouble expense is not recorded to a foreign-currency account."
-          },
-          {
-            "lead": "Cashback:",
-            "text": "paying off a loan with a card doesn't count as a purchase."
           }
         ]
       }

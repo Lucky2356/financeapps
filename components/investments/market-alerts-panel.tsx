@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/context";
 import { evaluateAlerts, tickersToFetch, type MarketAlert } from "@/lib/market/alerts";
 import { SMARTLAB_FIELDS, type SmartLabFundamentals } from "@/lib/market/smartlab";
+import { parseDecimalInput } from "@/lib/number-input";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Input } from "@/components/ui/input";
@@ -57,9 +58,12 @@ export function MarketAlertsPanel() {
 
   async function addAlert() {
     const cleanTicker = ticker.trim().toUpperCase();
-    const numeric = Number(value.replace(",", "."));
+    // Пустое поле — не ноль: `Number("")` давал 0, и сигнал вставал на нуле.
+    // Ноль и минус, набранные явно, допустимы: у чистого долга и прибыли
+    // порог «< 0» — обычный вопрос.
+    const numeric = parseDecimalInput(value);
     if (!cleanTicker) return toast.error(t("alerts.err.ticker"));
-    if (!Number.isFinite(numeric)) return toast.error(t("alerts.err.value"));
+    if (numeric === null) return toast.error(t("alerts.err.value"));
     try {
       const created = await apiClient.post("/market/alerts", {
         ticker: cleanTicker,

@@ -13,7 +13,20 @@
 
 import type { ServerResponse } from "node:http";
 
-type Listener = { personId: string; res: ServerResponse };
+/**
+ * Кто слушает: человек, его устройство и билет, с которым поток открыли. Билет
+ * и устройство нужны, чтобы поток закрылся вместе с ними: устройство, которое
+ * выкинули из «Моих устройств» (или вышедшее), раньше продолжало получать
+ * имена книг и время правок по уже открытому потоку — сколько угодно долго.
+ */
+type Listener = { personId: string; deviceId: string | null; token: string; res: ServerResponse };
+
+/**
+ * Сколько потоков держать одному человеку. Устройств у человека — несколько,
+ * а не сотни; сверх этого закрываются самые старые, иначе один билет мог
+ * открыть их тысячи и держать дескрипторы службы.
+ */
+const MAX_STREAMS_PER_PERSON = 20;
 
 export class EventBus {
   private readonly listeners = new Set<Listener>();
@@ -33,7 +46,12 @@ export class EventBus {
    * видит «подключено», всё работает, и только новое с другого устройства
    * появляется лишь после того, как он сам что-нибудь сделает.
    */
-  attach(personId: string, res: ServerResponse, origin: string): void {
+  attach(
+    who: { personId: string; deviceId: string | null; token: string },
+    res: ServerResponse,
+    origin: string
+  ): void {
+    const { personId } = who;
     res.writeHead(200, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache, no-transform",
@@ -45,9 +63,35 @@ export class EventBus {
     });
     res.write(": здравствуйте\n\n");
 
-    const listener: Listener = { personId, res };
+    const listener: Listener = { ...who, res };
     this.listeners.add(listener);
     res.on("close", () => this.listeners.delete(listener));
+
+    const own = [...this.listeners].filter((item) => item.personId === personId);
+    for (const extra of own.slice(0, Math.max(0, own.length - MAX_STREAMS_PER_PERSON))) {
+      this.drop(extra);
+    }
+  }
+
+  /** Закрыть потоки, открытые с этим билетом (выход). */
+  closeToken(token: string): void {
+    for (const listener of this.listeners) if (listener.token === token) this.drop(listener);
+  }
+
+  /** Закрыть потоки этого устройства (его выкинули из списка). */
+  closeDevice(personId: string, deviceId: string): void {
+    for (const listener of this.listeners) {
+      if (listener.personId === personId && listener.deviceId === deviceId) this.drop(listener);
+    }
+  }
+
+  private drop(listener: Listener): void {
+    this.listeners.delete(listener);
+    try {
+      listener.res.end();
+    } catch {
+      /* уже закрыт */
+    }
   }
 
   /** Всем устройствам этого человека: такая-то ячейка доросла до такой-то версии. */

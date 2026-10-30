@@ -16,6 +16,7 @@ export const en: Messages = {
   "api.account.notFound": "There's no such account.",
   "api.account.pick": "Choose an account.",
   "api.account.pickActive": "Choose an existing active account.",
+  "api.account.balanceNumber": "The account balance must be a number.",
   "api.ledger.pickAccountCategory": "Choose an existing account and category.",
   "api.split.minParts": "A split needs at least two parts.",
   "api.split.partInvalid": "Each part needs a category and an amount greater than zero.",
@@ -123,6 +124,8 @@ export const en: Messages = {
   // Хранилище
   "api.storage.locked": "The data is locked — enter the password.",
   "api.storage.aborted": "The write was cancelled.",
+  "api.storage.blocked":
+    "The data is open in another tab or app window. Close it and reload the page.",
   "api.storage.rosterUnreadable":
     "Couldn't tell whose data to open: this device's list of people couldn't be read.",
   // Пароль, шкатулка, код восстановления
@@ -239,6 +242,8 @@ export const en: Messages = {
   "api.server.bad_address": "Invalid address.",
   "api.server.request_too_large": "The request is too large.",
   "api.server.body_not_json": "The request body isn't JSON.",
+  "api.server.body_too_deep": "The request is nested too deeply.",
+  "api.server.busy": "The server is busy. Try again later.",
   "api.server.body_not_object": "The request body isn't a JSON object.",
   "api.server.too_many_attempts": "Too many attempts. Wait a minute.",
   "api.server.too_many_signups": "Too many new accounts from this address. Try again later.",

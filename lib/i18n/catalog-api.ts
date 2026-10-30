@@ -22,6 +22,7 @@ export const ru: Messages = {
   "api.account.notFound": "Такого счёта нет.",
   "api.account.pick": "Выберите счёт.",
   "api.account.pickActive": "Выберите существующий активный счёт.",
+  "api.account.balanceNumber": "Остаток на счёте — число.",
   "api.ledger.pickAccountCategory": "Выберите существующий счет и категорию.",
   "api.split.minParts": "Разделить можно минимум на две части.",
   "api.split.partInvalid": "У каждой части нужны категория и сумма больше нуля.",
@@ -128,6 +129,8 @@ export const ru: Messages = {
   // Хранилище
   "api.storage.locked": "Данные заперты — введите пароль.",
   "api.storage.aborted": "Запись отменена.",
+  "api.storage.blocked":
+    "Данные открыты в другой вкладке или окне приложения. Закройте их и обновите страницу.",
   "api.storage.rosterUnreadable":
     "Не удалось понять, чьи данные открывать: список людей устройства не прочитался.",
   // Пароль, шкатулка, код восстановления
@@ -245,6 +248,8 @@ export const ru: Messages = {
   "api.server.bad_address": "Неверный адрес.",
   "api.server.request_too_large": "Слишком большой запрос.",
   "api.server.body_not_json": "Тело запроса — не JSON.",
+  "api.server.body_too_deep": "Слишком глубокая вложенность в запросе.",
+  "api.server.busy": "Служба занята. Попробуйте позже.",
   "api.server.body_not_object": "Тело запроса — не объект JSON.",
   "api.server.too_many_attempts": "Слишком много попыток. Подождите минуту.",
   "api.server.too_many_signups": "Слишком много новых записей с этого адреса. Попробуйте позже.",

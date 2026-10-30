@@ -23,6 +23,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { compareToIndex } from "@/lib/market/compare-series";
 import { historyRangeStart } from "@/lib/market/history-range";
 import { combinePortfolioValue } from "@/lib/market/portfolio-value-series";
+import { todayDay } from "@/lib/transactions/date";
 import type { InvestmentData, PortfolioRow } from "@/types/finance";
 
 const RANGES = [
@@ -101,7 +102,9 @@ export function PortfolioValueChart({
     };
   }, [mode, range, portfolio.length]);
 
-  const since = historyRangeStart(range).toISOString().slice(0, 10);
+  // Снимки портфеля записаны местным днём (isoDay), и граница — тоже местный
+  // день: UTC-строка к востоку от Гринвича отрезала на день больше.
+  const since = todayDay(historyRangeStart(range));
   const real = useMemo(
     () => (history ?? []).filter((snapshot) => snapshot.date >= since),
     [history, since]

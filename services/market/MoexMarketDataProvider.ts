@@ -356,6 +356,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         results.push({
           ticker,
           name: securityName(ticker, row),
+          storedName: row?.name || meta?.name || ticker,
           assetKind: "STOCK",
           // One table decides the industry for every security, curated or not,
           // so the sector chart cannot end up speaking two vocabularies at once.
@@ -584,6 +585,7 @@ export class MoexMarketDataProvider implements MarketDataService {
         return {
           ticker,
           name,
+          storedName: row.name || meta?.name || ticker,
           assetKind: row.assetKind,
           sector: sectorForTicker(ticker, row.assetKind),
           risk: meta?.risk ?? "MEDIUM",

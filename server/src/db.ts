@@ -36,6 +36,9 @@ export type BookRow = {
 const SCHEMA = `
   pragma journal_mode = wal;
   pragma foreign_keys = on;
+  -- Занятую базу (резервная копия, sqlite3 в соседнем окне) ждать до пяти
+  -- секунд, а не отказывать сразу с SQLITE_BUSY и 500.
+  pragma busy_timeout = 5000;
 
   create table if not exists people (
     id          text primary key,
