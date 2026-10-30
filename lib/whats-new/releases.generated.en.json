@@ -1,5 +1,93 @@
 [
   {
+    "version": "2.8.2",
+    "date": "2026-10-30",
+    "summary": "📊 Totals on the operations screen match Analytics with no extra checkboxes, the Sheet is closer to Excel, and the window opens the way you closed it.",
+    "kind": "features",
+    "sections": [
+      {
+        "title": "Fixed — operations",
+        "items": [
+          {
+            "lead": "The total above the list covers the whole filter, not just the page.",
+            "text": "A month and category showed one total here and another in Analytics, and they only matched with “On one page” ticked. That checkbox is no longer needed and is gone. Transfers between your own accounts are left out of the total, as in Analytics (unless you filter by account or by transfers)."
+          },
+          {
+            "lead": "",
+            "text": "Bulk category changes, rules and AI no longer wipe an operation's tags."
+          },
+          {
+            "lead": "",
+            "text": "A page past the end of the list (after deleting or narrowing a filter) no longer shows an empty list with no buttons."
+          },
+          {
+            "lead": "",
+            "text": "Deleting one part of a split purchase now says that all its parts will be deleted; bulk delete behaves the same way."
+          },
+          {
+            "lead": "",
+            "text": "The from/to amount filter and amount search work in the base currency."
+          },
+          {
+            "lead": "",
+            "text": "A saved filter no longer remembers the page number."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — figures across screens",
+        "items": [
+          {
+            "lead": "",
+            "text": "The breakdown dialog (dashboard, plan vs actual) no longer adds dollars to roubles."
+          },
+          {
+            "lead": "",
+            "text": "The “Cards / Cash / Savings” tiles on Accounts are in the base currency."
+          },
+          {
+            "lead": "",
+            "text": "“Income” and “Spending this month” on the dashboard open the month's operations, not all-time ones."
+          },
+          {
+            "lead": "",
+            "text": "Month comparison no longer adds payments recorded in advance to the running month."
+          },
+          {
+            "lead": "",
+            "text": "Category trends in Analytics leave transfers out; cashback is computed from amounts in the base currency; the totals at the top of Budgets follow the selected month."
+          }
+        ]
+      },
+      {
+        "title": "Sheet",
+        "items": [
+          {
+            "lead": "Delete a sheet with the cross on its tab",
+            "text": ", rename it with a double click. The main sheet is linked to your plan — its menu explains why it can't be deleted."
+          },
+          {
+            "lead": "The free sheet works like Excel:",
+            "text": "cell references in formulas: =A1*2, =SUM(B1:B10), AVERAGE, COUNT; references follow their cells when rows are inserted or removed; range selection — Shift + arrows, Shift + click, dragging, a column letter or row number — with the sum, average and count shown below; Ctrl+C / Ctrl+X / Ctrl+V as a block, Delete clears the selection, Ctrl+Z and an “Undo” button; a formula bar with the cell address; “Row above” and “Column left”."
+          },
+          {
+            "lead": "The budget sheet",
+            "text": "selects ranges too and shows the sum of the selection; Delete, Ctrl+C and Ctrl+V work on the whole block."
+          }
+        ]
+      },
+      {
+        "title": "Window",
+        "items": [
+          {
+            "lead": "",
+            "text": "A window closed maximized opens maximized again."
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.8.1",
     "date": "2026-10-30",
     "summary": "🔒 A security review of the sync service, sync that survives a restart, correct dates in any time zone, and fast statement import.",
@@ -701,68 +789,6 @@
           {
             "lead": "Animations:",
             "text": "amounts on Home, in Accounts, “Safe to spend” and goals glide to the new value and briefly change colour (up — green, down — red); a just-recorded transaction is highlighted in Transactions; the details of “Safe to spend” and “until payday” expand smoothly; a reached goal gets a green bar and a “Goal reached” mark; the “+” button responds to taps. The system “reduce motion” setting turns all of it off."
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "version": "2.6.0",
-    "date": "2026-10-03",
-    "summary": "✨ “It's a transfer?”, bank reconciliation, year in review, balance history, month comparison, “will I make it to payday”, shared family goals, more detailed subscriptions and a monthly PDF report.",
-    "kind": "features",
-    "sections": [
-      {
-        "title": "New",
-        "items": [
-          {
-            "lead": "“It's a transfer?”",
-            "text": "(Transactions): pairs of “left one of your accounts — arrived on another” for the same amount on the same or the next day are linked into a transfer with one button — and stop counting as income and expense. This fixes the doubling after importing a bank statement."
-          },
-          {
-            "lead": "Bank reconciliation",
-            "text": "(Accounts → the scales next to an account): the balance from the bank, the difference and the latest transactions; if nothing turns up, the difference is recorded as one transaction."
-          },
-          {
-            "lead": "Year in review",
-            "text": "(Reports): earned, spent, saved, top categories, best and worst month, biggest expense, growth of money and cushion, compared with last year."
-          },
-          {
-            "lead": "Balance history",
-            "text": "(Accounts): a chart at the end of each month — all money, the cushion or one account."
-          },
-          {
-            "lead": "Compare months",
-            "text": "(Analytics): two months side by side by category."
-          },
-          {
-            "lead": "Will I make it to payday",
-            "text": "(Home): days to payday, money on cards, payments before it and how much you can spend per day; payday comes from your history or is set by you."
-          },
-          {
-            "lead": "Shared family goals",
-            "text": "(Goals): who topped up, members' shares (equal or custom), who is behind their share."
-          },
-          {
-            "lead": "More detailed subscriptions:",
-            "text": "how much you paid over the year, “price went up”, “Turn off” with a hint of how much it will save."
-          },
-          {
-            "lead": "Monthly report (PDF)",
-            "text": "(Reports): one page — totals, plan vs actual by category, large expenses."
-          }
-        ]
-      },
-      {
-        "title": "Fixed",
-        "items": [
-          {
-            "lead": "A sync conflict with nothing to choose no longer appears.",
-            "text": "If only service stamps differ, or it is a service record without a single field you entered (for example, a Sheet month), the merge decides by itself and loses nothing. Such empty conflicts (“Record”, “Mismatch: 0”) accumulated earlier disappear on their own."
-          },
-          {
-            "lead": "Clear names in the conflict dialog:",
-            "text": "each section has its own name (“Sheet month”, “Trip”, “Family member”…), an account, category and member are shown by name rather than by number; service fields (column, order, sheet) are hidden. The dialog title is no longer repeated twice."
           }
         ]
       }
