@@ -12,6 +12,8 @@
 // счёта нет). Прежде счёт входил в повтор, и кнопка упрямо писала на «свой»
 // счёт, даже когда в форме стоял другой.
 
+import { todayDay } from "@/lib/transactions/date";
+
 export type FavoriteSource = {
   type: "INCOME" | "EXPENSE";
   date: string;
@@ -85,7 +87,11 @@ export function suggestFavorites(
   prefs: FavoritePrefs,
   today: Date = new Date()
 ): Favorite[] {
-  const since = new Date(today.getTime() - WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+  // Граница окна — местный календарный день: UTC-строка в Москве ночью ещё
+  // вчерашняя, и в «два месяца» попадал лишний, 61-й день.
+  const since = todayDay(
+    new Date(today.getFullYear(), today.getMonth(), today.getDate() - WINDOW_DAYS)
+  );
   const hidden = new Set(prefs.hidden.map(sameKey));
   const groups = new Map<string, { item: FavoriteSource; count: number; last: string }>();
   for (const row of rows) {

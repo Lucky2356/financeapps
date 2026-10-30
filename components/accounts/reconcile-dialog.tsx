@@ -27,6 +27,7 @@ import type { TransactionsPageData } from "@/lib/data";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { readMine, writeMine } from "@/lib/storage/mine";
+import { todayDay } from "@/lib/transactions/date";
 
 type Account = { id: string; name: string; balance: number; currency: string };
 
@@ -77,7 +78,9 @@ export function ReconcileDialog({
 
   function markReconciled() {
     if (!account) return;
-    writeMine(reconciledKey(account.id), new Date().toISOString().slice(0, 10));
+    // Сегодняшний местный день: `toISOString()` в Москве до трёх ночи записывал
+    // вчерашнее число.
+    writeMine(reconciledKey(account.id), todayDay());
   }
 
   async function record() {

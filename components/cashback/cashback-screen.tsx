@@ -32,8 +32,11 @@ import { apiClient } from "@/lib/api/client";
 import type { CashbackPageData } from "@/lib/api/local/extras";
 import { ANY_CATEGORY, type CashbackRule } from "@/lib/cashback/cashback";
 import { formatCurrency } from "@/lib/format";
+import { todayDay } from "@/lib/transactions/date";
 
-const thisMonth = () => new Date().toISOString().slice(0, 7);
+// Местный месяц, а не UTC: в Москве до трёх ночи 1-го `toISOString()` ещё
+// давал прошлый месяц, и экран открывался на чужих правилах кэшбэка.
+const thisMonth = () => todayDay().slice(0, 7);
 
 const EMPTY: CashbackPageData = {
   month: "",

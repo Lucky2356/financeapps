@@ -11,6 +11,7 @@ import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/catalog";
 import { intlLocale } from "@/lib/i18n/display-locale";
 import { isDataLabel } from "@/lib/i18n/data-text";
 import { isoDay, snapshotAsOf, type NetWorthSnapshot } from "@/lib/net-worth-snapshots";
+import { dayAsLocalDate } from "@/lib/transactions/date";
 import { roundMoney } from "@/lib/utils";
 
 // Net worth split into its components for the dashboard breakdown. Same inputs
@@ -83,8 +84,11 @@ export function buildNetWorthTrend(params: {
     // made every earlier point higher than it really was — the chart of someone
     // paying off a loan sloped downwards while they were getting richer.
     .filter((tx) => !tx.liabilityId)
+    // День операции — местный (dayAsLocalDate): хранится UTC-полночью, и в
+    // Нью-Йорке `new Date("2026-10-01T00:00:00.000Z")` — вечер 30 сентября.
+    // Зарплата 1-го уходила в сентябрь, и точка сентября уже её включала.
     .map((tx) => ({
-      time: new Date(tx.date).getTime(),
+      time: dayAsLocalDate(tx.date).getTime(),
       delta: tx.type === "INCOME" ? tx.amount : -tx.amount
     }));
 

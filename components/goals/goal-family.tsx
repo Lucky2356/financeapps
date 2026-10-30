@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import type { GoalFamily } from "@/lib/family/goal-shares";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { parseDecimalInput } from "@/lib/number-input";
 import { cn } from "@/lib/utils";
 
 export function GoalFamilyLine({
@@ -115,8 +116,10 @@ export function GoalSharesFields({ shares }: { shares?: Record<string, number> }
   const payload = custom
     ? Object.fromEntries(
         members
-          .map((member) => [member.id, Number(values[member.id] ?? 0)] as const)
-          .filter(([, value]) => Number.isFinite(value) && value > 0)
+          // «66,7» с запятой — обычная доля: `Number` давал NaN, и она молча
+          // выпадала из payload.
+          .map((member) => [member.id, parseDecimalInput(values[member.id] ?? "") ?? 0] as const)
+          .filter(([, value]) => value > 0)
       )
     : {};
   return (

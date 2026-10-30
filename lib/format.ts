@@ -98,10 +98,11 @@ export function formatPercent(
   maximumFractionDigits = 1,
   locale: Locale = displayLocale()
 ) {
+  // −0,04 % округляется до нуля, и без withoutNegativeZero выходило «-0 %».
   return new Intl.NumberFormat(intlLocale(locale), {
     style: "percent",
     maximumFractionDigits
-  }).format(value / 100);
+  }).format(withoutNegativeZero(value, maximumFractionDigits) / 100);
 }
 
 // Даты операций хранятся полночью UTC своего дня (см. storedTransactionDate),

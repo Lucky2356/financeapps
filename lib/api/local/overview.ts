@@ -137,11 +137,15 @@ export function allowancePage(state: LocalState): Allowance {
   const expenses = monthRows.filter((row) => row.type === "EXPENSE");
   const finance = financeInput(state, true);
   const previous = finance.monthlyCashflow.slice(0, -1).filter((item) => item.income > 0);
+  // Сегодняшний день — тоже «впереди»: прогноз ставит на сегодня и платёж с
+  // таким сроком, и просроченный, но не подтверждённый (CashflowForecastService
+  // кладёт его сегодняшним числом). Деньги со счёта ещё не ушли, в «потрачено»
+  // их нет, и при `> today` аренда пропадала из бюджета целиком.
   const upcoming = forecastPage(state)
     .events.filter(
       (event) =>
         event.type === "EXPENSE" &&
-        event.date.slice(0, 10) > today &&
+        event.date.slice(0, 10) >= today &&
         event.date.slice(0, 10) <= monthEnd
     )
     .reduce((total, event) => total + event.amount, 0);

@@ -15,6 +15,21 @@ import { ratesOf, sumInBase } from "@/lib/api/local/money";
 import { dataText } from "@/lib/i18n/data-text";
 import { recordDebtApplied, upsertTransaction } from "@/lib/api/local/ledger";
 
+/**
+ * Сумма долга из формы: «1 000,50» с пробелами и запятой, пусто — ноль. Не
+ * число — понятный отказ здесь: NaN доходил до проверки книги, и человек видел
+ * «значение не подходит — поле liabilities.0.balance».
+ */
+function debtAmount(raw: string | undefined): number {
+  const value = Number(
+    String(raw ?? "")
+      .replace(/[\s\u00a0]/g, "")
+      .replace(",", ".") || 0
+  );
+  if (!Number.isFinite(value)) throw new Error(apiText("api.plan.amountRange"));
+  return Math.max(value, 0);
+}
+
 export function upsertLiability(state: LocalState, body: unknown, method: "POST" | "PUT") {
   const input = toFormObject(body);
   const kindInput = input.kind ?? "";
@@ -23,7 +38,7 @@ export function upsertLiability(state: LocalState, body: unknown, method: "POST"
       ? kindInput
       : "OTHER"
   ) as LiabilityRow["kind"];
-  const balance = Math.max(Number(input.balance ?? 0), 0);
+  const balance = debtAmount(input.balance);
   const dueDayRaw = Number(input.dueDay);
   const stored: Omit<LiabilityRow, "progress"> = {
     id: method === "PUT" && input.id ? input.id : id("debt"),
@@ -31,9 +46,9 @@ export function upsertLiability(state: LocalState, body: unknown, method: "POST"
     name: (input.name?.trim() || dataText("data.debt.new")).slice(0, 100),
     kind,
     balance,
-    originalAmount: Math.max(Number(input.originalAmount ?? 0), balance),
+    originalAmount: Math.max(debtAmount(input.originalAmount), balance),
     interestRate: Math.max(Number(input.interestRate ?? 0), 0),
-    minPayment: Math.max(Number(input.minPayment ?? 0), 0),
+    minPayment: debtAmount(input.minPayment),
     ...(Number.isInteger(dueDayRaw) && dueDayRaw >= 1 && dueDayRaw <= 31
       ? { dueDay: dueDayRaw }
       : {}),
