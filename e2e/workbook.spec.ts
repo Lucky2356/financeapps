@@ -36,15 +36,28 @@ test.describe("ПК", () => {
     await page.keyboard.press("Tab");
     await expect(page.locator('td[data-cell="A2"]')).toHaveText("Ипотека");
 
+    // Ссылка на клетку — как в Excel; строка формулы показывает саму формулу.
+    const a3 = page.locator('td[data-cell="A3"]');
+    await a3.click();
+    await page.keyboard.type("=A1*2");
+    await page.keyboard.press("Enter");
+    await expect(a3).toHaveText("6 000");
+    await a3.click();
+    await expect(page.getByTestId("free-formula-bar")).toHaveValue("=A1*2");
+
+    // Выделение A1:A3 — сумма выделенного внизу, как в строке состояния Excel.
+    await a1.click();
+    await a3.click({ modifiers: ["Shift"] });
+    await expect(page.getByTestId("free-stats")).toContainText("Сумма: 9 000");
+
     // На главный лист и обратно — всё на месте.
     await tabs.getByTestId("sheet-tab").first().click();
     await expect(page.getByTestId("free-sheet")).toHaveCount(0);
     await tabs.getByTestId("sheet-tab").filter({ hasText: "Расчёты" }).click();
     await expect(page.locator('td[data-cell="A1"]')).toHaveText("3 000");
 
-    // Удалить — уходит в корзину целиком.
-    await page.getByTestId("sheet-tab-menu").click();
-    await page.getByRole("dialog").getByRole("button", { name: "Удалить лист" }).click();
+    // Удалить — крестиком прямо на вкладке; уходит в корзину целиком.
+    await tabs.getByRole("button", { name: "Удалить лист «Расчёты»" }).click();
     await page
       .getByRole("alertdialog")
       .or(page.getByRole("dialog"))

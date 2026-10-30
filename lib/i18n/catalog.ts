@@ -2220,7 +2220,18 @@ const ru: Messages = {
   "wb.addCol": "Столбец",
   "wb.removeRow": "Убрать строку {row}",
   "wb.removeCol": "Убрать столбец {col}",
-  "wb.freeHint": "Двойное нажатие или любая буква — ввод. Ctrl+V — вставить блок из Excel.",
+  "wb.freeHint":
+    "Выделение — Shift со стрелками или протяжкой, Ctrl+C / Ctrl+V / Ctrl+Z. Формулы: =A1+B1, =СУММ(A1:A10).",
+  "wb.insertRow": "Строка выше",
+  "wb.insertCol": "Столбец левее",
+  "wb.undo": "Отменить",
+  "wb.formulaBar": "Содержимое клетки {cell}",
+  "wb.formulaBarHint": "Число, текст или формула: =A1*2, =СУММ(B1:B10)",
+  "wb.formulaBarPick": "Выберите клетку",
+  "wb.stats": "Сумма: {sum} · Среднее: {average} · Чисел: {count}",
+  "wb.removeTab": "Удалить лист «{name}»",
+  "wb.mainLocked":
+    "Главный лист связан с планом — его можно переименовать и сдвинуть, но не удалить.",
   "wb.formulaError": "Формулу не получилось посчитать",
   "wb.importAllTitle": "В файле листов: {count}",
   "wb.importAllLead":

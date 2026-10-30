@@ -7,7 +7,7 @@
 // выделенная клетка, отмена и прочее состояние одного листа не переезжали на
 // другой.
 
-import { ChevronLeft, ChevronRight, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -112,7 +112,8 @@ export function Workbook() {
     try {
       await apiClient.post("/sheets", { action: "remove", id: tab.id });
       await reload();
-      open("main");
+      // Убрали открытый лист — на главный; соседний — остаёмся, где были.
+      if (tab.id === current.id) open("main");
     } catch (cause) {
       toast.error((cause as Error).message);
     }
@@ -135,6 +136,10 @@ export function Workbook() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => open(tab.id)}
+                // Двойное нажатие — переименовать, как вкладку в Excel.
+                onDoubleClick={() =>
+                  setDialog({ mode: "rename", id: tab.id, name: tab.name || t("wb.main") })
+                }
                 className={cn(
                   "flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-sm transition-colors",
                   active
@@ -161,6 +166,22 @@ export function Workbook() {
                   data-testid="sheet-tab-menu"
                 >
                   <MoreHorizontal className="size-4" />
+                </button>
+              ) : null}
+              {/* Удалить — прямо на вкладке, а не в меню открытого листа: туда
+                  не догадывались заглянуть, и казалось, что листы не удаляются
+                  вовсе. Главный лист связан с планом и не удаляется — крестика
+                  у него нет, а в его меню сказано почему. */}
+              {tab.id !== "main" ? (
+                <button
+                  type="button"
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground/70 hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={t("wb.removeTab", { name: tab.name })}
+                  title={t("wb.removeTab", { name: tab.name })}
+                  onClick={() => void remove(tab)}
+                  data-testid="sheet-tab-remove"
+                >
+                  <X className="size-3.5" />
                 </button>
               ) : null}
             </div>
@@ -255,7 +276,9 @@ export function Workbook() {
                   {t("wb.moveRight")}
                   <ChevronRight className="size-4" />
                 </Button>
-                {dialog.id !== "main" ? (
+                {dialog.id === "main" ? (
+                  <p className="w-full text-xs text-muted-foreground">{t("wb.mainLocked")}</p>
+                ) : (
                   <Button
                     type="button"
                     size="sm"
@@ -270,7 +293,7 @@ export function Workbook() {
                     <Trash2 className="size-4" />
                     {t("wb.remove")}
                   </Button>
-                ) : null}
+                )}
               </div>
             ) : null}
             <DialogFooter>

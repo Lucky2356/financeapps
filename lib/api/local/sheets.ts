@@ -17,6 +17,7 @@
 // обратно на место. Код таблицы и не знает, что листов много.
 
 import { evaluate } from "@/lib/sheet/formula";
+import { evaluateFreeGrid, shiftReferences } from "@/lib/sheet/free-grid";
 import {
   importSheet,
   readSheet,
@@ -206,13 +207,18 @@ export function readFree(state: BookState, sheetId: string): FreeSheetData {
   const cells = (state.freeCells ?? []).filter((cell) => cell.sheetId === sheetId);
   const rows = Math.max(row?.rows ?? FREE_ROWS, ...cells.map((cell) => cell.r + 1), 1);
   const cols = Math.max(row?.cols ?? FREE_COLS, ...cells.map((cell) => cell.c + 1), 1);
+  // Клетки считаются все вместе: формула может ссылаться на соседние.
+  const shown = evaluateFreeGrid(
+    new Map(cells.map((cell) => [`${cell.r}|${cell.c}`, cell.input])),
+    freeValue
+  );
   return {
     rows,
     cols,
     cells: cells
       .map((cell) => {
-        const shown = freeValue(cell.input);
-        return { r: cell.r, c: cell.c, input: cell.input, value: shown.value, error: shown.error };
+        const value = shown.get(`${cell.r}|${cell.c}`) ?? { value: null, error: false };
+        return { r: cell.r, c: cell.c, input: cell.input, value: value.value, error: value.error };
       })
       .sort((a, b) => a.r - b.r || a.c - b.c)
   };
@@ -323,22 +329,37 @@ function setFreeCells(state: BookState, sheetId: string, cells: Body[]) {
   }
 }
 
-/** Убрать строку или столбец свободного листа — остальные сдвигаются. */
-function removeFreeLine(state: BookState, sheetId: string, axis: "r" | "c", index: number) {
+/**
+ * Убрать (`delta` −1) или вставить (+1) строку или столбец свободного листа —
+ * остальные сдвигаются, а ссылки в формулах идут за своими клетками, как в
+ * Excel (shiftReferences). Без этого «=СУММ(B1:B5)» после удаления строки 2
+ * молча считал бы на одну клетку больше.
+ */
+function shiftFreeLine(
+  state: BookState,
+  sheetId: string,
+  axis: "r" | "c",
+  index: number,
+  delta: 1 | -1
+) {
+  if (!Number.isFinite(index) || index < 0) return;
   const other = (state.freeCells ?? []).filter((cell) => cell.sheetId !== sheetId);
   const mine = (state.freeCells ?? [])
-    .filter((cell) => cell.sheetId === sheetId && cell[axis] !== index)
+    .filter((cell) => cell.sheetId === sheetId && !(delta === -1 && cell[axis] === index))
     .map((cell) => {
-      if (cell[axis] < index) return cell;
-      const moved = { ...cell, [axis]: cell[axis] - 1 };
+      const input = shiftReferences(cell.input, axis, index, delta);
+      if (cell[axis] < index) return input === cell.input ? cell : { ...cell, input };
+      const moved = { ...cell, input, [axis]: cell[axis] + delta };
       return { ...moved, id: `${sheetId}|${moved.r}|${moved.c}` };
-    });
+    })
+    .filter((cell) => cell.r < MAX_FREE_ROWS && cell.c < MAX_FREE_COLS);
   state.freeCells = [...other, ...mine];
   state.sheets = (state.sheets ?? []).map((item) => {
     if (item.id !== sheetId) return item;
     const key = axis === "r" ? "rows" : "cols";
+    const limit = axis === "r" ? MAX_FREE_ROWS : MAX_FREE_COLS;
     const size = item[key] ?? (axis === "r" ? FREE_ROWS : FREE_COLS);
-    return { ...item, [key]: Math.max(1, size - 1) };
+    return { ...item, [key]: Math.min(limit, Math.max(1, size + delta)) };
   });
 }
 
@@ -407,11 +428,19 @@ export const WORKBOOK_ACTIONS = {
     return readFree(state, sheetId);
   }),
   removeFreeRow: onFreeSheet((state, sheetId, body) => {
-    removeFreeLine(state, sheetId, "r", Math.trunc(Number(body.index)));
+    shiftFreeLine(state, sheetId, "r", Math.trunc(Number(body.index)), -1);
     return readFree(state, sheetId);
   }),
   removeFreeCol: onFreeSheet((state, sheetId, body) => {
-    removeFreeLine(state, sheetId, "c", Math.trunc(Number(body.index)));
+    shiftFreeLine(state, sheetId, "c", Math.trunc(Number(body.index)), -1);
+    return readFree(state, sheetId);
+  }),
+  insertFreeRow: onFreeSheet((state, sheetId, body) => {
+    shiftFreeLine(state, sheetId, "r", Math.trunc(Number(body.index)), 1);
+    return readFree(state, sheetId);
+  }),
+  insertFreeCol: onFreeSheet((state, sheetId, body) => {
+    shiftFreeLine(state, sheetId, "c", Math.trunc(Number(body.index)), 1);
     return readFree(state, sheetId);
   }),
   start: onBudgetSheet(SHEET_ACTIONS.start),

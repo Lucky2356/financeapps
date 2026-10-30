@@ -2202,7 +2202,18 @@ export const en: Messages = {
   "wb.addCol": "Column",
   "wb.removeRow": "Remove row {row}",
   "wb.removeCol": "Remove column {col}",
-  "wb.freeHint": "Double-tap or any key to type. Ctrl+V pastes a block from Excel.",
+  "wb.freeHint":
+    "Select with Shift + arrows or by dragging; Ctrl+C / Ctrl+V / Ctrl+Z. Formulas: =A1+B1, =SUM(A1:A10).",
+  "wb.insertRow": "Row above",
+  "wb.insertCol": "Column left",
+  "wb.undo": "Undo",
+  "wb.formulaBar": "Contents of cell {cell}",
+  "wb.formulaBarHint": "A number, text or formula: =A1*2, =SUM(B1:B10)",
+  "wb.formulaBarPick": "Select a cell",
+  "wb.stats": "Sum: {sum} · Average: {average} · Count: {count}",
+  "wb.removeTab": "Delete sheet “{name}”",
+  "wb.mainLocked":
+    "The main sheet is linked to your plan — you can rename and move it, but not delete it.",
   "wb.formulaError": "This formula could not be calculated",
   "wb.importAllTitle": "Sheets in the file: {count}",
   "wb.importAllLead":
