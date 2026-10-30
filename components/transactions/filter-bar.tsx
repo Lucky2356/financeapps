@@ -30,6 +30,7 @@ import {
   periodIsUnset,
   periodPresetOf,
   periodRange,
+  savedFilterParams,
   withFilter,
   type ChipKind,
   type PeriodPresetId
@@ -793,7 +794,7 @@ function SavedFilters({
     if (!trimmed) return;
     persist([
       ...saved.filter((filter) => filter.name !== trimmed),
-      { name: trimmed, params: currentParams }
+      { name: trimmed, params: savedFilterParams(currentParams) }
     ]);
     setName("");
     setNaming(false);
@@ -811,7 +812,7 @@ function SavedFilters({
           <button
             type="button"
             className="hover:text-primary"
-            onClick={() => onApply(filter.params)}
+            onClick={() => onApply(savedFilterParams(filter.params))}
           >
             {filter.name}
           </button>

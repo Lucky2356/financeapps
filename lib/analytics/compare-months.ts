@@ -1,9 +1,11 @@
 // «Сравнение месяцев»: два месяца бок о бок по каждой статье.
 //
 // Что выросло, что упало и на сколько — в рублях и процентах, крупные
-// изменения первыми. Если первый месяц ещё идёт, второй берётся до того же
+// изменения первыми. Если первый месяц ещё идёт, оба берутся до сегодняшнего
 // числа: иначе 5-го числа любой месяц «тратит меньше прошлого» просто потому,
-// что не кончился.
+// что не кончился. Режется и сам идущий месяц — записанная заранее аренда на
+// 25-е иначе попадала в него, но не в прошлый, и 12-го «расходы выросли в
+// тридцать раз», хотя «Итоги месяца» на тот же день показывали поровну.
 //
 // Чистая функция: экран и проверки зовут одно и то же.
 
@@ -31,7 +33,7 @@ export type CompareLine = {
 export type MonthComparison = {
   a: string;
   b: string;
-  /** Первый месяц ещё идёт — второй взят до этого числа. */
+  /** Первый месяц ещё идёт — оба взяты до этого числа. */
   asOfDay: number | null;
   expense: CompareLine[];
   income: CompareLine[];
@@ -44,12 +46,13 @@ function lines(
   rows: readonly CompareRow[],
   a: string,
   b: string,
-  inB: (row: CompareRow) => boolean
+  inWindow: (row: CompareRow) => boolean
 ) {
   const map = new Map<string, CompareLine>();
   for (const row of rows) {
+    if (!inWindow(row)) continue;
     const month = row.date.slice(0, 7);
-    const side = month === a ? "a" : month === b && inB(row) ? "b" : null;
+    const side = month === a ? "a" : month === b ? "b" : null;
     if (!side) continue;
     const line = map.get(row.categoryId) ?? {
       categoryId: row.categoryId,
@@ -85,18 +88,20 @@ export function compareMonths(input: {
   today: string;
 }): MonthComparison {
   const asOfDay = input.a === input.today.slice(0, 7) ? Number(input.today.slice(8, 10)) : null;
-  const inB = (row: CompareRow) => asOfDay === null || Number(row.date.slice(8, 10)) <= asOfDay;
+  // Одно окно на обе стороны: до сегодняшнего числа — и в идущем месяце, и в прошлом.
+  const inWindow = (row: CompareRow) =>
+    asOfDay === null || Number(row.date.slice(8, 10)) <= asOfDay;
   const expense = lines(
     input.rows.filter((row) => row.type === "EXPENSE"),
     input.a,
     input.b,
-    inB
+    inWindow
   );
   const income = lines(
     input.rows.filter((row) => row.type === "INCOME"),
     input.a,
     input.b,
-    inB
+    inWindow
   );
   const sum = (list: CompareLine[], side: "a" | "b") =>
     round(list.reduce((total, line) => total + line[side], 0));

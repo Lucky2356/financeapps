@@ -245,6 +245,11 @@ export type AccountRow = {
   type: string;
   balance: number;
   currency: string;
+  /**
+   * Остаток в основной валюте — только у счёта в другой валюте (как
+   * `baseAmount` у операции). Складывать — его: `baseBalance ?? balance`.
+   */
+  baseBalance?: number;
   /** Annual interest rate in percent (savings accounts). */
   interestRate?: number;
   /** How often that interest is added to the balance. */

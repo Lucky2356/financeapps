@@ -37,6 +37,7 @@ export function AnalyticsClient({ initialData }: { initialData: AnalyticsData })
     <>
       <AnalyticsView
         data={data}
+        includeTransfers={includeTransfers}
         transfers={<TransfersToggle checked={includeTransfers} onChange={setIncludeTransfers} />}
       />
       <CompareMonthsCard currency={data.currency} />

@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 
+import { makeRowAmount } from "@/components/transactions/transaction-manager/helpers";
 import { ResponsiveTable, type ResponsiveColumn } from "@/components/ui/responsive-table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api/client";
 import { formatCurrency, formatDate } from "@/lib/format";
+import type { TransactionsPageData } from "@/lib/data";
 import { useI18n } from "@/lib/i18n/context";
+import { countableAmount } from "@/lib/transactions/base-amount";
+import { isTransfer } from "@/lib/transactions/transfers";
 import type { TransactionRow } from "@/types/finance";
 
 /**
@@ -51,6 +55,7 @@ export function AmountDrilldown({
 }) {
   const { t } = useI18n();
   const [rows, setRows] = useState<TransactionRow[] | null>(null);
+  const [accounts, setAccounts] = useState<TransactionsPageData["accounts"]>([]);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -62,9 +67,13 @@ export function AmountDrilldown({
         const data = await apiClient.get(`/transactions?${query}${query ? "&" : ""}limit=all`);
         if (cancelled) return;
         setFailed(false);
+        setAccounts(data.accounts);
+        // Перевод узнаётся и по старой метке в описании (записанные до 1.10):
+        // по одному transferId такие строки попадали в список, а итог над
+        // ним их не считал.
         setRows(
           data.transactions.filter(
-            (row) => (!excludeTransfers || !row.transferId) && (!keep || keep(row))
+            (row) => (!excludeTransfers || !isTransfer(row)) && (!keep || keep(row))
           )
         );
       } catch {
@@ -81,7 +90,11 @@ export function AmountDrilldown({
     };
   }, [open, query, excludeTransfers, keep]);
 
-  const total = (rows ?? []).reduce((sum, row) => sum + row.amount, 0);
+  // Итог — в основной валюте, как и число, которое расшифровывают: 100 $ —
+  // это их цена в рублях, а не «100». Строка — как в «Учёте»: в валюте счёта,
+  // с пересчётом в скобках.
+  const total = (rows ?? []).reduce((sum, row) => sum + countableAmount(row), 0);
+  const rowAmount = makeRowAmount(accounts, currency);
 
   // Three states with nothing to draw a table for, and the one line that says
   // which. Named rather than nested into a chain of ternaries: the order of the
@@ -115,11 +128,7 @@ export function AmountDrilldown({
     {
       header: t("drill.amount"),
       align: "right",
-      cell: (row) => (
-        <span className="num whitespace-nowrap font-medium">
-          {formatCurrency(row.amount, currency)}
-        </span>
-      )
+      cell: (row) => <span className="num whitespace-nowrap font-medium">{rowAmount(row)}</span>
     }
   ];
 

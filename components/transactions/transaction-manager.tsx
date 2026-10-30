@@ -105,11 +105,18 @@ function TransactionList() {
         />
         <CardContent>
           {visibleTransactions.length === 0 ? (
-            <EmptyState
-              icon={ReceiptText}
-              title={t("tx.empty.title")}
-              description={t("tx.empty.desc")}
-            />
+            <>
+              <EmptyState
+                icon={ReceiptText}
+                title={t("tx.empty.title")}
+                description={t("tx.empty.desc")}
+              />
+              {/* Пустая страница не первая — кнопки листания остаются: без них
+                  с неё некуда было уйти, кроме как править адрес руками. */}
+              {pageData.pagination.page > 1 ? (
+                <TransactionPagination data={pageData} searchParams={searchParams} />
+              ) : null}
+            </>
           ) : (
             <>
               {selectedIds.size > 0 ? (

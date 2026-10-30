@@ -143,11 +143,18 @@ export function upsertTransaction(
     (typeof input.liabilityId === "string" && input.liabilityId) || previous?.liabilityId;
   // Метка длиннее 40 знаков записывалась, а схема книги её не принимает: при
   // следующем запуске пропадала вся операция, а остаток счёта — с ней.
-  const tags = String(input.tags ?? "")
-    .split(",")
-    .map((value) => value.trim().slice(0, 40).trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  //
+  // Правка без поля `tags` (массовая смена категории, правила, ИИ) метки не
+  // трогает — берутся прежние, как фото и номер перевода. Пустая строка —
+  // это «снять все метки», её форма правки и присылает.
+  const tags =
+    method === "PUT" && input.tags === undefined
+      ? [...(previous?.tags ?? [])]
+      : String(input.tags ?? "")
+          .split(",")
+          .map((value) => value.trim().slice(0, 40).trim())
+          .filter(Boolean)
+          .slice(0, 12);
   // Идёт поездка — новая трата получает её метку сама (lib/trips). Плановые
   // платежи (аренда, подписки), платёж по долгу и перевод между своими
   // счетами — не поездка: ипотека, внесённая из отпуска, в его бюджет не
@@ -836,9 +843,22 @@ export function undoLastImport(state: LocalState) {
 
 export function accountsPage(state: LocalState): AccountsPageData {
   const accounts = state.accounts.filter((account) => !account.isArchived);
+  const rates = ratesOf(state);
   return {
     source: "database",
-    accounts,
+    // Счёт в другой валюте несёт ещё и остаток в основной: плитки «Карты»,
+    // «Наличные», «Накопления» складывали 100 $ с рублями как 100 ₽. Копия, а
+    // не правка: строки книги этого поля не хранят.
+    accounts: accounts.map((account) =>
+      account.currency === state.currency
+        ? account
+        : {
+            ...account,
+            baseBalance: roundMoney(
+              convert(account.balance, account.currency, state.currency, rates)
+            )
+          }
+    ),
     totalBalance: sumInBase(state, accounts),
     currency: state.currency
   };
@@ -848,14 +868,17 @@ export function transactionsPage(
   state: LocalState,
   searchParams: URLSearchParams
 ): TransactionsPageData {
-  const page = Math.max(1, Number(searchParams.get("page") || 1));
+  // Номер страницы и её размер — из адреса, а адрес пишет кто угодно: на
+  // `page=abc` или `limit=xyz` получался NaN, и список выходил пустым.
+  const askedPage = Math.floor(Number(searchParams.get("page") || 1));
+  const askedLimit = Math.floor(Number(searchParams.get("limit") || 20));
   // `limit=all` hands back the whole filtered ledger. Exporting and looking
   // for duplicates need every row, and asking for a page of twenty and
   // treating it as the ledger is how a CSV export came out twenty rows long.
   const wantsEverything = searchParams.get("limit") === "all";
   const limit = wantsEverything
     ? Number.MAX_SAFE_INTEGER
-    : Math.min(100, Math.max(10, Number(searchParams.get("limit") || 20)));
+    : Math.min(100, Math.max(10, Number.isFinite(askedLimit) ? askedLimit : 20));
   const criteria = criteriaFromParams(searchParams);
   const filters = {
     from: criteria.from,
@@ -866,20 +889,28 @@ export function transactionsPage(
     q: criteria.q,
     minAmount: criteria.minAmount,
     maxAmount: criteria.maxAmount,
-    page,
+    page: 1,
     limit
   };
   // The rows keep the amount as it was recorded — a dollar operation reads
   // as dollars — and carry what it is worth in the base currency beside it,
   // so the totals above the list add up like every other total in the app.
   const context = baseAmountContext(state.accounts, ratesOf(state), state.currency);
+  const amountOf = (row: TransactionRow) => baseAmountOf(row, context);
   // Порядок — по выбору (`sort`), а «крупные сверху» сравнивают в основной
-  // валюте: доллары нельзя ставить рядом с рублями «как есть».
+  // валюте: доллары нельзя ставить рядом с рублями «как есть». Фильтр «от/до»
+  // и поиск суммой — тоже: иначе 100 $ (9 000 ₽) не находились по «от 5 000».
   const filtered = sortTransactions(
-    state.transactions.filter((transaction) => matchesCriteria(transaction, criteria)),
+    state.transactions.filter((transaction) => matchesCriteria(transaction, criteria, amountOf)),
     parseSort(searchParams.get("sort")),
-    (row) => baseAmountOf(row, context)
+    amountOf
   );
+  // Страница за концом списка (удалили операции, сузили фильтр, старая
+  // ссылка) показывала пустой список без кнопок — вернуться было нечем.
+  // Номер прижимается к последней странице, и в ответе — уже он.
+  const lastPage = Math.max(1, Math.ceil(filtered.length / limit));
+  const page = Math.min(lastPage, Math.max(1, Number.isFinite(askedPage) ? askedPage : 1));
+  filters.page = page;
   const start = (page - 1) * limit;
 
   // Итоги — по всему отфильтрованному, а не по странице (см. TransactionsPageData).
@@ -890,13 +921,14 @@ export function transactionsPage(
   // месяц. Строки переводов в списке остаются; в итог они входят, когда о них
   // и спрашивают: фильтр «переводы», категория переводов — или фильтр по
   // счёту, для которого перевод с него — настоящий уход денег.
-  const transferCategory = state.categories.find((category) =>
-    isTransferCategoryLabel(category.label)
-  );
+  // Категорий переводов две — расходная и доходная, — и выбрана может быть любая.
+  const transferCategoryIds = state.categories
+    .filter((category) => isTransferCategoryLabel(category.label))
+    .map((category) => category.id);
   const countTransfers =
     criteria.type === "TRANSFER" ||
     Boolean(criteria.accountId) ||
-    Boolean(transferCategory && criteria.categoryIds?.includes(transferCategory.id));
+    transferCategoryIds.some((id) => criteria.categoryIds?.includes(id));
   const totals = { income: 0, expense: 0 };
   for (const row of filtered) {
     if (!countTransfers && isTransfer(row)) continue;

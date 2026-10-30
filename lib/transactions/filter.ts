@@ -4,6 +4,7 @@
 // date/type/category/account/text filters with an amount range and multiple
 // categories.
 
+import { countableAmount } from "@/lib/transactions/base-amount";
 import { matchesSearch } from "@/lib/transactions/search";
 import { isTransfer } from "@/lib/transactions/transfers";
 
@@ -31,6 +32,8 @@ export type FilterableTransaction = {
   date: string;
   type: string;
   amount: number;
+  /** Сумма в основной валюте — у строк из API со счёта в другой валюте. */
+  baseAmount?: number;
   description?: string | null;
   /** Present on transfer halves recorded since 1.10.0. */
   transferId?: string;
@@ -66,10 +69,18 @@ export function criteriaFromParams(params: URLSearchParams): TxFilterCriteria {
   };
 }
 
-/** True when a transaction passes every active criterion. */
-export function matchesCriteria(
-  transaction: FilterableTransaction,
-  criteria: TxFilterCriteria
+/**
+ * True when a transaction passes every active criterion.
+ *
+ * Суммы «от/до» сравниваются в основной валюте — как сортировка, итоги и
+ * подписи фильтров: 100 $ — это 9 000 ₽, и «от 5 000» обязано их найти.
+ * Строки из API несут `baseAmount`; книга на устройстве его не хранит, и
+ * сервер передаёт пересчёт сам (`amountOf`).
+ */
+export function matchesCriteria<T extends FilterableTransaction>(
+  transaction: T,
+  criteria: TxFilterCriteria,
+  amountOf: (transaction: T) => number = countableAmount
 ): boolean {
   const date = transaction.date.slice(0, 10);
   if (criteria.from && date < criteria.from) return false;
@@ -90,11 +101,12 @@ export function matchesCriteria(
     if (!criteria.categoryIds.includes(transaction.category.id)) return false;
   }
   if (criteria.accountId && transaction.account.id !== criteria.accountId) return false;
+  const base = amountOf(transaction);
   if (typeof criteria.minAmount === "number" && !Number.isNaN(criteria.minAmount)) {
-    if (transaction.amount < criteria.minAmount) return false;
+    if (base < criteria.minAmount) return false;
   }
   if (typeof criteria.maxAmount === "number" && !Number.isNaN(criteria.maxAmount)) {
-    if (transaction.amount > criteria.maxAmount) return false;
+    if (base > criteria.maxAmount) return false;
   }
   if (criteria.tag) {
     const wanted = criteria.tag.toLowerCase();
@@ -104,8 +116,15 @@ export function matchesCriteria(
   if (criteria.q) {
     const haystack =
       `${transaction.description ?? ""} ${transaction.account.label} ${transaction.category.label} ${(transaction.tags ?? []).join(" ")}`.toLowerCase();
-    // Слова и суммы: «кофе >300», «1000-3000», «5к» — см. search.ts.
-    if (!matchesSearch(criteria.q, haystack, transaction.amount)) return false;
+    // Слова и суммы: «кофе >300», «1000-3000», «5к» — см. search.ts. Сумму
+    // ищут и в основной валюте, и как записана: «9000» и «100» обе находят 100 $.
+    const q = criteria.q;
+    if (
+      !matchesSearch(q, haystack, base) &&
+      (base === transaction.amount || !matchesSearch(q, haystack, transaction.amount))
+    ) {
+      return false;
+    }
   }
   return true;
 }
@@ -115,5 +134,5 @@ export function filterTransactions<T extends FilterableTransaction>(
   transactions: T[],
   criteria: TxFilterCriteria
 ): T[] {
-  return transactions.filter((transaction) => matchesCriteria(transaction, criteria));
+  return transactions.filter((transaction) => matchesCriteria<T>(transaction, criteria));
 }

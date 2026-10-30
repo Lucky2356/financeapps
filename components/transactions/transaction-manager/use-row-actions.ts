@@ -15,11 +15,13 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import type { useI18n } from "@/lib/i18n/context";
 import { isTransfer } from "@/lib/transactions/transfers";
 
-import type { TransactionRow } from "@/components/transactions/transaction-manager/helpers";
+import {
+  splitPartCounts,
+  type TransactionRow
+} from "@/components/transactions/transaction-manager/helpers";
 
 /** Правка и удаление одной операции — то, что делается из строки списка. */
 export function useTransactionRowActions({
-  pageData,
   run,
   confirm,
   confirmFutureDate,
@@ -77,21 +79,25 @@ export function useTransactionRowActions({
   // the dialog names the operation so it is clear WHICH one is about to go.
   async function removeTransaction(transaction: TransactionsPageData["transactions"][number]) {
     // Часть разделённой покупки удаляется вместе с остальными частями: одна
-    // половина чека без другой — это уже неправда о покупке.
+    // половина чека без другой — это уже неправда о покупке. Части считаются
+    // по всей книге: на странице их бывает видно одну, и диалог описывал одну
+    // строку, а удалялся весь чек. Не удалось сосчитать — говорится «все
+    // части», без числа.
     const group = transaction.splitGroupId;
-    const parts = group
-      ? pageData.transactions.filter((tx) => tx.splitGroupId === group).length
-      : 1;
+    const parts = group ? (await splitPartCounts([group]))?.get(group) : 1;
+    const date = formatDate(transaction.date);
     const ok = await confirm({
       title: t("tx.delete.title"),
       description:
-        group && parts > 1
-          ? t("tx.delete.split", { count: parts, date: formatDate(transaction.date) })
-          : t("tx.delete.desc", {
-              category: transaction.category.label,
-              amount: rowAmount(transaction),
-              date: formatDate(transaction.date)
-            }),
+        group && parts === undefined
+          ? t("tx.delete.splitAll", { date })
+          : group && parts !== undefined && parts > 1
+            ? t("tx.delete.split", { count: parts, date })
+            : t("tx.delete.desc", {
+                category: transaction.category.label,
+                amount: rowAmount(transaction),
+                date
+              }),
       destructive: true,
       confirmLabel: t("common.delete")
     });

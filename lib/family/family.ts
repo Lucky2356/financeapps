@@ -14,6 +14,8 @@
 //
 // Чистые функции: экран «Семья» и проверки зовут одно и то же.
 
+import { isTransfer } from "@/lib/transactions/transfers";
+
 export type Member = {
   id: string;
   name: string;
@@ -29,6 +31,7 @@ export type FamilyTransaction = {
   memberId?: string;
   shared?: boolean;
   transferId?: string;
+  description?: string | null;
 };
 
 export type Settlement = { id: string; from: string; to: string; amount: number; date: string };
@@ -56,7 +59,11 @@ export type FamilyPicture = {
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
-const isSpending = (row: FamilyTransaction) => row.type === "EXPENSE" && !row.transferId;
+// Перевод между своими счетами — не трата. Узнаём его, как и везде, по
+// transferId или по пометке [transfer:…] в описании (переводы до 1.10.0).
+const isSpending = (row: FamilyTransaction) =>
+  row.type === "EXPENSE" &&
+  !isTransfer({ description: row.description ?? null, transferId: row.transferId });
 
 /** На кого делится общая трата: кто был в семье в её день, и всегда — кто платил. */
 function sharersOf(members: Member[], row: FamilyTransaction): Member[] {
