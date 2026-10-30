@@ -452,10 +452,13 @@ function MoreFilters({
   // The list's own default is 20, which was not among the sizes on offer — so
   // the control sat there empty until something was picked. Whatever size is
   // actually in force is listed, even when it is not one of the three.
+  //
+  // Галочки «На одной странице» больше нет: она была нужна только затем, чтобы
+  // сумма над списком сходилась с аналитикой, а итоги теперь считаются по всем
+  // операциям под фильтром, сколько бы их ни было на странице. `limit=all` из
+  // старой ссылки или сохранённого фильтра список понимает по-прежнему; размер
+  // страницы тогда просто не выбран, и выбор любого возвращает разбивку.
   const pageSize = params.get("limit") ?? String(defaultLimit);
-  // "all" is a size the list understands but the picker cannot show, so the
-  // checkbox below owns that state and the picker is left inert while it holds.
-  const onePage = pageSize === "all";
   const pageSizes = [...new Set([pageSize, "20", "50", "100"])]
     .filter((size) => Number(size) > 0)
     .sort((a, b) => Number(a) - Number(b));
@@ -551,11 +554,7 @@ function MoreFilters({
               <Label htmlFor="flt-limit" className="text-xs">
                 {t("tx.perPage")}
               </Label>
-              <Select
-                value={pageSize}
-                disabled={onePage}
-                onValueChange={(value) => onSetParam("limit", value)}
-              >
+              <Select value={pageSize} onValueChange={(value) => onSetParam("limit", value)}>
                 <SelectTrigger id="flt-limit" className="h-9">
                   <SelectValue />
                 </SelectTrigger>
@@ -569,23 +568,6 @@ function MoreFilters({
               </Select>
             </div>
           </div>
-
-          {/* Everything on one screen, for reading a whole month at once or
-              printing it. `limit=all` is what the ledger already understood —
-              export and duplicate search ask for it — so this only puts the
-              switch where the owner can reach it. The page-size list goes
-              inert meanwhile rather than disappearing, so it stays obvious
-              what the checkbox is overriding. */}
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              className="size-4 rounded border accent-primary"
-              checked={onePage}
-              data-testid="one-page-toggle"
-              onChange={(event) => onSetParam("limit", event.target.checked ? "all" : "")}
-            />
-            <span>{t("tx.onePage")}</span>
-          </label>
 
           <SavedFilters
             currentParams={paramsString}

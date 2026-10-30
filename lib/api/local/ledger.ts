@@ -12,7 +12,12 @@ import { convert, isSupportedCurrency } from "@/lib/currency";
 import { isUsableMoney, roundMoney } from "@/lib/utils";
 import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
 import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount";
-import { TRANSFER_CATEGORY_KEY, transferKeyOf } from "@/lib/transactions/transfers";
+import {
+  isTransfer,
+  isTransferCategoryLabel,
+  TRANSFER_CATEGORY_KEY,
+  transferKeyOf
+} from "@/lib/transactions/transfers";
 import { dataText } from "@/lib/i18n/data-text";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createCategorySuggester, type CategorySuggester } from "@/lib/category-suggest";
@@ -877,6 +882,30 @@ export function transactionsPage(
   );
   const start = (page - 1) * limit;
 
+  // Итоги — по всему отфильтрованному, а не по странице (см. TransactionsPageData).
+  //
+  // И без переводов между своими счетами — как в аналитике: перевод не доход
+  // и не трата, а пара строк «ушло — пришло». Прежде месяц с переводом на
+  // вклад показывал над списком «расход» больше, чем аналитика за тот же
+  // месяц. Строки переводов в списке остаются; в итог они входят, когда о них
+  // и спрашивают: фильтр «переводы», категория переводов — или фильтр по
+  // счёту, для которого перевод с него — настоящий уход денег.
+  const transferCategory = state.categories.find((category) =>
+    isTransferCategoryLabel(category.label)
+  );
+  const countTransfers =
+    criteria.type === "TRANSFER" ||
+    Boolean(criteria.accountId) ||
+    Boolean(transferCategory && criteria.categoryIds?.includes(transferCategory.id));
+  const totals = { income: 0, expense: 0 };
+  for (const row of filtered) {
+    if (!countTransfers && isTransfer(row)) continue;
+    if (row.type === "INCOME") totals.income += baseAmountOf(row, context);
+    if (row.type === "EXPENSE") totals.expense += baseAmountOf(row, context);
+  }
+  totals.income = roundMoney(totals.income);
+  totals.expense = roundMoney(totals.expense);
+
   const rows = filtered.slice(start, start + limit).map((row) => {
     const base = baseAmountOf(row, context);
     return base === row.amount ? row : { ...row, baseAmount: base };
@@ -894,6 +923,7 @@ export function transactionsPage(
     // easy to miss — it is not on the page at all, while its money has
     // already left the balance.
     futureDated: futureDated(state.transactions),
+    totals,
     pagination: {
       page,
       limit: wantsEverything ? filtered.length : limit,

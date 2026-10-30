@@ -785,7 +785,6 @@ const ru: Messages = {
   "tx.bulk.aiConfirm.ok": "Отправить",
   "tx.bulk.noRules": "Нет правил категоризации",
   "tx.perPage": "На странице",
-  "tx.onePage": "На одной странице",
   "tx.future.notice":
     "Операций с датой в будущем: {count}, на {sum}. Они уже учтены в остатке и капитале.",
   "tx.future.show": "Показать их",

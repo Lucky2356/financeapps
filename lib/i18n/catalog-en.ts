@@ -770,7 +770,6 @@ export const en: Messages = {
   "tx.bulk.aiConfirm.ok": "Send",
   "tx.bulk.noRules": "No categorization rules",
   "tx.perPage": "Per page",
-  "tx.onePage": "On one page",
   "tx.future.notice":
     "Operations dated in the future: {count}, for {sum}. They already count against the balance.",
   "tx.future.show": "Show them",

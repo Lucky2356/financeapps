@@ -61,6 +61,13 @@ export type TransactionsPageData = {
    * has to be able to say how much of the headline figure has not happened yet.
    */
   futureDated: { count: number; net: number };
+  /**
+   * Итоги по ВСЕМ операциям под фильтром, а не по показанной странице, — в
+   * основной валюте. Прежде сумма над списком складывалась из двадцати строк
+   * страницы: месяц с категорией показывал в учёте одну сумму, в аналитике —
+   * другую, и сходились они только при «всё на одной странице».
+   */
+  totals?: { income: number; expense: number };
   filters: {
     from?: string;
     to?: string;

@@ -58,7 +58,7 @@ function TransactionList() {
   const confirmFutureDate = useConfirmFutureDate();
   const [photoFor, setPhotoFor] = useState<string | null>(null);
   const { pageData, loadTransactions } = useTransactionsPage();
-  const { visibleTransactions, sort, sortLabel, changeSort, dayStarts, totals, net } =
+  const { visibleTransactions, sort, sortLabel, changeSort, dayStarts, totals, net, matched } =
     useTransactionListView({ pageData, searchParams, paramsString, router, t });
   const { selectedIds, allVisibleSelected, toggleSelect, toggleSelectAll, clearSelection } =
     useTransactionSelection(visibleTransactions, paramsString);
@@ -96,7 +96,7 @@ function TransactionList() {
       <Card>
         <TransactionListHeader
           pageData={pageData}
-          visibleCount={visibleTransactions.length}
+          visibleCount={matched}
           totals={totals}
           net={net}
           sort={sort}
