@@ -85,3 +85,19 @@ describe("вставка в заполненный до края лист", () =
     expect(page.free!.cells.map((cell) => cell.input)).toEqual(["последняя"]);
   });
 });
+
+describe("большие диапазоны", () => {
+  it("МАКС и СУММ по 300 000 чисел не падают; МИН пустого — ноль", () => {
+    const inputs = new Map<string, string>();
+    for (let r = 0; r < 300; r += 1) inputs.set(`${r}|0`, String(r));
+    inputs.set("0|1", "=МАКС(A1:A300)");
+    inputs.set("1|1", "=МИН(C1:C5)");
+    const shown = evaluateFreeGrid(inputs, freeValue);
+    expect(shown.get("0|1")?.value).toBe(299);
+    expect(shown.get("1|1")?.value).toBe(0);
+    expect(evaluate(`=МАКС(${Array.from({ length: 300_000 }, (_, i) => i).join(";")})`)).toEqual({
+      ok: true,
+      value: 299_999
+    });
+  });
+});

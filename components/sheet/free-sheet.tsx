@@ -111,10 +111,17 @@ export function FreeSheet({ sheetId, onChanged }: { sheetId: string; onChanged: 
         }
         return next;
       });
-      setSize((was) => ({
-        rows: Math.max(was.rows, ...cells.map((cell) => cell.r + 1)),
-        cols: Math.max(was.cols, ...cells.map((cell) => cell.c + 1))
-      }));
+      // Циклом: вставка из Excel бывает в сотни тысяч клеток, и разворот их в
+      // аргументы Math.max падал бы с RangeError.
+      setSize((was) => {
+        let rows = was.rows;
+        let cols = was.cols;
+        for (const cell of cells) {
+          if (cell.r + 1 > rows) rows = cell.r + 1;
+          if (cell.c + 1 > cols) cols = cell.c + 1;
+        }
+        return { rows, cols };
+      });
       try {
         await apiClient.post("/sheet", { sheetId, action: "setFree", cells });
       } catch (cause) {

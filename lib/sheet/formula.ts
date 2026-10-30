@@ -40,10 +40,13 @@ function shiftDecimal(value: number, by: number): number {
 const FUNCTIONS: Record<string, (args: number[]) => number> = {
   SUM: (args) => args.reduce((sum, value) => sum + value, 0),
   СУММ: (args) => args.reduce((sum, value) => sum + value, 0),
-  MIN: (args) => Math.min(...args),
-  МИН: (args) => Math.min(...args),
-  MAX: (args) => Math.max(...args),
-  МАКС: (args) => Math.max(...args),
+  // Циклом, а не Math.min(...args): диапазон свободного листа бывает в сотни
+  // тысяч чисел, и разворот в аргументы падал с RangeError. Пустой — ноль, как
+  // в Excel.
+  MIN: (args) => (args.length ? args.reduce((low, value) => Math.min(low, value)) : 0),
+  МИН: (args) => (args.length ? args.reduce((low, value) => Math.min(low, value)) : 0),
+  MAX: (args) => (args.length ? args.reduce((high, value) => Math.max(high, value)) : 0),
+  МАКС: (args) => (args.length ? args.reduce((high, value) => Math.max(high, value)) : 0),
   ROUND: ([value, digits = 0]) => roundHalfAway(value, digits),
   ОКРУГЛ: ([value, digits = 0]) => roundHalfAway(value, digits),
   // Для диапазонов свободного листа (см. free-grid.ts): среднее и сколько

@@ -19,7 +19,8 @@ import Papa from "papaparse";
 
 import { evaluate, roundHalfAway } from "@/lib/sheet/formula";
 import { computeSheet, type SheetColumn, type SheetColumnKind } from "@/lib/sheet/model";
-import { dataKeyOf, dataText, isDataLabel } from "@/lib/i18n/data-text";
+import { dataKeyOf, dataText, dataVariants, isDataLabel, labelKey } from "@/lib/i18n/data-text";
+import { parseImportedAmount } from "@/services/import/CsvParsing";
 
 export type Grid = string[][];
 
@@ -71,14 +72,14 @@ function guessDelimiter(text: string): "\t" | ";" | "," {
 function trimGrid(grid: Grid): Grid {
   const rows = [...grid];
   while (rows.length > 0 && rows[rows.length - 1].every((cell) => cell === "")) rows.pop();
-  const width = Math.max(
-    0,
-    ...rows.map((row) => {
-      let end = row.length;
-      while (end > 0 && row[end - 1] === "") end -= 1;
-      return end;
-    })
-  );
+  // Циклом, а не Math.max(...): разворот в аргументы падал с RangeError на
+  // вставке в пару сотен тысяч строк.
+  let width = 0;
+  for (const row of rows) {
+    let end = row.length;
+    while (end > 0 && row[end - 1] === "") end -= 1;
+    if (end > width) width = end;
+  }
   return rows.map((row) => row.slice(0, width));
 }
 
@@ -185,13 +186,33 @@ export function parseMonth(raw: string): string | null {
   return null;
 }
 
-/** Число из клетки: «12 396», «12 396,00 ₽», «-500». Пусто или не число — null. */
+/**
+ * Число из клетки: «12 396», «12 396,00 ₽», «-500», «(500)», «12,345.67»,
+ * «1.234,56», «4.440892098500626e-16». Пусто или не число — null.
+ *
+ * Скобки — бухгалтерский минус, разряды через точку или запятую, экспонента
+ * (так Excel отдаёт остаток вроде 4e-16 после вычитаний). Раньше всё это
+ * не считалось числом и уходило в таблицу как формула — с ошибкой, а «(500)»
+ * формулой давало +500. Какой разделитель десятичный — решает тот же разбор,
+ * что у выписок (parseImportedAmount); здесь только проверяется, что в клетке
+ * нет ничего, кроме числа.
+ */
+const PLAIN_NUMBER = /^-?\d+(?:[.,]\d+)?$/;
+/** «12,345.67», «1.234,56», «1.234.567» — разряды по три, дробь другим знаком. */
+const GROUPED_NUMBER = /^-?\d{1,3}(?:(?:,\d{3})+(?:\.\d+)?|(?:\.\d{3})+(?:,\d+)?)$/;
+
 export function parseAmount(raw: string): number | null {
-  const text = raw.replace(/[\s ₽руб.]+$/giu, "").replace(/[\s ]/g, "");
+  let text = raw.replace(/[\s ₽руб.]+$/giu, "").replace(/[\s  ]/g, "");
   if (!text) return null;
-  const normalized = text.replace(",", ".");
-  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
-  return Number(normalized);
+  const bracketed = /^\((.+)\)$/.exec(text);
+  if (bracketed) text = bracketed[1];
+  text = text.replace(/^[\u2212\u2013]/, "-");
+  let value: number | null;
+  if (/^-?\d+(?:\.\d+)?e[-+]?\d+$/i.test(text)) value = Number(text);
+  else if (PLAIN_NUMBER.test(text) || GROUPED_NUMBER.test(text)) value = parseImportedAmount(text);
+  else return null;
+  if (value === null || !Number.isFinite(value)) return null;
+  return bracketed ? -Math.abs(value) : value;
 }
 
 function dateOf(raw: string): string | null {
@@ -208,18 +229,62 @@ const normalize = (text: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-/** Роль столбца по названию. */
+/**
+ * Столбцы, которые заводит само приложение (lib/sheet/templates.ts, пустой
+ * лист в lib/sheet/model.ts), — с тем видом, что у них в шаблоне. Своя же
+ * таблица, выгруженная и загруженная обратно, иначе читалась по словам:
+ * «Подушка на начало» — как «в сбережения», а английские «Balance»,
+ * «Cushion at start», «Saving per month» — все как расходы.
+ */
+const TEMPLATE_ROLES: Record<string, SheetColumnKind> = {
+  "data.sheet.col.opening": "opening",
+  "data.sheet.col.income": "income",
+  "data.sheet.col.cushionOpening": "savingsOpening",
+  "data.sheet.col.toSavings": "toSavings",
+  "data.sheet.col.salary": "income",
+  "data.sheet.col.otherIncome": "income",
+  "data.sheet.col.notes": "note",
+  "data.sheet.col.depositInterest": "savingsIncome",
+  "data.sheet.col.renovationSaved": "opening",
+  "data.sheet.col.savePerMonth": "income",
+  "data.sheet.col.done": "note",
+  "data.sheet.col.vacationSaved": "opening"
+};
+
+/**
+ * Написание (на любом языке) → вид. Собирается один раз: guessRole зовут на
+ * каждую клетку при поиске шапки, и обход всего словаря на каждую клетку
+ * большой вставки занимал бы секунды.
+ */
+let templateRoles: Map<string, SheetColumnKind> | null = null;
+
+function templateRole(name: string): SheetColumnKind | undefined {
+  if (!templateRoles) {
+    templateRoles = new Map();
+    for (const [key, kind] of Object.entries(TEMPLATE_ROLES)) {
+      for (const variant of dataVariants(key)) templateRoles.set(labelKey(variant), kind);
+    }
+  }
+  return templateRoles.get(labelKey(name));
+}
+
+/** Роль столбца по названию: сначала имена самого приложения, потом по словам. */
 export function guessRole(name: string): ImportRole {
   const text = normalize(name);
   if (!text) return "skip";
+  const template = templateRole(name);
+  if (template) return template;
   if (/^(месяц|дата|month|период)/.test(text)) return "month";
   if (/^(итог|итого|остаток на конец|на конец|total)/.test(text)) return "total";
-  if (/^(остаток|на начало|начало|opening)/.test(text)) return "opening";
+  // Английские основы — для таблиц, заведённых по-английски не из шаблона.
+  if (/^(остаток|на начало|начало|opening|balance)/.test(text)) return "opening";
   if (/(комментар|коммент|заметк|примечан|пометк|описан|note|comment|memo)/.test(text))
     return "note";
-  if (/(снят|с вклада|из сбереж|из подушк)/.test(text)) return "fromSavings";
-  if (/(процент.*вклад|вклад.*процент|кешбэк на остаток)/.test(text)) return "savingsIncome";
-  if (/(вклад|сбереж|подушк|накоп|копилк|отложить|инвест)/.test(text)) return "toSavings";
+  if (/(снят|с вклада|из сбереж|из подушк|from saving|withdraw)/.test(text)) return "fromSavings";
+  if (/(процент.*вклад|вклад.*процент|кешбэк на остаток|interest)/.test(text))
+    return "savingsIncome";
+  if (/(вклад|сбереж|подушк|накоп|копилк|отложить|инвест|saving|cushion|deposit|invest)/.test(text))
+    return "toSavings";
   if (/(доход|зарплат|^зп|аванс|премия|income|salary)/.test(text)) return "income";
   return "expense";
 }
@@ -293,7 +358,11 @@ export function planImport(grid: Grid, categories: readonly CategoryRef[]): Impo
     rows.push({ month, cells: row });
   }
 
-  const width = Math.max(...grid.slice(header).map((row) => row.length));
+  // Циклом: Math.max(...) с разворотом падал с RangeError на ~200 000 строк.
+  let width = 0;
+  for (let index = header; index < grid.length; index += 1) {
+    if (grid[index].length > width) width = grid[index].length;
+  }
   const columns: ImportColumn[] = [];
   for (let index = 0; index < width; index += 1) {
     const name = (names[index] ?? "").trim();

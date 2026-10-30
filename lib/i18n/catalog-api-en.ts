@@ -26,6 +26,8 @@ export const en: Messages = {
   "api.transfer.oneGone": "One of the transactions no longer exists.",
   "api.transfer.shape": "A transfer is a charge from one account and a deposit into another.",
   "api.transfer.alreadyLinked": "This transaction is already part of a transfer.",
+  "api.import.undoTransfer":
+    "Can't undo the import: {count} {n:transaction|transactions} from it {n:is|are} already linked into a transfer with a transaction entered by hand. Delete {n:that transfer|those transfers} in Transactions, or keep the import as it is.",
   "api.transfer.sameAccount": "A transfer is between two different accounts.",
   "api.transfer.amountMismatch": "The charge and deposit amounts don't match.",
   "api.transfer.pickAccounts": "Choose existing active accounts for the transfer.",
@@ -104,6 +106,8 @@ export const en: Messages = {
   // Данные, профили, копии
   "api.backup.notBackup":
     "This file doesn't look like an app backup — choose a file saved with “Download a copy”.",
+  "api.backup.newerVersion":
+    "This backup was made by a newer version of the app (format {version}). Update the app — this version can't read it.",
   "api.backup.noSuchCopy": "There's no such copy on this device.",
   "api.clear.noCopy": "There's no copy from before the data was cleared: it's kept for a week.",
   "api.profile.unreadable":

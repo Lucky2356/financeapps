@@ -2,24 +2,41 @@ import { isValid } from "date-fns";
 import Papa from "papaparse";
 
 import { formatInputDate } from "@/lib/format";
-import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
+import { isUsableMoney, MAX_MONEY } from "@/lib/utils";
+import {
+  parseImportedAmount,
+  parseImportedDate,
+  unescapeCsvField
+} from "@/services/import/CsvParsing";
 import { translate, type Locale } from "@/lib/i18n/catalog";
 
 export type ExistingTransactionLike = {
   date: string | Date;
   amount: number;
   description?: string | null;
+  /** Расход или доход. Нет — решает знак суммы. */
+  type?: string;
+  /** Счёт операции: имя сличается со столбцом счёта, когда тот выбран. */
+  account?: { label?: string | null } | null;
 };
 
-// Ключ для поиска повторов. Знак суммы не учитывается: в файле строки со знаком
-// (−1200), а в учёте сумма положительная и отдельно тип расход/доход. Сумма —
-// в копейках: округление до рубля склеивало −199,90 и −200, а Math.round(−1200,5)
-// даёт −1200, тогда как 1200,5 из учёта — 1201, и такая пара не сходилась вовсе.
-// День — тот, что хранится (formatInputDate читает полночь UTC как день): через
+// Повтор сличается так же, как у самого импорта (importCsvRows): день,
+// расход или доход, сумма, описание и — если в файле есть столбец счёта —
+// счёт. Раньше знак и счёт не учитывались вовсе, и поступление +5000 на
+// карту Б «повторяло» перевод 5000 с карты А того же дня — фильтр его
+// выбрасывал. В файле строки со знаком (−1200), а в учёте сумма
+// положительная и отдельно тип: знак сводится к типу. Операция без типа или
+// без счёта (старый формат) сличается без них.
+//
+// Сумма — в копейках: округление до рубля склеивало −199,90 и −200, а
+// Math.round(−1200,5) даёт −1200, тогда как 1200,5 из учёта — 1201. День —
+// тот, что хранится (formatInputDate читает полночь UTC как день): через
 // местное время к западу от Гринвича операция из учёта числилась вчерашней.
 function dedupKey(date: string | Date, amount: number, description: string): string {
   return `${formatInputDate(date)}|${Math.round(Math.abs(amount) * 100)}|${description.trim().toLowerCase()}`;
 }
+
+type StoredCopy = { income: boolean | null; account: string | null; used: boolean };
 
 export type ParsedCsv = {
   fields: string[];
@@ -33,6 +50,13 @@ export type CsvColumnMapping = {
   descriptionColumn: string;
   categoryColumn: string;
   accountColumn: string;
+  /**
+   * Валюта строки: по ней заводится новый счёт. Выбора на экране нет —
+   * столбец узнаётся по имени («currency» пишет своя выгрузка, «Валюта» —
+   * банки). Без него счёт из файла заводился в основной валюте, и выгрузка
+   * долларового счёта, загруженная в новый профиль, становилась рублями.
+   */
+  currencyColumn?: string;
 };
 
 export type CsvImportPreset = {
@@ -53,7 +77,8 @@ const aliases: Record<keyof CsvColumnMapping, string[]> = {
   amountColumn: ["amount", "сумма", "сумма операции", "value"],
   descriptionColumn: ["description", "описание", "назначение", "комментарий", "details"],
   categoryColumn: ["category", "категория", "mcc category"],
-  accountColumn: ["account", "счет", "счёт", "карта", "кошелек"]
+  accountColumn: ["account", "счет", "счёт", "карта", "кошелек"],
+  currencyColumn: ["currency", "валюта", "валюта операции", "валюта счета", "валюта счёта"]
 };
 
 const presets: CsvImportPreset[] = [
@@ -116,7 +141,11 @@ export class CsvImportMapper {
     const result = Papa.parse<Record<string, unknown>>(content, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (header) => header.trim()
+      transformHeader: (header) => header.trim(),
+      // Своя выгрузка ставит апостроф перед «=», «-», «+», «@» — защита от
+      // формул в Excel. Здесь он снимается, иначе описание «-5% скидка»
+      // возвращалось как «'-5% скидка», и повторы не узнавались.
+      transform: (value) => unescapeCsvField(value)
     });
 
     return {
@@ -132,7 +161,8 @@ export class CsvImportMapper {
       amountColumn: this.findByAlias(fields, "amountColumn"),
       descriptionColumn: this.findByAlias(fields, "descriptionColumn"),
       categoryColumn: this.findByAlias(fields, "categoryColumn"),
-      accountColumn: this.findByAlias(fields, "accountColumn")
+      accountColumn: this.findByAlias(fields, "accountColumn"),
+      ...this.currencyOf(fields)
     };
   }
 
@@ -175,7 +205,8 @@ export class CsvImportMapper {
       categoryColumn:
         this.findByCandidates(fields, preset.aliases.categoryColumn) || suggested.categoryColumn,
       accountColumn:
-        this.findByCandidates(fields, preset.aliases.accountColumn) || suggested.accountColumn
+        this.findByCandidates(fields, preset.aliases.accountColumn) || suggested.accountColumn,
+      ...this.currencyOf(fields)
     };
   }
 
@@ -201,6 +232,15 @@ export class CsvImportMapper {
         return;
       }
 
+      // Та же граница, что у записи операции: импорт такую строку пропустит,
+      // и проверка должна сказать об этом заранее, а не считать её годной.
+      if (!isUsableMoney(Math.abs(amount))) {
+        warnings.push(
+          translate(locale, "imp.warn.amountRange", { row: rowNumber, max: MAX_MONEY / 1e9 })
+        );
+        return;
+      }
+
       if (!date) {
         warnings.push(translate(locale, "imp.warn.date", { row: rowNumber }));
         return;
@@ -216,8 +256,8 @@ export class CsvImportMapper {
     };
   }
 
-  // Номера строк файла, которые уже есть в учёте, по ключу (день, |сумма|,
-  // описание). Повтор считается так же, как при самом импорте (importCsvRows):
+  // Номера строк файла, которые уже есть в учёте: тот же день, расход или
+  // доход, сумма, описание и счёт (см. dedupKey выше). Повтор считается так же, как при самом импорте (importCsvRows):
   // строка — повтор, только пока таких же в учёте больше, чем уже встречено в
   // файле. Два кофе по 200 ₽ за день в выписке — две покупки, а не одна; а если
   // в учёте уже лежит один, повтором будет только первый из двух. Раньше вторая
@@ -231,14 +271,25 @@ export class CsvImportMapper {
     const duplicates = new Set<number>();
     if (!mapping.dateColumn || !mapping.amountColumn) return duplicates;
 
-    const stored = new Map<string, number>();
+    // Счёт сличается, только когда в файле есть его столбец: без него
+    // импорт кладёт строки на первый счёт, и угадывать его здесь незачем.
+    const byAccount = Boolean(mapping.accountColumn);
+    const stored = new Map<string, StoredCopy[]>();
     for (const transaction of existing) {
       if (!isValid(new Date(transaction.date))) continue;
       const key = dedupKey(transaction.date, transaction.amount, transaction.description ?? "");
-      stored.set(key, (stored.get(key) ?? 0) + 1);
+      const label = transaction.account?.label;
+      const copies = stored.get(key) ?? [];
+      copies.push({
+        income: transaction.type ? transaction.type === "INCOME" : null,
+        account: byAccount && label ? label.trim().toLowerCase() : null,
+        used: false
+      });
+      stored.set(key, copies);
     }
 
-    const seen = new Map<string, number>();
+    // Каждая операция учёта «гасит» не больше одной строки файла: две
+    // одинаковые покупки в выписке при одной в учёте — один повтор, не два.
     rows.forEach((row, index) => {
       const amount = parseImportedAmount(row[mapping.amountColumn]);
       const date = parseImportedDate(row[mapping.dateColumn]);
@@ -247,14 +298,32 @@ export class CsvImportMapper {
       const description = mapping.descriptionColumn
         ? String(row[mapping.descriptionColumn] ?? "")
         : "";
-      const key = dedupKey(date, amount, description);
-
-      const count = seen.get(key) ?? 0;
-      seen.set(key, count + 1);
-      if (count < (stored.get(key) ?? 0)) duplicates.add(index);
+      const copies = stored.get(dedupKey(date, amount, description));
+      if (!copies) return;
+      const income = amount >= 0;
+      const account = byAccount
+        ? String(row[mapping.accountColumn] ?? "")
+            .trim()
+            .toLowerCase()
+        : null;
+      const match = copies.find(
+        (copy) =>
+          !copy.used &&
+          (copy.income === null || copy.income === income) &&
+          (copy.account === null || account === null || copy.account === account)
+      );
+      if (!match) return;
+      match.used = true;
+      duplicates.add(index);
     });
 
     return duplicates;
+  }
+
+  /** Столбец валюты — только если он есть: выбора на экране у него нет. */
+  private currencyOf(fields: string[]): Pick<CsvColumnMapping, "currencyColumn"> {
+    const column = this.findByAlias(fields, "currencyColumn");
+    return column ? { currencyColumn: column } : {};
   }
 
   private findByAlias(fields: string[], target: keyof CsvColumnMapping) {

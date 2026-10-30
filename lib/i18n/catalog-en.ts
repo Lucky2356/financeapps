@@ -1191,6 +1191,8 @@ export const en: Messages = {
   "imp.mapIntro": "Specify which CSV column maps to each field. Fields marked {star} are required.",
   "imp.presets": "Quick bank presets",
   "imp.warn.amount": "Row {row}: amount is empty, zero, or unrecognized",
+  "imp.warn.amountRange":
+    "Row {row}: amount is over {max} billion — looks like a typo, the row will be skipped",
   "imp.warn.date": "Row {row}: date not recognized",
   "imp.example": "Example: {value}",
   "imp.optional": "(optional)",

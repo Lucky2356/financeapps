@@ -205,8 +205,14 @@ export function putScope(state: BookState, sheetId: string, scoped: SheetState):
 export function readFree(state: BookState, sheetId: string): FreeSheetData {
   const row = (state.sheets ?? []).find((item) => item.id === sheetId);
   const cells = (state.freeCells ?? []).filter((cell) => cell.sheetId === sheetId);
-  const rows = Math.max(row?.rows ?? FREE_ROWS, ...cells.map((cell) => cell.r + 1), 1);
-  const cols = Math.max(row?.cols ?? FREE_COLS, ...cells.map((cell) => cell.c + 1), 1);
+  // Циклом, а не Math.max(...): лист бывает до 400 000 клеток, а разворот в
+  // аргументы на таком падает с RangeError.
+  let rows = Math.max(row?.rows ?? FREE_ROWS, 1);
+  let cols = Math.max(row?.cols ?? FREE_COLS, 1);
+  for (const cell of cells) {
+    if (cell.r + 1 > rows) rows = cell.r + 1;
+    if (cell.c + 1 > cols) cols = cell.c + 1;
+  }
   // Клетки считаются все вместе: формула может ссылаться на соседние.
   const shown = evaluateFreeGrid(
     new Map(cells.map((cell) => [`${cell.r}|${cell.c}`, cell.input])),
@@ -583,7 +589,10 @@ export function importWorkbook(
       created.push(tab);
     } else {
       const rows = Math.max(item.grid.length, 1);
-      const cols = Math.max(...item.grid.map((line) => line.length), 1);
+      // Циклом: Math.max(...) с разворотом падал с RangeError на листе в
+      // пару сотен тысяч строк.
+      let cols = 1;
+      for (const line of item.grid) if (line.length > cols) cols = line.length;
       const tab = createSheet(state, { name: item.name, kind: "free", rows, cols }, makeId);
       const cells: Body[] = [];
       item.grid.forEach((line, r) =>
