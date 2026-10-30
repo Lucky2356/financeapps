@@ -239,6 +239,8 @@ export const en: Messages = {
   "api.server.bad_address": "Invalid address.",
   "api.server.request_too_large": "The request is too large.",
   "api.server.body_not_json": "The request body isn't JSON.",
+  "api.server.body_too_deep": "The request is nested too deeply.",
+  "api.server.busy": "The server is busy. Try again later.",
   "api.server.body_not_object": "The request body isn't a JSON object.",
   "api.server.too_many_attempts": "Too many attempts. Wait a minute.",
   "api.server.too_many_signups": "Too many new accounts from this address. Try again later.",

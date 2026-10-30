@@ -17,6 +17,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import {
+  addressKey,
   clientAddress,
   createApp,
   MAX_SMALL_BODY_BYTES,
@@ -25,6 +26,7 @@ import {
   whichRoute,
   type App
 } from "../src/main.ts";
+import { usageOf } from "../src/vault.ts";
 
 // Только латиница: заголовки HTTP не переносят ничего сверх Latin-1, и
 // кириллический пропуск не отправить в принципе. То же и на живой машине —
@@ -1217,11 +1219,10 @@ describe("служба", () => {
       assert.equal((await call("/devices", { token: answer.token })).status, 200);
 
       // Билет погашен, пакет из базы стёрт. Повторный опрос того же билета
-      // (ответ потерялся по дороге) получает тот же ответ, а не «не найден» —
-      // и второго входа устройства не заводится.
+      // ответа не получает: знающий билет (сфотографировавший картинку) не
+      // войдёт вслед за настоящим устройством.
       const again = await call(`/pairing/request/${ticket}`, { method: "POST", body: {} });
-      assert.equal(again.status, 200);
-      assert.equal((again.body as { token: string }).token, answer.token);
+      assert.equal(again.status, 404);
       const left = app.db
         .prepare("select count(*) as n from pairings where sealed is not null")
         .get<{ n: number }>();
@@ -1804,5 +1805,171 @@ describe("служба: найденное при проверке безопа�
       statuses.push((await call("/pairing", { method: "POST", token })).status);
     }
     assert.deepEqual(statuses, [201, 201, 201, 201, 201, 429]);
+  });
+});
+
+// Проверка безопасности перед 2.8.1. Каждая проверка краснела на прежнем коде.
+describe("служба: проверка безопасности 2.8.1", () => {
+  beforeEach(async () => {
+    app = createApp({ dbPath: ":memory:", adminToken: ADMIN });
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+  });
+
+  afterEach(async () => {
+    await app.stop();
+  });
+
+  /** Вход «с адреса» — через X-Forwarded-For, которому служба верит от 127.0.0.1. */
+  async function loginFrom(from: string, login: string, secret: string) {
+    const response = await fetch(`${base}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": from },
+      body: JSON.stringify({ login, secret, device: "проверка" })
+    });
+    await response.text();
+    return response.status;
+  }
+
+  /** Дочитать поток до конца: true — служба его закрыла сама. */
+  async function closedBy(stream: Response): Promise<boolean> {
+    const reader = stream.body!.getReader();
+    const timeout = new Promise<false>((resolve) => setTimeout(() => resolve(false), 2000));
+    const ended = (async () => {
+      for (;;) if ((await reader.read()).done) return true as const;
+    })();
+    const result = await Promise.race([ended, timeout]);
+    if (!result) await reader.cancel();
+    return result;
+  }
+
+  it("вход без имени устройства виден в списке и отзывается", async () => {
+    const owner = await signUp("петя");
+    const hidden = await call("/auth/login", {
+      method: "POST",
+      body: { login: "петя", secret: "секрет-входа" }
+    });
+    const token = (hidden.body as { token: string }).token;
+    const list = (await call("/devices", { token: owner.token })).body as {
+      devices: Array<{ id: string; name: string }>;
+    };
+    assert.equal(list.devices.length, 2);
+    const other = list.devices.find((device) => device.id !== owner.deviceId)!;
+    await call(`/devices/${other.id}`, { method: "DELETE", token: owner.token });
+    assert.equal((await call("/vault", { token })).status, 401);
+  });
+
+  it("отозванное устройство перестаёт получать события", async () => {
+    const owner = await signUp("петя");
+    const second = (
+      await call("/auth/login", {
+        method: "POST",
+        body: { login: "петя", secret: "секрет-входа", device: "телефон" }
+      })
+    ).body as { token: string; deviceId: string };
+    const stream = await fetch(`${base}/events`, {
+      headers: { authorization: `Bearer ${second.token}` }
+    });
+    await call(`/devices/${second.deviceId}`, { method: "DELETE", token: owner.token });
+    assert.equal(await closedBy(stream), true);
+  });
+
+  it("выход закрывает и поток событий", async () => {
+    const { token } = await signUp("петя");
+    const stream = await fetch(`${base}/events`, {
+      headers: { authorization: `Bearer ${token}` }
+    });
+    await call("/auth/logout", { method: "POST", token });
+    assert.equal(await closedBy(stream), true);
+  });
+
+  it("параметры входа находят имя в любом регистре", async () => {
+    await signUp("petya");
+    const response = await call("/auth/params?login=Petya");
+    assert.equal(response.status, 200);
+  });
+
+  it("чужие неверные пароли не запирают вход хозяину", async () => {
+    await signUp("petya");
+    for (let at = 0; at < 6; at += 1) await loginFrom("203.0.113.66", "petya", "мимо");
+    assert.equal(await loginFrom("203.0.113.66", "petya", "мимо"), 429);
+    assert.equal(await loginFrom("198.51.100.7", "petya", "секрет-входа"), 200);
+  });
+
+  it("IPv6 считается по сети /64", () => {
+    assert.equal(
+      addressKey("2001:db8:1:2:aaaa::1"),
+      addressKey("2001:db8:1:2:bbbb:cccc:dddd:eeee")
+    );
+    assert.notEqual(addressKey("2001:db8:1:2::1"), addressKey("2001:db8:1:3::1"));
+    assert.equal(addressKey("::ffff:203.0.113.7"), "203.0.113.7");
+    assert.equal(clientAddress("127.0.0.1", "2001:db8::5"), addressKey("2001:db8::9"));
+  });
+
+  it("глубокая вложенность — 400, а не 500", async () => {
+    const { token } = await signUp("петя");
+    const deep = "[".repeat(100_000) + "]".repeat(100_000);
+    const response = await fetch(`${base}/vault/книга`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: `{"baseVersion":0,"body":${deep}}`
+    });
+    assert.equal(response.status, 400);
+    assert.equal(((await response.json()) as { code: string }).code, "body_too_deep");
+  });
+
+  it("история версий входит в занятое место", async () => {
+    const { token, personId } = await signUp("петя");
+    let version = 0;
+    await call("/vault/книга", { method: "PUT", token, body: { baseVersion: 0, body: BOOK } });
+    version = 1;
+    const once = usageOf(app.db, personId).bytes;
+    for (; version < 20; version += 1) {
+      await call("/vault/книга", {
+        method: "PUT",
+        token,
+        body: { baseVersion: version, body: BOOK }
+      });
+    }
+    assert.ok(usageOf(app.db, personId).bytes > once, "перезаписи ничего не стоят");
+  });
+
+  it("больше двух записей разом на человека — 503, служба не копит тела", async () => {
+    const { token } = await signUp("петя");
+    const { request } = await import("node:http");
+    const port = (app.server.address() as AddressInfo).port;
+    // Две записи, которые шлют тело медленно: заголовки ушли, тела нет.
+    const slow = [0, 1].map(() => {
+      const req = request({
+        host: "127.0.0.1",
+        port,
+        method: "PUT",
+        path: "/vault/x",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          "content-length": "100"
+        }
+      });
+      req.on("error", () => {});
+      req.write("{");
+      return req;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const third = await call("/vault/y", {
+      method: "PUT",
+      token,
+      body: { baseVersion: 0, body: BOOK }
+    });
+    for (const req of slow) req.destroy();
+    assert.equal(third.status, 503);
+    assert.equal((third.body as { code: string }).code, "busy");
+  });
+
+  it("ответы не кэшируются посредниками", async () => {
+    const response = await fetch(`${base}/health`);
+    await response.text();
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   });
 });

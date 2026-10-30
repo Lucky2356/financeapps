@@ -245,6 +245,8 @@ export const ru: Messages = {
   "api.server.bad_address": "Неверный адрес.",
   "api.server.request_too_large": "Слишком большой запрос.",
   "api.server.body_not_json": "Тело запроса — не JSON.",
+  "api.server.body_too_deep": "Слишком глубокая вложенность в запросе.",
+  "api.server.busy": "Служба занята. Попробуйте позже.",
   "api.server.body_not_object": "Тело запроса — не объект JSON.",
   "api.server.too_many_attempts": "Слишком много попыток. Подождите минуту.",
   "api.server.too_many_signups": "Слишком много новых записей с этого адреса. Попробуйте позже.",

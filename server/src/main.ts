@@ -168,6 +168,21 @@ export function sameSecret(given: string | null, expected: string): boolean {
   return timingSafeEqual(left, right);
 }
 
+/** Глубже книги не бывают и близко: у самой вложенной строки десяток уровней. */
+const MAX_DEPTH = 64;
+
+/** Глубже ли значение предела. Обход — без рекурсии, чтобы не упасть самому. */
+export function tooDeep(value: unknown, limit: number): boolean {
+  const stack: Array<[unknown, number]> = [[value, 1]];
+  while (stack.length > 0) {
+    const [item, depth] = stack.pop()!;
+    if (item === null || typeof item !== "object") continue;
+    if (depth > limit) return true;
+    for (const child of Object.values(item)) stack.push([child, depth + 1]);
+  }
+  return false;
+}
+
 /**
  * Адрес, с которого пришёл запрос, — для счётчиков попыток.
  *
@@ -186,9 +201,32 @@ export function clientAddress(peer: string | undefined, forwarded: string | unde
       .split(",")
       .map((hop) => hop.trim())
       .filter(Boolean);
-    if (hops.length > 0) return hops[hops.length - 1];
+    if (hops.length > 0) return addressKey(hops[hops.length - 1]);
   }
-  return peer ?? "неизвестно";
+  return addressKey(peer ?? "неизвестно");
+}
+
+/**
+ * Ключ счётчика для адреса. IPv6 — по сети /64, а не по адресу целиком.
+ *
+ * Обычному подключению по IPv6 выдают целую сеть /64 — восемнадцать
+ * квинтиллионов адресов, и каждый из них свой. Считай по полному адресу —
+ * и предел на вход, регистрацию или подбор кода снимался сменой последних
+ * цифр перед каждым запросом. IPv4 (и IPv4, завёрнутый в IPv6) — как есть.
+ */
+export function addressKey(address: string): string {
+  const plain = address.startsWith("::ffff:") ? address.slice(7) : address;
+  if (!plain.includes(":")) return plain;
+  const [head, tail = ""] = plain.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = plain.includes("::")
+    ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right]
+    : left;
+  return `${groups
+    .slice(0, 4)
+    .map((group) => (group || "0").toLowerCase().replace(/^0+(?=.)/, ""))
+    .join(":")}::/64`;
 }
 
 export function whichRoute(url: string | undefined): string {
@@ -250,7 +288,20 @@ export function createApp(options: AppOptions) {
 
   const db = openDatabase(options.dbPath);
   const bus = new EventBus();
+  // Подбор пароля к одному имени — по паре «имя + адрес». Счётчик по одному
+  // имени давал любому запереть чужой вход: пять неверных паролей к «маше» в
+  // минуту — и сама Маша, со своего адреса и с верным паролем, слышала
+  // «слишком много попыток». Подбор с многих адресов разом держит второй,
+  // общий на имя счётчик — он шире, и запереть им человека уже не так дёшево.
   const byLogin = new RateLimiter();
+  const byLoginAnywhere = new RateLimiter(60);
+  // Одновременные записи книг. Тело записи — до 32 МБ, и каждая держит его в
+  // памяти, пока разбирает. Десяток записей разом от одного билета
+  // складывался в сотни мегабайт и ронял службу на маленькой машине.
+  let writing = 0;
+  const writingBy = new Map<string, number>();
+  const MAX_WRITES = 8;
+  const MAX_WRITES_PER_PERSON = 2;
   // По адресу предел заметно шире, чем по имени, и это не поблажка. За одним
   // адресом сидит целая семья — общий роутер, раздача с телефона, — и пять
   // попыток на всех означали бы, что один человек, дважды ошибившийся паролем,
@@ -292,6 +343,10 @@ export function createApp(options: AppOptions) {
       "access-control-allow-origin": ORIGIN,
       "access-control-allow-headers": "authorization, content-type",
       "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+      // В ответах — билеты и шкатулки с ключом книги. Посреднику по дороге
+      // и кэшу браузера держать их незачем.
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
       "content-length": Buffer.byteLength(text)
     });
     res.end(text);
@@ -329,6 +384,13 @@ export function createApp(options: AppOptions) {
     // прочее — ошибка запроса, 400.
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new AuthError(400, "body_not_object", "Тело запроса — не объект JSON.");
+    }
+    // Разбор вложенность любой глубины переживает, а запись обратно в строку —
+    // нет: `[[[[…]]]]` в сто тысяч скобок ронял JSON.stringify с RangeError, и
+    // служба отвечала 500. Устройство 5xx считает «нет связи» и повторяет
+    // запрос — то есть кривое тело выглядело как упавшая служба, без конца.
+    if (tooDeep(parsed, MAX_DEPTH)) {
+      throw new AuthError(400, "body_too_deep", "Слишком глубокая вложенность в запросе.");
     }
     return parsed as Record<string, unknown>;
   }
@@ -491,7 +553,14 @@ export function createApp(options: AppOptions) {
       // «петя», «Петя» и «ПЕТЯ» были тремя счётчиками на одного человека, и
       // предел на подбор пароля обходился сменой регистра.
       const name = normalizeLogin(text(body.login));
-      if (!byLogin.allow(`имя:${name}`, stamp)) {
+      // В ключ — не больше 64 знаков имени: таких длинных имён запись не
+      // заводит, а иначе каждое «имя» в 100 КБ ложилось бы в память счётчика.
+      const counted = name.slice(0, 64);
+      const from = addressOf(req);
+      if (
+        !byLogin.allow(`имя:${counted}@${from}`, stamp) ||
+        !byLoginAnywhere.allow(`имя:${counted}`, stamp)
+      ) {
         return send(
           res,
           429,
@@ -504,7 +573,7 @@ export function createApp(options: AppOptions) {
         { login: name, secret: text(body.secret), device: text(body.device) || undefined },
         now()
       );
-      byLogin.forget(`имя:${name}`);
+      byLogin.forget(`имя:${counted}@${from}`);
       return send(res, 200, { ...session, vault: JSON.parse(session.vault) as unknown });
     }
 
@@ -536,7 +605,10 @@ export function createApp(options: AppOptions) {
     if (!who) return send(res, 401, refusal("auth_required", "Нужен вход."));
 
     if (path === "/auth/logout" && method === "POST") {
-      if (raw) logout(db, raw);
+      if (raw) {
+        logout(db, raw);
+        bus.closeToken(raw);
+      }
       return send(res, 204);
     }
 
@@ -622,7 +694,9 @@ export function createApp(options: AppOptions) {
     }
 
     if (path.startsWith("/devices/") && method === "DELETE") {
-      forgetDevice(db, who, decodePart(path.slice("/devices/".length)), now());
+      const deviceId = decodePart(path.slice("/devices/".length));
+      forgetDevice(db, who, deviceId, now());
+      bus.closeDevice(who.personId, deviceId);
       return send(res, 204);
     }
 
@@ -630,7 +704,7 @@ export function createApp(options: AppOptions) {
       // Отдельно от строки на «finish»: та придёт только при разрыве, а знать,
       // что устройство на связи, нужно именно сейчас.
       console.log("GET /events → поток открыт");
-      return bus.attach(who.personId, res, ORIGIN);
+      return bus.attach({ ...who, token: raw ?? "" }, res, ORIGIN);
     }
 
     if (path === "/vault" && method === "GET") {
@@ -663,79 +737,101 @@ export function createApp(options: AppOptions) {
       if (method === "PUT") {
         // Единственная ручка с большим пределом: книга с фото чеков бывает
         // тяжёлой. Сюда без билета не пускают — см. проверку входа выше.
-        const body = await readJson(req, MAX_BODY_BYTES);
-        const baseVersion = Number(body.baseVersion);
-        if (!Number.isInteger(baseVersion) || baseVersion < 0) {
-          return send(res, 400, refusal("bad_version", "Неверная версия."));
+        //
+        // И не больше двух записей разом на человека и восьми на службу: 503
+        // устройство понимает как «попробуйте позже» и повторит запись само.
+        const mine = writingBy.get(who.personId) ?? 0;
+        if (mine >= MAX_WRITES_PER_PERSON || writing >= MAX_WRITES) {
+          return send(res, 503, refusal("busy", "Служба занята. Попробуйте позже."));
         }
-
-        // Без книги писать нечего. `{"baseVersion":0}` без поля body раньше
-        // доходил до записи и падал там с 500 (JSON.stringify(undefined) — не
-        // строка). `null` не пускаем тоже: приложение его не шлёт никогда, а
-        // ячейка с номером версии и пустым телом для устройства выглядит как
-        // «на сервере ничего нет» — то есть книга, стёртая таким запросом,
-        // пропала бы с сервера молча, без единого отказа.
-        if (body.body === undefined || body.body === null) {
-          return send(res, 400, refusal("no_body", "Нет данных для записи."));
+        writing += 1;
+        writingBy.set(who.personId, mine + 1);
+        try {
+          return await putSlot(who.personId, slot);
+        } finally {
+          writing -= 1;
+          const left = (writingBy.get(who.personId) ?? 1) - 1;
+          if (left > 0) writingBy.set(who.personId, left);
+          else writingBy.delete(who.personId);
         }
-
-        // Время записи той версии, поверх которой пишут. Необязательное: без
-        // него — по одному номеру, как всегда.
-        const stamp = body.baseUpdatedAt;
-        if (
-          stamp !== undefined &&
-          stamp !== null &&
-          (typeof stamp !== "string" || stamp === "" || stamp.length > MAX_STAMP)
-        ) {
-          return send(res, 400, refusal("bad_version_time", "Неверное время версии."));
-        }
-        const baseUpdatedAt = typeof stamp === "string" ? stamp : null;
-
-        const outcome = writeSlot(
-          db,
-          who.personId,
-          slot,
-          baseVersion,
-          body.body,
-          now(),
-          LIMITS,
-          baseUpdatedAt
-        );
-        if (!outcome.ok && outcome.reason === "full") {
-          // 507, а не 409 и не 403. 409 значит «сходите за свежим и повторите» —
-          // устройство так и сделает, упрётся в то же самое и будет ходить по
-          // кругу, показывая человеку «вас обогнали» вместо «кончилось место».
-          // 507 устройство трактует как отказ, повторять который бесполезно, —
-          // и показывает текст. Данные при этом остаются на устройстве целыми:
-          // не уехало — не значит потеряно.
-          return send(res, 507, refusal(outcome.code, outcome.error, outcome.params));
-        }
-        if (!outcome.ok) {
-          // Отказ «вас обогнали» — 409, а не 200 с полем: по договору это другой
-          // исход, и путать его с успехом на уровне кода ответа нельзя.
-          //
-          // Назвало устройство время своей версии — к отказу прилагается и
-          // ответ, видела ли служба эту версию: отказ бывает и «из прошлого»,
-          // когда службу вернули из копии.
-          const ancestor =
-            baseUpdatedAt !== null && baseVersion > 0
-              ? ancestryOf(db, who.personId, slot, {
-                  version: baseVersion,
-                  updatedAt: baseUpdatedAt
-                })
-              : null;
-          return send(
-            res,
-            409,
-            ancestor ? { ...outcome, current: { ...outcome.current, ancestor } } : outcome
-          );
-        }
-        bus.announce(who.personId, slot, outcome.version);
-        return send(res, 200, outcome);
       }
     }
 
     return send(res, 404, refusal("no_route", "Нет такой ручки."));
+
+    /** Сама запись книги — под счётчиком одновременных записей выше. */
+    async function putSlot(personId: string, slot: string): Promise<void> {
+      const who = { personId };
+      const body = await readJson(req, MAX_BODY_BYTES);
+      const baseVersion = Number(body.baseVersion);
+      if (!Number.isInteger(baseVersion) || baseVersion < 0) {
+        return send(res, 400, refusal("bad_version", "Неверная версия."));
+      }
+
+      // Без книги писать нечего. `{"baseVersion":0}` без поля body раньше
+      // доходил до записи и падал там с 500 (JSON.stringify(undefined) — не
+      // строка). `null` не пускаем тоже: приложение его не шлёт никогда, а
+      // ячейка с номером версии и пустым телом для устройства выглядит как
+      // «на сервере ничего нет» — то есть книга, стёртая таким запросом,
+      // пропала бы с сервера молча, без единого отказа.
+      if (body.body === undefined || body.body === null) {
+        return send(res, 400, refusal("no_body", "Нет данных для записи."));
+      }
+
+      // Время записи той версии, поверх которой пишут. Необязательное: без
+      // него — по одному номеру, как всегда.
+      const stamp = body.baseUpdatedAt;
+      if (
+        stamp !== undefined &&
+        stamp !== null &&
+        (typeof stamp !== "string" || stamp === "" || stamp.length > MAX_STAMP)
+      ) {
+        return send(res, 400, refusal("bad_version_time", "Неверное время версии."));
+      }
+      const baseUpdatedAt = typeof stamp === "string" ? stamp : null;
+
+      const outcome = writeSlot(
+        db,
+        who.personId,
+        slot,
+        baseVersion,
+        body.body,
+        now(),
+        LIMITS,
+        baseUpdatedAt
+      );
+      if (!outcome.ok && outcome.reason === "full") {
+        // 507, а не 409 и не 403. 409 значит «сходите за свежим и повторите» —
+        // устройство так и сделает, упрётся в то же самое и будет ходить по
+        // кругу, показывая человеку «вас обогнали» вместо «кончилось место».
+        // 507 устройство трактует как отказ, повторять который бесполезно, —
+        // и показывает текст. Данные при этом остаются на устройстве целыми:
+        // не уехало — не значит потеряно.
+        return send(res, 507, refusal(outcome.code, outcome.error, outcome.params));
+      }
+      if (!outcome.ok) {
+        // Отказ «вас обогнали» — 409, а не 200 с полем: по договору это другой
+        // исход, и путать его с успехом на уровне кода ответа нельзя.
+        //
+        // Назвало устройство время своей версии — к отказу прилагается и
+        // ответ, видела ли служба эту версию: отказ бывает и «из прошлого»,
+        // когда службу вернули из копии.
+        const ancestor =
+          baseUpdatedAt !== null && baseVersion > 0
+            ? ancestryOf(db, who.personId, slot, {
+                version: baseVersion,
+                updatedAt: baseUpdatedAt
+              })
+            : null;
+        return send(
+          res,
+          409,
+          ancestor ? { ...outcome, current: { ...outcome.current, ancestor } } : outcome
+        );
+      }
+      bus.announce(who.personId, slot, outcome.version);
+      return send(res, 200, outcome);
+    }
   }
 
   /**
