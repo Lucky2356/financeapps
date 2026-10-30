@@ -2,6 +2,7 @@
 
 import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import type {
   ClipboardEvent,
   Dispatch,
@@ -50,7 +51,9 @@ export function SheetGrid({
   phone,
   categoryById,
   selected,
-  setSelected,
+  selectCell,
+  selectRange,
+  range,
   editing,
   setEditing,
   setColumnDialog,
@@ -79,7 +82,11 @@ export function SheetGrid({
   phone: boolean;
   categoryById: Map<string, ImportPageData["categories"][number]>;
   selected: Position | null;
-  setSelected: Dispatch<SetStateAction<Position | null>>;
+  /** Выбрать клетку; `extend` — растянуть выделение до неё. */
+  selectCell: (position: Position, extend?: boolean) => void;
+  selectRange: (anchor: Position, focus: Position) => void;
+  /** Выделенный прямоугольник, если выделено больше одной клетки. */
+  range: { top: number; bottom: number; left: number; right: number } | null;
   editing: Editing | null;
   setEditing: Dispatch<SetStateAction<Editing | null>>;
   setColumnDialog: Dispatch<SetStateAction<ColumnDraft | null>>;
@@ -95,6 +102,18 @@ export function SheetGrid({
   /** Клетки расходов выше обычного — `cellKey(месяц, столбец)`. */
   unusual: Map<string, AboveUsual>;
 }) {
+  // Протяжка мышью: где нажали, и было ли движение (тогда нажатие в конце
+  // протяжки — не новый выбор одной клетки).
+  const dragFrom = useRef<Position | null>(null);
+  const dragged = useRef(false);
+  useEffect(() => {
+    const up = () => {
+      dragFrom.current = null;
+    };
+    window.addEventListener("pointerup", up);
+    return () => window.removeEventListener("pointerup", up);
+  }, []);
+
   const mainSpan = display.findIndex((item) => item.type === "total") + 1;
   const savingsSpan = display.length - mainSpan;
   const pad = density === "comfort" ? "px-3 py-2.5 text-[15px]" : "px-2 py-1.5 text-sm";
@@ -108,7 +127,7 @@ export function SheetGrid({
       onKeyDown={onKeyDown}
       onPaste={onPaste}
       className={cn(
-        "relative max-h-[calc(100svh-15rem)] overflow-auto rounded-lg border bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "relative max-h-[calc(100svh-15rem)] select-none overflow-auto rounded-lg border bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring",
         !showTable && "hidden"
       )}
       data-testid="sheet-grid"
@@ -201,6 +220,12 @@ export function SheetGrid({
                 </th>
                 {display.map((item, col) => {
                   const isSelected = selected?.row === rowIndex && selected.col === col;
+                  const inRange =
+                    !!range &&
+                    rowIndex >= range.top &&
+                    rowIndex <= range.bottom &&
+                    col >= range.left &&
+                    col <= range.right;
                   const isEditing =
                     editing?.source === "cell" &&
                     editing.position.row === rowIndex &&
@@ -218,7 +243,7 @@ export function SheetGrid({
                       ? operationsHref(item.column, row.month)
                       : null;
                   const crosshair =
-                    !isSelected && (selected?.row === rowIndex || selected?.col === col);
+                    !range && !isSelected && (selected?.row === rowIndex || selected?.col === col);
                   const above =
                     item.type === "column" ? unusual.get(cellKey(row.month, item.column.id)) : null;
                   const aboveText = above
@@ -240,7 +265,7 @@ export function SheetGrid({
                     <td
                       key={item.type === "column" ? item.column.id : item.type}
                       role="gridcell"
-                      aria-selected={isSelected}
+                      aria-selected={isSelected || inRange}
                       data-pos={`${rowIndex}:${col}`}
                       data-col={item.type === "column" ? item.column.name : item.type}
                       data-above={above ? above.percent : undefined}
@@ -267,6 +292,7 @@ export function SheetGrid({
                           "font-medium text-success",
                         value === 0 && !isTotal && "text-muted-foreground/50",
                         isTotal && value !== null && value < 0 && NEGATIVE_TOTAL,
+                        inRange && !isSelected && "bg-primary/10",
                         isSelected && "outline outline-2 -outline-offset-2 outline-foreground",
                         cell?.error && "text-destructive"
                       )}
@@ -277,13 +303,30 @@ export function SheetGrid({
                             : aboveText
                           : baseTitle
                       }
-                      onClick={() => {
+                      onClick={(event) => {
                         if (phone) {
                           if (item.type === "column") setPhoneCell({ row: rowIndex, col });
                           return;
                         }
                         if (editing && !isEditing) commit();
-                        setSelected({ row: rowIndex, col });
+                        // Протяжка уже выделила — нажатие в её конце выбор не сбивает.
+                        if (dragged.current) {
+                          dragged.current = false;
+                          return;
+                        }
+                        selectCell({ row: rowIndex, col }, event.shiftKey);
+                      }}
+                      onPointerDown={(event) => {
+                        if (phone || event.button !== 0 || event.shiftKey || isEditing) return;
+                        dragFrom.current = { row: rowIndex, col };
+                        dragged.current = false;
+                      }}
+                      onPointerEnter={() => {
+                        const from = dragFrom.current;
+                        if (!from || (from.row === rowIndex && from.col === col)) return;
+                        // Протяжка мышью — выделение от клетки, где нажали.
+                        dragged.current = true;
+                        selectRange(from, { row: rowIndex, col });
                       }}
                       onDoubleClick={() => startEdit({ row: rowIndex, col })}
                     >

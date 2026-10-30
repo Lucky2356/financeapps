@@ -25,7 +25,8 @@ import {
   VIEW_KEY,
   remember,
   thisMonth,
-  type PhoneView
+  type PhoneView,
+  cellValue
 } from "@/components/sheet/budget-sheet/helpers";
 import { MonthMenuDialog } from "@/components/sheet/budget-sheet/month-menu-dialog";
 import { PhoneCellDialog } from "@/components/sheet/budget-sheet/phone-cell-editor";
@@ -48,6 +49,7 @@ import { useSheetText } from "@/components/sheet/sheet-text";
 import type { DisplayColumn, Position } from "@/components/sheet/sheet-types";
 import { Segmented } from "@/components/ui/segmented";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useI18n } from "@/lib/i18n/context";
 import { formatCurrency } from "@/lib/format";
 import { unusualExpenses } from "@/lib/sheet/highlight";
 import { firstShortfall, focusRow, monthsAhead, totalSeries } from "@/lib/sheet/insights";
@@ -116,6 +118,7 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
     if (helpOpen && hasColumns) remember(HELP_KEY, "1");
   }, [helpOpen, hasColumns]);
 
+  const { t } = useI18n();
   const money = (value: number) => formatCurrency(Math.round(value), "RUB");
   const plain = (value: number) =>
     value.toLocaleString(locale === "en" ? "en-GB" : "ru-RU", { maximumFractionDigits: 2 });
@@ -123,6 +126,9 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
   const {
     selected,
     setSelected,
+    selectCell,
+    selectRange,
+    range,
     editing,
     setEditing,
     tableRef,
@@ -153,6 +159,29 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
     setPhoneCell,
     setMonthIndex
   });
+
+  // Сумма, среднее и число чисел выделенного — итоги считаются тоже, как в Excel.
+  let rangeStats: { sum: number; average: number; count: number } | null = null;
+  if (range) {
+    let sum = 0;
+    let numbers = 0;
+    for (let row = range.top; row <= range.bottom; row += 1) {
+      for (let col = range.left; col <= range.right; col += 1) {
+        const value =
+          computed.rows[row] && display[col] ? cellValue(computed.rows[row], display[col]) : null;
+        if (value === null || value === undefined) continue;
+        sum += value;
+        numbers += 1;
+      }
+    }
+    if (numbers > 0) {
+      rangeStats = {
+        sum: Math.round(sum * 100) / 100,
+        average: Math.round((sum / numbers) * 100) / 100,
+        count: numbers
+      };
+    }
+  }
 
   // ── Вид ─────────────────────────────────────────────────────────────────
 
@@ -337,7 +366,9 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
         phone={phone}
         categoryById={categoryById}
         selected={selected}
-        setSelected={setSelected}
+        selectCell={selectCell}
+        selectRange={selectRange}
+        range={range}
         editing={editing}
         setEditing={setEditing}
         setColumnDialog={setColumnDialog}
@@ -352,6 +383,17 @@ export function BudgetSheet({ sheetId = "main" }: { sheetId?: string }) {
         money={money}
         unusual={unusual}
       />
+
+      {/* Сумма выделенного — как в строке состояния Excel. */}
+      {rangeStats ? (
+        <p className="text-xs tabular-nums text-muted-foreground" data-testid="sheet-stats">
+          {t("wb.stats", {
+            sum: plain(rangeStats.sum),
+            average: plain(rangeStats.average),
+            count: rangeStats.count
+          })}
+        </p>
+      ) : null}
 
       <SheetColumnDialog
         columnDialog={columnDialog}

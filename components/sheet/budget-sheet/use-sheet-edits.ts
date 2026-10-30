@@ -19,6 +19,7 @@ import type {
   SheetFormat,
   SheetWords
 } from "@/components/sheet/sheet-types";
+import { cellValue } from "@/components/sheet/budget-sheet/helpers";
 import { gridFromClipboard } from "@/lib/sheet/import";
 import { nextMonth, type ComputedSheet, type SheetColumn } from "@/lib/sheet/model";
 
@@ -54,7 +55,53 @@ export function useSheetEdits({
   setMonthIndex: Dispatch<SetStateAction<number | null>>;
 }) {
   const [selected, setSelected] = useState<Position | null>(null);
+  // Второй угол выделения. Пусто — выбрана одна клетка (selected). Есть —
+  // выделен прямоугольник от него до selected: Shift со стрелками,
+  // Shift+нажатие или протяжка мышью, как в Excel. Ради суммы выделенного,
+  // очистки и копирования блоком.
+  const [anchor, setAnchor] = useState<Position | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const range =
+    anchor && selected && (anchor.row !== selected.row || anchor.col !== selected.col)
+      ? {
+          top: Math.min(anchor.row, selected.row),
+          bottom: Math.max(anchor.row, selected.row),
+          left: Math.min(anchor.col, selected.col),
+          right: Math.max(anchor.col, selected.col)
+        }
+      : null;
+
+  /** Выбрать клетку; `extend` — растянуть выделение до неё от прежнего угла. */
+  function selectCell(position: Position, extend = false) {
+    if (extend && selected) setAnchor((was) => was ?? selected);
+    else setAnchor(null);
+    setSelected(position);
+  }
+
+  /** Выделить прямоугольник от `from` до `to` — протяжка мышью. */
+  function selectRange(from: Position, to: Position) {
+    setAnchor(from);
+    setSelected(to);
+  }
+
+  /** Клетки выделения (или одна выбранная) — только настоящие, без итогов. */
+  function cellsInRange(): Array<{ position: Position; column: SheetColumn }> {
+    if (!selected) return [];
+    const box = range ?? {
+      top: selected.row,
+      bottom: selected.row,
+      left: selected.col,
+      right: selected.col
+    };
+    const cells: Array<{ position: Position; column: SheetColumn }> = [];
+    for (let row = box.top; row <= box.bottom; row += 1) {
+      for (let col = box.left; col <= box.right; col += 1) {
+        const column = columnAt(col);
+        if (column) cells.push({ position: { row, col }, column });
+      }
+    }
+    return cells;
+  }
   const tableRef = useRef<HTMLDivElement>(null);
   const scrolledToNow = useRef(false);
 
@@ -154,13 +201,39 @@ export function useSheetEdits({
     }
     if (ctrl && event.key.toLowerCase() === "c") {
       event.preventDefault();
-      const column = columnAt(selected.col);
-      const row = computed.rows[selected.row];
-      const cell = column && row ? row.cells[column.id] : null;
-      const text =
-        cell?.input ||
-        (cell?.value !== null && cell?.value !== undefined ? String(cell.value) : "");
-      void navigator.clipboard?.writeText(text).catch(() => undefined);
+      // Блоком, как его понимает Excel: столбцы через табуляцию, месяцы —
+      // строками. Итоги копируются числом.
+      const box = range ?? {
+        top: selected.row,
+        bottom: selected.row,
+        left: selected.col,
+        right: selected.col
+      };
+      const lines: string[] = [];
+      for (let r = box.top; r <= box.bottom; r += 1) {
+        const line: string[] = [];
+        for (let c = box.left; c <= box.right; c += 1) {
+          const column = columnAt(c);
+          const row = computed.rows[r];
+          const cell = column && row ? row.cells[column.id] : null;
+          const item = display[c];
+          const total =
+            !column && row && item && item.type !== "column" ? cellValue(row, item) : null;
+          line.push(
+            cell?.input ||
+              (cell?.value !== null && cell?.value !== undefined ? String(cell.value) : "") ||
+              (total !== null && total !== undefined ? String(total) : "")
+          );
+        }
+        lines.push(line.join("\t"));
+      }
+      void navigator.clipboard?.writeText(lines.join("\n")).catch(() => undefined);
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      setAnchor({ row: 0, col: 0 });
+      setSelected({ row: computed.rows.length - 1, col: display.length - 1 });
       return;
     }
     const moves: Record<string, [number, number]> = {
@@ -172,7 +245,7 @@ export function useSheetEdits({
     };
     if (moves[event.key]) {
       event.preventDefault();
-      setSelected(move(selected, ...moves[event.key]));
+      selectCell(move(selected, ...moves[event.key]), event.shiftKey && event.key !== "Tab");
       return;
     }
     if (event.key === "Enter" || event.key === "F2") {
@@ -182,9 +255,11 @@ export function useSheetEdits({
     }
     if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      const column = columnAt(selected.col);
-      const row = computed.rows[selected.row];
-      if (column && row) void save([{ month: row.month, columnId: column.id, input: "" }]);
+      const changes = cellsInRange()
+        .map(({ position, column }) => ({ row: computed.rows[position.row], column }))
+        .filter(({ row, column }) => row && (row.cells[column.id]?.input ?? "") !== "")
+        .map(({ row, column }) => ({ month: row.month, columnId: column.id, input: "" }));
+      if (changes.length) void save(changes);
       return;
     }
     if (ctrl && event.key.toLowerCase() === "d") {
@@ -211,7 +286,7 @@ export function useSheetEdits({
     const text = event.clipboardData.getData("text/plain");
     if (!text) return;
     event.preventDefault();
-    void paste(text, selected);
+    void paste(text, range ? { row: range.top, col: range.left } : selected);
   }
 
   /** Клавиши поля ввода — одни и те же в клетке и в строке над таблицей. */
@@ -330,6 +405,9 @@ export function useSheetEdits({
   return {
     selected,
     setSelected,
+    selectCell,
+    selectRange,
+    range,
     editing,
     setEditing,
     tableRef,
