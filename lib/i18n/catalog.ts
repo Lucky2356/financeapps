@@ -511,12 +511,16 @@ const ru: Messages = {
   "sub.list.title": "Подписки",
   "bud.hero.label": "Потрачено из лимита",
   "bud.hero.caption": "Лимит {limit} за месяц",
+  "bud.hero.captionMonth": "Лимит {limit} за {month}",
   "bud.tile.limit": "Лимит",
   "bud.tile.limitCaption": "Категорий: {count}",
   "bud.tile.left": "Остаток",
   "bud.tile.leftCaption": "До конца месяца",
+  "bud.tile.leftCaptionPast": "На конец месяца",
   "bud.tile.perDay": "В день",
   "bud.tile.perDayCaption": "Осталось дней: {days}",
+  "bud.tile.perDayPast": "В среднем в день",
+  "bud.tile.perDayPastCaption": "Дней в месяце: {days}",
   "bud.tile.exceeded": "Превышений",
   "bud.tile.exceededNone": "Все в пределах лимита",
   "goal.hero.label": "Накоплено по целям",
@@ -773,6 +777,8 @@ const ru: Messages = {
   "tx.delete.title": "Удалить операцию?",
   "tx.delete.split":
     "Это часть покупки от {date}, разделённой по категориям. Удалятся все её части ({count}).",
+  "tx.delete.splitAll":
+    "Это часть покупки от {date}, разделённой по категориям. Удалятся все её части.",
   "tx.delete.desc": "{category} — {amount} от {date}. Действие необратимо.",
   "tx.bulk.deleted": "Удалено операций: {count}",
   "tx.bulk.categorized": "Обновлено: {applied}, пропущено: {skipped}",
@@ -785,7 +791,6 @@ const ru: Messages = {
   "tx.bulk.aiConfirm.ok": "Отправить",
   "tx.bulk.noRules": "Нет правил категоризации",
   "tx.perPage": "На странице",
-  "tx.onePage": "На одной странице",
   "tx.future.notice":
     "Операций с датой в будущем: {count}, на {sum}. Они уже учтены в остатке и капитале.",
   "tx.future.show": "Показать их",
@@ -2221,7 +2226,18 @@ const ru: Messages = {
   "wb.addCol": "Столбец",
   "wb.removeRow": "Убрать строку {row}",
   "wb.removeCol": "Убрать столбец {col}",
-  "wb.freeHint": "Двойное нажатие или любая буква — ввод. Ctrl+V — вставить блок из Excel.",
+  "wb.freeHint":
+    "Выделение — Shift со стрелками или протяжкой, Ctrl+C / Ctrl+V / Ctrl+Z. Формулы: =A1+B1, =СУММ(A1:A10).",
+  "wb.insertRow": "Строка выше",
+  "wb.insertCol": "Столбец левее",
+  "wb.undo": "Отменить",
+  "wb.formulaBar": "Содержимое клетки {cell}",
+  "wb.formulaBarHint": "Число, текст или формула: =A1*2, =СУММ(B1:B10)",
+  "wb.formulaBarPick": "Выберите клетку",
+  "wb.stats": "Сумма: {sum} · Среднее: {average} · Чисел: {count}",
+  "wb.removeTab": "Удалить лист «{name}»",
+  "wb.mainLocked":
+    "Главный лист связан с планом — его можно переименовать и сдвинуть, но не удалить.",
   "wb.formulaError": "Формулу не получилось посчитать",
   "wb.importAllTitle": "В файле листов: {count}",
   "wb.importAllLead":

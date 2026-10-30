@@ -58,7 +58,10 @@ export function useTransactionListView({
     : null;
   const dayStarts = new Map((dayGroups ?? []).map((group) => [group.items[0].id, group]));
 
-  const totals = visibleTransactions.reduce(
+  // Итоги — от данных по всему фильтру (pageData.totals), а не сложением
+  // строк страницы: на странице их двадцать, а под фильтром может быть сто.
+  // Сложение страницы — только пока данных с итогами нет.
+  const pageTotals = visibleTransactions.reduce(
     (acc, transaction) => {
       // A dollar operation contributes what it is worth in the base currency,
       // not its number of dollars.
@@ -68,7 +71,10 @@ export function useTransactionListView({
     },
     { income: 0, expense: 0 }
   );
+  const totals = pageData.totals ?? pageTotals;
   const net = totals.income - totals.expense;
+  // Сколько операций под фильтром — всех, а не на этой странице.
+  const matched = pageData.totals ? pageData.pagination.total : visibleTransactions.length;
 
-  return { visibleTransactions, sort, sortLabel, changeSort, dayStarts, totals, net };
+  return { visibleTransactions, sort, sortLabel, changeSort, dayStarts, totals, net, matched };
 }

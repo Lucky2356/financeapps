@@ -496,12 +496,16 @@ export const en: Messages = {
   "sub.list.title": "Subscriptions",
   "bud.hero.label": "Spent against the limit",
   "bud.hero.caption": "Limit {limit} this month",
+  "bud.hero.captionMonth": "Limit {limit} for {month}",
   "bud.tile.limit": "Limit",
   "bud.tile.limitCaption": "Categories: {count}",
   "bud.tile.left": "Left",
   "bud.tile.leftCaption": "Until month end",
+  "bud.tile.leftCaptionPast": "At month end",
   "bud.tile.perDay": "Per day",
   "bud.tile.perDayCaption": "Days left: {days}",
+  "bud.tile.perDayPast": "Average per day",
+  "bud.tile.perDayPastCaption": "Days in month: {days}",
   "bud.tile.exceeded": "Over limit",
   "bud.tile.exceededNone": "All within the limit",
   "goal.hero.label": "Saved towards goals",
@@ -758,6 +762,8 @@ export const en: Messages = {
   "tx.delete.title": "Delete transaction?",
   "tx.delete.split":
     "This is part of a purchase on {date} split by category. All its parts ({count}) will be deleted.",
+  "tx.delete.splitAll":
+    "This is part of a purchase on {date} split by category. All its parts will be deleted.",
   "tx.delete.desc": "{category} — {amount} on {date}. This cannot be undone.",
   "tx.bulk.deleted": "Transactions deleted: {count}",
   "tx.bulk.categorized": "Updated: {applied}, skipped: {skipped}",
@@ -770,7 +776,6 @@ export const en: Messages = {
   "tx.bulk.aiConfirm.ok": "Send",
   "tx.bulk.noRules": "No categorization rules",
   "tx.perPage": "Per page",
-  "tx.onePage": "On one page",
   "tx.future.notice":
     "Operations dated in the future: {count}, for {sum}. They already count against the balance.",
   "tx.future.show": "Show them",
@@ -2203,7 +2208,18 @@ export const en: Messages = {
   "wb.addCol": "Column",
   "wb.removeRow": "Remove row {row}",
   "wb.removeCol": "Remove column {col}",
-  "wb.freeHint": "Double-tap or any key to type. Ctrl+V pastes a block from Excel.",
+  "wb.freeHint":
+    "Select with Shift + arrows or by dragging; Ctrl+C / Ctrl+V / Ctrl+Z. Formulas: =A1+B1, =SUM(A1:A10).",
+  "wb.insertRow": "Row above",
+  "wb.insertCol": "Column left",
+  "wb.undo": "Undo",
+  "wb.formulaBar": "Contents of cell {cell}",
+  "wb.formulaBarHint": "A number, text or formula: =A1*2, =SUM(B1:B10)",
+  "wb.formulaBarPick": "Select a cell",
+  "wb.stats": "Sum: {sum} · Average: {average} · Count: {count}",
+  "wb.removeTab": "Delete sheet “{name}”",
+  "wb.mainLocked":
+    "The main sheet is linked to your plan — you can rename and move it, but not delete it.",
   "wb.formulaError": "This formula could not be calculated",
   "wb.importAllTitle": "Sheets in the file: {count}",
   "wb.importAllLead":

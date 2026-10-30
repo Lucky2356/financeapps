@@ -99,32 +99,22 @@ test("строка легенды на главной раскрывается �
   await expect(dialog.getByText("Загружаем операции…")).toBeHidden({ timeout: 15_000 });
 });
 
-// A month read at once, or printed. `limit=all` was already understood by the
-// ledger — export and duplicate search ask for it — but nothing put the switch
-// where the owner could reach it.
-test("галочка «на одной странице» убирает разбивку", async ({ page }) => {
+// Сумма над списком — по всему фильтру, а не по странице. Прежде она
+// складывалась из строк страницы и сходилась с аналитикой только с галочкой
+// «На одной странице»; галочки больше нет — она не нужна.
+test("итоги над списком не зависят от размера страницы", async ({ page }) => {
   await seedExampleData(page);
-  await openSettled(page, "/transactions");
+  const totalsAt = async (limit: number) => {
+    await openSettled(page, `/transactions?limit=${limit}`);
+    const line = page.getByText(/Итоговый поток:/);
+    await expect(line).toBeVisible({ timeout: 15_000 });
+    return (await line.locator("..").innerText()).replace(/\s+/g, " ");
+  };
+  const small = await totalsAt(10);
+  const large = await totalsAt(100);
+  expect(small).toBe(large);
 
-  const gear = page.getByRole("button", { name: "Фильтры" });
-  await gear.click();
-  const toggle = page.getByTestId("one-page-toggle");
-  await expect(toggle).toBeVisible();
-  // A plain click, not check(): ticking it navigates, and check() waits for a
-  // state it can no longer read on the element it clicked.
-  await toggle.click();
-  await expect(page).toHaveURL(/limit=all/);
-
-  // Nothing is left on another page: what is shown is everything there is.
-  const footer = page.getByText(/Показано \d+-\d+ из \d+/);
-  await expect(footer).toBeVisible({ timeout: 15_000 });
-  const [, to, total] = (await footer.innerText()).match(/Показано \d+-(\d+) из (\d+)/) ?? [];
-  expect(to).toBe(total);
-  await expect(page.getByRole("link", { name: "Дальше" })).toBeHidden();
-
-  // The panel stays open across the navigation, so the state of its own
-  // controls is right there: the picker goes inert rather than vanishing, which
-  // is what keeps it obvious what the checkbox is overriding.
-  await expect(toggle).toBeChecked();
-  await expect(page.locator("#flt-limit")).toBeDisabled();
+  await page.getByRole("button", { name: "Фильтры" }).click();
+  await expect(page.getByTestId("more-filters-panel")).toBeVisible();
+  await expect(page.getByTestId("one-page-toggle")).toHaveCount(0);
 });

@@ -1,5 +1,6 @@
 // Per-category spending trends with simple anomaly detection. Pure and
 import { countableAmount } from "@/lib/transactions/base-amount";
+import { isTransfer } from "@/lib/transactions/transfers";
 // deterministic: given raw expense transactions it builds a month-by-month
 // series per category, compares the latest month against the average of the
 // prior months in the window, and flags unusually high/low months. Feeds the
@@ -10,6 +11,9 @@ export type TrendTransaction = {
   type: string;
   date: string;
   category: { id: string; label: string; color?: string };
+  /** По ним узнаётся перевод между своими счетами (см. lib/transactions/transfers). */
+  description?: string | null;
+  transferId?: string;
 };
 
 export type CategoryTrend = {
@@ -37,6 +41,12 @@ export type TrendOptions = {
    * тратами — и одна операция, записанная на будущее, сдвигала всё окно.
    */
   currentMonth?: string;
+  /**
+   * Галка «учитывать переводы» отчётов. По умолчанию переводы между своими
+   * счетами — не траты: иначе «Переводы» выходили в тренды самой «выросшей»
+   * статьёй, хотя соседние карточки той же страницы их не считали.
+   */
+  includeTransfers?: boolean;
 };
 
 function monthKey(date: string): string {
@@ -57,7 +67,15 @@ export function buildCategoryTrends(
   const highThreshold = options.highThreshold ?? 0.4;
   const lowThreshold = options.lowThreshold ?? 0.5;
 
-  const expenses = transactions.filter((transaction) => transaction.type === "EXPENSE");
+  const expenses = transactions.filter(
+    (transaction) =>
+      transaction.type === "EXPENSE" &&
+      (options.includeTransfers ||
+        !isTransfer({
+          description: transaction.description ?? null,
+          transferId: transaction.transferId
+        }))
+  );
   if (expenses.length === 0) return [];
 
   // Окно кончается на текущем месяце, когда он передан. Без него — на

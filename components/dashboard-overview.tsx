@@ -12,6 +12,7 @@ import { StatTile, type StatTone } from "@/components/ui/stat-tile";
 import type { DashboardData } from "@/types/finance";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
+import { periodRange } from "@/lib/transactions/filter-chips";
 
 const METRIC_ICON: Record<string, LucideIcon | undefined> = {
   totalBalance: WalletCards,
@@ -22,12 +23,27 @@ const METRIC_ICON: Record<string, LucideIcon | undefined> = {
 
 // Every figure on the overview grid comes from somewhere the owner can open —
 // tapping the number is the fastest way to ask "made of what?".
-const METRIC_HREF: Record<string, string | undefined> = {
-  totalBalance: "/accounts",
-  monthIncome: "/transactions?type=INCOME",
-  monthExpense: "/transactions?type=EXPENSE",
-  freeCash: "/transactions"
-};
+//
+// Доход и расход — за месяц, и ссылка несёт его даты: `?type=INCOME` без
+// периода «Учёт» читает как явный запрос и показывает всё время — под плиткой
+// «доход месяца» открывался доход за годы.
+export function metricHref(key: string, today: Date = new Date()): string | undefined {
+  const month = periodRange("thisMonth", today);
+  const monthOf = (type: "INCOME" | "EXPENSE") =>
+    `/transactions?${new URLSearchParams({ type, from: month?.from ?? "", to: month?.to ?? "" })}`;
+  switch (key) {
+    case "totalBalance":
+      return "/accounts";
+    case "monthIncome":
+      return monthOf("INCOME");
+    case "monthExpense":
+      return monthOf("EXPENSE");
+    case "freeCash":
+      return "/transactions";
+    default:
+      return undefined;
+  }
+}
 
 // `loading` — первое чтение ещё не вернулось, в `data` заготовка сборки: нули и
 // русские подписи. Вместо них — заглушки той же формы, чтобы экран не прыгал.
@@ -92,7 +108,7 @@ export function DashboardOverview({
             loading={loading}
             icon={tile.icon}
             tone={toTone(tile.tone)}
-            href={METRIC_HREF[tile.key ?? ""]}
+            href={metricHref(tile.key ?? "")}
           />
         ))}
       </StatGrid>

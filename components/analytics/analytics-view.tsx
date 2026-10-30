@@ -48,9 +48,12 @@ import { InfoHint } from "@/components/info-hint";
 
 export function AnalyticsView({
   data,
-  transfers
+  transfers,
+  includeTransfers = false
 }: {
   data: AnalyticsData;
+  /** Та же галка, что у остальной страницы: тренды по статьям слушаются её же. */
+  includeTransfers?: boolean;
   /** The "count transfers" checkbox — shown on the same line as the print button. */
   transfers?: ReactNode;
 }) {
@@ -292,7 +295,7 @@ export function AnalyticsView({
           from={data.from}
           to={data.to}
         />
-        <CategoryTrendsSection currency={data.currency} />
+        <CategoryTrendsSection currency={data.currency} includeTransfers={includeTransfers} />
       </div>
     </div>
   );
@@ -458,7 +461,13 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-function CategoryTrendsSection({ currency }: { currency: string }) {
+function CategoryTrendsSection({
+  currency,
+  includeTransfers
+}: {
+  currency: string;
+  includeTransfers: boolean;
+}) {
   const dataVersion = useDataVersion();
   const { t } = useI18n();
   const [transactions, setTransactions] = useState<TransactionsPageData["transactions"]>([]);
@@ -484,9 +493,16 @@ function CategoryTrendsSection({ currency }: { currency: string }) {
     // при открытии, — и спорит с соседним экраном, читающим ту же книгу.
   }, [dataVersion]);
 
+  // Строки /transactions — сырые, с обеими половинами переводов. Без галки
+  // переводы не траты — как в /analytics, который рисует карточки рядом
+  // (отсеивает их buildCategoryTrends по includeTransfers).
   const trends = useMemo(
-    () => buildCategoryTrends(transactions, { currentMonth: todayDay().slice(0, 7) }).slice(0, 8),
-    [transactions]
+    () =>
+      buildCategoryTrends(transactions, {
+        currentMonth: todayDay().slice(0, 7),
+        includeTransfers
+      }).slice(0, 8),
+    [transactions, includeTransfers]
   );
 
   if (trends.length === 0) return null;

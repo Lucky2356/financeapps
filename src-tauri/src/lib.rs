@@ -75,15 +75,30 @@ fn open_main_window<R: tauri::Runtime>(app: &tauri::App<R>) {
     return;
   };
   let _ = window.restore_state(window_state_flags());
-  if let Err(error) = fit_to_monitor(&window) {
-    eprintln!("окно не подогнано под экран: {error}");
-  }
+  let maximize = match fit_to_monitor(&window) {
+    Ok(maximize) => maximize,
+    Err(error) => {
+      eprintln!("окно не подогнано под экран: {error}");
+      false
+    }
+  };
   let _ = window.show();
+  // Развернуть — только ПОКАЗАННОЕ окно. Windows не разворачивает скрытое:
+  // `maximize()` до show() молча ничего не делал, и окно, закрытое
+  // развёрнутым, открывалось в обычном размере, хотя «развёрнуто» плагин
+  // запомнил верно. Плагин восстанавливает это сам, по своим данным; маленький
+  // экран (fit_to_monitor) — по нашему решению.
+  let _ = window.restore_state(tauri_plugin_window_state::StateFlags::MAXIMIZED);
+  if maximize {
+    let _ = window.maximize();
+  }
   let _ = window.set_focus();
 }
 
+/// Подогнать окно под экран. `true` — экран маленький, и окно надо
+/// развернуть, когда оно будет показано (см. open_main_window).
 #[cfg(desktop)]
-fn fit_to_monitor<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> tauri::Result<()> {
+fn fit_to_monitor<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> tauri::Result<bool> {
   use tauri::{LogicalSize, Manager, PhysicalPosition, PhysicalSize};
   use window_fit::{Placement, Rect};
 
@@ -95,7 +110,7 @@ fn fit_to_monitor<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> tauri:
     .unwrap_or((960.0, 640.0));
 
   let Some(monitor) = window.current_monitor()?.or(window.primary_monitor()?) else {
-    return Ok(());
+    return Ok(false);
   };
   let scale = monitor.scale_factor();
   let area = monitor.work_area();
@@ -123,7 +138,7 @@ fn fit_to_monitor<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> tauri:
   window.set_min_size(Some(LogicalSize::new(min_w, min_h)))?;
 
   if window.is_maximized()? {
-    return Ok(());
+    return Ok(false);
   }
 
   let position = window.outer_position()?;
@@ -141,10 +156,10 @@ fn fit_to_monitor<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> tauri:
     Placement::Maximize { x, y, inner_width, inner_height } => {
       window.set_size(PhysicalSize::new(inner_width, inner_height))?;
       window.set_position(PhysicalPosition::new(x, y))?;
-      window.maximize()?;
+      return Ok(true);
     }
   }
-  Ok(())
+  Ok(false)
 }
 
 /// Обновление на телефоне без браузера: скачать APK и открыть установку.

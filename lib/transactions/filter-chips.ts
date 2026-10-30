@@ -129,6 +129,18 @@ export function periodIsUnset(params: URLSearchParams): boolean {
   return true;
 }
 
+/**
+ * Что запомнить в сохранённом фильтре: всё, кроме листания. Страница 4 —
+ * не часть фильтра: применённый позже, когда операций под ним меньше, он
+ * открывал пустую страницу. `limit=all` — служебный (выгрузка), не выбор.
+ */
+export function savedFilterParams(paramsString: string): string {
+  const next = new URLSearchParams(paramsString);
+  next.delete("page");
+  if (next.get("limit") === "all") next.delete("limit");
+  return next.toString();
+}
+
 /** A copy with one filter written in (empty value removes it), paging reset. */
 export function withFilter(params: URLSearchParams, key: string, value: string): URLSearchParams {
   const next = new URLSearchParams(params);

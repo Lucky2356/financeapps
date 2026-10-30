@@ -6,6 +6,54 @@ its release notes from here. The Russian CHANGELOG.md is the source of truth:
 every release is written there first, then translated here with the same
 version, date and sections.
 
+## [2.8.2] — 2026-10-30
+
+📊 Totals on the operations screen match Analytics with no extra checkboxes, the Sheet is closer to Excel, and the window opens the way you closed it.
+
+### Fixed — operations
+- **The total above the list covers the whole filter, not just the page.**
+  A month and category showed one total here and another in Analytics, and
+  they only matched with “On one page” ticked. That checkbox is no longer
+  needed and is gone. Transfers between your own accounts are left out of the
+  total, as in Analytics (unless you filter by account or by transfers).
+- Bulk category changes, rules and AI no longer wipe an operation's tags.
+- A page past the end of the list (after deleting or narrowing a filter) no
+  longer shows an empty list with no buttons.
+- Deleting one part of a split purchase now says that all its parts will be
+  deleted; bulk delete behaves the same way.
+- The from/to amount filter and amount search work in the base currency.
+- A saved filter no longer remembers the page number.
+
+### Fixed — figures across screens
+- The breakdown dialog (dashboard, plan vs actual) no longer adds dollars to
+  roubles.
+- The “Cards / Cash / Savings” tiles on Accounts are in the base currency.
+- “Income” and “Spending this month” on the dashboard open the month's
+  operations, not all-time ones.
+- Month comparison no longer adds payments recorded in advance to the running
+  month.
+- Category trends in Analytics leave transfers out; cashback is computed from
+  amounts in the base currency; the totals at the top of Budgets follow the
+  selected month.
+
+### Sheet
+- **Delete a sheet with the cross on its tab**, rename it with a double
+  click. The main sheet is linked to your plan — its menu explains why it
+  can't be deleted.
+- **The free sheet works like Excel:**
+  - cell references in formulas: `=A1*2`, `=SUM(B1:B10)`, AVERAGE, COUNT;
+    references follow their cells when rows are inserted or removed;
+  - range selection — Shift + arrows, Shift + click, dragging, a column
+    letter or row number — with the sum, average and count shown below;
+  - Ctrl+C / Ctrl+X / Ctrl+V as a block, Delete clears the selection,
+    Ctrl+Z and an “Undo” button;
+  - a formula bar with the cell address; “Row above” and “Column left”.
+- **The budget sheet** selects ranges too and shows the sum of the
+  selection; Delete, Ctrl+C and Ctrl+V work on the whole block.
+
+### Window
+- A window closed maximized opens maximized again.
+
 ## [2.8.1] — 2026-10-30
 
 🔒 A security review of the sync service, sync that survives a restart, correct dates in any time zone, and fast statement import.

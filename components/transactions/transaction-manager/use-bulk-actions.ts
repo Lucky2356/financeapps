@@ -12,6 +12,7 @@ import type { TransactionsPageData } from "@/lib/data";
 import type { useI18n } from "@/lib/i18n/context";
 
 import {
+  splitPartCounts,
   type TransactionRow,
   updatePayload
 } from "@/components/transactions/transaction-manager/helpers";
@@ -42,17 +43,42 @@ export function useBulkActions({
   const [bulkPending, setBulkPending] = useState(false);
 
   async function bulkDelete() {
-    const ids = [...selectedIds];
-    if (ids.length === 0) return;
+    if (selectedIds.size === 0) return;
+    // Часть разделённой покупки удаляется так же, как из строки, — вся
+    // покупка разом (`?splitGroupId=`), по разу на покупку. По одному `id`
+    // чек терял выбранные части, а остальные оставались висеть.
+    const rowOf = new Map(pageData.transactions.map((row) => [row.id, row]));
+    const ids: string[] = [];
+    const groups = new Set<string>();
+    for (const id of selectedIds) {
+      const group = rowOf.get(id)?.splitGroupId;
+      if (group) groups.add(group);
+      else ids.push(id);
+    }
+    // Сколько строк уйдёт с каждой покупкой — по всей книге. Не прочитали —
+    // хотя бы видимые на странице части.
+    const counted = await splitPartCounts(groups);
+    const partsOf = (group: string) =>
+      counted?.get(group) ??
+      Math.max(1, pageData.transactions.filter((row) => row.splitGroupId === group).length);
+    const total = ids.length + [...groups].reduce((sum, group) => sum + partsOf(group), 0);
     const ok = await confirm({
       title: t("tx.bulk.deleteTitle"),
-      description: t("tx.bulk.deleteDesc", { count: ids.length }),
+      description: t("tx.bulk.deleteDesc", { count: total }),
       destructive: true,
       confirmLabel: t("common.delete")
     });
     if (!ok) return;
     setBulkPending(true);
     let done = 0;
+    for (const group of groups) {
+      try {
+        await apiClient.delete(`/transactions?splitGroupId=${encodeURIComponent(group)}`);
+        done += partsOf(group);
+      } catch {
+        /* keep going; summary reports how many succeeded */
+      }
+    }
     for (const id of ids) {
       try {
         await apiClient.delete(`/transactions?id=${encodeURIComponent(id)}`);

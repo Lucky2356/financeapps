@@ -306,7 +306,9 @@ function cashback({ state, searchParams }: ReadRequest) {
     state,
     month,
     // Погашение кредита — не покупка по карте: кэшбэк за него не платят.
-    countingState(state, false)
+    // Суммы — в основной валюте, как на всех соседних экранах: 100 $ по
+    // долларовой карте — это 9 000 ₽ трат, а не 100, и процент берётся с них.
+    countingState(inBase(state), false)
       .transactions.filter((row) => row.type === "EXPENSE" && !row.liabilityId)
       .map((row) => ({
         id: row.id,

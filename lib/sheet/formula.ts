@@ -31,7 +31,15 @@ const FUNCTIONS: Record<string, (args: number[]) => number> = {
   MAX: (args) => Math.max(...args),
   МАКС: (args) => Math.max(...args),
   ROUND: ([value, digits = 0]) => roundHalfAway(value, digits),
-  ОКРУГЛ: ([value, digits = 0]) => roundHalfAway(value, digits)
+  ОКРУГЛ: ([value, digits = 0]) => roundHalfAway(value, digits),
+  // Для диапазонов свободного листа (см. free-grid.ts): среднее и сколько
+  // чисел. Среднее пустого — ошибка (деления на ноль), как #ДЕЛ/0! в Excel.
+  AVERAGE: (args) => args.reduce((sum, value) => sum + value, 0) / args.length,
+  СРЗНАЧ: (args) => args.reduce((sum, value) => sum + value, 0) / args.length,
+  COUNT: (args) => args.length,
+  СЧЁТ: (args) => args.length,
+  СЧЕТ: (args) => args.length,
+  ABS: ([value]) => Math.abs(value)
 };
 
 type Token =

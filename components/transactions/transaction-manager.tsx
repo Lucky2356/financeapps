@@ -58,7 +58,7 @@ function TransactionList() {
   const confirmFutureDate = useConfirmFutureDate();
   const [photoFor, setPhotoFor] = useState<string | null>(null);
   const { pageData, loadTransactions } = useTransactionsPage();
-  const { visibleTransactions, sort, sortLabel, changeSort, dayStarts, totals, net } =
+  const { visibleTransactions, sort, sortLabel, changeSort, dayStarts, totals, net, matched } =
     useTransactionListView({ pageData, searchParams, paramsString, router, t });
   const { selectedIds, allVisibleSelected, toggleSelect, toggleSelectAll, clearSelection } =
     useTransactionSelection(visibleTransactions, paramsString);
@@ -96,7 +96,7 @@ function TransactionList() {
       <Card>
         <TransactionListHeader
           pageData={pageData}
-          visibleCount={visibleTransactions.length}
+          visibleCount={matched}
           totals={totals}
           net={net}
           sort={sort}
@@ -105,11 +105,18 @@ function TransactionList() {
         />
         <CardContent>
           {visibleTransactions.length === 0 ? (
-            <EmptyState
-              icon={ReceiptText}
-              title={t("tx.empty.title")}
-              description={t("tx.empty.desc")}
-            />
+            <>
+              <EmptyState
+                icon={ReceiptText}
+                title={t("tx.empty.title")}
+                description={t("tx.empty.desc")}
+              />
+              {/* Пустая страница не первая — кнопки листания остаются: без них
+                  с неё некуда было уйти, кроме как править адрес руками. */}
+              {pageData.pagination.page > 1 ? (
+                <TransactionPagination data={pageData} searchParams={searchParams} />
+              ) : null}
+            </>
           ) : (
             <>
               {selectedIds.size > 0 ? (

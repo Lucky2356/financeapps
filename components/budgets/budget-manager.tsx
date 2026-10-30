@@ -52,7 +52,20 @@ function buildMonthOptions(locale: Locale) {
   return options;
 }
 
-export function BudgetManager({ data }: { data: BudgetsPageData }) {
+export function BudgetManager({
+  data,
+  month,
+  onMonthChange
+}: {
+  data: BudgetsPageData;
+  /**
+   * Выбранный месяц, когда его держит страница (BudgetsScreen): шапка с итогами
+   * над списком должна показывать тот же месяц, что и список. Без него —
+   * свой собственный выбор, как раньше.
+   */
+  month?: string;
+  onMonthChange?: (month: string) => void;
+}) {
   const router = useRouter();
   const { t, locale } = useI18n();
   // Month selection is purely client-side — no URL params needed.
@@ -64,7 +77,9 @@ export function BudgetManager({ data }: { data: BudgetsPageData }) {
   // limits on August for the whole of September — while the month list beside
   // it, which reads the real clock, already offered September. The device's own
   // date is the only one that means anything here.
-  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), "yyyy-MM"));
+  const [ownMonth, setOwnMonth] = useState(() => format(new Date(), "yyyy-MM"));
+  const selectedMonth = month ?? ownMonth;
+  const setSelectedMonth = onMonthChange ?? setOwnMonth;
   const apiPath = `/budgets?month=${selectedMonth}` as const;
   const { data: pageData, reload } = useApiPageData(data, apiPath);
 

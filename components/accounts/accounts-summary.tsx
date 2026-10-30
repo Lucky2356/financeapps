@@ -20,12 +20,13 @@ export function AccountsSummary({ data }: { data: AccountsPageData }) {
   const loading = !ready;
   const currency = pageData.currency;
 
-  // Balances are summed per kind. Multi-currency accounts are already converted
-  // into the base currency by the API, so plain addition is right here.
+  // Balances are summed per kind, in the base currency: a dollar account
+  // carries what it is worth beside its own balance (`baseBalance`), and
+  // adding its bare 100 $ to roubles made the tiles disagree with the total.
   const sumOf = (types: string[]) =>
     pageData.accounts
       .filter((account) => types.includes(account.type))
-      .reduce((sum, account) => sum + account.balance, 0);
+      .reduce((sum, account) => sum + (account.baseBalance ?? account.balance), 0);
 
   // Each tile opens the operations of the accounts it sums, so a surprising
   // figure is one tap from its history.
