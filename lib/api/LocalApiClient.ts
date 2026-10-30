@@ -39,6 +39,15 @@ import {
   type PhotoPlace,
   type StoredPhoto
 } from "@/lib/photos/receipt-photo";
+import {
+  KEPT_PHOTO_DAYS,
+  KEPT_PHOTO_PREFIX,
+  keptPhoto,
+  keptPhotoKey,
+  keptPhotoStale,
+  storedPhotoOf,
+  type KeptPhoto
+} from "@/lib/photos/kept-photos";
 import { todayDay } from "@/lib/transactions/date";
 import { createStorageAdapter } from "@/lib/storage/createStorageAdapter";
 import { LATEST_LOCAL_STATE_VERSION } from "@/lib/storage/migrations/runLocalStateMigrations";
@@ -64,13 +73,18 @@ import {
   standardCategoriesFrom,
   createInitialState,
   createBlankState,
-  migrateLocalState
+  migrateLocalState,
+  recomputeGoal
 } from "@/lib/api/local/state";
 import {
+  applyDebtPayment,
   releaseTrashedPayments,
   restoreTransaction,
   restoreTransactionOnReturnedAccount
 } from "@/lib/api/local/ledger";
+import { applyBalance, ratesOf } from "@/lib/api/local/money";
+import { convert } from "@/lib/currency";
+import { roundMoney } from "@/lib/utils";
 import { buildInvestmentsPage, investmentMarketFor } from "@/lib/api/local/investments";
 import { backupDocument } from "@/lib/api/local/settings";
 import { buildSampleState } from "@/lib/api/local/sample";
@@ -558,6 +572,7 @@ export class LocalApiClient implements ApiClient {
     // Своя же выгрузка с одной кривой строкой (длинная метка, лимит старой
     // версии) отвергалась целиком — «файл не похож на копию». Читается так
     // же, как своя книга при запуске: кривое отбрасывается, остальное — на месте.
+    assertNotNewer(document);
     const readable = readableState(document);
     if (!readable) throw new Error(apiText("api.backup.notBackup"));
     const restored = migrateLocalState(readable);
@@ -981,12 +996,16 @@ export class LocalApiClient implements ApiClient {
     // Операции не стало — не стало и её фото. Сличаем записанное с прежним,
     // а не ловим каждое место, где операцию удаляют: их много (одна, чек
     // целиком, выбранные, перевод), и одно забытое оставило бы фото навсегда.
-    for (const gone of orphanedPhotos(
-      (previous?.transactions as Array<{ id: string; photo?: PhotoPlace }> | undefined) ?? [],
-      next.transactions
-    )) {
-      await this.dropPhoto(gone.id, gone.place);
-    }
+    //
+    // Фото при этом не стирается, а откладывается (kept-photos.ts): операция
+    // пропадает и тогда, когда книгу заменяют копией, — и возвращается, когда
+    // возвращают другую. Вернулась — фото кладётся обратно (returnKeptPhotos).
+    const before =
+      (previous?.transactions as Array<{ id: string; photo?: PhotoPlace }> | undefined) ?? [];
+    const gone = orphanedPhotos(before, next.transactions);
+    for (const photo of gone) await this.dropPhoto(photo.id, photo.place, KEPT_PHOTO_DAYS);
+    if (gone.length > 0) await this.pruneKeptPhotos();
+    await this.returnKeptPhotos(before, next.transactions);
   }
 
   // ——— корзина ————————————————————————————————————————————————————
@@ -1222,9 +1241,13 @@ export class LocalApiClient implements ApiClient {
    * здесь осталось бы на сервере и на других устройствах (слой синхронизации
    * нарочно не передаёт удаление ключа, см. SyncingStorageAdapter.removeItem).
    */
-  private async dropPhoto(transactionId: string, place: PhotoPlace) {
+  private async dropPhoto(transactionId: string, place: PhotoPlace, keepDays?: number) {
     const key = photoKey(transactionId, place);
     try {
+      // `keepDays` — операция исчезла, а не фото убрали руками: отложить его
+      // до стирания (kept-photos.ts). Убранное руками («Удалить фото») не
+      // откладывается — его человек выбросил сам.
+      if (keepDays !== undefined) await this.keepPhoto(key, keepDays);
       if (place === "device") await this.storage.removeItem(key);
       else if (await this.storage.getItem<unknown>(key))
         await this.storage.setItem<StoredPhoto>(key, {
@@ -1233,6 +1256,67 @@ export class LocalApiClient implements ApiClient {
         });
     } catch {
       /* фото не главное — книга уже записана */
+    }
+  }
+
+  /** Отложить фото по ключу `key` перед стиранием (kept-photos.ts). */
+  private async keepPhoto(key: string, days: number) {
+    const stored = await this.storage.getItem<unknown>(key);
+    if (!isPhotoData(stored)) return;
+    await this.storage.setItem<KeptPhoto>(keptPhotoKey(key), keptPhoto(stored, new Date(), days));
+  }
+
+  /**
+   * Операции, вернувшиеся в книгу с отметкой о фото, — фото обратно на место.
+   *
+   * Вернуться операция может многими путями: «Вернуть» местную копию, отмена
+   * очистки, восстановление из файла. Ловить каждый незачем — как и при
+   * удалении, здесь сличается записанное с прежним: строка с фото, которой
+   * прежде не было (или было, но без этого фото), ищет своё отложенное.
+   * Фото на месте (приехало с другого устройства) — его и оставляем.
+   */
+  private async returnKeptPhotos(
+    before: ReadonlyArray<{ id: string; photo?: PhotoPlace }>,
+    after: ReadonlyArray<{ id: string; photo?: PhotoPlace }>
+  ) {
+    const had = new Map<string, PhotoPlace>();
+    for (const row of before) if (row.photo) had.set(row.id, row.photo);
+    for (const row of after) {
+      if (!row.photo || had.get(row.id) === row.photo) continue;
+      const key = photoKey(row.id, row.photo);
+      try {
+        const kept = await this.storage.getItem<KeptPhoto>(keptPhotoKey(key));
+        if (!isPhotoData(kept)) continue;
+        if (!isPhotoData(await this.storage.getItem<unknown>(key)))
+          await this.storage.setItem<StoredPhoto>(key, storedPhotoOf(kept));
+        await this.storage.removeItem(keptPhotoKey(key));
+      } catch {
+        /* фото не главное — книга уже записана */
+      }
+    }
+  }
+
+  /**
+   * Убрать отложенные фото, которые больше никому не вернуть: срок вышел, и
+   * нет копии (местной или до очистки) старше, чем их отложили. Метёт там, где
+   * отложенных прибавляется (удаление операций с фото) и где копии уходят
+   * (takeLocalCopy), — не на каждую запись: читать приходится каждое фото.
+   */
+  private async pruneKeptPhotos() {
+    try {
+      const clearCopy = await this.beforeClearCopy();
+      const oldest =
+        [...(await this.localCopies()).map((copy) => copy.savedAt), clearCopy?.savedAt]
+          .filter((at): at is string => typeof at === "string")
+          .sort()[0] ?? null;
+      const now = new Date().toISOString();
+      for (const key of await this.storage.keys()) {
+        if (!key.startsWith(KEPT_PHOTO_PREFIX)) continue;
+        if (keptPhotoStale(await this.storage.getItem<unknown>(key), now, oldest))
+          await this.storage.removeItem(key);
+      }
+    } catch {
+      /* подметём в следующий раз */
     }
   }
 
@@ -1373,14 +1457,6 @@ export class LocalApiClient implements ApiClient {
     // держит книгу ЦЕЛИКОМ, и «удалить всё», оставив их, значило бы удалить
     // не всё. На службу они не ездят, так что убрать их с диска и есть удалить.
     for (const key of await this.storage.keys()) {
-      // Фото чеков — тоже данные человека. Синхронизируемые гасятся следом,
-      // чтобы исчезли и на других устройствах.
-      if (key.startsWith(PHOTO_PREFIX)) {
-        const [, rest] = key.split(PHOTO_PREFIX);
-        const place: PhotoPlace = rest.endsWith(":device") ? "device" : "synced";
-        await this.dropPhoto(rest.replace(/:device$/, ""), place);
-        continue;
-      }
       if (
         key === LEGACY_STATE_KEY ||
         key.endsWith(PRE_UPGRADE_SUFFIX) ||
@@ -1390,8 +1466,21 @@ export class LocalApiClient implements ApiClient {
         key.endsWith(LOCAL_COPY_SUFFIX) ||
         key.endsWith(TRASH_SUFFIX)
       ) {
+        // Отложенные фото (kept-photos.ts) тоже уходят: их операции
+        // удалили ещё до очистки, а копии, которым они были нужны, — вот здесь.
         await this.storage.removeItem(key);
       }
+    }
+    // Фото чеков — тоже данные человека. Синхронизируемые гасятся следом,
+    // чтобы исчезли и на других устройствах. Но сначала откладываются — на
+    // тот же срок, что и копия до очистки: без них «Вернуть» возвращало
+    // операции со скрепкой и без фото. Отдельным проходом, ПОСЛЕ уборки выше:
+    // в одном проходе отложенное только что могло попасть под неё же.
+    for (const key of await this.storage.keys()) {
+      if (!key.startsWith(PHOTO_PREFIX)) continue;
+      const [, rest] = key.split(PHOTO_PREFIX);
+      const place: PhotoPlace = rest.endsWith(":device") ? "device" : "synced";
+      await this.dropPhoto(rest.replace(/:device$/, ""), place, BEFORE_CLEAR_DAYS);
     }
     this.invalidateStateCache();
   }
@@ -1487,6 +1576,8 @@ export class LocalApiClient implements ApiClient {
       await this.storage.removeItem(localCopyKey(stale.id));
     }
     await this.storage.setItem(LOCAL_COPY_INDEX_KEY, kept.slice(0, LOCAL_COPIES_KEEP));
+    // Ушли старые копии — с ними, может быть, и нужда в отложенных фото.
+    if (kept.length > LOCAL_COPIES_KEEP) await this.pruneKeptPhotos();
     return copy;
   }
 
@@ -1636,6 +1727,7 @@ function isProfilesBackup(value: unknown): value is ProfilesBackup {
  * потерять остальные записи.
  */
 function readMergeDocument(document: unknown, profileName?: string): LocalState {
+  assertNotNewer(document);
   const parsed = localStateSchema.safeParse(document);
   if (parsed.success) return migrateLocalState(parsed.data);
   const salvaged = salvageLocalState(document);
@@ -1724,6 +1816,7 @@ function addRows<T>(
  */
 function mergeRecords(state: LocalState, incoming: LocalState): number {
   const tally: Tally = { added: 0 };
+  const here = whatIsHere(state);
 
   const categoryOf = new Map<string, LocalState["categories"][number]>();
   const categories = [...state.categories];
@@ -1958,8 +2051,71 @@ function mergeRecords(state: LocalState, incoming: LocalState): number {
   );
 
   mergeSheets(tally, state, incoming, categoryId);
+  postOntoHere(state, incoming, here);
 
   return tally.added;
+}
+
+/** Что было в книге до объединения — чьи остатки ещё не знают о пришедшем. */
+function whatIsHere(state: LocalState) {
+  const ids = (rows: ReadonlyArray<{ id: string }>) => new Set(rows.map((row) => row.id));
+  return {
+    accounts: ids(state.accounts),
+    goals: ids(state.goals),
+    liabilities: ids(state.liabilities),
+    transactions: ids(state.transactions),
+    goalMovements: ids(state.goalMovements ?? [])
+  };
+}
+
+/**
+ * Провести добавленное по здешним остаткам.
+ *
+ * Счёт, которого здесь не было, приезжает со своим остатком — в нём его
+ * операции уже сидят. А счёт с тем же id, что и здешний (второе устройство
+ * когда-то восстановилось из копии первого), остаётся здешним, и его остаток
+ * о пришедших операциях не знает. Раньше они просто добавлялись: на первом
+ * устройстве расход 300 — после «Объединить» на втором операция есть, а
+ * «Карта» всё ещё 1000 вместо 700. Так же — цель (пополнение, движение
+ * цели) и долг (платёж по нему).
+ */
+function postOntoHere(
+  state: LocalState,
+  incoming: LocalState,
+  here: ReturnType<typeof whatIsHere>
+): void {
+  for (const row of state.transactions) {
+    if (here.transactions.has(row.id)) continue;
+    if (here.accounts.has(row.account.id))
+      applyBalance(state, row.account.id, row.type === "INCOME" ? row.amount : -row.amount);
+    if (row.liabilityId && here.liabilities.has(row.liabilityId)) applyDebtPayment(state, row, -1);
+  }
+  const rates = ratesOf(state);
+  for (const move of state.goalMovements ?? []) {
+    if (here.goalMovements.has(move.id)) continue;
+    // Сумма движения — в валюте приложения той книги, откуда оно приехало.
+    const goal = here.goals.has(move.goalId)
+      ? state.goals.find((item) => item.id === move.goalId)
+      : undefined;
+    if (goal) {
+      const delta = roundMoney(convert(move.amount, incoming.currency, state.currency, rates));
+      const updated = recomputeGoal({
+        ...goal,
+        currentAmount: roundMoney(goal.currentAmount + delta)
+      });
+      state.goals = state.goals.map((item) => (item.id === goal.id ? updated : item));
+    }
+    const account = here.accounts.has(move.accountId)
+      ? state.accounts.find((item) => item.id === move.accountId)
+      : undefined;
+    if (account) {
+      applyBalance(
+        state,
+        account.id,
+        -roundMoney(convert(move.amount, incoming.currency, account.currency, rates))
+      );
+    }
+  }
 }
 
 /**
@@ -2052,6 +2208,20 @@ function freeSheetName(state: LocalState, name: string): string {
     candidate = `${name.slice(0, 54)} (${n})`;
   }
   return candidate;
+}
+
+/**
+ * Копия от более новой версии приложения — так и сказать.
+ *
+ * Схема такой копии этой версии неизвестна, строгий разбор её не принимает, а
+ * спасение по частям не трогает номер схемы — и человек слышал «файл не похож
+ * на резервную копию» про свой же файл, снятый на обновлённом телефоне. Дело
+ * не в файле, а в версии: обновить приложение — и копия откроется.
+ */
+function assertNotNewer(document: unknown): void {
+  const version = (document as { schemaVersion?: unknown } | null)?.schemaVersion;
+  if (typeof version === "number" && version > LATEST_LOCAL_STATE_VERSION)
+    throw new Error(apiText("api.backup.newerVersion", { version }));
 }
 
 /**
