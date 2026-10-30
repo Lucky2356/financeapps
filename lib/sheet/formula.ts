@@ -18,9 +18,23 @@ export type FormulaResult = { ok: true; value: number } | { ok: false; error: st
  */
 export function roundHalfAway(value: number, digits = 2): number {
   if (!Number.isFinite(value)) return value;
-  const scaled = Math.round(Number(`${Math.abs(value).toPrecision(15)}e${digits}`));
-  const result = Number(`${scaled}e${-digits}`);
+  const scaled = Math.round(shiftDecimal(Number(Math.abs(value).toPrecision(15)), digits));
+  const result = shiftDecimal(scaled, -digits);
   return result === 0 ? 0 : Math.sign(value) * result;
+}
+
+/**
+ * Умножить на 10^by через запись числа, без ошибки двоичной дроби.
+ *
+ * Порядок прибавляется к уже имеющемуся, а не дописывается вторым «e»:
+ * очень малые и очень большие числа JavaScript пишет сам в виде «5.55e-17»,
+ * и прежнее «5.55e-17e2» было NaN. Так «0,1+0,2−0,3» (остаток 5,55e-17 от
+ * двоичных дробей) превращал итог месяца в «не число» — а за ним и все
+ * следующие месяцы, куда итог переносится остатком.
+ */
+function shiftDecimal(value: number, by: number): number {
+  const [mantissa, exponent = "0"] = String(value).split("e");
+  return Number(`${mantissa}e${Number(exponent) + by}`);
 }
 
 const FUNCTIONS: Record<string, (args: number[]) => number> = {

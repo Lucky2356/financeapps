@@ -249,6 +249,10 @@ export function freeValue(input: string): { value: number | null; error: boolean
  */
 function looksLikeTextNumber(text: string): boolean {
   if (/^\+\s*\d/.test(text)) return true;
+  // Номер карты или счёта — больше 15 цифр, с пробелами или без. Числом его
+  // не сохранить (точность double — 15 знаков), и посчитанный он показывался
+  // «не числом» или с другими последними цифрами.
+  if (/^[\d\s]+$/.test(text) && text.replace(/\s/g, "").length > 15) return true;
   if (/\d\s*-\s*\d+\s*-\s*\d/.test(text)) return true;
   return /^\d{4}-\d{1,2}(-\d{1,2})?$/.test(text);
 }
@@ -343,6 +347,17 @@ function shiftFreeLine(
   delta: 1 | -1
 ) {
   if (!Number.isFinite(index) || index < 0) return;
+  // Вставка сдвигает клетки дальше от края; клетки на последней возможной
+  // строке или столбце сдвигать некуда — прежде они молча пропадали.
+  const limit = axis === "r" ? MAX_FREE_ROWS : MAX_FREE_COLS;
+  if (
+    delta === 1 &&
+    (state.freeCells ?? []).some(
+      (cell) => cell.sheetId === sheetId && cell[axis] >= index && cell[axis] >= limit - 1
+    )
+  ) {
+    throw new Error(apiText("api.sheet.freeFull"));
+  }
   const other = (state.freeCells ?? []).filter((cell) => cell.sheetId !== sheetId);
   const mine = (state.freeCells ?? [])
     .filter((cell) => cell.sheetId === sheetId && !(delta === -1 && cell[axis] === index))
@@ -357,7 +372,6 @@ function shiftFreeLine(
   state.sheets = (state.sheets ?? []).map((item) => {
     if (item.id !== sheetId) return item;
     const key = axis === "r" ? "rows" : "cols";
-    const limit = axis === "r" ? MAX_FREE_ROWS : MAX_FREE_COLS;
     const size = item[key] ?? (axis === "r" ? FREE_ROWS : FREE_COLS);
     return { ...item, [key]: Math.min(limit, Math.max(1, size + delta)) };
   });

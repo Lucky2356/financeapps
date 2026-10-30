@@ -78,6 +78,8 @@ export function FreeSheet({ sheetId, onChanged }: { sheetId: string; onChanged: 
   // ввода уже ничего не значит. Без этого «сохранить на месте» при потере фокуса
   // возвращало выбор на ту же клетку, и Enter не опускал вниз.
   const closedByKey = useRef(false);
+  // Строку формулы закрыли клавишей (Enter, Esc) — её потеря фокуса уже не пишет.
+  const barHandled = useRef(false);
   // Что было в клетках до каждой правки — для Ctrl+Z.
   const [history, setHistory] = useState<Cell[][]>([]);
 
@@ -152,17 +154,33 @@ export function FreeSheet({ sheetId, onChanged }: { sheetId: string; onChanged: 
   }
 
   function commit(position: Position, draft: string, then: "down" | "right" | "stay") {
-    if (then !== "stay") closedByKey.current = true;
     const before = inputs.get(keyOf(position)) ?? "";
     setEditing(null);
     if (draft !== before) void save([{ ...position, input: draft }]);
-    const next =
-      then === "down"
-        ? { r: position.r + 1, c: position.c }
-        : then === "right"
-          ? { r: position.r, c: position.c + 1 }
-          : position;
-    select(next);
+    // «На месте» — это потеря фокуса: человек нажал другую клетку или строку
+    // формулы. Выбор и фокус тогда остаются там, куда он нажал. Прежде выбор
+    // возвращался на правленую клетку, и чтобы перейти, нажимать приходилось
+    // дважды, а протяжка начиналась не с той клетки.
+    if (then === "stay") return;
+    closedByKey.current = true;
+    select(
+      then === "down" ? { r: position.r + 1, c: position.c } : { r: position.r, c: position.c + 1 }
+    );
+    gridRef.current?.focus();
+  }
+
+  /**
+   * Enter в строке формулы: записать и опуститься на клетку ниже. Свой путь, не
+   * через commit: отметка «закрыто клавишей» — про поле в клетке, и, оставшись
+   * от строки формулы, она глотала следующую правку клетки. И потеря фокуса,
+   * которая следует за переходом в лист, второй раз уже не пишет.
+   */
+  function commitBar(position: Position) {
+    barHandled.current = true;
+    const draft = barDraft ?? inputs.get(keyOf(position)) ?? "";
+    setBarDraft(null);
+    if (draft !== (inputs.get(keyOf(position)) ?? "")) void save([{ ...position, input: draft }]);
+    select({ r: position.r + 1, c: position.c });
     gridRef.current?.focus();
   }
 
@@ -364,16 +382,19 @@ export function FreeSheet({ sheetId, onChanged }: { sheetId: string; onChanged: 
             if (!selected) return;
             if (event.key === "Enter") {
               event.preventDefault();
-              const draft = barDraft ?? inputs.get(keyOf(selected)) ?? "";
-              setBarDraft(null);
-              commit(selected, draft, "down");
+              commitBar(selected);
             } else if (event.key === "Escape") {
               event.preventDefault();
+              barHandled.current = true;
               setBarDraft(null);
               gridRef.current?.focus();
             }
           }}
           onBlur={() => {
+            if (barHandled.current) {
+              barHandled.current = false;
+              return;
+            }
             if (!selected || barDraft === null) return;
             const draft = barDraft;
             setBarDraft(null);
