@@ -6,6 +6,54 @@ its release notes from here. The Russian CHANGELOG.md is the source of truth:
 every release is written there first, then translated here with the same
 version, date and sections.
 
+## [2.8.1] — 2026-10-30
+
+🔒 A security review of the sync service, sync that survives a restart, correct dates in any time zone, and fast statement import.
+
+### Fixed — sync and “Merge”
+- **An edit made offline is sent after a restart.** Before, it waited for
+  the next edit on that device while the badge said “everything is on the
+  server”.
+- **“Merge” no longer mixes profiles.** A “Business” or “Example” profile
+  that was open when joining was poured into the shared main profile and
+  spread to every device. Now each profile finds its match or arrives whole.
+- “Merge” waits for the shared data to arrive: on a slow connection,
+  categories and accounts are no longer duplicated.
+- One damaged record with a local edit no longer blocks sending the rest; an
+  error that doesn't go away retries less and less often instead of pulling
+  the data from the server every minute.
+- Russian and English devices no longer overwrite each other's security
+  names.
+- A change stream that closes right away no longer reconnects every second.
+
+### Fixed — money and dates
+- **“Safe to spend today” and the calendar count payments due today** and overdue
+  unconfirmed ones — the rent no longer disappears from the budget.
+- The forecast, net worth trend, limit suggestion, cashback, account
+  reconciliation and portfolio chart no longer shift dates by a day west of
+  Greenwich or around midnight.
+- Selling a fractional quantity of a security no longer wipes out the rest.
+- Family goal shares and alert thresholds accept a decimal comma; account
+  balances accept “1 000,50”; an empty alert value is an error, not zero.
+- Percentages no longer show as “-0 %”.
+
+### Fixed — sync service
+- Every sign-in shows up in the device list and can be revoked; a revoked
+  device and signing out close the change stream at once.
+- An answer to QR pairing is handed out only once.
+- Someone else's wrong passwords no longer lock the owner out; IPv6 limits
+  count by network, not by address.
+- Version history counts toward the storage quota; concurrent writes are
+  limited; a deeply nested request is refused instead of failing the service.
+
+### Improved
+- Importing a statement without a category column is dozens of times faster
+  (1000 rows: 0.2 s instead of 15 s).
+- Android: pressing “Update” again doesn't start a second download; the
+  downloaded APK is removed after the update.
+- Desktop: a failed update download is shown with a “Retry” button.
+- Blocked browser storage no longer crashes the app.
+
 ## [2.8.0] — 2026-10-27
 
 🌍 A complete English version: every screen, message, category and example is in English. Plus a big review: what you record no longer disappears on restart, backups come back in full, and sync no longer stalls on one damaged record.
