@@ -1,5 +1,101 @@
 [
   {
+    "version": "2.8.3",
+    "date": "2026-10-30",
+    "summary": "🛡️ Money no longer disappears or appears from nowhere, receipt photos come back with their operations, statements import more accurately, and the Sheet no longer shows “not a number”.",
+    "kind": "fixes",
+    "sections": [
+      {
+        "title": "Fixed — money",
+        "items": [
+          {
+            "lead": "",
+            "text": "A transfer involving an archived account can no longer be deleted or changed: before, the money dropped out of your net worth and couldn't be brought back."
+          },
+          {
+            "lead": "",
+            "text": "Half of a transfer can't become income or an expense — net worth no longer grows from nothing."
+          },
+          {
+            "lead": "",
+            "text": "Autopay no longer charges a different account when the chosen one is archived. Deleting a manual payment made by mistake lets autopay run this month again."
+          },
+          {
+            "lead": "",
+            "text": "Selling a security you don't hold credits the chosen account; undoing a partial sale no longer loses shares on the next purchase."
+          },
+          {
+            "lead": "",
+            "text": "A recurring transaction switched from weekly to monthly counts its day from the new date; one on an archived account can be paused."
+          },
+          {
+            "lead": "",
+            "text": "Account balances, debt amounts and rates stay within sensible limits."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — backups and “Merge”",
+        "items": [
+          {
+            "lead": "Receipt photos come back with their operations",
+            "text": "— after restoring a local copy, undoing a clear, or restoring a file on the same device."
+          },
+          {
+            "lead": "",
+            "text": "“Merge” updates the balances of matching accounts, goals and debts."
+          },
+          {
+            "lead": "",
+            "text": "A backup from a newer version of the app now says to update the app."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — statements",
+        "items": [
+          {
+            "lead": "",
+            "text": "The duplicate check no longer drops real rows, and re-importing your own export no longer duplicates operations."
+          },
+          {
+            "lead": "",
+            "text": "Dates like “05-10-2026”, “2026/10/05” and Excel serial numbers, and amounts like “1234.5678” and “1.2E+3” are read correctly; one bad amount no longer rejects the whole file."
+          },
+          {
+            "lead": "",
+            "text": "The account currency from your own export is kept; an archived account's operations are not duplicated."
+          }
+        ]
+      },
+      {
+        "title": "Fixed — Sheet",
+        "items": [
+          {
+            "lead": "",
+            "text": "“0.1+0.2−0.3” no longer turns a month's total — and every month after it — into “not a number”; card numbers in a free sheet stay text."
+          },
+          {
+            "lead": "",
+            "text": "“=1200 x3” is 3,600 again; the formula bar saves once and doesn't interfere with the next edit; clicking another cell while editing selects it."
+          },
+          {
+            "lead": "",
+            "text": "Delete after an edit on the budget sheet clears only the selected cell."
+          },
+          {
+            "lead": "",
+            "text": "CSV files in cp1251 and the app's own column names (English too) import correctly; “(500)” is minus 500."
+          },
+          {
+            "lead": "",
+            "text": "Huge sheets and ranges no longer crash; MIN and MAX of an empty range are 0."
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.8.2",
     "date": "2026-10-30",
     "summary": "📊 Totals on the operations screen match Analytics with no extra checkboxes, the Sheet is closer to Excel, and the window opens the way you closed it.",
@@ -739,56 +835,6 @@
           {
             "lead": "",
             "text": "Works on Android only, offline, and only with the genuine Loli (her signature is checked). Turn it on in Settings → “Loli voice assistant”; the link is off by default."
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "version": "2.6.1",
-    "date": "2026-10-03",
-    "summary": "🐞 Rent is no longer recorded twice on two devices, debts and their payments add up, and the app is faster on a large book and has animations.",
-    "kind": "features",
-    "sections": [
-      {
-        "title": "Fixed",
-        "items": [
-          {
-            "lead": "Deleted a debt payment — the debt is back.",
-            "text": "Before, the money returned to the account but the debt stayed reduced. Restore a payment from the trash or change its amount, and the debt changes with it."
-          },
-          {
-            "lead": "Auto-pay on a debt in another currency",
-            "text": "(for example, a dollar loan paid from a rouble card) is charged at the exchange rate, not as the same number."
-          },
-          {
-            "lead": "Rent is not recorded twice on two devices.",
-            "text": "Scheduled payments and auto-payments are written after the first check with the server (no longer than 10 seconds): a phone opened after the computer no longer records the same rent again."
-          },
-          {
-            "lead": "A scheduled payment remembers its template:",
-            "text": "rent charged while you are on holiday doesn't go into the trip budget, and “will I make it to payday” doesn't count it twice."
-          },
-          {
-            "lead": "Two identical coffees in one morning:",
-            "text": "statement import and bank notification suggestions no longer take the second identical purchase for a repeat of the first."
-          },
-          {
-            "lead": "",
-            "text": "The monthly report shows large expenses from foreign-currency accounts at the exchange rate."
-          }
-        ]
-      },
-      {
-        "title": "Changed",
-        "items": [
-          {
-            "lead": "Faster on a large book:",
-            "text": "recording a transaction is about 5 times faster, Transactions, Limits, Home and “Safe to spend” 2–5 times, “It's a transfer?” dozens of times. The app loads less code at launch: the English dictionary, “What's new” and charts load only when needed."
-          },
-          {
-            "lead": "Animations:",
-            "text": "amounts on Home, in Accounts, “Safe to spend” and goals glide to the new value and briefly change colour (up — green, down — red); a just-recorded transaction is highlighted in Transactions; the details of “Safe to spend” and “until payday” expand smoothly; a reached goal gets a green bar and a “Goal reached” mark; the “+” button responds to taps. The system “reduce motion” setting turns all of it off."
           }
         ]
       }
