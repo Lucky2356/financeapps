@@ -205,8 +205,14 @@ export function putScope(state: BookState, sheetId: string, scoped: SheetState):
 export function readFree(state: BookState, sheetId: string): FreeSheetData {
   const row = (state.sheets ?? []).find((item) => item.id === sheetId);
   const cells = (state.freeCells ?? []).filter((cell) => cell.sheetId === sheetId);
-  const rows = Math.max(row?.rows ?? FREE_ROWS, ...cells.map((cell) => cell.r + 1), 1);
-  const cols = Math.max(row?.cols ?? FREE_COLS, ...cells.map((cell) => cell.c + 1), 1);
+  // Циклом, а не Math.max(...): лист бывает до 400 000 клеток, а разворот в
+  // аргументы на таком падает с RangeError.
+  let rows = Math.max(row?.rows ?? FREE_ROWS, 1);
+  let cols = Math.max(row?.cols ?? FREE_COLS, 1);
+  for (const cell of cells) {
+    if (cell.r + 1 > rows) rows = cell.r + 1;
+    if (cell.c + 1 > cols) cols = cell.c + 1;
+  }
   // Клетки считаются все вместе: формула может ссылаться на соседние.
   const shown = evaluateFreeGrid(
     new Map(cells.map((cell) => [`${cell.r}|${cell.c}`, cell.input])),
@@ -249,6 +255,10 @@ export function freeValue(input: string): { value: number | null; error: boolean
  */
 function looksLikeTextNumber(text: string): boolean {
   if (/^\+\s*\d/.test(text)) return true;
+  // Номер карты или счёта — больше 15 цифр, с пробелами или без. Числом его
+  // не сохранить (точность double — 15 знаков), и посчитанный он показывался
+  // «не числом» или с другими последними цифрами.
+  if (/^[\d\s]+$/.test(text) && text.replace(/\s/g, "").length > 15) return true;
   if (/\d\s*-\s*\d+\s*-\s*\d/.test(text)) return true;
   return /^\d{4}-\d{1,2}(-\d{1,2})?$/.test(text);
 }
@@ -343,6 +353,17 @@ function shiftFreeLine(
   delta: 1 | -1
 ) {
   if (!Number.isFinite(index) || index < 0) return;
+  // Вставка сдвигает клетки дальше от края; клетки на последней возможной
+  // строке или столбце сдвигать некуда — прежде они молча пропадали.
+  const limit = axis === "r" ? MAX_FREE_ROWS : MAX_FREE_COLS;
+  if (
+    delta === 1 &&
+    (state.freeCells ?? []).some(
+      (cell) => cell.sheetId === sheetId && cell[axis] >= index && cell[axis] >= limit - 1
+    )
+  ) {
+    throw new Error(apiText("api.sheet.freeFull"));
+  }
   const other = (state.freeCells ?? []).filter((cell) => cell.sheetId !== sheetId);
   const mine = (state.freeCells ?? [])
     .filter((cell) => cell.sheetId === sheetId && !(delta === -1 && cell[axis] === index))
@@ -357,7 +378,6 @@ function shiftFreeLine(
   state.sheets = (state.sheets ?? []).map((item) => {
     if (item.id !== sheetId) return item;
     const key = axis === "r" ? "rows" : "cols";
-    const limit = axis === "r" ? MAX_FREE_ROWS : MAX_FREE_COLS;
     const size = item[key] ?? (axis === "r" ? FREE_ROWS : FREE_COLS);
     return { ...item, [key]: Math.min(limit, Math.max(1, size + delta)) };
   });
@@ -569,7 +589,10 @@ export function importWorkbook(
       created.push(tab);
     } else {
       const rows = Math.max(item.grid.length, 1);
-      const cols = Math.max(...item.grid.map((line) => line.length), 1);
+      // Циклом: Math.max(...) с разворотом падал с RangeError на листе в
+      // пару сотен тысяч строк.
+      let cols = 1;
+      for (const line of item.grid) if (line.length > cols) cols = line.length;
       const tab = createSheet(state, { name: item.name, kind: "free", rows, cols }, makeId);
       const cells: Body[] = [];
       item.grid.forEach((line, r) =>

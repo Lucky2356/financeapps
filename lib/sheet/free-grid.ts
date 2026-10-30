@@ -43,7 +43,12 @@ const REFERENCE = /(\$?)([A-Za-z]{1,2})(\$?)(\d{1,4})(?::(\$?)([A-Za-z]{1,2})(\$
 function standsAlone(source: string, start: number, end: number): boolean {
   const before = source[start - 1] ?? "";
   const after = source[end] ?? "";
-  return !/[A-Za-zА-Яа-яЁё0-9_]/.test(before) && !/[A-Za-zА-Яа-яЁё0-9_(]/.test(after);
+  if (/[A-Za-zА-Яа-яЁё0-9_]/.test(before) || /[A-Za-zА-Яа-яЁё0-9_(]/.test(after)) return false;
+  // Ссылка не может стоять сразу за числом или скобкой — между ними нужен
+  // знак действия. «=1200 x3» — это «1200 × 3» (x — умножение), а не 1200 и
+  // клетка X3: иначе пустая X3 давала «1200 0», и выходило 12 000 вместо 3 600.
+  const previous = source.slice(0, start).trimEnd().slice(-1);
+  return !/[0-9)]/.test(previous);
 }
 
 /** Есть ли в вводе ссылки на клетки — то есть зависит ли он от других. */
@@ -59,7 +64,9 @@ export function hasReferences(input: string): boolean {
 function literal(value: number): string {
   const text = Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(15)));
   const plain = /e/i.test(text) ? value.toFixed(10).replace(/\.?0+$/, "") : text;
-  return value < 0 ? `(${plain})` : plain;
+  // Всегда в скобках: число, вставленное рядом с другим через пробел, иначе
+  // склеилось бы с ним в одно («2 000» — это две тысячи, а не 2 и 000).
+  return `(${plain})`;
 }
 
 /** Ввод клетки без ссылок — как и прежде (см. freeValue в sheets.ts). */

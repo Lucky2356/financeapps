@@ -40,6 +40,7 @@ import {
   createTransfer,
   deleteTransaction,
   importCsvRows,
+  isArchivedAccount,
   linkTransfer,
   reconcileAccount,
   restoreTransaction,
@@ -50,7 +51,7 @@ import {
 } from "@/lib/api/local/ledger";
 import { budgetWarningFor, upsertBudget } from "@/lib/api/local/budgets";
 import { depositToGoal, goalAccount, upsertGoal, withdrawFromGoal } from "@/lib/api/local/goals";
-import { autoPayDebts, payDebt, upsertLiability } from "@/lib/api/local/debts";
+import { autoPayDebts, payDebt, reopenPaidMonth, upsertLiability } from "@/lib/api/local/debts";
 import {
   materializeAllDue,
   materializeRecurring,
@@ -347,10 +348,20 @@ export const STATE_DELETES = {
     // Перевод узнаётся и по старой метке в описании (записанные до 1.10).
     const row = state.transactions.find((item) => item.id === itemId);
     const transfer = row ? transferKeyOf(row) : null;
-    const ids = transfer
-      ? state.transactions.filter((item) => transferKeyOf(item) === transfer).map((item) => item.id)
-      : [itemId];
-    for (const one of ids) deleteTransaction(state, one);
+    const rows = transfer
+      ? state.transactions.filter((item) => transferKeyOf(item) === transfer)
+      : row
+        ? [row]
+        : [];
+    // Перевод, одна половина которого на счёте в архиве («Перенести остаток и
+    // убрать в архив»), не удаляется: деньги вернулись бы на архивный счёт и
+    // выпали из капитала, а вернуть удалённое было бы нельзя — «Отменить» не
+    // принимает операцию на архивном счёте.
+    if (transfer && rows.some((item) => isArchivedAccount(state, item.account.id)))
+      throw new Error(apiText("api.transfer.archived"));
+    for (const one of rows) deleteTransaction(state, one.id);
+    // Удалённый платёж по долгу снова открывает месяц автоплатежу.
+    for (const one of rows) reopenPaidMonth(state, one);
     return true;
   },
   "/goals": byId((state, itemId, { searchParams }) => {
@@ -435,6 +446,16 @@ export const STATE_DELETES = {
       // формы обоих слов — в словаре, по числу n; count — то же число, но с
       // разделителями языка экрана («1 234»).
       throw new Error(apiText("api.category.inUse", { n: txCount, count: apiCount(txCount) }));
+    }
+    // Плановая операция с удалённой категорией не проводится и не правится —
+    // висит в списке, пока её не удалят. Категория, которую она ждёт, остаётся.
+    const planCount = state.recurringTransactions.filter(
+      (item) => item.category.id === itemId
+    ).length;
+    if (planCount > 0) {
+      throw new Error(
+        apiText("api.category.inRecurring", { n: planCount, count: apiCount(planCount) })
+      );
     }
     state.categories = state.categories.filter((c) => c.id !== itemId);
   })

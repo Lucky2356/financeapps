@@ -9,8 +9,8 @@ import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { parseSort, sortTransactions } from "@/lib/transactions/sort";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
 import { convert, isSupportedCurrency } from "@/lib/currency";
-import { isUsableMoney, roundMoney } from "@/lib/utils";
-import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
+import { isUsableMoney, MAX_MONEY, roundMoney } from "@/lib/utils";
+import { apiCount, apiText, moneyRangeText } from "@/lib/i18n/api-text";
 import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount";
 import {
   isTransfer,
@@ -37,6 +37,7 @@ import {
 } from "@/lib/api/local/state";
 import {
   applyBalance,
+  archivedAccountNamed,
   findOrCreateAccount,
   findOrCreateAppAccount,
   findOrCreateAppCategory,
@@ -57,6 +58,10 @@ function accountBalance(raw: string | undefined): number {
       .replace(",", ".") || 0
   );
   if (!Number.isFinite(value)) throw new Error(apiText("api.account.balanceNumber"));
+  // «1e308» — тоже число, но сумма таких остатков даёт бесконечный капитал, и
+  // после него не сохранялась ни одна запись. Предел тот же, что у операций.
+  if (Math.abs(value) > MAX_MONEY)
+    throw new Error(apiText("api.account.balanceRange", { max: MAX_MONEY / 1e9 }));
   return value;
 }
 
@@ -122,14 +127,17 @@ export function upsertTransaction(
   recurringId?: string
 ) {
   const input = toFormObject(body);
-  const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
-  const category = state.categories.find((item) => item.id === input.categoryId);
-  if (!account || !category) throw new Error(apiText("api.ledger.pickAccountCategory"));
-
   const previous =
     method === "PUT" && input.id
       ? state.transactions.find((item) => item.id === input.id)
       : undefined;
+  // Правка половины перевода проверяется до всего остального — отказ должен
+  // объяснять, что не так с переводом, а не просить выбрать счёт.
+  if (previous) checkTransferEdit(state, previous, input);
+  const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
+  const category = state.categories.find((item) => item.id === input.categoryId);
+  if (!account || !category) throw new Error(apiText("api.ledger.pickAccountCategory"));
+
   if (method === "PUT" && input.id) deleteTransaction(state, input.id);
 
   const amount = Number(input.amount);
@@ -226,6 +234,38 @@ export function upsertTransaction(
   if (method === "PUT" && previous?.liabilityId) applyDebtPayment(state, transaction, -1);
   if (method === "PUT" && previous) keepTransferInStep(state, previous, transaction);
   return transaction;
+}
+
+/** Счёт убран в архив. Счёта, которого нет вовсе, это не касается. */
+export function isArchivedAccount(state: LocalState, accountId: string): boolean {
+  return state.accounts.some((item) => item.id === accountId && item.isArchived);
+}
+
+/**
+ * Что нельзя сделать с половиной перевода правкой.
+ *
+ * — Сменить тип. Номер перевода строка сохраняет (см. upsertTransaction), и
+ *   поступление, ставшее тратой, оставалось «переводом»: итоги его не видят,
+ *   а капитал сдвигался на двойную сумму из ниоткуда.
+ * — Поставить её на счёт второй половины: перевод со счёта на него же.
+ * — Править перевод, вторая половина которого на счёте в архиве: сумма второй
+ *   половины поменялась бы на архивном счёте, а он в капитал не входит.
+ */
+function checkTransferEdit(
+  state: LocalState,
+  previous: TransactionRow,
+  input: ReturnType<typeof toFormObject>
+) {
+  const key = transferKeyOf(previous);
+  if (!key) return;
+  const halves = state.transactions.filter((row) => transferKeyOf(row) === key);
+  if (halves.some((row) => isArchivedAccount(state, row.account.id)))
+    throw new Error(apiText("api.transfer.archived"));
+  const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
+  if (type !== previous.type) throw new Error(apiText("api.transfer.typeLocked"));
+  const partner = halves.find((row) => row.id !== previous.id);
+  if (partner && partner.account.id === input.accountId)
+    throw new Error(apiText("api.transfer.sameAccount"));
 }
 
 /**
@@ -711,6 +751,12 @@ export function importCsvRows(state: LocalState, body: unknown) {
     before.set(key, (before.get(key) ?? 0) + 1);
   }
   const seen = new Map<string, number>();
+  // Столбец валюты: выбранный, а нет — узнанный по имени. Своя выгрузка пишет
+  // «currency» в каждой строке; по нему новый счёт заводится в своей валюте.
+  const currencyColumn =
+    input.currencyColumn ||
+    Object.keys(rows[0] ?? {}).find((name) => /^(currency|валюта)$/i.test(name.trim())) ||
+    "";
   // Подбор категории по истории — по указателю, разобранному один раз, а не
   // разбором всей истории заново на каждую строку (lib/category-suggest).
   // Строки этого же файла в нём учитываются, как и прежде: каждая записанная
@@ -740,16 +786,52 @@ export function importCsvRows(state: LocalState, body: unknown) {
         skipped += 1;
         continue;
       }
+      // Сумма вне разумного («5 000 000 000 000» — опечатка или склеенные
+      // столбцы) — пропуск этой строки, как и нечитаемой. Раньше её отвергал
+      // upsertTransaction посреди цикла, и одна такая строка отменяла весь файл.
+      if (!isUsableMoney(Math.abs(rawAmount))) {
+        skipped += 1;
+        continue;
+      }
       const type = rawAmount >= 0 ? "INCOME" : "EXPENSE";
       const accountName = String(row[input.accountColumn ?? ""] ?? "").trim();
+      const description = String(row[input.descriptionColumn ?? ""] ?? "").trim();
+      // День строки файла — тот, что будет записан, а не UTC-день местной
+      // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же
+      // файла не узнавал ни одной строки и задваивал всё.
+      const day = storedTransactionDate(date).slice(0, 10);
+      // Счёт с этим именем в архиве (а открытого нет): строки, что на нём уже
+      // есть, — повторы. Иначе выписка убранной в архив карты, загруженная
+      // снова, ложилась целиком на новый счёт с тем же именем. Новые строки
+      // идут, как и прежде, на новый открытый счёт: в архивный не пишут.
+      const archived = accountName ? archivedAccountNamed(state, accountName) : undefined;
+      if (archived) {
+        const archivedKey = keyOf([archived.id, type, Math.abs(rawAmount), day, description]);
+        const count = seen.get(archivedKey) ?? 0;
+        seen.set(archivedKey, count + 1);
+        if (count < (before.get(archivedKey) ?? 0)) {
+          skipped += 1;
+          continue;
+        }
+      }
       const account = accountName
-        ? findOrCreateAccount(state, accountName)
+        ? findOrCreateAccount(state, accountName, [], String(row[currencyColumn] ?? ""))
         : (fallbackAccount ?? findOrCreateAppAccount(state, DEFAULT_IMPORT_ACCOUNT_KEY));
       // Rows without an account of their own follow the first one there is —
       // including one this import has just made.
       fallbackAccount = fallbackAccount ?? account;
+      // Категория в ключ повтора не входит: она зависит от правил на момент
+      // импорта, и повторно загруженная выписка, разнесённая уже по новому
+      // правилу, задвоилась бы целиком.
+      const key = keyOf([account.id, type, Math.abs(rawAmount), day, description]);
+      const already = before.get(key) ?? 0;
+      const count = seen.get(key) ?? 0;
+      seen.set(key, count + 1);
+      if (count < already) {
+        skipped += 1;
+        continue;
+      }
       const rawCategoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
-      const description = String(row[input.descriptionColumn ?? ""] ?? "").trim();
       // When the CSV row carries no category, try to auto-categorize it from
       // the description against existing transactions before falling back to a
       // generic import bucket.
@@ -780,21 +862,6 @@ export function importCsvRows(state: LocalState, body: unknown) {
             type === "INCOME" ? "data.cat.importIncome" : "data.cat.importExpense",
             type
           );
-      }
-      // День строки файла — тот, что будет записан, а не UTC-день местной
-      // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же
-      // файла не узнавал ни одной строки и задваивал всё.
-      const day = storedTransactionDate(date).slice(0, 10);
-      // Категория в ключ повтора не входит: она зависит от правил на момент
-      // импорта, и повторно загруженная выписка, разнесённая уже по новому
-      // правилу, задвоилась бы целиком.
-      const key = keyOf([account.id, type, Math.abs(rawAmount), day, description]);
-      const already = before.get(key) ?? 0;
-      const count = seen.get(key) ?? 0;
-      seen.set(key, count + 1);
-      if (count < already) {
-        skipped += 1;
-        continue;
       }
       // Пустой список — чтобы upsertTransaction не копировал всю историю ради
       // одной новой строки (см. выше; на место всё встаёт в `finally`).
@@ -831,6 +898,27 @@ export function importCsvRows(state: LocalState, body: unknown) {
 export function undoLastImport(state: LocalState) {
   const [batch, ...rest] = state.importBatches ?? [];
   if (!batch) return { removed: 0 };
+  // Строку импорта могли связать в перевод с операцией, записанной руками
+  // («Это перевод»). Удалить одну её половину значило бы оставить вторую с
+  // номером перевода и категорией «Переводы» — итоги её не считают, и деньги
+  // молча выпадали бы из расходов. Разъединять вторую половину самим —
+  // значит менять чужую, ручную запись и гадать, какая категория у неё была.
+  // Поэтому отказ с объяснением, и импорт остаётся целым: человек удалит
+  // такой перевод сам (или оставит импорт). Перевод, обе половины которого
+  // из этого же импорта, уходит целиком и отмене не мешает.
+  const inBatch = new Set(batch.transactionIds);
+  const transferKeys = new Set(
+    state.transactions
+      .filter((item) => inBatch.has(item.id))
+      .map((item) => transferKeyOf(item))
+      .filter((key): key is string => Boolean(key))
+  );
+  const linked = state.transactions.filter((item) => {
+    const key = transferKeyOf(item);
+    return key !== null && !inBatch.has(item.id) && transferKeys.has(key);
+  }).length;
+  if (linked > 0)
+    throw new Error(apiText("api.import.undoTransfer", { n: linked, count: apiCount(linked) }));
   let removed = 0;
   for (const transactionId of batch.transactionIds) {
     const before = state.transactions.length;

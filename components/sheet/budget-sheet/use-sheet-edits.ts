@@ -125,7 +125,7 @@ export function useSheetEdits({
       setPhoneCell(position);
       return;
     }
-    setSelected(position);
+    selectCell(position);
     setEditing({ position, draft: draft ?? inputAt(position), source: "cell" });
   }
 
@@ -137,7 +137,9 @@ export function useSheetEdits({
       void save([{ month: row.month, columnId: column.id, input: editing.draft.trim() }]);
     }
     setEditing(null);
-    if (next) setSelected(clamp(next));
+    // Выделение диапазона кончается вместе с правкой: иначе следующий Delete
+    // стёр бы все клетки от прежнего угла до новой.
+    if (next) selectCell(clamp(next));
     requestAnimationFrame(() => tableRef.current?.focus());
   }
 
@@ -383,7 +385,7 @@ export function useSheetEdits({
         0,
         display.findIndex((item) => item.type === "column")
       );
-      setSelected({ row, col: selected?.col ?? col });
+      selectCell({ row, col: selected?.col ?? col });
     }
   }
 
@@ -393,7 +395,7 @@ export function useSheetEdits({
     const next = computed.rows[position.row + 1];
     if (!column || !next) return;
     void save([{ month: next.month, columnId: column.id, input: inputAt(position) }]);
-    setSelected({ row: position.row + 1, col: position.col });
+    selectCell({ row: position.row + 1, col: position.col });
   }
 
   function clearSelected(position: Position) {

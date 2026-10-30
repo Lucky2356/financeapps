@@ -109,6 +109,9 @@ export const transactionRowSchema = z.object({
   // На сколько платёж уменьшил долг, в валюте долга. Меньше суммы платежа,
   // когда заплатили больше остатка: удаление возвращает долгу именно это.
   debtApplied: z.number().finite().min(0).optional(),
+  // Платёж записал автоплатёж (а не человек): его удаление не возвращает
+  // автоплатёж в этом месяце — иначе удалённое создавалось бы снова.
+  autoPaid: z.boolean().optional(),
   // Когда операцию записали — порядок внутри одного дня.
   createdAt: z.string().optional(),
   // Где фото чека: уезжает на другие устройства или лежит только здесь.
@@ -256,14 +259,17 @@ export const realizedEventSchema = z.object({
    * What a sale took out of the portfolio, so deleting the record can put it
    * back: the lots it drained, the average the position had before it, the row
    * itself when the sale emptied it, and the income row the money arrived as.
-   * Absent on dividends and on sales of a ticker that was not held.
+   * Absent on dividends and on sales of a ticker that was not held — unless the
+   * proceeds of such a sale went to an account (then only the income row).
    */
   soldFrom: z
     .object({
       averageBuyPrice: z.coerce.number().finite().min(0).default(0),
       lots: z.array(purchaseLotSchema).optional(),
       position: portfolioRowSchema.optional(),
-      transactionId: z.string().min(1).optional()
+      transactionId: z.string().min(1).optional(),
+      // Продажа бумаги, которой не было в портфеле: отмена снимает только деньги.
+      outsidePortfolio: z.boolean().optional()
     })
     .optional()
 });

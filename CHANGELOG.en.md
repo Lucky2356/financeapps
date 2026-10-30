@@ -6,6 +6,50 @@ its release notes from here. The Russian CHANGELOG.md is the source of truth:
 every release is written there first, then translated here with the same
 version, date and sections.
 
+## [2.8.3] — 2026-10-30
+
+🛡️ Money no longer disappears or appears from nowhere, receipt photos come back with their operations, statements import more accurately, and the Sheet no longer shows “not a number”.
+
+### Fixed — money
+- A transfer involving an archived account can no longer be deleted or
+  changed: before, the money dropped out of your net worth and couldn't be
+  brought back.
+- Half of a transfer can't become income or an expense — net worth no longer
+  grows from nothing.
+- Autopay no longer charges a different account when the chosen one is
+  archived. Deleting a manual payment made by mistake lets autopay run this
+  month again.
+- Selling a security you don't hold credits the chosen account; undoing a
+  partial sale no longer loses shares on the next purchase.
+- A recurring transaction switched from weekly to monthly counts its day from
+  the new date; one on an archived account can be paused.
+- Account balances, debt amounts and rates stay within sensible limits.
+
+### Fixed — backups and “Merge”
+- **Receipt photos come back with their operations** — after restoring a
+  local copy, undoing a clear, or restoring a file on the same device.
+- “Merge” updates the balances of matching accounts, goals and debts.
+- A backup from a newer version of the app now says to update the app.
+
+### Fixed — statements
+- The duplicate check no longer drops real rows, and re-importing your own
+  export no longer duplicates operations.
+- Dates like “05-10-2026”, “2026/10/05” and Excel serial numbers, and amounts
+  like “1234.5678” and “1.2E+3” are read correctly; one bad amount no longer
+  rejects the whole file.
+- The account currency from your own export is kept; an archived account's
+  operations are not duplicated.
+
+### Fixed — Sheet
+- “0.1+0.2−0.3” no longer turns a month's total — and every month after it —
+  into “not a number”; card numbers in a free sheet stay text.
+- “=1200 x3” is 3,600 again; the formula bar saves once and doesn't interfere
+  with the next edit; clicking another cell while editing selects it.
+- Delete after an edit on the budget sheet clears only the selected cell.
+- CSV files in cp1251 and the app's own column names (English too) import
+  correctly; “(500)” is minus 500.
+- Huge sheets and ranges no longer crash; MIN and MAX of an empty range are 0.
+
 ## [2.8.2] — 2026-10-30
 
 📊 Totals on the operations screen match Analytics with no extra checkboxes, the Sheet is closer to Excel, and the window opens the way you closed it.

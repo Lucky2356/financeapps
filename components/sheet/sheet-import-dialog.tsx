@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiClient } from "@/lib/api/client";
+import { decodeTextBytes } from "@/lib/files/decode-text";
 import { formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/context";
 import { intlLocale } from "@/lib/i18n/display-locale";
@@ -103,7 +104,9 @@ export function SheetImportDialog({
         setSheetIndex(0);
         if (list[0]) fromGrid(list[0].grid);
       } else {
-        const content = await file.text();
+        // Не текстом файла: он читается только как UTF-8, и CSV из Excel в cp1251
+        // превращался в «����» — ни шапки, ни месяцев. Как у импорта выписок.
+        const content = decodeTextBytes(await file.arrayBuffer());
         setSheets([]);
         setText(content);
         fromGrid(gridFromText(content));
@@ -138,7 +141,7 @@ export function SheetImportDialog({
               plan: null,
               grid: sheet.grid,
               rows: sheet.grid.length,
-              cols: Math.max(0, ...sheet.grid.map((line) => line.length))
+              cols: sheet.grid.reduce((most, line) => Math.max(most, line.length), 0)
             };
       }),
     [sheets, refs]

@@ -2,7 +2,12 @@
 // на чтение и движение баланса. На этом стоят все остальные разделы.
 
 import { id } from "@/lib/api/local/helpers";
-import { convert, DEFAULT_CURRENCY_RATES, type CurrencyRates } from "@/lib/currency";
+import {
+  convert,
+  DEFAULT_CURRENCY_RATES,
+  isSupportedCurrency,
+  type CurrencyRates
+} from "@/lib/currency";
 import { roundMoney } from "@/lib/utils";
 import { DEFAULT_CATEGORY_COLOR } from "@/lib/categories/palette";
 import {
@@ -27,27 +32,55 @@ export function applyBalance(state: LocalState, accountId: string, delta: number
   );
 }
 
+/** Имя счёта из файла — так, как его запишет findOrCreateAccount. */
+function importedAccountLabel(name: string) {
+  return name.trim().slice(0, 60) || DEFAULT_IMPORT_ACCOUNT;
+}
+
 /**
  * The account a CSV row names, made if it is not there yet. Balances follow
  * from the operations posted onto it, so a new account starts at zero and
  * ends up holding exactly what was imported into it.
+ *
+ * `currency` — валюта из столбца файла: новый счёт заводится в ней, а не в
+ * основной. Своя выгрузка пишет её в каждой строке, и долларовый счёт,
+ * загруженный в новый профиль, иначе становился рублёвым с теми же числами.
+ * Найденный счёт свою валюту не меняет.
  */
-export function findOrCreateAccount(state: LocalState, name: string, aliases: string[] = []) {
-  const label = name.trim().slice(0, 60) || DEFAULT_IMPORT_ACCOUNT;
+export function findOrCreateAccount(
+  state: LocalState,
+  name: string,
+  aliases: string[] = [],
+  currency?: string
+) {
+  const label = importedAccountLabel(name);
   const names = new Set([label, ...aliases].map((item) => item.toLowerCase()));
   const existing = state.accounts.find(
     (item) => !item.isArchived && names.has(item.name.toLowerCase())
   );
   if (existing) return existing;
+  const code = currency?.trim().toUpperCase() ?? "";
   const account = {
     id: id("account"),
     name: label,
     type: "DEBIT_CARD" as const,
     balance: 0,
-    currency: state.currency
+    currency: isSupportedCurrency(code) ? code : state.currency
   };
   state.accounts = [...state.accounts, account];
   return account;
+}
+
+/**
+ * Счёт в архиве с этим именем — если открытого с таким именем нет. Импорт
+ * сличает с ним повторы: выписка карты, убранной в архив, загруженная снова,
+ * иначе ложилась целиком на новый счёт с тем же именем — вдвое.
+ */
+export function archivedAccountNamed(state: LocalState, name: string) {
+  const label = importedAccountLabel(name).toLowerCase();
+  if (state.accounts.some((item) => !item.isArchived && item.name.toLowerCase() === label))
+    return undefined;
+  return state.accounts.find((item) => item.isArchived && item.name.toLowerCase() === label);
 }
 
 /**
