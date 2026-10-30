@@ -2868,6 +2868,8 @@ export const en: Messages = {
   "sync2.join.submit": "Connect",
   "sync2.join.working": "Connecting…",
   "sync2.join.done": "Connected — your data is loading",
+  "sync2.merge.notArrived":
+    "The shared data hasn't finished loading — the connection is slow. You can add your records in a moment: press “Try again”.",
   "prefs.homeTransfers.title": "Transfers on the home screen",
   "prefs.homeTransfers.desc":
     "Count transfers between your own accounts in the home screen's income and spending.",

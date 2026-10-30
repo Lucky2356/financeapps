@@ -10,11 +10,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // остаётся, записи — в памяти, и есть выход: повторить или сохранить в файл.
 
 const { calls } = vi.hoisted(() => ({
-  calls: { merges: 0, failMerge: true, saved: [] as string[] }
+  calls: { merges: 0, failMerge: true, saved: [] as string[], arrived: true }
 }));
 
 vi.mock("@/lib/vault/runtime", () => ({
   joinWithLink: async () => undefined,
+  sharedBooksArrived: async () => calls.arrived,
   // Обратная связка не нужна: ждём вечно, чтобы не мешала.
   requestPairing: () => new Promise(() => undefined),
   checkPairingRequest: async () => false
@@ -69,6 +70,7 @@ beforeEach(() => {
   calls.merges = 0;
   calls.failMerge = true;
   calls.saved = [];
+  calls.arrived = true;
   takeCarryOver();
 });
 
@@ -101,5 +103,30 @@ describe("объединение не удалось", () => {
     expect(calls.merges).toBe(2);
     expect(joined).toHaveBeenCalledOnce();
     expect(peekCarryOver()).toBeNull();
+  });
+
+  it("не вливает записи, пока общие данные не приехали", async () => {
+    // Разбор 2.8.1: на медленной связи подключение отпускало через 20 секунд,
+    // и свои записи ложились в пустое место целиком. Приехавшая следом общая
+    // книга сливалась с ними без основы — «Кофе» и «Карта» задваивались.
+    calls.arrived = false;
+    calls.failMerge = false;
+    const joined = vi.fn();
+    carryOver(bundle);
+    render(
+      <I18nProvider>
+        <PairJoin initialLink="financeapps://pair?c=1" onJoined={joined} />
+      </I18nProvider>
+    );
+
+    const panel = await screen.findByTestId("merge-failed");
+    expect(panel).toHaveTextContent("ещё не загрузились");
+    expect(calls.merges).toBe(0);
+    expect(peekCarryOver()).toBe(bundle);
+
+    calls.arrived = true;
+    await userEvent.setup().click(screen.getByRole("button", { name: "Попробовать снова" }));
+    expect(calls.merges).toBe(1);
+    expect(joined).toHaveBeenCalledOnce();
   });
 });

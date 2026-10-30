@@ -3,7 +3,15 @@ import type { AssetKind, SecurityRisk } from "@/types/enums";
 
 export type MarketSecurity = {
   ticker: string;
+  /** Имя на языке экрана — для показа. */
   name: string;
+  /**
+   * Имя на языке биржи — для книги. Книга общая для устройств, и пиши в неё
+   * имя на языке экрана, русское и английское устройства переписывали бы его
+   * друг у друга при каждом обновлении цен, без конца гоняя книгу туда-сюда.
+   * Нет — книга берёт `name`.
+   */
+  storedName?: string;
   /** Share, bond, fund or metal — see AssetKind. */
   assetKind: AssetKind;
   sector: string;

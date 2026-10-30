@@ -727,5 +727,85 @@ describe("синхронизирующее хранилище", () => {
       // Повтор поставлен — не навсегда «ошибка».
       expect(timers.length).toBeGreaterThan(0);
     });
+
+    it("и со своей правкой в ней не держит отправку других", async () => {
+      // Разбор 2.8.1: исправление выше касалось только приёма. Правка в
+      // самой испорченной ячейке ставила её первой в очередь отправки, сервер
+      // отвечал «вас обогнали», слияние падало — и падала вся прогонка.
+      const BROKEN = "localFinanceState_broken";
+      server.seed(BROKEN, box("битое"));
+      const picky: Merge = async (slot, mine, theirs, base) => {
+        if (slot === BROKEN) throw new Error("не открывается");
+        return glue(slot, mine, theirs, base);
+      };
+      await storage.start(server, picky);
+      await storage.setItem(BROKEN, box("правка"));
+      await storage.setItem(SLOT, box("моё"));
+      await storage.flush();
+
+      expect(server.peek(SLOT)?.body).toEqual(box("моё"));
+      expect(storage.status).toBe("error");
+    });
+  });
+
+  describe("ошибка, которая не проходит сама", () => {
+    it("повторяется всё реже, а не каждую минуту", async () => {
+      // Разбор 2.8.1: книга, которую не записать (кончилось место), гоняла с
+      // сервера всю книгу раз в минуту, пока открыто приложение.
+      const BROKEN = "localFinanceState_broken";
+      server.seed(BROKEN, box("битое"));
+      const picky: Merge = async (slot, mine, theirs, base) => {
+        if (slot === BROKEN) throw new Error("не записывается");
+        return glue(slot, mine, theirs, base);
+      };
+      await storage.start(server, picky);
+      await storage.flush();
+      const delays: number[] = [];
+      for (let round = 0; round < 4; round += 1) {
+        const next = timers.shift()!;
+        delays.push(next.delayMs);
+        next.run();
+        await storage.flush();
+      }
+      expect(delays).toEqual([60_000, 120_000, 240_000, 480_000]);
+    });
+  });
+
+  describe("правка без связи и перезапуск", () => {
+    it("уезжает после перезапуска, а не висит до следующей правки", async () => {
+      // Разбор 2.8.1: очередь на отправку жила только в памяти. Правка без
+      // связи, потом закрытие приложения — и запуск видел на сервере ту же
+      // версию, считал всё сошедшимся и говорил «всё на сервере».
+      await storage.start(server, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+      server.online = false;
+      await storage.setItem(SLOT, box("а+б"));
+      await storage.flush();
+      storage.stop();
+      server.online = true;
+
+      const reopened = new SyncingStorageAdapter(device, (run, delayMs) => {
+        timers.push({ run, delayMs });
+      });
+      await reopened.start(server, glue);
+      await reopened.flush();
+
+      expect(server.peek(SLOT)?.body).toEqual(box("а+б"));
+      expect(reopened.status).toBe("synced");
+    });
+
+    it("отправленное не уезжает заново при каждом запуске", async () => {
+      await storage.start(server, glue);
+      await storage.setItem(SLOT, box("а"));
+      await storage.flush();
+      storage.stop();
+
+      const reopened = new SyncingStorageAdapter(device, () => {});
+      const push = vi.spyOn(server, "push");
+      await reopened.start(server, glue);
+      await reopened.flush();
+      expect(push).not.toHaveBeenCalled();
+    });
   });
 });

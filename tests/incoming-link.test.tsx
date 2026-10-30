@@ -21,6 +21,7 @@ vi.mock("@/lib/vault/runtime", () => ({
   },
   requestPairing: async () => new Promise(() => undefined),
   checkPairingRequest: async () => false,
+  sharedBooksArrived: async () => true,
   serverAccount: {}
 }));
 vi.mock("@/lib/api/client", () => ({ apiClient: { post: async () => undefined } }));
