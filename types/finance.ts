@@ -198,6 +198,11 @@ export type TransactionRow = {
    */
   liabilityId?: string;
   /**
+   * Платёж записал автоплатёж, а не человек. Удалили такой — значит, месяц
+   * оплачен иначе, и автоплатёж его повторять не должен (см. reopenPaidMonth).
+   */
+  autoPaid?: boolean;
+  /**
    * На сколько этот платёж уменьшил долг, в валюте долга. Долг не уходит ниже
    * нуля, и переплата снимает с него только остаток — удаление платежа
    * возвращает долгу ровно эту долю. У старых операций поля нет.
@@ -548,6 +553,8 @@ export type RealizedInvestmentEvent = {
     lots?: PurchaseLot[];
     position?: PortfolioRow;
     transactionId?: string;
+    /** Бумаги не было в портфеле: отмена продажи снимает только деньги. */
+    outsidePortfolio?: boolean;
   };
 };
 

@@ -22,9 +22,20 @@ import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
 
 export function upsertRecurring(state: LocalState, body: unknown, method: "POST" | "PUT") {
   const input = toFormObject(body);
-  const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
+  const previous =
+    method === "PUT" ? state.recurringTransactions.find((item) => item.id === input.id) : undefined;
+  // Правка оставляет прежний счёт и прежнюю категорию, даже если счёт ушёл в
+  // архив, а категории больше нет: иначе такой шаблон нельзя было ни
+  // поставить на паузу, ни выключить — форма отказывала «выберите счёт». Новый
+  // выбор — только из живых счетов и существующих категорий.
+  const keepsAccount = previous !== undefined && previous.account.id === input.accountId;
+  const keepsCategory = previous !== undefined && previous.category.id === input.categoryId;
+  const account = state.accounts.find(
+    (item) => item.id === input.accountId && (keepsAccount || !item.isArchived)
+  );
   const category = state.categories.find((item) => item.id === input.categoryId);
-  if (!account || !category) throw new Error(apiText("api.ledger.pickAccountCategory"));
+  if ((!account && !keepsAccount) || (!category && !keepsCategory))
+    throw new Error(apiText("api.ledger.pickAccountCategory"));
 
   const service = new RecurringTransactionService();
   const frequency =
@@ -40,20 +51,29 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
   const trialEndsOn = /^\d{4}-\d{2}-\d{2}$/.test(String(input.trialEndsOn ?? ""))
     ? String(input.trialEndsOn)
     : null;
-  const accountRef = { id: account.id, label: account.name };
-  const categoryRef = { id: category.id, label: category.label, color: category.color };
+  const accountRef = account ? { id: account.id, label: account.name } : previous!.account;
+  const categoryRef = category
+    ? { id: category.id, label: category.label, color: category.color }
+    : previous!.category;
   // Местный день, а не UTC-полночь: западнее Гринвича «2026-01-31» иначе
   // становился 30-м (см. localCalendarDate).
   let nextDateInput = localCalendarDate(input.nextDate);
   // Дату в форме не трогали — число остаётся прежним. Иначе правка одной
   // суммы у платежа на 31-е, стоящего сейчас на 28 февраля, перевела бы его
   // на 28-е навсегда.
-  const previous =
-    method === "PUT" ? state.recurringTransactions.find((item) => item.id === input.id) : undefined;
+  //
+  // Прежнее число — только у той же частоты и не у недельного: у недельного
+  // числа месяца нет, и недельный шаблон с 5-го, дошедший до 19-го и ставший
+  // месячным, платил бы 5-го, а не 19-го, как стоит в форме.
   const dayOfMonth =
-    previous && todayDay(new Date(previous.nextDate)) === String(input.nextDate).trim()
+    previous &&
+    previous.frequency === frequency &&
+    frequency !== "WEEKLY" &&
+    todayDay(new Date(previous.nextDate)) === String(input.nextDate).trim()
       ? anchorDayOf(previous)
       : dayOfMonthFrom(input.nextDate);
+  // Недельному число месяца не записывается (см. выше).
+  const storedDay = frequency === "WEEKLY" ? {} : { dayOfMonth };
 
   // Шаблон стоял на паузе и снова включён — без этого он сохранял прежнюю
   // дату, и первая же запись (автоматическая — при запуске, молча) проводила
@@ -81,7 +101,7 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
       type,
       frequency,
       nextDate: nextDateInput.toISOString(),
-      dayOfMonth,
+      ...storedDay,
       description,
       isActive,
       daysUntilNext: status.daysUntilNext,
@@ -112,7 +132,7 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
     type,
     frequency,
     nextDate: nextDateInput.toISOString(),
-    dayOfMonth,
+    ...storedDay,
     description,
     isActive,
     daysUntilNext: status.daysUntilNext,
@@ -123,6 +143,14 @@ export function upsertRecurring(state: LocalState, body: unknown, method: "POST"
   };
   state.recurringTransactions = [...state.recurringTransactions, row];
   return row;
+}
+
+/**
+ * Число месяца шаблона после проведения. У недельного его нет — и записанное
+ * прежними версиями снимается: иначе оно всплыло бы при смене частоты.
+ */
+function dayOfMonthFor(item: LocalState["recurringTransactions"][number], anchorDay: number) {
+  return { dayOfMonth: item.frequency === "WEEKLY" ? undefined : anchorDay };
 }
 
 export function materializeRecurring(state: LocalState, body: unknown) {
@@ -161,7 +189,7 @@ export function materializeRecurring(state: LocalState, body: unknown) {
       ? {
           ...item,
           nextDate: status.nextDateAfterRun.toISOString(),
-          dayOfMonth: anchorDay,
+          ...dayOfMonthFor(item, anchorDay),
           isDue: false
         }
       : item
@@ -218,7 +246,7 @@ export function materializeAllDue(state: LocalState) {
         ? {
             ...item,
             nextDate: status.nextDateAfterRun.toISOString(),
-            dayOfMonth: anchorDay,
+            ...dayOfMonthFor(item, anchorDay),
             isDue: false
           }
         : item

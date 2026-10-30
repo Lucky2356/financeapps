@@ -17,6 +17,8 @@ export const en: Messages = {
   "api.account.pick": "Choose an account.",
   "api.account.pickActive": "Choose an existing active account.",
   "api.account.balanceNumber": "The account balance must be a number.",
+  "api.account.balanceRange":
+    "The account balance must be within {max} billion either way — otherwise it's a typo, not money.",
   "api.ledger.pickAccountCategory": "Choose an existing account and category.",
   "api.split.minParts": "A split needs at least two parts.",
   "api.split.partInvalid": "Each part needs a category and an amount greater than zero.",
@@ -28,6 +30,10 @@ export const en: Messages = {
   "api.transfer.amountMismatch": "The charge and deposit amounts don't match.",
   "api.transfer.pickAccounts": "Choose existing active accounts for the transfer.",
   "api.transfer.distinct": "The source and destination accounts must be different.",
+  "api.transfer.archived":
+    "This transfer involves an archived account, so it can't be deleted or changed: the money would stay on the archived account and drop out of your net worth.",
+  "api.transfer.typeLocked":
+    "Half of a transfer can't become income or an expense. Delete the transfer and record the transaction again.",
   "api.tx.notFound": "Transaction not found — it may have been deleted already.",
   "api.tx.restoreFailed": "Couldn't restore the transaction.",
   "api.tx.restoreOrphan":
@@ -42,6 +48,8 @@ export const en: Messages = {
     "A default category can't be deleted — you can rename it, recolor it or change its icon.",
   "api.category.inUse":
     "Can't delete the category: {count} {n:transaction is|transactions are} linked to it.",
+  "api.category.inRecurring":
+    "Can't delete the category: {count} {n:recurring transaction uses|recurring transactions use} it.",
   "api.rule.needTextAndCategory": "Enter the text and a category for the rule.",
   // Лимиты, план, цели, долги
   "api.budget.pickExpenseCategory": "Choose an expense category.",
@@ -54,6 +62,9 @@ export const en: Messages = {
   "api.debt.settled": "This debt is already paid off.",
   "api.debt.pickAccount": "Choose the account you're paying from.",
   "api.debt.noCategory": "There's no expense category to record the payment under.",
+  "api.debt.amountRange":
+    "The debt amount must be from zero to {max} billion — otherwise it's a typo, not money.",
+  "api.debt.rateRange": "The interest rate must be from 0 to 1000%.",
   // Инвестиции
   "api.inv.lotPositive": "Enter a quantity and price greater than zero.",
   "api.inv.quantityPositive": "Enter a quantity greater than zero.",
@@ -79,6 +90,8 @@ export const en: Messages = {
   "api.sheet.unknownColumnKind": "Unknown column type.",
   "api.sheet.columnName": "The column needs a name.",
   "api.sheet.noColumn": "There's no such column.",
+  "api.sheet.freeFull":
+    "The sheet is full to the edge: there is no room to insert a row or column. Clear the last row or column first.",
   "api.sheet.goalNumber": "The goal amount must be a number.",
   "api.sheet.nothingToUndo": "Nothing to undo.",
   "api.sheet.nothingToImport": "Nothing to import.",

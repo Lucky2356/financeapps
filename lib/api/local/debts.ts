@@ -7,9 +7,9 @@ import { dueLiabilities, monthKey, paymentAmount } from "@/lib/debts/auto-pay";
 import { plannedDebtPayments } from "@/lib/debts/planned";
 import { activeDebts, isSettledDebt } from "@/lib/debts/settled";
 import { convert, isSupportedCurrency } from "@/lib/currency";
-import { isUsableMoney, roundMoney } from "@/lib/utils";
+import { isUsableMoney, MAX_MONEY, roundMoney } from "@/lib/utils";
 import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
-import type { LiabilityRow } from "@/types/finance";
+import type { LiabilityRow, TransactionRow } from "@/types/finance";
 import { type LocalState, recomputeLiability } from "@/lib/api/local/state";
 import { ratesOf, sumInBase } from "@/lib/api/local/money";
 import { dataText } from "@/lib/i18n/data-text";
@@ -27,6 +27,23 @@ function debtAmount(raw: string | undefined): number {
       .replace(",", ".") || 0
   );
   if (!Number.isFinite(value)) throw new Error(apiText("api.plan.amountRange"));
+  // «1e308» — тоже число: долг такого размера делал капитал бесконечным, и
+  // дальше не сохранялась ни одна запись. Предел тот же, что у операций.
+  if (value > MAX_MONEY) throw new Error(apiText("api.debt.amountRange", { max: MAX_MONEY / 1e9 }));
+  return Math.max(value, 0);
+}
+
+/**
+ * Ставка из формы, в процентах годовых: пусто — ноль. Больше 1000 % ставок не
+ * бывает — это опечатка, и бесконечная ставка ломала расчёт переплаты.
+ */
+function debtRate(raw: string | undefined): number {
+  const value = Number(
+    String(raw ?? "")
+      .replace(/[\s\u00a0]/g, "")
+      .replace(",", ".") || 0
+  );
+  if (!Number.isFinite(value) || value > 1000) throw new Error(apiText("api.debt.rateRange"));
   return Math.max(value, 0);
 }
 
@@ -47,7 +64,7 @@ export function upsertLiability(state: LocalState, body: unknown, method: "POST"
     kind,
     balance,
     originalAmount: Math.max(debtAmount(input.originalAmount), balance),
-    interestRate: Math.max(Number(input.interestRate ?? 0), 0),
+    interestRate: debtRate(input.interestRate),
     minPayment: debtAmount(input.minPayment),
     ...(Number.isInteger(dueDayRaw) && dueDayRaw >= 1 && dueDayRaw <= 31
       ? { dueDay: dueDayRaw }
@@ -150,6 +167,41 @@ export function payDebt(state: LocalState, body: unknown) {
   return { paid: amount, balance, closed: balance === 0, transactionId: tx.id };
 }
 
+/**
+ * Платёж по долгу удалили — месяц снова открыт для автоплатежа, если в нём не
+ * осталось другого платежа по этому долгу.
+ *
+ * Ручной платёж (и автоплатёж) отмечает месяц оплаченным (`lastPaidMonth`), а
+ * удаление платежа отметку не снимало: деньги вернулись на счёт, долг снова
+ * больше, а автоплатёж считал месяц закрытым и пропускал его. Отметка
+ * возвращается к последнему месяцу, где платёж остался, — или снимается.
+ * Зовётся после того, как строка уже снята с книги.
+ */
+export function reopenPaidMonth(
+  state: LocalState,
+  row: Pick<TransactionRow, "liabilityId" | "type" | "date" | "autoPaid">
+) {
+  // Удалён платёж, который записал сам автоплатёж, — человек так говорит, что
+  // этот месяц оплачен иначе (или не нужен). Повторять его автоплатёж не должен:
+  // удалённое создавалось бы снова при каждом запуске.
+  if (!row.liabilityId || row.type !== "EXPENSE" || row.autoPaid) return;
+  const liability = state.liabilities.find((item) => item.id === row.liabilityId);
+  const month = row.date.slice(0, 7);
+  if (!liability || liability.lastPaidMonth !== month) return;
+  const paidMonths = state.transactions
+    .filter((item) => item.liabilityId === liability.id && item.type === "EXPENSE")
+    .map((item) => item.date.slice(0, 7));
+  if (paidMonths.includes(month)) return;
+  const earlier = paidMonths.filter((item) => item < month).sort();
+  const previous = earlier[earlier.length - 1];
+  state.liabilities = state.liabilities.map((item) => {
+    if (item.id !== liability.id) return item;
+    const { lastPaidMonth: _was, ...rest } = item;
+    void _was;
+    return previous ? { ...rest, lastPaidMonth: previous } : rest;
+  });
+}
+
 export function autoPayDebts(state: LocalState) {
   const today = new Date();
   const due = dueLiabilities(state.liabilities, today);
@@ -160,14 +212,20 @@ export function autoPayDebts(state: LocalState) {
   let posted = 0;
 
   for (const liability of due) {
-    const accountId =
-      state.accounts.find(
-        (account) => account.id === liability.paymentAccountId && !account.isArchived
-      )?.id ?? fallbackAccount?.id;
-    const categoryId =
-      state.categories.find(
-        (category) => category.id === liability.paymentCategoryId && category.kind === "EXPENSE"
-      )?.id ?? fallbackCategory?.id;
+    // Запасной счёт и категория — только для долга, у которого они не выбраны.
+    // Выбранный счёт ушёл в архив (категорию удалили) — платёж не проводится:
+    // раньше он молча списывался с первого попавшегося счёта, хотя человек
+    // назвал другой, и деньги уходили не оттуда, откуда он их ждал.
+    const accountId = liability.paymentAccountId
+      ? state.accounts.find(
+          (account) => account.id === liability.paymentAccountId && !account.isArchived
+        )?.id
+      : fallbackAccount?.id;
+    const categoryId = liability.paymentCategoryId
+      ? state.categories.find(
+          (category) => category.id === liability.paymentCategoryId && category.kind === "EXPENSE"
+        )?.id
+      : fallbackCategory?.id;
     // Without an account or an expense category there is nowhere to post.
     if (!accountId || !categoryId) continue;
 
@@ -195,6 +253,9 @@ export function autoPayDebts(state: LocalState) {
     );
     // paymentAmount не больше остатка — платёж снимает с долга всю сумму.
     recordDebtApplied(state, tx.id, amount);
+    state.transactions = state.transactions.map((row) =>
+      row.id === tx.id ? { ...row, autoPaid: true } : row
+    );
 
     state.liabilities = state.liabilities.map((item) =>
       item.id === liability.id

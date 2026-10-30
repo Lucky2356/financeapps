@@ -335,7 +335,18 @@ function roundQuantity(value: number): number {
  */
 export function applySale(state: LocalState, event: RealizedInvestmentEvent, accountId?: string) {
   const position = state.investments.portfolio.find((item) => item.ticker === event.ticker);
-  if (!position || event.quantity <= 0) return;
+  // Бумаги нет в портфеле (её не заводили или уже убрали) — портфель не
+  // трогается, но деньги за неё всё равно приходят на названный счёт. Раньше
+  // продажа тут и заканчивалась: запись в налоговом журнале была, денег нигде.
+  if (position && event.quantity > 0) takeFromPortfolio(state, event, position);
+  postProceeds(state, event, accountId);
+}
+
+function takeFromPortfolio(
+  state: LocalState,
+  event: RealizedInvestmentEvent,
+  position: InvestmentData["portfolio"][number]
+) {
   if (event.quantity > position.quantity)
     throw new Error(
       apiText("api.inv.sellTooMuch", {
@@ -399,7 +410,9 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
     ...(taken.length ? { lots: taken } : {}),
     ...(left > 0 ? {} : { position })
   };
+}
 
+function postProceeds(state: LocalState, event: RealizedInvestmentEvent, accountId?: string) {
   // Where the money went, if the owner said. Without an account the sale is
   // still recorded — some people keep the cash with the broker and track it
   // as a position of its own.
@@ -425,7 +438,12 @@ export function applySale(state: LocalState, event: RealizedInvestmentEvent, acc
     },
     "POST"
   );
-  event.soldFrom = { ...event.soldFrom, transactionId: posted.id };
+  // Продажа бумаги не из портфеля помнит только операцию с деньгами:
+  // `outsidePortfolio` говорит undoSale, что бумаги возвращать некуда.
+  event.soldFrom = {
+    ...(event.soldFrom ?? { averageBuyPrice: 0, outsidePortfolio: true }),
+    transactionId: posted.id
+  };
 }
 
 /**
@@ -440,6 +458,7 @@ export function undoSale(state: LocalState, event: RealizedInvestmentEvent) {
   const sold = event.soldFrom;
   if (!sold) return;
   if (sold.transactionId) deleteTransaction(state, sold.transactionId);
+  if (sold.outsidePortfolio) return;
 
   const current = state.investments.portfolio.find((item) => item.ticker === event.ticker);
   if (!current) {
@@ -455,8 +474,19 @@ export function undoSale(state: LocalState, event: RealizedInvestmentEvent) {
 
   // Merge the lots back only when the position still keeps lots — half a set
   // of them would not add up to the quantity beside it.
+  //
+  // Позиция продавалась без покупок (количество и средняя руками), а лоты
+  // появились потом — «Докупить» сделал из остатка первый лот. Проданные бумаги
+  // возвращаются тогда отдельным лотом по прежней средней: без него количество
+  // было бы больше суммы лотов, и следующая докупка, считающая по лотам,
+  // теряла вернувшиеся бумаги.
+  const returned: PurchaseLot[] = sold.lots?.length
+    ? sold.lots
+    : current.lots?.length && sold.averageBuyPrice > 0
+      ? [{ date: event.date, quantity: event.quantity, price: sold.averageBuyPrice }]
+      : [];
   const lots =
-    current.lots && sold.lots?.length ? sortLots([...current.lots, ...sold.lots]) : current.lots;
+    current.lots && returned.length ? sortLots([...current.lots, ...returned]) : current.lots;
   const quantity = roundQuantity(current.quantity + event.quantity);
   const average = lots?.length ? summarizeLots(lots).averageBuyPrice : sold.averageBuyPrice;
   state.investments = {

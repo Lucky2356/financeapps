@@ -9,7 +9,7 @@ import { criteriaFromParams, matchesCriteria } from "@/lib/transactions/filter";
 import { parseSort, sortTransactions } from "@/lib/transactions/sort";
 import { futureDated, storedTransactionDate } from "@/lib/transactions/date";
 import { convert, isSupportedCurrency } from "@/lib/currency";
-import { isUsableMoney, roundMoney } from "@/lib/utils";
+import { isUsableMoney, MAX_MONEY, roundMoney } from "@/lib/utils";
 import { apiText, moneyRangeText } from "@/lib/i18n/api-text";
 import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount";
 import {
@@ -57,6 +57,10 @@ function accountBalance(raw: string | undefined): number {
       .replace(",", ".") || 0
   );
   if (!Number.isFinite(value)) throw new Error(apiText("api.account.balanceNumber"));
+  // «1e308» — тоже число, но сумма таких остатков даёт бесконечный капитал, и
+  // после него не сохранялась ни одна запись. Предел тот же, что у операций.
+  if (Math.abs(value) > MAX_MONEY)
+    throw new Error(apiText("api.account.balanceRange", { max: MAX_MONEY / 1e9 }));
   return value;
 }
 
@@ -122,14 +126,17 @@ export function upsertTransaction(
   recurringId?: string
 ) {
   const input = toFormObject(body);
-  const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
-  const category = state.categories.find((item) => item.id === input.categoryId);
-  if (!account || !category) throw new Error(apiText("api.ledger.pickAccountCategory"));
-
   const previous =
     method === "PUT" && input.id
       ? state.transactions.find((item) => item.id === input.id)
       : undefined;
+  // Правка половины перевода проверяется до всего остального — отказ должен
+  // объяснять, что не так с переводом, а не просить выбрать счёт.
+  if (previous) checkTransferEdit(state, previous, input);
+  const account = state.accounts.find((item) => item.id === input.accountId && !item.isArchived);
+  const category = state.categories.find((item) => item.id === input.categoryId);
+  if (!account || !category) throw new Error(apiText("api.ledger.pickAccountCategory"));
+
   if (method === "PUT" && input.id) deleteTransaction(state, input.id);
 
   const amount = Number(input.amount);
@@ -226,6 +233,38 @@ export function upsertTransaction(
   if (method === "PUT" && previous?.liabilityId) applyDebtPayment(state, transaction, -1);
   if (method === "PUT" && previous) keepTransferInStep(state, previous, transaction);
   return transaction;
+}
+
+/** Счёт убран в архив. Счёта, которого нет вовсе, это не касается. */
+export function isArchivedAccount(state: LocalState, accountId: string): boolean {
+  return state.accounts.some((item) => item.id === accountId && item.isArchived);
+}
+
+/**
+ * Что нельзя сделать с половиной перевода правкой.
+ *
+ * — Сменить тип. Номер перевода строка сохраняет (см. upsertTransaction), и
+ *   поступление, ставшее тратой, оставалось «переводом»: итоги его не видят,
+ *   а капитал сдвигался на двойную сумму из ниоткуда.
+ * — Поставить её на счёт второй половины: перевод со счёта на него же.
+ * — Править перевод, вторая половина которого на счёте в архиве: сумма второй
+ *   половины поменялась бы на архивном счёте, а он в капитал не входит.
+ */
+function checkTransferEdit(
+  state: LocalState,
+  previous: TransactionRow,
+  input: ReturnType<typeof toFormObject>
+) {
+  const key = transferKeyOf(previous);
+  if (!key) return;
+  const halves = state.transactions.filter((row) => transferKeyOf(row) === key);
+  if (halves.some((row) => isArchivedAccount(state, row.account.id)))
+    throw new Error(apiText("api.transfer.archived"));
+  const type = input.type === "INCOME" ? "INCOME" : "EXPENSE";
+  if (type !== previous.type) throw new Error(apiText("api.transfer.typeLocked"));
+  const partner = halves.find((row) => row.id !== previous.id);
+  if (partner && partner.account.id === input.accountId)
+    throw new Error(apiText("api.transfer.sameAccount"));
 }
 
 /**
