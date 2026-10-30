@@ -15,7 +15,7 @@ import { baseAmountContext, baseAmountOf } from "@/lib/transactions/base-amount"
 import { TRANSFER_CATEGORY_KEY, transferKeyOf } from "@/lib/transactions/transfers";
 import { dataText } from "@/lib/i18n/data-text";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
-import { suggestCategoryId } from "@/lib/category-suggest";
+import { createCategorySuggester, type CategorySuggester } from "@/lib/category-suggest";
 import { matchRule } from "@/lib/categorization-rules";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import type { WatchRow } from "@/lib/analytics/watchdog";
@@ -40,6 +40,21 @@ import {
   sumInBase
 } from "@/lib/api/local/money";
 
+/**
+ * Остаток из формы счёта: «1 000,50» с пробелами и запятой, пусто — ноль,
+ * минус допустим (кредитка). Не число — понятный отказ: NaN доходил до проверки
+ * книги, и человек видел «значение не подходит — поле accounts.0.balance».
+ */
+function accountBalance(raw: string | undefined): number {
+  const value = Number(
+    String(raw ?? "")
+      .replace(/[\s\u00a0]/g, "")
+      .replace(",", ".") || 0
+  );
+  if (!Number.isFinite(value)) throw new Error(apiText("api.account.balanceNumber"));
+  return value;
+}
+
 export function upsertAccount(state: LocalState, body: unknown, method: "POST" | "PUT") {
   const input = toFormObject(body);
   const requestedCurrency = String(input.currency ?? "").toUpperCase();
@@ -55,7 +70,7 @@ export function upsertAccount(state: LocalState, body: unknown, method: "POST" |
     // при следующем запуске. Обрезаем.
     name: (input.name?.trim() || dataText("data.account.new")).slice(0, 100),
     type: input.type || "DEBIT_CARD",
-    balance: Number(input.balance ?? 0),
+    balance: accountBalance(input.balance),
     // Honour an explicitly chosen supported currency; fall back to the base.
     currency: isSupportedCurrency(requestedCurrency) ? requestedCurrency : state.currency,
     // Savings terms. A blank rate means "no interest", so the fields are
@@ -684,83 +699,113 @@ export function importCsvRows(state: LocalState, body: unknown) {
     before.set(key, (before.get(key) ?? 0) + 1);
   }
   const seen = new Map<string, number>();
-  for (const row of rows) {
-    const rawAmount = parseImportedAmount(row[input.amountColumn]);
-    const date = parseImportedDate(row[input.dateColumn]);
-    if (rawAmount === null || rawAmount === 0 || !date) {
-      skipped += 1;
-      continue;
+  // Подбор категории по истории — по указателю, разобранному один раз, а не
+  // разбором всей истории заново на каждую строку (lib/category-suggest).
+  // Строки этого же файла в нём учитываются, как и прежде: каждая записанная
+  // добавляется в его начало — туда же, где она встаёт в списке операций.
+  //
+  // И список операций не копируется целиком на каждую строку: на время
+  // импорта новые строки собираются отдельно, а встают поверх прежних один
+  // раз, в конце — в том же порядке (последняя строка файла сверху). Внутри
+  // цикла прежний список никто не читает: повторы сличаются с `before`,
+  // подсказка — с указателем. `finally` возвращает список и при ошибке —
+  // с теми строками, что успели записаться, как было и раньше.
+  const existing = state.transactions;
+  const added: TransactionRow[] = [];
+  let suggester: CategorySuggester | undefined;
+  const suggesterNow = () => {
+    if (!suggester) {
+      suggester = createCategorySuggester(existing);
+      for (const row of added) suggester.prepend(row);
     }
-    const type = rawAmount >= 0 ? "INCOME" : "EXPENSE";
-    const accountName = String(row[input.accountColumn ?? ""] ?? "").trim();
-    const account = accountName
-      ? findOrCreateAccount(state, accountName)
-      : (fallbackAccount ?? findOrCreateAppAccount(state, DEFAULT_IMPORT_ACCOUNT_KEY));
-    // Rows without an account of their own follow the first one there is —
-    // including one this import has just made.
-    fallbackAccount = fallbackAccount ?? account;
-    const rawCategoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
-    const description = String(row[input.descriptionColumn ?? ""] ?? "").trim();
-    // When the CSV row carries no category, try to auto-categorize it from
-    // the description against existing transactions before falling back to a
-    // generic import bucket.
-    //
-    // Правило человека важнее категории банка: колонку категории заполняют
-    // все выписки, и правило «Пятёрочка → Продукты» при импорте не работало
-    // ни разу — строка шла в «Супермаркеты» банка, заведённые заново.
-    const ruledId = rawCategoryName ? matchRule(description, state.rules) : null;
-    const ruled = ruledId
-      ? state.categories.find((item) => item.id === ruledId && item.kind === type)
-      : undefined;
-    let category;
-    if (ruled) {
-      category = ruled;
-    } else if (rawCategoryName) {
-      category = findOrCreateCategory(state, rawCategoryName, type);
-    } else {
-      const suggestedId = suggestCategoryId(description, state.transactions, {
-        type,
-        rules: [...state.rules]
-      });
-      category =
-        (suggestedId
-          ? state.categories.find((item) => item.id === suggestedId && item.kind === type)
-          : undefined) ??
-        findOrCreateAppCategory(
-          state,
-          type === "INCOME" ? "data.cat.importIncome" : "data.cat.importExpense",
-          type
-        );
+    return suggester;
+  };
+  try {
+    for (const row of rows) {
+      const rawAmount = parseImportedAmount(row[input.amountColumn]);
+      const date = parseImportedDate(row[input.dateColumn]);
+      if (rawAmount === null || rawAmount === 0 || !date) {
+        skipped += 1;
+        continue;
+      }
+      const type = rawAmount >= 0 ? "INCOME" : "EXPENSE";
+      const accountName = String(row[input.accountColumn ?? ""] ?? "").trim();
+      const account = accountName
+        ? findOrCreateAccount(state, accountName)
+        : (fallbackAccount ?? findOrCreateAppAccount(state, DEFAULT_IMPORT_ACCOUNT_KEY));
+      // Rows without an account of their own follow the first one there is —
+      // including one this import has just made.
+      fallbackAccount = fallbackAccount ?? account;
+      const rawCategoryName = String(row[input.categoryColumn ?? ""] ?? "").trim();
+      const description = String(row[input.descriptionColumn ?? ""] ?? "").trim();
+      // When the CSV row carries no category, try to auto-categorize it from
+      // the description against existing transactions before falling back to a
+      // generic import bucket.
+      //
+      // Правило человека важнее категории банка: колонку категории заполняют
+      // все выписки, и правило «Пятёрочка → Продукты» при импорте не работало
+      // ни разу — строка шла в «Супермаркеты» банка, заведённые заново.
+      const ruledId = rawCategoryName ? matchRule(description, state.rules) : null;
+      const ruled = ruledId
+        ? state.categories.find((item) => item.id === ruledId && item.kind === type)
+        : undefined;
+      let category;
+      if (ruled) {
+        category = ruled;
+      } else if (rawCategoryName) {
+        category = findOrCreateCategory(state, rawCategoryName, type);
+      } else {
+        const suggestedId = suggesterNow().suggest(description, {
+          type,
+          rules: [...state.rules]
+        });
+        category =
+          (suggestedId
+            ? state.categories.find((item) => item.id === suggestedId && item.kind === type)
+            : undefined) ??
+          findOrCreateAppCategory(
+            state,
+            type === "INCOME" ? "data.cat.importIncome" : "data.cat.importExpense",
+            type
+          );
+      }
+      // День строки файла — тот, что будет записан, а не UTC-день местной
+      // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же
+      // файла не узнавал ни одной строки и задваивал всё.
+      const day = storedTransactionDate(date).slice(0, 10);
+      // Категория в ключ повтора не входит: она зависит от правил на момент
+      // импорта, и повторно загруженная выписка, разнесённая уже по новому
+      // правилу, задвоилась бы целиком.
+      const key = keyOf([account.id, type, Math.abs(rawAmount), day, description]);
+      const already = before.get(key) ?? 0;
+      const count = seen.get(key) ?? 0;
+      seen.set(key, count + 1);
+      if (count < already) {
+        skipped += 1;
+        continue;
+      }
+      // Пустой список — чтобы upsertTransaction не копировал всю историю ради
+      // одной новой строки (см. выше; на место всё встаёт в `finally`).
+      state.transactions = [];
+      const created = upsertTransaction(
+        state,
+        {
+          amount: String(Math.abs(rawAmount)),
+          type,
+          accountId: account.id,
+          categoryId: category.id,
+          date: date.toISOString(),
+          description
+        },
+        "POST"
+      );
+      added.push(created);
+      suggester?.prepend(created);
+      transactionIds.push(created.id);
+      imported += 1;
     }
-    // День строки файла — тот, что будет записан, а не UTC-день местной
-    // полуночи: к востоку от Гринвича это вчера, и повторный импорт того же
-    // файла не узнавал ни одной строки и задваивал всё.
-    const day = storedTransactionDate(date).slice(0, 10);
-    // Категория в ключ повтора не входит: она зависит от правил на момент
-    // импорта, и повторно загруженная выписка, разнесённая уже по новому
-    // правилу, задвоилась бы целиком.
-    const key = keyOf([account.id, type, Math.abs(rawAmount), day, description]);
-    const already = before.get(key) ?? 0;
-    const count = seen.get(key) ?? 0;
-    seen.set(key, count + 1);
-    if (count < already) {
-      skipped += 1;
-      continue;
-    }
-    const created = upsertTransaction(
-      state,
-      {
-        amount: String(Math.abs(rawAmount)),
-        type,
-        accountId: account.id,
-        categoryId: category.id,
-        date: date.toISOString(),
-        description
-      },
-      "POST"
-    );
-    transactionIds.push(created.id);
-    imported += 1;
+  } finally {
+    state.transactions = [...added.reverse(), ...existing];
   }
   if (transactionIds.length > 0) {
     state.importBatches = [

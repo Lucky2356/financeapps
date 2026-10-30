@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api/client";
 import { buildNotifications } from "@/lib/notifications";
-import { translate } from "@/lib/i18n/catalog";
+import { translate, type Locale } from "@/lib/i18n/catalog";
 import { getClientLocale } from "@/lib/i18n/client-locale";
 import { isAndroidShell } from "@/lib/platform/device";
 import { isDesktopShell } from "@/lib/updates/desktop";
@@ -20,6 +20,37 @@ function isFxStale(updatedAt: string | null | undefined): boolean {
   if (Number.isNaN(then.getTime())) return true;
   const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   return day(then) !== day(new Date());
+}
+
+/**
+ * Установка обновления на компьютере по кнопке тоста — с отчётом о неудаче.
+ *
+ * Раньше install() звался без обработки: отказ (сеть, подпись, нет места)
+ * оставлял «Скачиваю обновление…» и необработанное исключение — человек ждал
+ * того, что уже не случится. Теперь так же, как на Android
+ * (installAndroidUpdate): тост загрузки, при ошибке — причина и «Повторить».
+ */
+export async function installDesktopUpdate(
+  update: { install: () => Promise<void> },
+  locale: Locale
+): Promise<void> {
+  const id = toast.loading(translate(locale, "set.update.downloading"));
+  try {
+    await update.install();
+    // Успех обычно не наступает: установщик перезапускает приложение сам.
+    toast.dismiss(id);
+  } catch (error) {
+    console.error("[updater]", error);
+    toast.error(translate(locale, "set.update.failed"), {
+      id,
+      description: error instanceof Error ? error.message : String(error),
+      duration: 30_000,
+      action: {
+        label: translate(locale, "set.update.retry"),
+        onClick: () => void installDesktopUpdate(update, locale)
+      }
+    });
+  }
 }
 
 // Runs opt-in automation once per app load: refreshes FX rates (desktop),
@@ -141,10 +172,7 @@ async function runAutomation() {
             duration: 15_000,
             action: {
               label: translate(locale, "set.update.confirmLabel"),
-              onClick: () => {
-                toast.info(translate(locale, "set.update.downloading"));
-                void update.install();
-              }
+              onClick: () => void installDesktopUpdate(update, locale)
             }
           });
         }

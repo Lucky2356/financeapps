@@ -16,6 +16,7 @@ export const en: Messages = {
   "api.account.notFound": "There's no such account.",
   "api.account.pick": "Choose an account.",
   "api.account.pickActive": "Choose an existing active account.",
+  "api.account.balanceNumber": "The account balance must be a number.",
   "api.ledger.pickAccountCategory": "Choose an existing account and category.",
   "api.split.minParts": "A split needs at least two parts.",
   "api.split.partInvalid": "Each part needs a category and an amount greater than zero.",
@@ -123,6 +124,8 @@ export const en: Messages = {
   // Хранилище
   "api.storage.locked": "The data is locked — enter the password.",
   "api.storage.aborted": "The write was cancelled.",
+  "api.storage.blocked":
+    "The data is open in another tab or app window. Close it and reload the page.",
   "api.storage.rosterUnreadable":
     "Couldn't tell whose data to open: this device's list of people couldn't be read.",
   // Пароль, шкатулка, код восстановления

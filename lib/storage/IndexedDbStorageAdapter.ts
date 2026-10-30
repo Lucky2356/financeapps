@@ -88,6 +88,16 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
 
     this.connection = new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(this.databaseName, 1);
+      // Открытие, которому мешает другая вкладка: она держит базу старой версии
+      // и не закрывает её. Без ответа на это обещание не исполнялось НИКОГДА, а
+      // с ним вставало всё приложение — пустой экран без единого слова. Теперь
+      // это понятный отказ; следующий вызов попробует открыть заново.
+      let blocked = false;
+      request.onblocked = () => {
+        blocked = true;
+        this.connection = null;
+        reject(new Error(apiText("api.storage.blocked")));
+      };
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(this.storeName)) {
@@ -96,6 +106,12 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
       };
       request.onsuccess = () => {
         const db = request.result;
+        // Другая вкладка всё же отпустила базу, но отказ уже отдан: это
+        // соединение никому не нужно, и держать его открытым — снова мешать.
+        if (blocked) {
+          db.close();
+          return;
+        }
         db.onclose = () => (this.connection = null);
         db.onversionchange = () => {
           db.close();

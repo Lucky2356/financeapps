@@ -38,7 +38,11 @@ export function SetupChecklist() {
   const [settingUp, setSettingUp] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
-    return localStorage.getItem(STORAGE_KEY) === "true";
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "true";
+    } catch {
+      return false; // хранилище недоступно — подсказка видна
+    }
   });
 
   const loadCounts = useCallback(async () => {

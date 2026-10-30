@@ -20,11 +20,18 @@ function isLocale(value: unknown): value is Locale {
 }
 
 // Resolves the initial locale: saved choice → browser language → default (ru).
-function resolveInitialLocale(): Locale {
+// Чтение хранилища — под try: при запрете сайтовых данных (строгий режим
+// приватности, встроенное окно) localStorage бросает SecurityError, и без
+// этого падал бы весь корень приложения, а не только память о языке.
+export function resolveInitialLocale(): Locale {
   if (typeof window === "undefined") return DEFAULT_LOCALE;
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  if (isLocale(saved)) return saved;
-  const browser = window.navigator.language?.slice(0, 2).toLowerCase();
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (isLocale(saved)) return saved;
+  } catch {
+    /* хранилище недоступно — язык устройства */
+  }
+  const browser = window.navigator?.language?.slice(0, 2).toLowerCase();
   return isLocale(browser) ? browser : DEFAULT_LOCALE;
 }
 

@@ -26,7 +26,13 @@ export function useIncludeTransfers(
   const [include, setInclude] = useState(false);
 
   useEffect(() => {
-    const read = () => setInclude(localStorage.getItem(KEY) === "1");
+    const read = () => {
+      try {
+        setInclude(localStorage.getItem(KEY) === "1");
+      } catch {
+        /* хранилище недоступно — переводы не учитываются, как по умолчанию */
+      }
+    };
     read();
     window.addEventListener(EVENT, read);
     return () => window.removeEventListener(EVENT, read);
