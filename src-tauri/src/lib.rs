@@ -1,3 +1,4 @@
+mod folder_files;
 #[cfg(desktop)]
 mod window_fit;
 
@@ -45,6 +46,15 @@ pub fn run() {
     .plugin(installer());
 
   builder
+    // Файлы приложения в выбранной человеком папке — копии и синхронизация
+    // (folder_files.rs): вместо прав странице на всю домашнюю папку.
+    .invoke_handler(tauri::generate_handler![
+      folder_files::backup_write,
+      folder_files::backup_list,
+      folder_files::backup_remove,
+      folder_files::sync_file_write,
+      folder_files::sync_file_read
+    ])
     .setup(|_app| {
       // Future secure tokens must use OS keychain / secure storage, never plain files.
       #[cfg(desktop)]

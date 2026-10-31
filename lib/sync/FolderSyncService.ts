@@ -1,6 +1,7 @@
 "use client";
 
 import { apiClient } from "@/lib/api/client";
+import { readSyncFile, writeSyncFile } from "@/lib/files/app-folder";
 import { decryptString, encryptString } from "@/lib/sync/crypto";
 import { apiText } from "@/lib/i18n/api-text";
 
@@ -10,11 +11,8 @@ import { apiText } from "@/lib/i18n/api-text";
 // their other machines, which pull it back. Last-write-wins — pull overwrites
 // local, push overwrites the cloud copy. Desktop only (needs the Tauri fs API).
 
-const SYNC_FILENAME = "financeapps-sync.enc";
-
-function filePath(folder: string): string {
-  return `${folder.replace(/[\\/]+$/, "")}/${SYNC_FILENAME}`;
-}
+// The file itself («financeapps-sync.enc» in the folder) is read and written by
+// the Rust commands in lib/files/app-folder.ts, not the fs plugin.
 
 // Opens a native folder picker; returns the chosen path or null if cancelled.
 export async function pickSyncFolder(): Promise<string | null> {
@@ -28,18 +26,16 @@ export async function pushToFolder(folder: string, passphrase: string): Promise<
   const backup = await apiClient.get("/backup");
   const payload = JSON.stringify({ exportedAt: new Date().toISOString(), backup });
   const encrypted = await encryptString(payload, passphrase);
-  const fs = await import("@tauri-apps/plugin-fs");
-  await fs.writeTextFile(filePath(folder), encrypted);
+  await writeSyncFile(folder, encrypted);
 }
 
 export type PullResult = { exportedAt: string | null };
 
 // Reads and decrypts the snapshot from the sync folder and restores it locally.
 export async function pullFromFolder(folder: string, passphrase: string): Promise<PullResult> {
-  const fs = await import("@tauri-apps/plugin-fs");
   let encrypted: string;
   try {
-    encrypted = await fs.readTextFile(filePath(folder));
+    encrypted = await readSyncFile(folder);
   } catch {
     throw new Error(apiText("api.folder.noFile"));
   }

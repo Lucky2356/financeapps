@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Desktop permissions for CSV/JSON import/export and cloud-folder sync. An imported file is read as raw bytes (fs:allow-read-file) so a bank statement in Windows-1251 can be decoded on our side; fs:allow-read-text-file stays for the sync folder, which is always UTF-8. Both rely on the same fs:scope below — the picked file itself is added to the scope by the dialog plugin. The opener scope is pinned to this project's releases: the command permission alone is not enough, the plugin also matches the URL against this list. The home directory stays in the allow list because that is where cloud folders actually live (YandexDisk, Dropbox, OneDrive sit next to it, not under Documents), and a folder picked once has to stay readable for the scheduled backup after a restart. What does NOT belong to a finance app is denied outright — deny wins over allow — so credentials, keys and application data are out of reach even though the folder above them is not. The http scope ends with https://* and https://*:* — the two spellings the capability schema documents for \"any HTTPS origin\". Both are needed: https://* alone covers port 443 only, so a server behind a non-standard port would be refused because the sync server's address is typed by its owner at runtime and cannot be pinned at build time. Capabilities are granted per window, so this scope belongs to the main webview: any script running in the page may call the http plugin and reach any HTTPS origin, and the page CSP connect-src (which governs only the webview's own fetch) does not stop it. Sync requests go through lib/sync/shell-fetch.ts, which routes them via Rust because the page CSP would otherwise block every request to a self-hosted server, and it would look like \"no connection\". The breadth is accepted because the page runs only the app's own bundled code: the CSP admits no remote scripts (script-src 'self'), and no user or server data is rendered as HTML (the only dangerouslySetInnerHTML is a static constant in app/layout.tsx), so there is no realistic way to inject a script that could abuse it. Narrowing the scope would need the sync address, which is only known at runtime.",
+  "description": "Desktop permissions. Files: the page may read a file and write a file only where the person picked it in a native dialog this session — the dialog plugin adds exactly that path to the fs scope at runtime, so the static fs:scope allows nothing on its own. An imported file is read as raw bytes (fs:allow-read-file) so a bank statement in Windows-1251 can be decoded on our side. The scheduled backups and the cloud-folder sync file are NOT written through the fs plugin: a folder picked once has to stay writable after a restart, which used to mean read/write/remove over the whole home directory for any script in the page. They go through the app's own Rust commands (src-tauri/src/folder_files.rs), which only touch files with the app's own names (financeapps-backup-*.json, financeapps-sync.enc) directly inside the given folder and refuse symlinks — so no other file can be read, overwritten or deleted through them. The deny list stays as a second line for dialog-picked paths. The opener scope is pinned to this project's releases. The http scope ends with https://* and https://*:* because the sync server's address is typed by its owner at runtime and cannot be pinned at build time; it belongs to the main webview, so the defence is keeping foreign scripts out of the page: the CSP admits only the app's own bundled scripts (script-src 'self' plus the hashes and nonces Tauri adds for inline scripts at build time — no 'unsafe-inline'), and no user or server data is rendered as HTML.",
   "platforms": ["windows", "macOS", "linux"],
   "windows": ["main"],
   "permissions": [
@@ -10,10 +10,7 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:allow-read-file",
-    "fs:allow-read-text-file",
     "fs:allow-write-text-file",
-    "fs:allow-read-dir",
-    "fs:allow-remove",
     "window-state:allow-restore-state",
     "window-state:allow-save-window-state",
     "updater:default",
@@ -31,7 +28,7 @@
     },
     {
       "identifier": "fs:scope",
-      "allow": ["$DESKTOP/**", "$DOCUMENT/**", "$DOWNLOAD/**", "$HOME/**"],
+      "allow": [],
       "deny": [
         "$HOME/.ssh/**",
         "$HOME/.gnupg/**",

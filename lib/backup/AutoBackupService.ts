@@ -1,6 +1,7 @@
 "use client";
 
 import { apiClient } from "@/lib/api/client";
+import { listBackupFiles, removeBackupFile, writeBackupFile } from "@/lib/files/app-folder";
 import { readMine, writeMine } from "@/lib/storage/mine";
 import {
   backupFileName,
@@ -48,29 +49,21 @@ export function setLastBackupRun(iso: string): void {
 
 // Desktop file IO for scheduled local backups. Writes a timestamped JSON
 // snapshot of the full local state into the configured folder and rotates old
-// files so only `keep` remain. Uses the Tauri fs plugin (desktop only).
-
-function joinPath(folder: string, name: string): string {
-  return `${folder.replace(/[\\/]+$/, "")}/${name}`;
-}
+// files so only `keep` remain. Files go through the Rust commands in
+// lib/files/app-folder.ts, which touch only the app's own backup files.
 
 export async function runAutoBackup(config: AutoBackupConfig): Promise<string | null> {
   if (config.frequency === "off" || !config.folder) return null;
-  const fs = await import("@tauri-apps/plugin-fs");
-
   const backup = await apiClient.get("/backup");
   const payload = JSON.stringify({ exportedAt: new Date().toISOString(), backup }, null, 2);
   const name = backupFileName();
-  await fs.writeTextFile(joinPath(config.folder, name), payload);
+  await writeBackupFile(config.folder, name, payload);
 
   // Rotate: list the folder and delete backups beyond the keep count.
   try {
-    const entries = await fs.readDir(config.folder);
-    const names = entries
-      .map((entry) => entry.name)
-      .filter((entryName): entryName is string => typeof entryName === "string");
+    const names = await listBackupFiles(config.folder);
     for (const stale of selectBackupsToDelete(names, config.keep)) {
-      await fs.remove(joinPath(config.folder, stale)).catch(() => {
+      await removeBackupFile(config.folder, stale).catch(() => {
         /* best-effort rotation */
       });
     }
