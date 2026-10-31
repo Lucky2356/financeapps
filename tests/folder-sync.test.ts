@@ -11,14 +11,21 @@ import { describe, expect, it, vi } from "vitest";
 
 const folder = vi.hoisted(() => new Map<string, string>());
 
-vi.mock("@tauri-apps/plugin-fs", () => ({
-  writeTextFile: async (path: string, text: string) => {
-    folder.set(path, text);
-  },
-  readTextFile: async (path: string) => {
-    const text = folder.get(path);
-    if (text === undefined) throw new Error("нет файла");
-    return text;
+// Файл в папке пишут и читают команды Rust (lib/files/app-folder.ts).
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: async (command: string, args: { folder: string; content?: string }) => {
+    // Rust берёт файл в папке через Path::join: «/облако» и «/облако/» — одна папка.
+    const key = args.folder.replace(/[\\/]+$/, "");
+    if (command === "sync_file_write") {
+      folder.set(key, args.content ?? "");
+      return undefined;
+    }
+    if (command === "sync_file_read") {
+      const text = folder.get(key);
+      if (text === undefined) throw new Error("нет файла");
+      return text;
+    }
+    throw new Error(`неизвестная команда ${command}`);
   }
 }));
 

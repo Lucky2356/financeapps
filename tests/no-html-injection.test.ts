@@ -3,15 +3,17 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-// GUARD: the app's Content-Security-Policy allows `script-src 'unsafe-inline'`,
-// and that is only harmless while no text a person can type — a description, a
-// category name, a CSV cell, a model's answer — can become markup. React
-// escapes everything it renders, so the danger is the handful of constructs
-// that step around React and hand a string to the DOM or to the interpreter.
+// GUARD: no text a person can type — a description, a category name, a CSV
+// cell, a model's answer — may become markup or code. The CSP no longer allows
+// `script-src 'unsafe-inline'` (Tauri adds hashes and nonces for the app's own
+// inline scripts at build time), but the http plugin's scope is wide by
+// necessity (tests/tauri-permissions.test.ts), so an injected script would
+// still be the whole hole. React escapes everything it renders; the danger is
+// the handful of constructs that step around React and hand a string to the
+// DOM or to the interpreter.
 //
-// This file is the reason `unsafe-inline` stays. It fails the build the moment
-// that stops being true, rather than a year later when someone reads the CSP
-// and takes the audit note on trust.
+// This file fails the build the moment that stops being true, rather than a
+// year later when someone reads the CSP and takes the audit note on trust.
 const SOURCE_DIRS = ["app", "components", "hooks", "lib", "services", "types"];
 
 /**

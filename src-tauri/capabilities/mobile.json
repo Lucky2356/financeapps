@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Android permissions: the camera for reading the pairing QR, the same CSV/JSON import-export and smart-lab lookups as on the desktop, minus the window/updater plugins that have no mobile implementation. An imported file is read as raw bytes (fs:allow-read-file) so a bank statement in Windows-1251 can be decoded on our side; fs:allow-read-text-file stays for the sync folder, which is always UTF-8. Both rely on the same fs:scope below — the picked file itself is added to the scope by the dialog plugin. The opener scope is pinned to this project's releases: granting the command alone opens nothing — the plugin also checks the URL against this list, and a bare `opener:allow-open-url` blocked the update download. The http scope ends with https://* and https://*:* — the two spellings the capability schema documents for \"any HTTPS origin\". Both are needed: https://* alone covers port 443 only, so a server behind a non-standard port would be refused because the sync server's address is typed by its owner at runtime and cannot be pinned at build time. Capabilities are granted per window, so this scope belongs to the main webview: any script running in the page may call the http plugin and reach any HTTPS origin, and the page CSP connect-src (which governs only the webview's own fetch) does not stop it. Sync requests go through lib/sync/shell-fetch.ts, which routes them via Rust because the page CSP would otherwise block every request to a self-hosted server, and it would look like \"no connection\". The breadth is accepted because the page runs only the app's own bundled code: the CSP admits no remote scripts (script-src 'self'), and no user or server data is rendered as HTML (the only dangerouslySetInnerHTML is a static constant in app/layout.tsx), so there is no realistic way to inject a script that could abuse it. Narrowing the scope would need the sync address, which is only known at runtime.",
+  "description": "Android permissions: the camera for reading the pairing QR, file import/export through the native dialogs, and smart-lab lookups, minus the window/updater plugins that have no mobile implementation. An imported file is read as raw bytes (fs:allow-read-file) so a bank statement in Windows-1251 can be decoded on our side; an export is written where the person picked it (fs:allow-write-text-file). Nothing else in the app reads directories, reads text files or removes files through the fs plugin, so those permissions are not granted, and the app's own data directories ($APPDATA, $APPLOCALDATA — the WebView's storage among them) are not in the fs scope. The opener scope is pinned to this project's releases. The http scope ends with https://* and https://*:* because the sync server's address is typed by its owner at runtime and cannot be pinned at build time; it belongs to the main webview, so the defence is keeping foreign scripts out of the page: the CSP admits only the app's own bundled scripts (script-src 'self' plus the hashes and nonces Tauri adds for inline scripts at build time — no 'unsafe-inline'), and no user or server data is rendered as HTML.",
   "platforms": ["android", "iOS"],
   "windows": ["main"],
   "permissions": [
@@ -9,10 +9,7 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:allow-read-file",
-    "fs:allow-read-text-file",
     "fs:allow-write-text-file",
-    "fs:allow-read-dir",
-    "fs:allow-remove",
     "barcode-scanner:allow-scan",
     "barcode-scanner:allow-cancel",
     "barcode-scanner:allow-check-permissions",
@@ -31,7 +28,7 @@
     },
     {
       "identifier": "fs:scope",
-      "allow": ["$DOCUMENT/**", "$DOWNLOAD/**", "$APPDATA/**", "$APPLOCALDATA/**", "$TEMP/**"]
+      "allow": ["$DOCUMENT/**", "$DOWNLOAD/**", "$TEMP/**"]
     },
     {
       "identifier": "http:default",

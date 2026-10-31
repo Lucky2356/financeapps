@@ -30,6 +30,11 @@ import { useEffect, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 import { unwrapBackup } from "@/lib/backup/unwrap";
+import {
+  BackupPasswordRequiredError,
+  isEncryptedBackup,
+  readBackupFileText
+} from "@/lib/backup/encryption";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,6 +125,9 @@ export function FirstRun({
 
   const [code, setCode] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  /** Выбранный файл заперт паролем — тогда под ним появляется поле пароля. */
+  const [fileLocked, setFileLocked] = useState(false);
+  const [filePassword, setFilePassword] = useState("");
   const [base, setBase] = useState("");
   const [login, setLogin] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
@@ -185,6 +193,26 @@ export function FirstRun({
     }
   }
 
+  /**
+   * Выбран файл копии. Заперт ли он паролем, видно по первым полям — и поле
+   * пароля появляется сразу, а не после первой неудачной попытки.
+   */
+  function chooseFile(next: File | null) {
+    setFile(next);
+    setFileLocked(false);
+    setFilePassword("");
+    setError(null);
+    if (!next) return;
+    void next
+      .text()
+      .then((text) => {
+        if (isEncryptedBackup(JSON.parse(text))) setFileLocked(true);
+      })
+      .catch(() => {
+        /* не JSON — скажет восстановление, по нажатию */
+      });
+  }
+
   /** Поднять данные из файла копии — тем же путём, что и «Импорт». */
   async function restoreFromFile(event: React.FormEvent) {
     event.preventDefault();
@@ -192,13 +220,17 @@ export function FirstRun({
     setError(null);
     setBusy(true);
     try {
-      const payload = unwrapBackup(JSON.parse(await file.text()));
+      // Запертый файл расшифровывается здесь, на устройстве, и дальше идёт
+      // ровно как открытый: /backup получает тот же документ.
+      const payload = unwrapBackup(await readBackupFileText(await file.text(), filePassword));
       if (!payload || typeof payload !== "object") throw new Error(t("vault.restore.broken"));
       await apiClient.post("/backup", { backup: payload });
       onDone();
     } catch (cause) {
+      if (cause instanceof BackupPasswordRequiredError) setFileLocked(true);
       // Непрочитанный JSON и отвергнутая копия — для человека одно и то же:
-      // файл не тот. Разницу между ними ему разбирать незачем.
+      // файл не тот. Разницу между ними ему разбирать незачем. Неверный пароль
+      // — другое дело: файл остаётся выбранным, и пароль можно ввести снова.
       const message =
         cause instanceof SyntaxError ? t("vault.restore.broken") : (cause as Error).message;
       setError(message);
@@ -488,10 +520,24 @@ export function FirstRun({
               id="vault-backup"
               type="file"
               accept="application/json,.json"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
               required
             />
           </div>
+
+          {fileLocked ? (
+            <div className="space-y-2">
+              <Label htmlFor="vault-backup-password">{t("backupLock.password")}</Label>
+              <Input
+                id="vault-backup-password"
+                type="password"
+                autoComplete="off"
+                value={filePassword}
+                onChange={(event) => setFilePassword(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">{t("backupLock.lead")}</p>
+            </div>
+          ) : null}
 
           <Problem text={error} />
           <Button type="submit" className="w-full" disabled={busy || !file}>

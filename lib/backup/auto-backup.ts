@@ -1,9 +1,13 @@
 // Scheduled local backups (desktop). On app start the automation runner checks
 // whether a backup is due and, if so, writes a timestamped JSON snapshot of the
-// full local state into a user-chosen folder, then rotates old files. Unlike the
-// encrypted cloud-folder sync this is an on-disk safety copy on the user's own
-// machine, so it needs no passphrase. The pure helpers below are unit-tested;
-// the Tauri file IO lives in runAutoBackup.
+// full local state into a user-chosen folder, then rotates old files. The pure
+// helpers below are unit-tested; the Tauri file IO lives in runAutoBackup.
+//
+// Папку для копий люди выбирают облачную (Яндекс Диск, Dropbox) — чтобы копия
+// пережила компьютер. Поэтому файл можно запереть паролем (`encrypt`), как и
+// ручную копию — см. lib/backup/encryption. Имя файла при этом не меняется:
+// по нему копии находятся и чистятся. Сам пароль в этих настройках НЕ лежит —
+// где он хранится и почему именно там, сказано в AutoBackupService.
 
 export type BackupFrequency = "off" | "daily" | "weekly";
 
@@ -11,9 +15,19 @@ export type AutoBackupConfig = {
   frequency: BackupFrequency;
   folder: string | null;
   keep: number;
+  /**
+   * Запирать ли файлы паролем. Включается только вместе с сохранённым паролем;
+   * у настроек, записанных до появления шифрования, поля нет — это «нет».
+   */
+  encrypt?: boolean;
 };
 
-export const DEFAULT_AUTO_BACKUP: AutoBackupConfig = { frequency: "off", folder: null, keep: 7 };
+export const DEFAULT_AUTO_BACKUP: AutoBackupConfig = {
+  frequency: "off",
+  folder: null,
+  keep: 7,
+  encrypt: false
+};
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BACKUP_PREFIX = "financeapps-backup-";

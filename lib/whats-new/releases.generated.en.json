@@ -1,5 +1,34 @@
 [
   {
+    "version": "2.8.4",
+    "date": "2026-10-31",
+    "summary": "🔐 Backups can be locked with a password, and the app now has exactly the permissions it needs.",
+    "kind": "fixes",
+    "sections": [
+      {
+        "title": "Security",
+        "items": [
+          {
+            "lead": "Password-protected backups.",
+            "text": "“Download a copy” offers to lock the file with a password; scheduled backups can too (“Encrypt with a password”). Restoring recognises a locked file and asks for the password; a locked backup opens on any device with just the password. Unlocked backups work as before."
+          },
+          {
+            "lead": "File access only where you choose.",
+            "text": "The app can no longer read, write or delete files across your whole home folder: the page sees only what you picked in an open or save dialog. Scheduled backups and the cloud-folder sync file are written by dedicated commands that touch only the app's own files."
+          },
+          {
+            "lead": "",
+            "text": "On Android, the app's own data is out of the page's reach."
+          },
+          {
+            "lead": "",
+            "text": "A stricter page security policy: only the app's own inline scripts are allowed, by fingerprint."
+          }
+        ]
+      }
+    ]
+  },
+  {
     "version": "2.8.3",
     "date": "2026-10-30",
     "summary": "🛡️ Money no longer disappears or appears from nowhere, receipt photos come back with their operations, statements import more accurately, and the Sheet no longer shows “not a number”.",
@@ -810,31 +839,6 @@
           {
             "lead": "",
             "text": "A month without income: Loli no longer says “budget used up” — the assistant simply has nothing to calculate “safe to spend today” from."
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "version": "2.7.0",
-    "date": "2026-10-03",
-    "summary": "🎙️ Loli integration: expenses spoken to Loli land here, and Loli answers money questions using the numbers here.",
-    "kind": "features",
-    "sections": [
-      {
-        "title": "Added",
-        "items": [
-          {
-            "lead": "Expenses from Loli.",
-            "text": "“Loli, I spent 850 on groceries” — the expense appears in Suggestions on Home and is recorded with one tap. Turn on “Record straight away” and it goes straight into Transactions. Edit or cancel the expense in Loli and the same transaction changes, and anything sent twice is not doubled. The category is matched by name (“Cafes and restaurants” → “Restaurants”), income by description (“salary came in” → “Salary”)."
-          },
-          {
-            "lead": "Loli answers money questions:",
-            "text": "“how much can I spend today?”, “will I make it to payday?”, “how much is left for groceries?”, “how much money do I have?”. Loli gets only totals — not a single transaction, description or shop. You can choose not to share the summary."
-          },
-          {
-            "lead": "",
-            "text": "Works on Android only, offline, and only with the genuine Loli (her signature is checked). Turn it on in Settings → “Loli voice assistant”; the link is off by default."
           }
         ]
       }

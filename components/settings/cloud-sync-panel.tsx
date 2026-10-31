@@ -1,6 +1,6 @@
 "use client";
 
-import { CloudDownload, CloudUpload, FolderOpen, RefreshCw } from "lucide-react";
+import { CloudDownload, CloudUpload, FolderOpen, Lock, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -9,15 +9,19 @@ import { pickSyncFolder, pullFromFolder, pushToFolder } from "@/lib/sync/FolderS
 import { type AutoBackupConfig, type BackupFrequency } from "@/lib/backup/auto-backup";
 import {
   loadAutoBackupConfig,
+  loadAutoBackupPassword,
   runAutoBackup,
   saveAutoBackupConfig,
+  saveAutoBackupPassword,
   setLastBackupRun
 } from "@/lib/backup/AutoBackupService";
+import { MIN_BACKUP_PASSWORD } from "@/lib/backup/encryption";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { readMine, writeMine } from "@/lib/storage/mine";
 import {
   Select,
@@ -158,24 +162,79 @@ export function CloudSyncPanel({ embedded = false }: { embedded?: boolean }) {
 }
 
 // Scheduled local backups: a timestamped snapshot written to a chosen folder on
-// app start, with rotation. No passphrase (on-disk safety copy, not cloud sync).
+// app start, with rotation. Папка часто облачная, поэтому файлы можно запереть
+// паролем; пароль хранится только на этом устройстве (см. AutoBackupService).
 export function AutoBackupPanel() {
   const { t } = useI18n();
   const [config, setConfig] = useState<AutoBackupConfig>({
     frequency: "off",
     folder: null,
-    keep: 7
+    keep: 7,
+    encrypt: false
   });
   const [busy, setBusy] = useState(false);
+  /** Есть ли пароль к копиям на этом устройстве. null — ещё не знаем. */
+  const [passwordKept, setPasswordKept] = useState<boolean | null>(null);
+  /** Открыта ли форма пароля: при включении шифрования и при смене пароля. */
+  const [editingPassword, setEditingPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.resolve().then(() => setConfig(loadAutoBackupConfig()));
+    loadAutoBackupPassword()
+      .then((found) => setPasswordKept(found !== null))
+      .catch(() => setPasswordKept(false));
   }, []);
 
   function update(next: Partial<AutoBackupConfig>) {
     const merged = { ...config, ...next };
     setConfig(merged);
     saveAutoBackupConfig(merged);
+  }
+
+  function closePasswordForm() {
+    setEditingPassword(false);
+    setPassword("");
+    setRepeat("");
+    setPasswordError(null);
+  }
+
+  async function toggleEncrypt(on: boolean) {
+    if (on) {
+      // Включится по-настоящему, когда пароль сохранён: настройка «шифровать»
+      // без пароля значила бы копии, которые не пишутся вовсе.
+      setEditingPassword(true);
+      return;
+    }
+    closePasswordForm();
+    if (!config.encrypt) return;
+    update({ encrypt: false });
+    try {
+      await saveAutoBackupPassword(null);
+    } catch {
+      /* стереть не вышло — пароль ничего не значит, раз шифрование выключено */
+    }
+    setPasswordKept(false);
+  }
+
+  async function savePassword(event: React.FormEvent) {
+    event.preventDefault();
+    setPasswordError(null);
+    if (password.length < MIN_BACKUP_PASSWORD) {
+      return setPasswordError(t("backupPw.tooShort", { n: MIN_BACKUP_PASSWORD }));
+    }
+    if (password !== repeat) return setPasswordError(t("backupPw.mismatch"));
+    try {
+      await saveAutoBackupPassword(password);
+    } catch (error) {
+      return setPasswordError(error instanceof Error ? error.message : t("backup.error"));
+    }
+    update({ encrypt: true });
+    setPasswordKept(true);
+    closePasswordForm();
+    toast.success(t("backup.pw.saved"));
   }
 
   async function chooseFolder() {
@@ -256,6 +315,85 @@ export function AutoBackupPanel() {
               {t("sync.choose")}
             </Button>
           </div>
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="backup-encrypt" className="flex items-center gap-2">
+                <Lock className="size-4" />
+                {t("backup.encrypt")}
+              </Label>
+              <p id="backup-encrypt-hint" className="text-xs text-muted-foreground">
+                {t("backup.encryptHint")}
+              </p>
+            </div>
+            <Switch
+              id="backup-encrypt"
+              checked={Boolean(config.encrypt) || editingPassword}
+              onChange={(on) => void toggleEncrypt(on)}
+              aria-describedby="backup-encrypt-hint"
+            />
+          </div>
+
+          {editingPassword ? (
+            <form onSubmit={(event) => void savePassword(event)} className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="backup-password">{t("backup.pw.label")}</Label>
+                  <Input
+                    id="backup-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="backup-password-repeat">{t("backupPw.repeat")}</Label>
+                  <Input
+                    id="backup-password-repeat"
+                    type="password"
+                    autoComplete="new-password"
+                    value={repeat}
+                    onChange={(event) => setRepeat(event.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs">
+                {t("backup.pw.warn")}
+              </p>
+              {passwordError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {passwordError}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" size="sm">
+                  {t("backup.pw.save")}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={closePasswordForm}>
+                  {t("common.cancel")}
+                </Button>
+              </div>
+            </form>
+          ) : config.encrypt ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {passwordKept === false ? (
+                <p className="text-destructive">{t("backup.pw.missing")}</p>
+              ) : (
+                <p className="text-muted-foreground">{t("backup.pw.kept")}</p>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setEditingPassword(true)}
+              >
+                {passwordKept === false ? t("backup.pw.set") : t("backup.pw.change")}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <Button type="button" variant="outline" onClick={() => void runNow()} disabled={busy}>

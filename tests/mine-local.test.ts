@@ -74,7 +74,9 @@ const PERSONAL_FILES = [
   "components/transactions/filter-bar.tsx",
   "lib/backup/AutoBackupService.ts",
   "components/settings/cloud-sync-panel.tsx",
-  "components/quick-add-fab.tsx",
+  "components/quick-add-fab/use-quick-add-open.ts",
+  "components/quick-add-fab/use-quick-add-draft.ts",
+  "components/quick-add-fab/use-quick-add-submit.ts",
   "components/automation-runner.tsx",
   "components/onboarding-tour.tsx"
 ];
