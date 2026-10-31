@@ -8,7 +8,15 @@ version, date and sections.
 
 ## [2.8.4] — 2026-10-31
 
-🔐 Backups can be locked with a password, and the app now has exactly the permissions it needs.
+🔐 Backups can be locked with a password, the app now has exactly the permissions it needs, and plan vs actual no longer counts transfers.
+
+### Fixed
+- **Plan vs actual no longer counts transfers between your own accounts.** A
+  transfer from a card to a deposit that arrived as two bank statements was
+  counted as income and spending: “Transfers” columns appeared and “To
+  savings” showed zero. Import now links such pairs itself when the bank
+  called both halves a transfer; other similar pairs can be linked right on
+  plan vs actual (“Looks like transfers…” → “Link all”).
 
 ### Security
 - **Password-protected backups.** “Download a copy” offers to lock the file
