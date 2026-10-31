@@ -6,6 +6,30 @@ its release notes from here. The Russian CHANGELOG.md is the source of truth:
 every release is written there first, then translated here with the same
 version, date and sections.
 
+## [2.8.4] — 2026-10-31
+
+🔐 Backups can be locked with a password, and the app now has exactly the permissions it needs.
+
+### Security
+- **Password-protected backups.** “Download a copy” offers to lock the file
+  with a password; scheduled backups can too (“Encrypt with a password”).
+  Restoring recognises a locked file and asks for the password; a locked
+  backup opens on any device with just the password. Unlocked backups work as
+  before.
+- **File access only where you choose.** The app can no longer read, write or
+  delete files across your whole home folder: the page sees only what you
+  picked in an open or save dialog. Scheduled backups and the cloud-folder
+  sync file are written by dedicated commands that touch only the app's own
+  files.
+- On Android, the app's own data is out of the page's reach.
+- A stricter page security policy: only the app's own inline scripts are
+  allowed, by fingerprint.
+
+### Under the hood
+- The largest parts of the code — the local data “server”, the quick-add
+  dialog and the investments screen — are split into modules. Behaviour is
+  unchanged; they are easier to check and develop from here.
+
 ## [2.8.3] — 2026-10-30
 
 🛡️ Money no longer disappears or appears from nowhere, receipt photos come back with their operations, statements import more accurately, and the Sheet no longer shows “not a number”.
