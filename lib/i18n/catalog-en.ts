@@ -230,6 +230,12 @@ export const en: Messages = {
   "tp.link": "It's a transfer",
   "tp.dismiss": "No",
   "tp.linked": "Linked as a transfer",
+  "tp.linkAll": "Link all",
+  "tp.linkedAll": "Linked as transfers: {count}",
+  "tp.planHint":
+    "Until a pair is linked, plan vs actual counts it as income and spending, and the transfer is missing from “To savings”.",
+  "imp.toast.linkedTransfers":
+    "Transfers between your accounts linked automatically: {count} {count:pair|pairs}",
   "family.sinceHint":
     "Empty — from the start. Shared spending before this day doesn't concern them.",
   "family.sinceShort": "since {date}",

@@ -246,6 +246,12 @@ const ru: Messages = {
   "tp.link": "Это перевод",
   "tp.dismiss": "Нет",
   "tp.linked": "Связано в перевод",
+  "tp.linkAll": "Связать все",
+  "tp.linkedAll": "Связано переводов: {count}",
+  "tp.planHint":
+    "Пока пары не связаны, план/факт считает их доходом и расходом, а в «В сбережения» перевод не попадает.",
+  "imp.toast.linkedTransfers":
+    "Переводы между своими счетами связаны сами: {count} {count:пара|пары|пар}",
   "family.sinceHint": "Пусто — с самого начала. Общие траты до этого дня его не касаются.",
   "family.sinceShort": "с {date}",
   "family.removeOne": "Убрать: {name}",

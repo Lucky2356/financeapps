@@ -59,7 +59,14 @@ test("английская версия: ни одной русской стро
   await button.click();
   await expect
     .poll(
-      () => page.evaluate(() => (window as unknown as Record<string, unknown>).__seedMark !== true),
+      () =>
+        page
+          .evaluate(() => (window as unknown as Record<string, unknown>).__seedMark !== true)
+          // Отказ evaluate — перезагрузка идёт: старый документ разрушен, новый
+          // ещё не встал. Это «ещё рано», а не провал проверки (как в
+          // loadExample, helpers.ts) — прежде проверка падала, попав ровно в
+          // перезагрузку.
+          .catch(() => false),
       { timeout: 30_000 }
     )
     .toBe(true);

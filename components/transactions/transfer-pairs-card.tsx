@@ -33,7 +33,11 @@ function readDismissed(): string[] {
   }
 }
 
-export function TransferPairsCard() {
+/**
+ * `planHint` — на экране план/факта: там важнее сказать, ЧТО меняется, когда
+ * пары связаны, — они перестают быть доходом и тратой и уходят в «В сбережения».
+ */
+export function TransferPairsCard({ planHint = false }: { planHint?: boolean } = {}) {
   const { t } = useI18n();
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const [open, setOpen] = useState(false);
@@ -49,6 +53,28 @@ export function TransferPairsCard() {
     const next = [...dismissed.filter((item) => item !== key), key].slice(-DISMISSED_LIMIT);
     writeMine(TRANSFER_PAIRS_DISMISSED_KEY, JSON.stringify(next));
     setDismissed(next);
+  }
+
+  /** Все пары разом: по одной их связывали десятками нажатий. */
+  async function linkAll() {
+    setBusy("all");
+    let linked = 0;
+    try {
+      for (const pair of pairs) {
+        await apiClient.post("/transactions", {
+          action: "linkTransfer",
+          expenseId: pair.expense.id,
+          incomeId: pair.income.id
+        });
+        linked += 1;
+      }
+      toast.success(t("tp.linkedAll", { count: linked }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("tx.toast.saveError"));
+    } finally {
+      setBusy(null);
+      await reload();
+    }
   }
 
   async function link(pair: TransferPair) {
@@ -80,12 +106,25 @@ export function TransferPairsCard() {
           <ArrowRightLeft className="size-5 shrink-0 text-primary" />
           <span className="min-w-0 flex-1">
             <span className="block font-medium">{t("tp.title", { count: pairs.length })}</span>
-            <span className="block text-sm text-muted-foreground">{t("tp.hint")}</span>
+            <span className="block text-sm text-muted-foreground">
+              {t(planHint ? "tp.planHint" : "tp.hint")}
+            </span>
           </span>
           <ChevronDown
             className={cn("size-4 shrink-0 transition-transform", open && "rotate-180")}
           />
         </button>
+        {open && pairs.length > 1 ? (
+          <Button
+            type="button"
+            size="sm"
+            disabled={busy !== null}
+            onClick={() => void linkAll()}
+            data-testid="transfer-pairs-link-all"
+          >
+            {t("tp.linkAll")}
+          </Button>
+        ) : null}
         {open ? (
           <ul className="stagger divide-y rounded-lg border">
             {pairs.map((pair) => (
