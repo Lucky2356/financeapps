@@ -21,6 +21,7 @@ import {
 import { dataText } from "@/lib/i18n/data-text";
 import { parseImportedAmount, parseImportedDate } from "@/services/import/CsvParsing";
 import { createCategorySuggester, type CategorySuggester } from "@/lib/category-suggest";
+import { findTransferPairs } from "@/lib/transactions/transfer-pairs";
 import { matchRule } from "@/lib/categorization-rules";
 import { isoDay } from "@/lib/net-worth-snapshots";
 import type { WatchRow } from "@/lib/analytics/watchdog";
@@ -892,7 +893,49 @@ export function importCsvRows(state: LocalState, body: unknown) {
       ...(state.importBatches ?? []).slice(0, 9)
     ];
   }
-  return { imported, skipped };
+  const linkedTransfers = linkImportedTransfers(state, new Set(transactionIds));
+  return { imported, skipped, linkedTransfers };
+}
+
+/** Перевод по словам банка: категория «Переводы» или «между своими счетами». */
+const OWN_TRANSFER_TEXT = /между\s+(своими\s+)?сч[её]тами|сво(й|им|ими)\s+сч[её]т|own\s+accounts?/i;
+
+function looksLikeTransfer(row: TransactionRow): boolean {
+  return (
+    isTransferCategoryLabel(row.category.label) || OWN_TRANSFER_TEXT.test(row.description ?? "")
+  );
+}
+
+/**
+ * Перевод между своими счетами, пришедший выписками, — две строки: списание с
+ * одной карты и поступление на другую. Связанными в перевод они не приходят, и
+ * итоги считали их доходом и тратой: план/факт показывал «Переводы» в расходах
+ * и доходах, а в «В сбережения» — ноль, хотя деньги ушли на вклад. Пока
+ * проверка повторов ошибочно выбрасывала вторую половину (до 2.8.3), это было
+ * незаметно; теперь приходят обе.
+ *
+ * Связываются только уверенные пары: та же сумма и валюта, разные свои счета,
+ * не дальше суток друг от друга (findTransferPairs, как в «Это перевод?»), хотя
+ * бы одна строка — из этой загрузки, и ОБЕ банк сам назвал переводом.
+ * Остальные похожие пары предлагает карточка «Это перевод?» — решает человек.
+ */
+function linkImportedTransfers(state: LocalState, fresh: ReadonlySet<string>): number {
+  if (fresh.size === 0) return 0;
+  const currencyOf = new Map(state.accounts.map((account) => [account.id, account.currency]));
+  const pairs = findTransferPairs(
+    state.transactions.filter((row) => looksLikeTransfer(row)),
+    (accountId) => currencyOf.get(accountId) ?? state.currency
+  ).filter((pair) => fresh.has(pair.expense.id) || fresh.has(pair.income.id));
+  let linked = 0;
+  for (const pair of pairs) {
+    try {
+      linkTransfer(state, { expenseId: pair.expense.id, incomeId: pair.income.id });
+      linked += 1;
+    } catch {
+      /* пара уже не годится (связали раньше в этом же проходе) — дальше */
+    }
+  }
+  return linked;
 }
 
 export function undoLastImport(state: LocalState) {

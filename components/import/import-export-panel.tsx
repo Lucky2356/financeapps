@@ -386,6 +386,8 @@ export function ImportExportPanel({
       toast.success(
         t("imp.toast.imported", { imported: result.imported, skipped: result.skipped })
       );
+      if (result.linkedTransfers > 0)
+        toast.success(t("imp.toast.linkedTransfers", { count: result.linkedTransfers }));
       setImportStep(1);
       setFields([]);
       setRows([]);
