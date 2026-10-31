@@ -43,3 +43,18 @@ describe("разделы меню", () => {
     expect(hrefs).toContain("/investments");
   });
 });
+
+describe("меню новичка", () => {
+  it("новая книга — узкие разделы спрятаны; настроенное меню не трогается", async () => {
+    const { newcomerMenu, NEWCOMER_HIDDEN } = await import("@/lib/nav-visibility");
+    const fresh = newcomerMenu(null);
+    expect(parseHidden(fresh)).toEqual(new Set(NEWCOMER_HIDDEN));
+    // Главная, учёт, счета, лимиты, цели, таблица — на месте.
+    for (const core of ["/goals", "/sheet", "/investments"]) {
+      expect(parseHidden(fresh).has(core)).toBe(false);
+    }
+    // Человек уже выбирал — даже «ничего не скрывать» — его выбор остаётся.
+    expect(newcomerMenu("[]")).toBeNull();
+    expect(newcomerMenu('["/trips"]')).toBeNull();
+  });
+});

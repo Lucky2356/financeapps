@@ -29,6 +29,33 @@ export const HIDEABLE_SECTIONS: readonly HideableSection[] = [
 export const NAV_HIDDEN_KEY = "nav-hidden";
 export const NAV_HIDDEN_EVENT = "nav-hidden-changed";
 
+/**
+ * Что спрятано у новичка: самые узкие разделы. Человек, который завёл пустую
+ * книгу, первым делом видит два десятка пунктов меню, из которых ему нужны
+ * пять, — и не понимает, с чего начать. Узкое — кэшбэк, поездки, «Что если»,
+ * семья, вычеты — ждёт в настройках («Разделы меню») и включается одним
+ * переключателем.
+ *
+ * Только для новой пустой книги (первый запуск, «Начать с нуля» или «Из
+ * выписки»): у того, кто уже пользуется приложением, подключил устройство к
+ * своим данным или вернул копию, меню не меняется.
+ */
+export const NEWCOMER_HIDDEN: readonly string[] = [
+  "/cashback",
+  "/trips",
+  "/what-if",
+  "/family",
+  "/deductions"
+];
+
+/**
+ * Меню новичка — если человек его ещё не настраивал (`saved` — сохранённое,
+ * null — ничего). Настраивал — null: его выбор не трогаем.
+ */
+export function newcomerMenu(saved: string | null): string | null {
+  return saved === null ? encodeHidden(new Set(NEWCOMER_HIDDEN)) : null;
+}
+
 const HIDEABLE = new Set(HIDEABLE_SECTIONS.map((section) => section.href));
 
 /** Разобрать сохранённое; чужое и мусор отбрасываются — неубираемое не спрячешь. */

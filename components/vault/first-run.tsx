@@ -39,6 +39,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/context";
+import { NAV_HIDDEN_EVENT, NAV_HIDDEN_KEY, newcomerMenu } from "@/lib/nav-visibility";
+import { readMine, writeMine } from "@/lib/storage/mine";
 import { DEFAULT_SERVER, hasDefaultServer } from "@/lib/sync/default-server";
 import { readPairing } from "@/lib/sync/pairing-link";
 import { cameraPossible, scanQr } from "@/lib/sync/scan-qr";
@@ -169,7 +171,20 @@ export function FirstRun({
    */
   function protectionDone() {
     if (source === "file") return setStep("restore");
+    if (source === "fresh") simplifyMenu();
     onDone();
+  }
+
+  /** Новая пустая книга — меню новичка (lib/nav-visibility.ts NEWCOMER_HIDDEN). */
+  function simplifyMenu() {
+    try {
+      const menu = newcomerMenu(readMine(NAV_HIDDEN_KEY));
+      if (menu === null) return;
+      writeMine(NAV_HIDDEN_KEY, menu);
+      window.dispatchEvent(new Event(NAV_HIDDEN_EVENT));
+    } catch {
+      /* хранилище недоступно — меню останется полным, это не беда */
+    }
   }
 
   async function startWithoutPassword(from: Source | "bank") {
@@ -182,6 +197,7 @@ export function FirstRun({
         setStep("restore");
         return;
       }
+      simplifyMenu();
       onDone();
       // Выписка — это экран импорта: туда и ведём, счета и операции появятся
       // из файла банка.
