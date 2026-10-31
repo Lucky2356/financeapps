@@ -271,14 +271,21 @@ describe("возврат из корзины: долг сходится в лю�
     };
   }
 
+  // Время удаления — от «сейчас», а не числом. Корзина держит записи 30 дней,
+  // и записи, помеченные 1 октября, 31 октября в 10:00 устаревали и исчезали
+  // из неё: проверка падала с «В корзине этого уже нет», хотя приложение было
+  // ни при чём, — бомба с часовым механизмом в самой проверке.
+  const EARLIER = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const LATER = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
   describe("платёж и его счёт", () => {
     // Платёж удалили (долг вернулся), потом не стало и счёта.
     async function bothInTrash() {
       const w = await world();
       await w.client.delete(`/transactions?id=${w.payment.id}`);
       expect(await w.debt()).toBe(30000);
-      await w.stamp("transactions", "2026-10-01T10:00:00.000Z");
-      await w.accountVanishes("2026-10-01T11:00:00.000Z");
+      await w.stamp("transactions", EARLIER);
+      await w.accountVanishes(LATER);
       return w;
     }
 
@@ -314,13 +321,13 @@ describe("возврат из корзины: долг сходится в лю�
     }
 
     it("долг удалён раньше платежа — вместе", async () => {
-      const w = await debtThenPayment("2026-10-01T10:00:00.000Z", "2026-10-01T11:00:00.000Z");
+      const w = await debtThenPayment(EARLIER, LATER);
       await w.restore(["liabilities", "transactions"]);
       expect(await w.debt()).toBe(PAID);
     });
 
     it("долг удалён раньше платежа — сначала долг, потом платёж", async () => {
-      const w = await debtThenPayment("2026-10-01T10:00:00.000Z", "2026-10-01T11:00:00.000Z");
+      const w = await debtThenPayment(EARLIER, LATER);
       await w.restore(["liabilities"]);
       // Платежа в книге нет — и в долге его нет.
       expect(await w.debt()).toBe(30000);
@@ -329,7 +336,7 @@ describe("возврат из корзины: долг сходится в лю�
     });
 
     it("долг и платёж исчезли разом (сверка) — вместе", async () => {
-      const w = await debtThenPayment("2026-10-01T10:00:00.000Z", "2026-10-01T10:00:00.000Z");
+      const w = await debtThenPayment(EARLIER, EARLIER);
       await w.restore(["liabilities", "transactions"]);
       expect(await w.debt()).toBe(PAID);
     });
@@ -342,8 +349,8 @@ describe("возврат из корзины: долг сходится в лю�
         const w = await world();
         await w.client.delete(`/transactions?id=${w.payment.id}`);
         await w.client.delete(`/debts?id=${w.debtId}`);
-        await w.stamp("transactions", "2026-10-01T10:00:00.000Z");
-        await w.stamp("liabilities", "2026-10-01T11:00:00.000Z");
+        await w.stamp("transactions", EARLIER);
+        await w.stamp("liabilities", LATER);
         for (const step of order) await w.restore(step);
         expect(await w.debt(), JSON.stringify(order)).toBe(PAID);
       }
