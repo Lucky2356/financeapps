@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Download,
   FileJson,
+  Lock,
   RotateCcw,
   ShieldCheck,
   Upload
@@ -16,6 +17,12 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { unwrapBackup } from "@/lib/backup/unwrap";
+import {
+  decryptBackupFile,
+  encryptBackupText,
+  isEncryptedBackup,
+  type EncryptedBackupFile
+} from "@/lib/backup/encryption";
 import { apiClient } from "@/lib/api/client";
 import type { PreUpgradeBackup } from "@/lib/api/LocalApiClient";
 import type { ImportPageData, TransactionsPageData } from "@/lib/data";
@@ -43,6 +50,8 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { BackupSaveDialog } from "@/components/import/backup-save-dialog";
 import { CsvImportMapper, type CsvColumnMapping } from "@/services/import/CsvImportMapper";
 import { ExportService } from "@/services/export/ExportService";
 import { cn } from "@/lib/utils";
@@ -148,6 +157,14 @@ export function ImportExportPanel({
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [restorePayload, setRestorePayload] = useState<unknown>(null);
   const [restorePreview, setRestorePreview] = useState<BackupPreview | null>(null);
+  // Какую копию сейчас сохраняют — окно с паролем одно на обе кнопки.
+  const [saveTarget, setSaveTarget] = useState<"current" | "preUpgrade" | null>(null);
+  // Выбранный файл заперт паролем: держим его, пока пароль не подойдёт, —
+  // неверный пароль не должен заставлять выбирать файл заново.
+  const [lockedFile, setLockedFile] = useState<EncryptedBackupFile | null>(null);
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
   const [undoPending, setUndoPending] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2 | 3>(1);
   const fileSystem = useMemo(() => createFileSystemAdapter(), []);
@@ -219,16 +236,26 @@ export function ImportExportPanel({
     );
   }
 
-  async function exportBackup() {
+  /**
+   * Текст файла копии: как есть или запертый паролем (lib/backup/encryption).
+   * Под паролем лежит ровно тот же текст, поэтому восстановление после
+   * расшифровки идёт тем же путём, что и для открытого файла.
+   */
+  async function backupFileText(plain: string, password: string | null): Promise<string> {
+    return password ? encryptBackupText(plain, password) : plain;
+  }
+
+  async function exportBackup(password: string | null) {
     try {
       const backup = await apiClient.get("/backup");
       const stamp = todayDay();
       await fileSystem.saveTextFile(
         `financial-assistant-backup-${stamp}.json`,
-        JSON.stringify(backup, null, 2),
+        await backupFileText(JSON.stringify(backup, null, 2), password),
         "application/json;charset=utf-8"
       );
       toast.success(t("imp.toast.backupSaved"));
+      setSaveTarget(null);
       await reloadReferences();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("imp.toast.backupError"));
@@ -252,22 +279,32 @@ export function ImportExportPanel({
     };
   }, []);
 
-  async function exportPreUpgrade() {
+  async function exportPreUpgrade(password: string | null) {
     if (!preUpgrade) return;
     try {
       await fileSystem.saveTextFile(
         `financial-assistant-before-${preUpgrade.toVersion ?? "upgrade"}.json`,
-        JSON.stringify(
-          { exportedAt: new Date().toISOString(), backup: preUpgrade.backup },
-          null,
-          2
+        await backupFileText(
+          JSON.stringify(
+            { exportedAt: new Date().toISOString(), backup: preUpgrade.backup },
+            null,
+            2
+          ),
+          password
         ),
         "application/json;charset=utf-8"
       );
       toast.success(t("imp.toast.backupSaved"));
+      setSaveTarget(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("imp.toast.backupError"));
     }
+  }
+
+  function forgetLockedFile() {
+    setLockedFile(null);
+    setUnlockPassword("");
+    setUnlockError(null);
   }
 
   async function pickBackupForRestore() {
@@ -276,10 +313,38 @@ export function ImportExportPanel({
 
     try {
       const parsed = JSON.parse(file.content) as unknown;
+      forgetLockedFile();
+      if (isEncryptedBackup(parsed)) {
+        // Запертый файл: сначала пароль, потом — всё как обычно. Прежний
+        // выбор сбрасывается, чтобы кнопка «Восстановить» не восстановила
+        // предыдущий файл, пока человек вводит пароль к этому.
+        setRestorePayload(null);
+        setRestorePreview(null);
+        setLockedFile(parsed);
+        return;
+      }
       setRestorePayload(unwrapBackup(parsed));
       setRestorePreview(summarizeBackupPayload(parsed));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("imp.toast.readError"));
+    }
+  }
+
+  async function unlockBackup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!lockedFile) return;
+    setUnlockError(null);
+    setUnlocking(true);
+    try {
+      const parsed = await decryptBackupFile(lockedFile, unlockPassword);
+      setRestorePayload(unwrapBackup(parsed));
+      setRestorePreview(summarizeBackupPayload(parsed));
+      forgetLockedFile();
+    } catch (error) {
+      // Файл остаётся выбранным: пароль можно ввести ещё раз.
+      setUnlockError(error instanceof Error ? error.message : t("imp.toast.readError"));
+    } finally {
+      setUnlocking(false);
     }
   }
 
@@ -391,10 +456,19 @@ export function ImportExportPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={exportBackup}>
+            <Button type="button" variant="outline" onClick={() => setSaveTarget("current")}>
               <Download className="size-4" />
               {t("imp.downloadBackup")}
             </Button>
+            <BackupSaveDialog
+              open={saveTarget !== null}
+              onOpenChange={(open) => {
+                if (!open) setSaveTarget(null);
+              }}
+              onSave={(password) =>
+                saveTarget === "preUpgrade" ? exportPreUpgrade(password) : exportBackup(password)
+              }
+            />
             <Dialog
               open={restoreDialogOpen}
               onOpenChange={(open) => {
@@ -402,6 +476,7 @@ export function ImportExportPanel({
                 if (!open) {
                   setRestorePayload(null);
                   setRestorePreview(null);
+                  forgetLockedFile();
                 }
               }}
             >
@@ -422,6 +497,38 @@ export function ImportExportPanel({
                     <p>{t("imp.restoreWarn")}</p>
                   </div>
                 </div>
+                {lockedFile ? (
+                  <form
+                    onSubmit={unlockBackup}
+                    className="space-y-3 rounded-lg border bg-muted/20 p-4 text-sm"
+                  >
+                    <div className="flex items-start gap-3">
+                      <Lock className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <div>
+                        <p className="font-medium">{t("backupLock.title")}</p>
+                        <p className="mt-1 text-muted-foreground">{t("backupLock.lead")}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="backup-unlock-password">{t("backupLock.password")}</Label>
+                      <Input
+                        id="backup-unlock-password"
+                        type="password"
+                        autoComplete="off"
+                        value={unlockPassword}
+                        onChange={(event) => setUnlockPassword(event.target.value)}
+                      />
+                    </div>
+                    {unlockError ? (
+                      <p role="alert" className="text-destructive">
+                        {unlockError}
+                      </p>
+                    ) : null}
+                    <Button type="submit" size="sm" disabled={unlocking || !unlockPassword}>
+                      {unlocking ? t("backupLock.opening") : t("backupLock.open")}
+                    </Button>
+                  </form>
+                ) : null}
                 {restorePreview ? (
                   <div className="rounded-lg border bg-muted/20 p-4 text-sm">
                     <p className="font-medium">{t("imp.selectedBackup")}</p>
@@ -491,7 +598,7 @@ export function ImportExportPanel({
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => void exportPreUpgrade()}
+                onClick={() => setSaveTarget("preUpgrade")}
                 className="h-auto w-full whitespace-normal py-2 sm:w-auto"
               >
                 <Download className="size-4" />

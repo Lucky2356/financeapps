@@ -2137,6 +2137,38 @@ export const en: Messages = {
   "backup.running": "Saving…",
   "backup.done": "Backup saved",
   "backup.error": "Couldn't save the backup",
+  "backup.encrypt": "Encrypt with a password",
+  "backup.encryptHint":
+    "Files in the folder will be locked with a password — this matters if the folder is in the cloud or the copies end up in a messenger. So that copies can be made unattended, the password is kept on this device (encrypted along with your data and never synced). It protects the copies wherever they end up, but not from someone using this device with the app unlocked.",
+  "backup.pw.label": "Password for copies",
+  "backup.pw.warn":
+    "Without this password the copies can't be restored — neither here nor on a new device. Write it down: you will be asked for it when restoring from a file.",
+  "backup.pw.save": "Save password",
+  "backup.pw.saved": "Password saved. New copies will be encrypted.",
+  "backup.pw.kept": "The password is kept on this device; new copies are encrypted.",
+  "backup.pw.missing":
+    "There is no password on this device — no copies are made until you set it again.",
+  "backup.pw.change": "Change password",
+  "backup.pw.set": "Set password",
+  "backupPw.repeat": "Repeat the password",
+  "backupPw.tooShort": "The password must be at least {n} characters.",
+  "backupPw.mismatch": "The passwords don't match.",
+  "backupSave.title": "Save a backup",
+  "backupSave.lead":
+    "Backups often end up in the cloud or in a messenger. Protect this one with a password — then nobody can read the file without it.",
+  "backupSave.password": "Password for the file",
+  "backupSave.warn":
+    "The password is not stored anywhere. Without it the file can't be restored — neither here nor on another device. Write it down.",
+  "backupSave.encrypted": "Save with password",
+  "backupSave.saving": "Saving…",
+  "backupSave.plain": "Save without a password",
+  "backupSave.plainHint":
+    "Without a password the file is plain JSON: anyone who gets it can open and read it.",
+  "backupLock.title": "This file is password-protected",
+  "backupLock.lead": "Enter the password you set when saving the backup.",
+  "backupLock.password": "File password",
+  "backupLock.open": "Open the file",
+  "backupLock.opening": "Checking the password…",
   // AI insights ("ask your finances")
   "aiq.title": "Ask your finances",
   "aiq.placeholder": "e.g. where is my money going?",

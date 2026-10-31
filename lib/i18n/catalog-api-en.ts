@@ -185,6 +185,16 @@ export const en: Messages = {
   "api.folder.corrupt": "The sync file is damaged.",
   "api.folder.unknownFormat": "Unknown sync file format.",
   "api.folder.wrongPassword": "Wrong password, or the file is damaged.",
+  // Файл резервной копии под паролем (lib/backup/encryption)
+  "api.backup.needPassword": "Set a password for the backup file.",
+  "api.backup.locked": "This backup file is password-protected — enter the password.",
+  "api.backup.wrongPassword":
+    "The password doesn't match, or the file is damaged. Check the password and try again.",
+  "api.backup.corrupt": "The backup file is damaged and can't be decrypted.",
+  "api.backup.newerFormat":
+    "This backup file was encrypted by a newer version of the app. Update the app and try again.",
+  "api.backup.autoNoPassword":
+    "Scheduled copies are set to be encrypted, but there is no password on this device. Set it again under “Scheduled copies”.",
   // Подключение устройства по коду
   "api.pair.thisDeviceCode":
     "This code is for connecting THIS device. On the new device, open “Connect to another device” — it will appear there.",
