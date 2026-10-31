@@ -78,8 +78,9 @@ const ON_DEMAND: Record<string, string> = {
   "components/goals/goal-manager.tsx":
     "окна цели (правка, пополнение, удаление): читают счета, когда окно открыли",
   "components/debts/debt-manager.tsx": "окно долга: читает счета и категории при открытии",
-  "components/quick-add-fab.tsx":
-    "окно быстрой записи: читает при открытии, лимиты — пока оно открыто (зависимость open)",
+  "components/quick-add-fab/use-quick-add-open.ts": "окно быстрой записи: читает при открытии",
+  "components/quick-add-fab/use-quick-add-hints.ts":
+    "окно быстрой записи: лимиты — пока оно открыто (зависимость open)",
   "components/import/import-export-panel.tsx":
     "копия — по нажатию «Скачать»; отложенная перед обновлением книга меняется только с обновлением"
 };
