@@ -148,7 +148,7 @@ describe("импорт выписки не тормозит на большой 
     });
     const elapsed = performance.now() - started;
 
-    expect(result).toEqual({ imported: 1000, skipped: 0 });
+    expect(result).toEqual({ imported: 1000, skipped: 0, linkedTransfers: 0 });
     expect(elapsed).toBeLessThan(3000);
     // Новые строки — сверху, последняя строка файла первой, история под ними.
     expect(state.transactions).toHaveLength(6000);
